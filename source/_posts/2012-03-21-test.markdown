@@ -1,0 +1,126 @@
+---
+layout: post
+title: "GitHubにブログを設置してみたよ"
+date: 2012-03-21 19:29
+comments: true
+categories: 
+---
+
+TLにGitHubでブログのホスティングしている人がいたので、
+「[githubとjekyllとoctopressで作る簡単でモダンなブログ](http://mattn.kaoriya.net/software/lang/ruby/20111017205717.htm)」
+を参考に作ってみましたよ。
+
+
+## RVM のインストール
+
+自分の環境には Ruby 1.9.2.2 が入っているんだけど、Ocropressでは Ruby 1.9.2 が必要らしい。
+そのままでもいけるかと思ったけど、怒られた。
+rake コマンドを全部 bundle exec rake に置き換えると一応実行はできるけど、なんだか警告がでる。
+
+こういう時は複数のバージョンの Ruby を切り替えて管理できる、 rvm というのを使うといいらしい。
+公式サイトの「[Installing RVM](http://octopress.org/docs/setup/rvm/)」通りにコマンドを打てばOK。
+
+``` bash
+bash -s stable < <(curl -s https://raw.github.com/wayneeseguin/rvm/master/binscripts/rvm-installer)
+echo '[[ -s "$HOME/.rvm/scripts/rvm" ]] && . "$HOME/.rvm/scripts/rvm" # Load RVM function' >> ~/.bash_profile
+source ~/.bash_profile
+rvm install 1.9.2 && rvm use 1.9.2
+rvm rubygems latest
+```
+
+
+## Octopress のインストール
+
+あとはgitでクローンして、インストールコマンドを叩くだけ。
+
+``` bash
+git clone git://github.com/imathis/octopress.git octopress
+cd octopress
+
+gem install bundler
+bundle install
+
+rake install
+rake setup_github_pages
+```
+
+最後のコマンドは GitHub Pages に公開するためのもの。公開用のレポジトリを聞いてくるので予め登録しておこう。
+
+
+## rubypythonの検索パスを書き換える
+markdown記法はソースコードの表示にも対応しているんだけど、自分の環境では、ソースコードの代わりに
+
+    Liquid error: undefined method `Py_IsInitialized’ for RubyPython::Python:Module
+
+と表示されてしまった。
+
+ソースコードを追って見るとソースコードの表示には [rubypython](http://rubypython.rubyforge.org/) という
+Ruby から Python のコードを実行する gem が使われているみたい。
+Python コードの実行に本物の Python を使っているんだけど、その Python の検索機能が貧弱で rubypython が想定していない場所に置いてあるとエラーを吐くみたい。
+
+僕の環境の場合、 ~/.rvm/gems/ruby-1.9.2-p318/gems/rubypython-0.5.1/lib/rubypython/pythonexec.rb の中に Python の検索設定が書いてあった。
+53行目から次のようなUnix系の設定がある。
+
+``` ruby
+    if FFI::Platform.unix?
+      # On Unixes, let's look in some standard alternative places, too.
+      # Just in case. Some Unixes don't include a .so symlink when they
+      # should, so let's look for the base case of .so.1, too.
+      [ libname, "#{libname}.1" ].each do |name|
+        locations << File.join("/opt/local/lib", name)
+        locations << File.join("/opt/lib", name)
+        locations << File.join("/usr/local/lib", name)
+        locations << File.join("/usr/lib", name)
+      end
+    end
+```
+
+64bitな環境で実行したいので、以下の設定を追加。
+
+``` ruby
+        locations << File.join("/opt/local/lib64", name)
+        locations << File.join("/opt/lib64", name)
+        locations << File.join("/usr/local/lib64", name)
+        locations << File.join("/usr/lib64", name)
+```
+
+これで表示されるようになった。
+
+
+
+## 記事を書いて公開してみる
+
+新しい記事を書くには、
+
+``` bash
+rake new_post["title"]
+```
+
+source/_posts 以下に記事用のファイルを作ってくれるのでこれを自分の好きなエディタで編集。
+
+最後に
+
+``` bash
+rake gen_deploy
+{% endcodeblock %}
+```
+
+とすると、HTMLの生成、公開をしてくれる。
+
+## 記事のプレビュー
+デプロイしてから実際に見られるようになるには若干時間がかかるし、誰でも見られる状態になってしまうので、下記コマンドでプレビュー
+
+```
+rake generate
+rake preview
+```
+
+
+## 感想
+慣れない Ruby に少し手こずったけど、自分が普段使っているエディタを使えるのは楽でいいね。
+普段は TeX 使いなので、WYSIWYG環境で編集できなくても苦じゃないし。むしろ楽。
+
+はてな記法よりも markdown 記法のほうが自分には馴染みやすい。
+改行の扱いとか TeX に近いし。
+
+しばらく使って良かったらこっちに移ってみようかな。
