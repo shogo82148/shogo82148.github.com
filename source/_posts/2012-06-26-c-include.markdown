@@ -1,0 +1,87 @@
+---
+layout: post
+title: "CやC++でのincludeの優先順位"
+date: 2012-06-26 11:13
+comments: true
+categories: [C, C++]
+---
+
+こんにちは、gccのオプションを十個も言えない、非人のshogoです。
+
+工藤氏作の[TinySVM](http://chasen.org/~taku/software/TinySVM/)で遊ぼうとしていたところ、
+ヘッダファイルの読み込み順序ではまったのでメモ。
+
+## 2つのinclude文
+皆さんご存知の通り、Cプリプロセッサの#include文ではファイルの指定方法が2種類あります。
+
+1. &#035;include <somefile> // システムにインストールされたライブラリを使う場合
+2. &#035;include &quot;somefile&quot; // 自作のヘッダファイルなどを読み込む場合
+
+大抵はコメントで書いたような使い分けをするんじゃないかと思います。
+両者の違いはファイルの検索対象となるディレクトリの違いにあります。
+前者はコンパイラが知っているディレクトリのみを検索するのに対して、
+後者はカレントディレクトリを検索したのち、<>と同じディレクトリを検索します。
+
+コンパイラが知っているディレクトリは具体的に書くと次のようになっています。
+
+1. -I オプションで指定されたディレクトリ
+2. 環境変数 C&#095;INCLUDE&#095;PATH や CPLUS&#095;INCLUDE&#095;PATH で指定されたディレクトリ
+3. システムによって予め決められたディレクトリ(/usr/local/includeとか)
+
+上にあるものほど優先順位高く、同名のファイルがあった場合、優先順位の高いディレクトリにあるものが読み込まれます。
+
+## 標準のヘッダを使いたい
+
+次のようなCのプログラムを考えてみます。
+
+```c
+/* sample.c */
+#include <stdio.h> // 標準ヘッダのstdio.hを取り込んでほしい！
+#include "stdio.h" // ../userheaderディレクトリ内のstdio.hを取り込んでほしい！
+```
+
+最初のincludeではシステムに用意された標準ヘッダのstdio.hを、
+2つ目のincludeでは自前で用意したstdio.hを読み込もうとしています。
+しかし、自前で用意したstdio.hはuserheaderという別ディレクトリにあるので
+このままでは参照できません。
+
+別ディレクトリにあるヘッダファイルを参照する場合、一般的には-Iオプションを使って次のようにコンパイルすると思います。
+
+```bash
+gcc -I../userheader sample.c
+```
+
+しかしこの例の場合はこの方法は上手く行きません。
+<>で囲った場合も""で囲った場合も、カレントディレクトリにはstdio.hは見つからないので、
+先の優先順位に従って次のような順番で検索を行います。
+
+1. userheader
+2. 標準ヘッダstdio.hが入ったディレクトリ
+
+どちらの書き方でもuserheader内のstdio.hを先に発見してしまうので、
+標準ヘッダのstdio.hにはどう頑張ってもアクセスすることができません。
+
+## 解決策
+
+iquoteオプションを使うと、&quot;&quot;で囲った場合のみuserheaderを見に行くようになります。
+
+```bash
+gcc -iquote../userheader sample.c
+```
+
+## TinySVMの場合
+
+TinySVM0.09(現時点での最新版)は一部環境でgetoptの違うというエラーが発生するようです。
+これは-Iオプションを使ってしまったため、標準ヘッダのgetopt.hと、自前で用意したgetopt.hの使い分けができていないのが原因です。
+
+TinySVMに同梱されたgetopt関数の引数を書き換えることで対処している例がほとんど
+([himorogiの日記](http://d.hatena.ne.jp/himorogi/20090621/1245536366), [RとLinuxと...](http://rmecab.jp/wiki/index.php?%CF%C2%C9%DB%C9%F3%C2%BE%A5%A4%A5%F3%A5%B9%A5%C8%A1%BC%A5%EB),etc)
+ですが、大抵の環境にgetoptはあると思うのでgetopt.hを削除してしまったほうがいいかもしれません。
+(TinySVM最近更新されていないのでgetoptが古いし)
+
+
+## 参考
+
+* [C言語のヘッダ読み込み順について](http://ameblo.jp/mofu-mofu-alpaca/entry-10868656211.html)
+* [Directory Options - Using the GNU Compiler Collection (GCC)](http://gcc.gnu.org/onlinedocs/gcc-4.7.1/gcc/Directory-Options.html)
+* [The C Preprocessor](http://gcc.gnu.org/onlinedocs/gcc-4.7.1/cpp.pdf) pp.66-67
