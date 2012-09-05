@@ -1,0 +1,123 @@
+---
+layout: post
+title: VeeWeeでVagrantのboxを作ってみた
+date: 2012-09-01 15:26
+comments: true
+categories: [Vagrant]
+---
+
+## Vagrant
+
+[Vagrant](http://vagrantup.com/)はコマンドラインから[VirtualBox](https://www.virtualbox.org/)を扱えるようにするツール。
+仮想マシンの起動・再起動をコマンドライン上から行えるのはもちろん、[Chef](http://wiki.opscode.com/display/chef/Home)や
+[Puppet](http://puppetlabs.com/puppet/what-is-puppet/)
+と連携することで必要なソフトウェアのインストールを行なってくれます。
+
+Vagrantを使うには仮想マシンのひな形であるBase Boxが必要です。
+[Vagrantbox.es](http://www.vagrantbox.es/)にいろんなOSのBoxがあるけど、
+インストールされているOSのバージョンが古かったり、タイムゾーンがUTCになっていたりして
+不具合発生。
+そこでBoxを自分で作ってみようと思い立ち、やってみたのでそのメモ。
+
+作ったBoxはDropBoxにあげておいたので使いたい方はどうぞ。
+Ubuntu 12.04.1 Server + VirtualBox 4.1.20 で作ってあります。
+
+```
+vagrant box add myubuntu https://dl.dropbox.com/u/15524906/ubuntu-12.04-amd64.box
+```
+
+## VeeWee
+
+[VeeWee](https://github.com/jedi4ever/veewee)はBoxの作成を自動化してくれるツール。
+OSのインストール、不要なパッケージの削除、Box化なんかを自動でやってくれるらしい。
+
+## VagrantとVeeWeeのインストール
+
+Rubyの実行環境とVirtualBoxのインストールを済ませたら、
+gemを使ってVagrantとVeeWeeをインストール。
+
+```
+gem install vagrant
+gem install veewee
+```
+
+## 使ってみる
+
+```
+vagrant basebox templates
+```
+
+と打つとテンプレートの一覧が出てくる。
+現時点でのUbuntu最新版であるUbuntu 12.04をテンプレートとして使ってみる。
+
+```
+vagrant basebox define myubuntu ubuntu-12.04-server-amd64
+```
+
+これでdefinitions/myubuntuの中に設定ファイルができる。
+
+そのままだとisoのダウンロードで404が帰ってくるので設定ファイルを書き換え。
+加えて日本語が使えるようにLocaleをja\_JPに、タイムゾーンをAsia/Tokyoにしておく。
+
+```diff
+--- templates/ubuntu-12.04-server-amd64/definition.rb   2012-08-31 18:23:28.000000000 +0900
++++ definitions/myubuntu/definition.rb                  2012-08-31 21:17:52.000000000 +0900
+@@ -6,8 +6,8 @@
+   :hostiocache => 'off',
+   :os_type_id => 'Ubuntu_64',
+   :iso_file => "ubuntu-12.04-server-amd64.iso",
+-  :iso_src => "http://releases.ubuntu.com/12.04/ubuntu-12.04-server-amd64.iso",
+-  :iso_md5 => 'f2e921788d35bbdf0336d05d228136eb',
++  :iso_src => "http://ftp.jaist.ac.jp/pub/Linux/ubuntu-releases/12.04.1/ubuntu-12.04.1-server-amd64.iso",
++  :iso_md5 => '06472ddf11382c8da1f32e9487435c3d',
+   :iso_download_timeout => "1000",
+   :boot_wait => "4",
+   :boot_cmd_sequence => [
+--- templates/ubuntu-12.04-server-amd64/preseed.cfg     2012-08-31 18:23:28.000000000 +0900
++++ definitions/myubuntu/preseed.cfg                    2012-08-31 19:22:47.000000000 +0900
+@@ -1,5 +1,5 @@
+ ## Options to set on the command line
+-d-i debian-installer/locale string en_US.utf8
++d-i debian-installer/locale string ja_JP.utf8
+ d-i console-setup/ask_detect boolean false
+ d-i console-setup/layout string USA
+
+@@ -11,7 +11,7 @@
+ # Not working , specify a dummy in the DHCP
+ #d-i netcfg/no_default_route boolean
+
+-d-i time/zone string UTC
++d-i time/zone string Asia/Tokyo
+ d-i clock-setup/utc-auto boolean true
+ d-i clock-setup/utc boolean true
+```
+
+設定ができたらビルド。
+
+```
+vagrant basebox build myubuntu
+```
+
+isoのダウンロードとosのインストールが始まるので気長にまつ。
+途中で「isoが無いけどダウンロードする？」と聞かれるので「Yes」と答えよう(「y」と打つだけだと自分でダウンロードしろと言われる)。
+
+ビルドができたらファイルの形式にエクスポート。
+
+```
+vagrant basebox export myubuntu
+```
+
+カレントディレクトリにmyubuntu.boxができて完成！
+
+myubuntuをboxとして登録すれば、vagrantから使えるようになる。
+DropBoxにあげておいたので、以下のコマンドで使える。
+
+```
+vagrant box add myubuntu https://dl.dropbox.com/u/15524906/ubuntu-12.04-amd64.box
+mkdir foo
+cd foo
+vagrant init myubuntu
+vagrant up
+vagrant ssh
+```
+
