@@ -1,0 +1,451 @@
+---
+layout: post
+title: "6さいカンファレンス 第2回「数学の定理を自動で発見するAI を Haskellで作ろう！」まとめ"
+date: 2012-10-02 13:07
+comments: true
+categories: [6さいカンファレンス]
+---
+
+2012/09/13に[くいなちゃん](https://twitter.com/kuina_tesso)さん主催で開催された6さいカンファレンスのまとめ。
+第2回は「数学の定理を自動で発見するAI を Haskellで作ろう！」です。
+
+勝手にまとめてしまったので、何か問題があれば[@shogo82148](https://twitter.com/shogo82148)まで。
+
+
+## WELCOME TO HELL!!
+
+くいなちゃん: それでは、まず、数学の「定理」とは何か、について説明したいと思います。
+みなさん、日常的に「定理」という言葉を使っていると思いますが、「定理」とは何か、説明できますか
+
+くいなちゃん: 「教科書に載っている公式が、定理だ！」と思うかもしれませんね。
+確かに、教科書にも定理は載っています。
+
+くいなちゃん: では、曖昧な理解の方のために、厳密かつ ゆるふわに説明しましょう。
+
+くいなちゃん: 定理とは、次のように定義できます。
+
+1. 公理であるならば、定理である。
+2. 定理を推論規則によって推論したものは、定理である。
+
+以上。
+
+くいなちゃん: はい、みなさんこれで定理が何かを理解したと思いますので、数学の定理を自動で発見するAIを作ろうと思います。
+
+くいなちゃん: Haskellで。
+
+
+## Haskell!
+
+くいなちゃん: そもそも、Haskellって何？
+という方もおられるかと思いますので、まずは Haskell について簡単に説明しておきたいと思います。
+
+くいなちゃん: Haskell は、関数型言語です。
+宣言的プログラミングによって、プログラムしていくプログラミング言語です。「○○は××である！」というのを繰り返してプログラミングする感じですね。　「まずは○○して、次に××しろ！」という C言語(手続き型言語)とはかなり異なります。
+
+くいなちゃん: では具体的に、今回定理を発見するための数学の体系を説明しながら、同時に Haskell で実装してみることにしましょう。
+
+くいなちゃん: 最終的には 大規模な数学体系の定理を発見するとしても、まずは試しに小さな体系で定理を発見してみることを考えます。
+今回は、命題論理を対象としてみます。
+
+## 定義
+
+くいなちゃん: では、今回対象とする命題論理を、厳密に定義していきましょう。
+まず、この体系で用いられる記号は、P　Q　R　￢　⇒　の5種類です。
+この5種類をうまく並べると、この数学体系でのあらゆる式や命題が記述できます。
+
+くいなちゃん: まあ、たとえば、　P⇒P　(PならばPである)　といった感じですん。
+わかりますね。
+
+くいなちゃん: ￢　は数学における否定によく使われる記号ですが、いまのところ、単なる記号にすぎず、意味は定義されていません
+
+くいなちゃん: ちなみに、くいなちゃんはポーランド記法が好きなので、　P⇒P　を、　⇒PP　と書くことにしましょう
+
+くいなちゃん: ついでに、いちいち　⇒　とか　￢　とかヘンな記号を入力するのは大変なので、　⇒　を以後　>　と書き、￢　を以後　~　と書くことにします。
+
+くいなちゃん: 結局、この体系で使われる記号は、　P　Q　R　~　>　の5種類ということになりますね。
+
+くいなちゃん: ここで、　P　Q　R　を、変数と呼ぶことにしましょう。
+Propositional Variables なんですが、和訳が解らぬ
+
+takayukib: 『情報科学における論理』だと「命題変数」ってなってますね＞和訳
+
+くいなちゃん: 今回、ヒルベルトさんという偉い人が考えた公理を使います。
+以下がそれです。
+
+1. φ → (χ → φ)
+2. (φ → (χ → ψ)) → ((φ → χ) → (φ → ψ))
+3. (￢ψ → ￢φ)→(φ → ψ)
+
+くいなちゃん: ただ、この公理は、くいなちゃんの数学体系の記号で表されていないので、ポーランド記法に変換して書き直します。
+
+1. `>P>QP`
+2. `>>P>QR>>PQ>PR`
+3. `>>~P~Q>QP`
+
+## 実装
+
+くいなちゃん: そこまでを Haskell で書いたのが、これです！
+そのまま書いているだけなので、難しくはないですね。
+<http://tes.so/6saiconf_2/img0.png>
+
+``` haskell
+import List
+import Control.Monad
+
+symbols = ['P', 'Q', 'R', '~', '>']
+
+propositional_variables = ["P", "Q", "R"]
+
+axioms = [">P>QP", ">>P>>QR>>PQ>>PR", ">>~P~Q>QP"]
+```
+
+くいなちゃん: Haskell は宣言的に書くことができるので、symbols(記号)は○○であるとか、axioms(公理)は××であるとか、そのまま書けます。
+
+くいなちゃん: くいなちゃんのvimの色設定に文句はゆるさん
+
+## 整式
+
+くいなちゃん: 次に、この体系に「整式」というものを導入します。
+整式とは、ちゃんとした式と思ってくだされば結構です。`>PP`は整式ですが、`>P` (Pならば…完)は式としておかしいので、整式ではないという感じです。
+
+くいなちゃん: 以下が、整式に関しての厳密な定義です。これを満たせば、整式となります。
+
+1. P,Q,Rは整式である
+2. もしφが整式なら、`~φ`も整式である
+3. もしφとψが整式なら、`>φψ`も整式である
+4. これ以外は整式でない
+
+くいなちゃん: はい、それでは、Haskell のほうにもこれを書きましょう。
+<http://tes.so/6saiconf_2/img1.png>
+
+``` haskell
+import List
+import Control.Monad
+
+symbols = ['P', 'Q', 'R', '~', '>']
+
+propositional_variables = ["P", "Q", "R"]
+
+axioms = [">P>QP", ">>P>QR>>PQ>PR", ">>~P~Q>QP"]
+
+formula phi
+    | phi == [] = False
+    | elem phi propositional_variables = True -- Each propositional variable is, on its own, a formula
+    | head phi == '~' && formula (tail phi) = True -- If phi is a formula, then ~ phi is a formula
+    | head phi == '>' && check [] (tail phi) = True -- If phi and psi are formulas, then > phi psi is a formula
+    | otherwise = False
+        where
+            check a b
+                | b == [] = False
+                | formula a && formula b = True
+                | otherwise = check (a ++ [head b]) (tail b)
+
+main = print $ formula ">P~Q" -- True
+```
+
+くいなちゃん: 見辛い色のコメントを読めばわかりますが、それぞれ 1 2 3 の整式の定義が記述されています。
+わかります？
+
+くいなちゃん: 軽く説明しましょう。`formula phi`の一つ目の条件である`elem phi propositional_variables = True`とは、elem は「○○が××に含まれているか」という意味なので、phi が propositional_variables(命題変数？、すなわちPQR)なら`True`という意味です。
+
+くいなちゃん: 1つめの整式の定義に合致しますね。
+
+くいなちゃん: はい、それでは下のほうにある`main = print $ formula ">P~Q"`を見てください。
+これはメイン関数です。
+「main は、`formula ">P~Q"`の結果を、print するものだ」という宣言になっています。
+結果は、`>P~Q` (P⇒￢Q) は式として正しいので、`True`が表示されます。
+
+## 変数の置き換え規則の導入
+
+くいなちゃん: ここで、変数は、整式で置き換えられる規則を導入しましょう。
+P とか Q とかが、文字通り P や Q だけでなく、`>PP` などの式が当てはまらないと "変数" として、あんまり意味がなくなってしまいますからね。
+
+くいなちゃん: つまり、`>P>QP` という公理には、`>R>PR` でも良いですし、それぞれに`>PP`を代入して`>>PP>>PP>PP` でも良いということにしたほうが良いということです。
+
+くいなちゃん: はい、それを Haskell で書いたのがこちらです(グロ注意)。
+意味が解らなくても構いません。
+さっき言ったことが書かれていると思ってください。
+<http://tes.so/6saiconf_2/img2.png>
+
+``` haskell
+import List
+import Control.Monad
+
+symbols = ['P', 'Q', 'R', '~', '>']
+
+propositional_variables = ["P", "Q", "R"]
+
+axioms = [">P>QP", ">>P>QR>>PQ>PR", ">>~P~Q>QP"]
+
+formula phi
+    | phi == [] = False
+    | elem phi propositional_variables = True -- Each propositional variable is, on its own, a formula
+    | head phi == '~' && formula (tail phi) = True -- If phi is a formula, then ~ phi is a formula
+    | head phi == '>' && check [] (tail phi) = True -- If phi and psi are formulas, then > phi psi is a formula
+    | otherwise = False
+        where
+            check a b
+                | b == [] = False
+                | formula a && formula b = True
+                | otherwise = check (a ++ [head b]) (tail b)
+
+check_axioms [] f = False
+check_axioms (th : ths) f
+    | check [head f] (tail f) th [] [] [] = True
+    | otherwise = check_axioms ths f
+        where
+            check a b (c : cs) p q r
+                | (c == '~' || c == '>') && a == [c] =
+                    if b == [] && cs == [] then True else
+                        if b == [] || cs == [] then False else check [head b] (tail b) cs p q r
+                | c == '~' || c == '>' = False
+                | not (formula a) = if b == [] then False else check (a ++ [head b]) (tail b) (c : cs) p q r
+                | c == 'P' && (p == [] || a == p) =
+                    if b == [] && cs == [] then True else
+                        if b == [] || cs == [] then False else check [head b] (tail b) cs a q r
+                | c == 'Q' && (q == [] || a == q) =
+                    if b == [] && cs == [] then True else
+                        if b == [] || cs == [] then False else check [head b] (tail b) cs p a r
+                | c == 'R' && (r == [] || a == r) =
+                    if b == [] && cs == [] then True else
+                        if b == [] || cs == [] then False else check [head b] (tail b) cs p q a
+                | otherwise = False
+
+main = print $ check_axioms axioms ">>RR>>RR>RR" -- True
+```
+
+くいなちゃん: 下のほうにある main に注目です。
+"`>>RR>>RR>RR`" という式が、公理にマッチするかをチェックしています。
+`>>RR>>RR>RR`は公理に直接ありませんが、`>P>QP` という公理に P を `>RR`, Q を `>RR` と当てはめたらこの形になるので、True となっています。
+
+## 推論規則の導入
+
+くいなちゃん: はい、公理はこのへんでいいでしょう。
+最初に言いましたが、定理はこの公理を"推論規則"によって推論することで導出します。
+ということで、推論規則を定義しましょう。
+φと(φ → ψ)という形の整式からはψを推論できる(モーダスポネンス)を推論規則として採用することにします。
+
+くいなちゃん: くいなちゃんの数学体系の言葉で書くと、 P が定理で、かつ `>PQ` が定理ならば、Q も定理である、と推論されるという感じです。
+
+くいなちゃん: この推論規則を書いたのが、こちらです。
+中ほどの `modus_ponens` がそれです。
+<http://tes.so/6saiconf_2/img3.png>
+
+``` haskell
+import List
+import Control.Monad
+
+symbols = ['P', 'Q', 'R', '~', '>']
+
+propositional_variables = ["P", "Q", "R"]
+
+axioms = [">P>QP", ">>P>QR>>PQ>PR", ">>~P~Q>QP"]
+
+formula phi
+    | phi == [] = False
+    | elem phi propositional_variables = True -- Each propositional variable is, on its own, a formula
+    | head phi == '~' && formula (tail phi) = True -- If phi is a formula, then ~ phi is a formula
+    | head phi == '>' && check [] (tail phi) = True -- If phi and psi are formulas, then > phi psi is a formula
+    | otherwise = False
+        where
+            check a b
+                | b == [] = False
+                | formula a && formula b = True
+                | otherwise = check (a ++ [head b]) (tail b)
+
+modus_ponens ths f
+    | head f == '>' && ret /= [] = ret
+    | otherwise = []
+        where
+            ret = check [] (tail f)
+            check a b
+                | b == [] = []
+                | formula a && formula b && check_axioms ths a && check_axioms ths f = b
+                | otherwise = check (a ++ [head b]) (tail b)
+
+check_axioms [] f = False
+check_axioms (th : ths) f
+    | check [head f] (tail f) th [] [] [] = True
+    | otherwise = check_axioms ths f
+        where
+            check a b (c : cs) p q r
+                | (c == '~' || c == '>') && a == [c] =
+                    if b == [] && cs == [] then True else
+                        if b == [] || cs == [] then False else check [head b] (tail b) cs p q r
+                | c == '~' || c == '>' = False
+                | not (formula a) = if b == [] then False else check (a ++ [head b]) (tail b) (c : cs) p q r
+                | c == 'P' && (p == [] || a == p) =
+                    if b == [] && cs == [] then True else
+                        if b == [] || cs == [] then False else check [head b] (tail b) cs a q r
+                | c == 'Q' && (q == [] || a == q) =
+                    if b == [] && cs == [] then True else
+                        if b == [] || cs == [] then False else check [head b] (tail b) cs p a r
+                | c == 'R' && (r == [] || a == r) =
+                    if b == [] && cs == [] then True else
+                        if b == [] || cs == [] then False else check [head b] (tail b) cs p q a
+                | otherwise = False
+
+main = print $ check_axioms axioms ">>RR>>RR>RR" -- True
+```
+
+くいなちゃん: これにより、任意の式が公理から導出できます。
+たとえば、下の main のところにもありますが、`>>P>QP>>PQ>PP`という式を推論させると、これ自体が公理で、かつ `>P>QP` が公理なので、`>>PQ>PP` が新たな定理として導出できることが出力されます。
+
+## すべての定理を自動で発見していくAIが・・・！？
+
+くいなちゃん: はい、よろしいでしょうか。
+では、"P" から何か導出できるかをまずチェックし、次に "Q" "R" "~" ">" "PP" "PQ"…
+とあらゆる式のパターンを導出させていくと、あらゆる定理が発見できることになりますよね！
+これを書いたのが次です。
+<http://tes.so/6saiconf_2/img5.png>
+これにより、全ての定理を自動で発見していく AIが作られました！　#かのように思えた
+
+``` haskell
+import List
+import Control.Monad
+
+symbols = ['P', 'Q', 'R', '~', '>']
+
+propositional_variables = ["P", "Q", "R"]
+
+axioms = [">P>QP", ">>P>QR>>PQ>PR", ">>~P~Q>QP"]
+
+formula phi
+    | phi == [] = False
+    | elem phi propositional_variables = True -- Each propositional variable is, on its own, a formula
+    | head phi == '~' && formula (tail phi) = True -- If phi is a formula, then ~ phi is a formula
+    | head phi == '>' && check [] (tail phi) = True -- If phi and psi are formulas, then > phi psi is a formula
+    | otherwise = False
+        where
+            check a b
+                | b == [] = False
+                | formula a && formula b = True
+                | otherwise = check (a ++ [head b]) (tail b)
+
+modus_ponens ths f
+    | head f == '>' && ret /= [] = ret
+    | otherwise = []
+        where
+            ret = check [] (tail f)
+            check a b
+                | b == [] = []
+                | formula a && formula b && check_axioms ths a && check_axioms ths f = b
+                | otherwise = check (a ++ [head b]) (tail b)
+
+check_axioms [] f = False
+check_axioms (th : ths) f
+    | check [head f] (tail f) th [] [] [] = True
+    | otherwise = check_axioms ths f
+        where
+            check a b (c : cs) p q r
+                | (c == '~' || c == '>') && a == [c] =
+                    if b == [] && cs == [] then True else
+                        if b == [] || cs == [] then False else check [head b] (tail b) cs p q r
+                | c == '~' || c == '>' = False
+                | not (formula a) = if b == [] then False else check (a ++ [head b]) (tail b) (c : cs) p q r
+                | c == 'P' && (p == [] || a == p) =
+                    if b == [] && cs == [] then True else
+                        if b == [] || cs == [] then False else check [head b] (tail b) cs a q r
+                | c == 'Q' && (q == [] || a == q) =
+                    if b == [] && cs == [] then True else
+                        if b == [] || cs == [] then False else check [head b] (tail b) cs p a r
+                | c == 'R' && (r == [] || a == r) =
+                    if b == [] && cs == [] then True else
+                        if b == [] || cs == [] then False else check [head b] (tail b) cs p q a
+                | otherwise = False
+
+run = do
+    n <- [1 .. 12]
+    x <- replicateM n symbols
+    return x
+
+main = print $ nub $ map (modus_ponens axioms) (map (">" ++) run)
+```
+
+くいなちゃん: とりあえず実際に実行させてみると、まる一日計算させて、やっと数個の定理が発見させたに過ぎませんでした。
+あと、このプログラムに、発見された定理をもとに、新たに最初から推論しなおすことも必要でした。
+そして…
+
+くいなちゃん: 数日後…　ド・モルガンの定理を発見させることに成功しました！
+
+くいなちゃん: はい、こんな感じで、数学の定理は見つかります。
+できれば、こんなシンプルな体系ではなく、もっと高度(高階)な体系で試してみると、面白いと思います。
+あと、C++で書いたほうが速い。
+以上ですん☆
+
+くいなちゃん: (実は、ド・モルガンの定理を発見したプログラムは、C#で書かれました)
+
+
+## 補足とか
+
+第2回は[命題論理](http://ja.wikipedia.org/wiki/%E5%91%BD%E9%A1%8C%E8%AB%96%E7%90%86)を扱ったもので難しかったですね・・・．
+Wikipediaによると，今回扱った公理系は[ダフィット・ヒルベルト](http://ja.wikipedia.org/wiki/%E3%83%80%E3%83%95%E3%82%A3%E3%83%83%E3%83%88%E3%83%BB%E3%83%92%E3%83%AB%E3%83%99%E3%83%AB%E3%83%88)が定式化したものらしいです．
+公理とか定理についての説明は[定義、公理、命題、定理とは何か？](http://homepage3.nifty.com/rikei-index01/biseki/bisekiteiri8.html)のページが簡単でわかりやすかった．
+
+さて，Haskellとの関わりあいなんて[すごいH本](http://www.amazon.co.jp/gp/product/4274068854/ref=as_li_ss_tl?ie=UTF8&camp=247&creative=7399&creativeASIN=4274068854&linkCode=as2&tag=shogo82148-22)を学校の図書館で借りただけの僕ですが，くいなちゃんさんのプログラムがかなりグロいことだけはわかります．
+なんだかHaskellっぽくない．
+カンファレンス中にもちらっと発言している人がいたけど，代数的データ型とパターンマッチを使ったほうがそれっぽい気がする．
+(自分じゃ書けないけど)
+
+あと，">"が現れた時の動作．中置記法に直した時にどこまでが前でとこからが後ろか，ってのを全通り試してる．
+先頭から見ていけばちゃんとわかるはず．
+
+これを直せば綺麗なコードで高速化が！って思ったけど，僕にHaskellは早すぎた．
+ブラウザ上で実行できるようにJavaScriptcriptで実装しておきますね．
+
+<textarea id="result" rows="30" cols="100" style="width: 100%;">
+</textarea>
+<input id="length" value="3"><input id="run" type="button" value="実行">
+
+<script>
+(function() {
+    var worker;
+    var run = document.getElementById("run");
+    run.addEventListener('click', function() {
+        var result = document.getElementById('result');
+        if(!worker) {
+            worker = new Worker('/files/2012-10-01-6saiconf-2.js');
+            worker.addEventListener('message', function(e) {
+                if(e.data.msg == 'finish') {
+                    run.disabled = false;
+                } else {
+                    result.value += e.data.formula + '\t' + e.data.theorem +
+                        '\tP:' + e.data.P +
+                        '\tQ:' + e.data.Q +
+                        '\tR:' + e.data.R + '\n';
+                }
+            });
+        }
+        run.disabled = true;
+        worker.postMessage(document.getElementById('length').value);
+    }, false);
+})();
+</script>
+
+くいなちゃんさんのコードでは適当な式を作って定理に当てはめていたけど，
+この実装では定理中の変数を別の式に置き換えることで高速化．
+ボタンをたくさん押すと，いまで見つけた定理から新しい定理を証明します．
+各行の先頭が発見した定理．そのとなりにあるのは元になった定理．
+それに「P:〜 Q:〜 R:〜」を代入すると証明できることをあらわしています．
+
+実際やってみると2回目くらいで`>PP`(P⇒P)が見つかります．
+当たり前すぎて逆に証明するのがむずかしいけど，この公理系では公理から証明できる「定理」なんですね．
+
+ところで，くいなちゃんさんはカンファレンスの最後に[ド・モルガンの定理](http://ja.wikipedia.org/wiki/%E3%83%89%E3%83%BB%E3%83%A2%E3%83%AB%E3%82%AC%E3%83%B3%E3%81%AE%E6%B3%95%E5%89%87)を導いたと言っていますが，
+この公理系では「AまたはB」や「AかつB」が出てきません．
+どうやったんですかね？
+
+実は「A∨B」「 A∧B」はそれぞれ「￢A⇒B」「￢(A⇒￢B)」(くいなちゃんさんの記法では`>~AB`, `~>A~B`)
+の略記だったのです！(真理値表で確認すると一致する)
+例えばさっきのプログラムを動かすと`>P>~PP`(P⇒(￢P⇒P))が定理としてでてきます．
+一見変な風に見えるけど，P⇒P∨Pを証明したわけですね．
+
+この表記で行くと，ド・モルガンの定理は
+
+- `>~>~PQ~>~P~~Q`(￢(￢P⇒Q)⇒￢(￢P⇒￢￢Q)) + 逆:`>~>~P~~Q~>~PQ`もしくは裏:`>~~>~PQ~~>~P~~Q`
+- `>~~>P~Q>~~P~Q`(￢￢(P⇒￢Q)⇒(￢￢P⇒￢Q)) + 逆:`>>~~P~Q~~>P~Q`もしくは裏:`>~~~>P~Q~>~~P~Q`
+
+・・・僕は見つけてないけど，誰か見つけたら教えてください．
+
+<iframe src="http://rcm-jp.amazon.co.jp/e/cm?lt1=_blank&bc1=000000&IS2=1&bg1=FFFFFF&fc1=000000&lc1=0000FF&t=shogo82148-22&o=9&p=8&l=as4&m=amazon&f=ifr&ref=ss_til&asins=4274068854" style="width:120px;height:240px;" scrolling="no" marginwidth="0" marginheight="0" frameborder="0"></iframe>
+
