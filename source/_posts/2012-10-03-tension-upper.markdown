@@ -14,6 +14,8 @@ categories:
 
 いいだろう，その挑戦受けてやる！
 
+<!-- more -->
+
 ## WebRTCって？
 
 WebRTCというのはブラウザ上で Real Time Communication を行うAPI群のことことです．

@@ -12,6 +12,9 @@ categories:
 {% oembed http://www.youtube.com/watch?v=Q4gTV4r0zRs %}
 
 この動画で出てくる[おねえさんのコンピュータ][]を作ってみた、というお話。
+
+<!-- more -->
+
 [おねえさんのコンピュータ][]からアクセスできます。
 
 [おねえさんのコンピュータ]: http://shogo82148.github.com/letscount/

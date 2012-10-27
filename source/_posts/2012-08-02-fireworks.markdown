@@ -15,6 +15,8 @@ categories: ["Android"]
 
 [アプリをダウンロード](https://github.com/downloads/shogo82148/FireworksMeasure/FireworksMeasure.apk)
 
+<!-- more -->
+
 ## 使い方
 
 起動すると、こんな画面が表示されます。

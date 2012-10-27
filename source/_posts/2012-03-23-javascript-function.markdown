@@ -12,6 +12,7 @@ Ajaxを使ってIMEを実現した[AjaxIME](http://ajaxime.chasen.org/)がFireFo
 
 - [Chrome17対応版AjaxIME](http://shogo82148.github.com/AjaxIME/)
 
+<!-- more -->
 
 ## 原因
 

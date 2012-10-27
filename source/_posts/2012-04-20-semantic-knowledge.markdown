@@ -11,6 +11,8 @@ categories: [勉強会, 意味知識勉強会]
 
 紹介された論文とか、スライドは[自然言語処理研究室の意味知識勉強会のページ](http://www.jnlp.org/makabi/semantic_knowledge)からどうぞ。
 
+<!-- more -->
+
 ## 関連学会
 - ACL
 - AAAI
