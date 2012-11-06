@@ -3,7 +3,7 @@ layout: post
 title: "半自動トゥギャりスクリプトを書いてみた"
 date: 2012-10-13 17:35
 comments: true
-categories: 
+categories: [togetter, bookmarklet]
 ---
 
 ## togetterでたくさんツイートをまとめたい
@@ -28,6 +28,8 @@ categories:
 ## ブックマークレットを書いてみたよ
 
 面倒なので、自動的に検索ボタンを押すブックマークレットを書いてみた。
+
+** [ユーザスクリプトで書き直してみたよ！](/blog/2012/10/28/togetter-helper/) **
 
 <!-- more -->
 
