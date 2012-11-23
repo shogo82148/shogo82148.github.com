@@ -1,0 +1,175 @@
+---
+layout: post
+title: "VirtualBoxでHadoop環境を作ってみる"
+date: 2012-11-06 23:20
+comments: true
+categories: [Hadoop, VirtualBox]
+---
+
+隣の人がHadoopいじって遊んでたので，自分もちょっとやっておこうかなと思い少し触ってみました．
+実際にマシンを借りて大規模な計算をするのは大変なので，
+仮想マシンを作って遊んでみました．
+
+<!-- More -->
+
+## 仮装Hadoop環境の構築
+
+巷ではVMWareが人気だったりしますが，今回は[VirtualBox][]を使ってみたいと思います．
+なぜかというと[VirtualBox][]をコンソールから扱えるVagrantで遊んでいたので，
+ちょうどパソコンにインストールされていたから．
+以下，VirtualBoxは既にインストールされているものとして話を進めます．
+
+[Cloudera's Hadoop Demo VM for CDH4][ClouderaDemo]に
+VMWare, KVM, VirtualBox用の各種イメージが置いてあるので，
+VirtualBox用のものをダウンロードしてきます．
+tar.gzで圧縮されているので解凍しましょう．
+中にcloudera-demo-vm.vmdkというファイルが入ってます．
+
+VirtualBoxを起動してHadoop用のマシンを新規作成します．
+設定は以下のとおりに
+
+- デモイメージはCentOSベースらしいのでOSタイプとして RedHat**(64bit版)** を選択
+- メモリは3Gバイト以上
+- ハードディスクは後で設定するので，「起動ディスク」のチェックを外し割り当てしない
+
+新規作成したら設定を少しいじります．
+
+- IO APICが有効化されていることを確認
+- ストレージにcloudera-demo-vm.vmdkを追加．この時 **IDEコントローラ** の下にいれること．
+- ネットワークアダプタをホストオンリーアダプタに設定
+
+これで実行できるようになります．
+
+
+## 遊んでみる
+
+せっかくなので少し遊んでみる事にします．
+イメージの置いてあったページにある[Hadoop Tutorial][Tutorial]をやってみましょう．
+Hadoopの例として必ず最初に出てくるであろう，Word Countです．
+
+まずソースコードを入力します．
+
+``` java WordCount.java https://ccp.cloudera.com/display/DOC/Hadoop+Tutorial
+package org.myorg;
+
+import java.io.IOException;
+import java.util.*;
+
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.conf.*;
+import org.apache.hadoop.io.*;
+import org.apache.hadoop.mapred.*;
+import org.apache.hadoop.util.*;
+
+public class WordCount {
+
+    public static class Map extends MapReduceBase implements Mapper<LongWritable, Text, Text, IntWritable> {
+        private final static IntWritable one = new IntWritable(1);
+        private Text word = new Text();
+
+        public void map(LongWritable key, Text value, OutputCollector<Text, IntWritable> output, Reporter reporter) throws IOException {
+            String line = value.toString();
+            StringTokenizer tokenizer = new StringTokenizer(line);
+            while (tokenizer.hasMoreTokens()) {
+                word.set(tokenizer.nextToken());
+                output.collect(word, one);
+            }
+        }
+    }
+
+    public static class Reduce extends MapReduceBase implements Reducer<Text, IntWritable, Text, IntWritable> {
+        public void reduce(Text key, Iterator<IntWritable> values, OutputCollector<Text, IntWritable> output, Reporter reporter) throws IOException {
+            int sum = 0;
+            while (values.hasNext()) {
+                sum += values.next().get();
+            }
+            output.collect(key, new IntWritable(sum));
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        JobConf conf = new JobConf(WordCount.class);
+        conf.setJobName("wordcount");
+
+        conf.setOutputKeyClass(Text.class);
+        conf.setOutputValueClass(IntWritable.class);
+
+        conf.setMapperClass(Map.class);
+        conf.setCombinerClass(Reduce.class);
+        conf.setReducerClass(Reduce.class);
+
+        conf.setInputFormat(TextInputFormat.class);
+        conf.setOutputFormat(TextOutputFormat.class);
+
+        FileInputFormat.setInputPaths(conf, new Path(args[0]));
+        FileOutputFormat.setOutputPath(conf, new Path(args[1]));
+
+        JobClient.runJob(conf);
+    }
+}
+```
+
+コンパイルして，jarで固めておきます．
+
+``` bash
+mkdir wordcount_classes
+javac -cp /usr/lib/hadoop/client-0.20/\* -d wordcount_classes WordCount.java 
+jar cvf wordcount.jar -C wordcount_classes/ .
+```
+
+プログラムの準備はこれで終わりです．
+しかし，解析対象が無いと解析のしようがないので，ローカルに適当な内容の解析対象のファイルを用意しておきましょう．
+
+``` bash
+echo "Hello World Bye World" > file01
+echo "Hello Hadoop Goodbye Hadoop" > file02
+```
+
+ローカルのファイルをHadoopのファイルシステムへコピーします．
+
+``` bash
+hadoop fs -mkdir /user/cloudera/wordcount
+hadoop fs -mkdir /user/cloudera/wordcount/input
+hadoop fs -copyFromLocal file1 /user/cloudera/wordcount/input
+hadoop fs -copyFromLocal file2 /user/cloudera/wordcount/input
+```
+
+これで準備完了．
+WordCountのプログラムを実行してみましょう．
+
+``` bash
+hadoop jar wordcount.jar org.myorg.WordCount /user/cloudera/wordcount/input /user/cloudera/wordcount/output
+```
+
+以下のコマンドでプログラムが動いていることを確認します．
+
+``` bash
+hadoop fs -ls /user/cloudera/wordcount/output
+hadoop fs -cat /user/cloudera/wordcount/output/part-00000
+```
+
+以下の結果が得られているはずです．
+
+``` plain
+Bye	1
+Goodbye	1
+Hadoop	2
+Hello	2
+World	2
+```
+
+
+## まとめ
+
+VirtualBoxを使ってHadoopの実行環境をお手軽に作り，
+WordCountをして遊んでみました．
+
+HadoopというとWordCountが例としてあげられることが多く「それしかできないの？」と思っていましたが，
+[Mahout][]というライブラリを使うとHadoopの枠組みで数々の機械学習ができてしまうらしいです．
+応用範囲は広そうなのでもう少し高度なことをして遊んでみたいですね．
+
+
+[VirtualBox]: https://www.virtualbox.org/
+[ClouderaDemo]: https://ccp.cloudera.com/display/SUPPORT/Cloudera%27s+Hadoop+Demo+VM+for+CDH4
+[Tutorial]: https://ccp.cloudera.com/display/DOC/Hadoop+Tutorial
+[Mahout]: http://mahout.apache.org/
