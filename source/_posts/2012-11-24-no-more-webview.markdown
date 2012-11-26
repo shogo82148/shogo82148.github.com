@@ -359,5 +359,59 @@ WebViewはアプリからブラウザの機能を扱うのに非常に便利で�
 作りました．
 3分間計りたいときにどうぞ．
 
+## おへんじ
+
+たくさんシェアしてもらったのでお返事書いておきます．
+
+<blockquote class="twitter-tweet" lang="ja"><p>たしかにそうなんだけど、PIN形式は実装が手間だし、PINコピペするのも手間だし、IntentFilter形式は空のブラウザー窓が残るのがものすごく気になるんだよなぁ… / “OAuthの認証にWebViewを使うのはやめよう - S…” <a href="http://t.co/NS0kyGg2" title="http://htn.to/hZZLhx">htn.to/hZZLhx</a></p>&mdash; たくじさん (@takuji31) <a href="https://twitter.com/takuji31/status/272987171202424833" data-datetime="2012-11-26T08:56:28+00:00">11月 26, 2012</a></blockquote>
+<script src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+WebViewでURLフックを入れるよりは，PINコードのほうがコードもわかりやすく簡単かと．
+ただPINコードのコピペが面倒なのはそのとおりなので，Android アプリの場合採用は難しいかもしれません．
+
+Intent Filterはマニフェストに手を入れる必要がある分面倒．ブラウザにタブが残るのも厄介です．
+ここは利便性とセキュリティとのトレードオフと割り切るしか無いでしょう．
+Web上での本人確認の方法がパスワードくらいしかない以上，パスワード流出の危険性はかなり重大な欠陥だと言えます．
+手間なのは最初の一回だけですし，Intent Filter を使うのが賢い方法だと思います．
+
+
+<blockquote class="twitter-tweet" lang="ja"><p>追記。あと標準ブラウザも絶対ダメ。。→そもそもWebViewを使っちゃダメなのよ。。Android版のChromeだけ使いましょう。。 / “OAuthの認証にWebViewを使うのはやめよう - Shogo's Blog” <a href="http://t.co/jjo1o4Gb" title="http://htn.to/ybxt7Y">htn.to/ybxt7Y</a></p>&mdash; Kietaさん (@typex20) <a href="https://twitter.com/typex20/status/273001101798813696" data-datetime="2012-11-26T09:51:49+00:00">11月 26, 2012</a></blockquote>
+<script src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+はい．おっしゃるとおりです．
+わざわざ反論してまで WebView を使う理由が思い浮かびません．
+代替手法を考えるべきだと思います．
+
+
+<blockquote class="twitter-tweet" lang="ja"><p>安全に実装できるんならこしたことはないけど、悪意のある実装を前提にするのならWebViewでも他のコンポーネントでもかわらないかな。どっちかというと外部サイトビューワーの役割を持つWebViewでフィッシング開くじょとの方がリスク高そう<a href="http://t.co/QB2HoJSc" title="http://shogo82148.github.com/blog/2012/11/24/no-more-webview/">shogo82148.github.com/blog/2012/11/2…</a></p>&mdash; laiso(レイソー)さん (@laiso) <a href="https://twitter.com/laiso/status/273027828126187520" data-datetime="2012-11-26T11:38:01+00:00">11月 26, 2012</a></blockquote>
+<script src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+<blockquote class="twitter-tweet" data-in-reply-to="273027828126187520" lang="ja"><p>@<a href="https://twitter.com/laiso">laiso</a> 普段使ってるブラウザでログイン済みの場合なら、少なくともパスワード取られないことが保証できるので、WebViewだろうとブラウザっぽいものだろうとパスワード聞かれたタイミングで警戒すべき、という方が分かりやすいんじゃないかと思う。</p>&mdash; malaさん (@bulkneets) <a href="https://twitter.com/bulkneets/status/273029308254154753" data-datetime="2012-11-26T11:43:54+00:00">11月 26, 2012</a></blockquote>
+<script src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+このポストで取り上げているのは「認証画面を偽装してパスワードを盗む」ことが可能という，まさしくフィッシングの話題です．
+開発者は，自前で「** ブラウザっぽいもの ** 」を実装するのではなく，「 ** 本物のブラウザ ** 」を使いましょう，という紹介でした．
+
+問題なのは「パスワードを聞かれる or 聞かれない」ではなく，「どのアプリがパスワードを聞いているか」です．
+ログインしていなければ当然Webブラウザでもパスワードは聞かれます．
+認証を求めているアプリとは別の，** 信用のできるアプリ ** がパスワードを聞いてくるということが重要なのです．
+Webブラウザを信用出来ないというのであれば，そもそもWebサービスを使うべきではありません．
+
+
+<blockquote class="twitter-tweet" lang="ja"><p>OAuthの認証にWebViewを使うのはやめよう - Shogo's Blog<a href="http://t.co/EQElowcq" title="http://bit.ly/S75tRa">bit.ly/S75tRa</a> WebView使って怪し気な事してたらどうせパケットキャプチャでばれない？ まぁ、PINの方が確実に安全だと思うのでそこは賛成だけど</p>&mdash; nakamura001さん (@nakamura001) <a href="https://twitter.com/nakamura001/status/273012182357266432" data-datetime="2012-11-26T10:35:51+00:00">11月 26, 2012</a></blockquote>
+<script src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+パケットキャプチャだけでは見抜けないと思います．
+認証画面のDOM要素を直接見れば，通信にまったく介入しなくてもパスワードなんて簡単に抜けます．
+実際には WebView からDOM要素を見ることはできないようですが，
+DOM 操作が可能な WebView を自前実装することだって技術的には可能です．
+そのため，パスワードを盗みとっているかどうかを外からみた動作だけで判断することは非常に難しく，
+内部構造を解析する必要があると思います．
+
+パケットキャプチャやらリバースエンジニアリングを駆使すれば理論的はすべての不正は防げるとは思いますが，
+それをすべてのアプリでやるのは非常に面倒ですし，一般ユーザが実践するのは困難です．
+こういうことをやらなくてもある程度安全にサービスを使えるようにするのが OAuth の役割．
+積極的に利用していくべきでしょう．
+
 [Twitter4J]: http://twitter4j.org/ja/index.html
 
