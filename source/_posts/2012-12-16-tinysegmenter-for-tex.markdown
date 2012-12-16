@@ -79,7 +79,7 @@ $ ./maker tex < model
 
 これを自分のドキュメントに読み込ませてみます．
 
-```bash
+```tex
 \documentclass{jarticle}
 \usepackage{tinysegmenter}
 \begin{document}
