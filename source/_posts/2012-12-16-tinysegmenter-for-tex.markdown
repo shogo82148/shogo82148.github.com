@@ -8,7 +8,7 @@ categories: [NLP, LaTeX]
 
 この記事は[TeX & LaTeX Advent Calendar](http://atnd.org/events/34318)の傘下記事です．
 15日はk16.shikanoさんの「[TeX がむかついたので実装したけど挫折してる話](http://note.golden-lucky.net/2012/12/tex.html)」,
-17日は\@undefinedです．
+17日は@egtraさんの「[LCDF TypetoolsでOpenTypeフォントを使う(DVIPDFMXで)](http://dev.activebasic.com/egtra/2012/12/18/522/)」です．
 
 neruko3114が参加しているのを見てなんだか楽しそうだったで参加してみました．
 とはいってもネタも思いつかなったので，過去に作ったものをTeXに移植してみました．
