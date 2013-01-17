@@ -21,6 +21,8 @@ Python2系が対象です(3系はよくわからない)．
 - MeCabに渡す文字列はencode，戻ってきた文字列はdecodeする
 - MeCabに渡した文字列は必ず変数に入れておく
 
+<!-- More -->
+
 ## EncodeとDecode
 
 Python2系の文字列には，バイト列として扱われる文字列(str)と，Unicodeで表現された文字列(unicode)があります．

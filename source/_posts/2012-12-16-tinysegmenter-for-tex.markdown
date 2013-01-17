@@ -15,6 +15,8 @@ neruko3114が参加しているのを見てなんだか楽しそうだったで�
 ターゲットは[TinySegmenter](http://chasen.org/~taku/software/TinySegmenter/)．
 以前作った[TinySegmenterMaker](https://github.com/shogo82148/TinySegmenterMaker)でLaTeXを出力できるようになったよ！
 
+<!-- More -->
+
 ## 使ってみる
 
 [TinySegmenterMaker](https://github.com/shogo82148/TinySegmenterMaker)のレポジトリをダウンロードするなり`git clone`するなりして
