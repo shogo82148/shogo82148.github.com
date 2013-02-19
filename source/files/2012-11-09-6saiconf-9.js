@@ -5,7 +5,7 @@ window.addEventListener('load', function() {
 
     var ctx = new AudioContext();
     var mediaElement = new Audio();
-    mediaElement.src = "http://tes.so/6saiconf_5/snd7.mp3";
+    mediaElement.src = "http://kuina.tes.so/6saiconf_5/snd7.mp3";
     mediaElement.loop = true;
     var srcElement = null;
 
