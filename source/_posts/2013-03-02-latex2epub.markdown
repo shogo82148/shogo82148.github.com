@@ -1,0 +1,126 @@
+---
+layout: post
+title: LaTeX2EPUBで電子書籍を作ってみる
+date: 2013-03-02 16:20
+comments: true
+categories: [LaTeX, epub]
+---
+
+LaTeXで書いた文章を電子書籍にしたくなったので，
+[LaTeX2EPUB][]を使ってみました．
+
+<!-- More -->
+[LaTeX2EPUB][]は[LaTeXML][]と[ReVIEW][]に依存しているようなので，
+それぞれインストールしていきます．
+あと，数式の変換とかにLaTeXを使っているので別途用意する必要あり．
+いろんなディストリビューションがあるけど，
+ここでは TeX Live 2012 を使いました．
+
+## LaTeXML のインストール
+
+[LaTeXML][]はLaTeXの文章をXML形式に変換するソフト．
+そこからさらにXSLTを使ってXHTMLへ変換できる．
+[ドキュメント](http://dlmf.nist.gov/LaTeXML/get.html)に従って
+依存するライブラリをインストール．
+
+``` bash
+perl -MCPAN -e shell
+cpan> install DB_File, Parse::RecDescent, File::Which
+cpan> install XML::LibXML, XML::LibXSLT
+```
+
+ドキュメントが少し古いらしく，これだけでは不十分だった．
+追加でParse::RecDescentとImage::Magickもインストールしておく．
+
+``` bash
+cpan> install Parse::RecDescent
+cpan> quit
+yum install ImageMagick-perl
+```
+
+後はソースを取ってきてmakeするだけ．
+現時点での最新版0.7.0をインストールした．
+
+```
+wget http://dlmf.nist.gov/LaTeXML/releases/LaTeXML-0.7.0.tar.gz
+tar zxvf LaTeXML-0.7.0.tar.gz
+cd LaTeXML-0.7.0
+perl Makefile.PL
+make
+make test
+make install
+```
+
+## ReVIEW のインストール
+
+[ReVIEW][]は簡単なマークアップ言語で書かれたテキストから
+PDFやEPUBを作成するためのスクリプトです．
+このなかのEPUB作成機能に依存しているようなのでインストールしておきます．
+[ReVIEW][]はgemで簡単インストール．
+
+``` bash
+gem install review
+```
+
+## LaTeX2EPUB のインストール
+
+[LaTeX2EPUB][]本体をインストール．
+本家の日本語化対応が少し不十分だったので
+改造版を上げといた．
+これをダウンロードしてパスの通ったところに置けばインストール完了．
+
+``` bash
+git clone https://github.com/shogo82148/latex2epub
+```
+
+## 日本語化対応
+
+自分の環境だと
+数式中に日本語を上手く扱えませんでした．
+どうやらGhostscriptの設定が不十分だった模様．
+[ここ](http://www.ice.is.kit.ac.jp/~umehara/misc/comp/20110817a.html)
+を参考に設定変更．
+自分の環境では/usr/share/ghostscript/8.70/Resource/Init/cidfmap
+に次の内容を追加することで変換できました．
+
+``` plain
+/TakaoMincho << /FileType /TrueType /Path (/usr/share/fonts/ipa-mincho/ipam.ttf) /SubfontID 0 /CSI [(Japan1) 2] >> ;
+/TakaoGothic << /FileType /TrueType /Path (less /usr/share/fonts/ipa-gothic/ipag.ttf) /SubfontID 0 /CSI [(Japan1) 2] >> ;
+/Ryumin-Light /TakaoMincho ;
+/GothicBBB-Medium /TakaoGothic ;
+```
+
+## 電子書籍を作ってみる
+
+yaml形式の設定ファイルを適当に編集して
+
+``` bash
+latex2epub.rb sample.tex sample.yaml
+```
+
+と打てば変換してくれる．
+
+デフォルトの設定ではスタイルファイルを読んでくれないので，
+自前スタイルファイル中でマクロを定義している場合はそのままでは変換できない．
+*.sty.ltxml というファイルを代わりに作っておくと，そっちを代わりに読んでくれる．
+中身はPerlスクリプト．
+書き方は[LaTeXMLのドキュメント](http://dlmf.nist.gov/LaTeXML/manual/customization/customization.latexml.xhtml)を参照．
+
+Perlのソースを頑張って読んで，以下の問題は一応解決した．
+画像の変換もできた．
+
+- 数式内に日本語を含めるとエラーになる．
+- 画像はまだ実験していない
+
+次の問題はまだ解決してない．
+XSLよくわかんない．
+
+- 目次に「〜 in 〜」とどうしても入ってしまう．
+- 対応TeXクラスがまだ少ない．
+- 数式部分を(出来れば画像も)SVG化できるようにしたい．
+- もうちょっといいCSSが必要．
+
+[LaTeX2EPUB]: http://kmuto.jp/d/index.cgi/computer/latex2epub.htm
+[EPUB]: http://ja.wikipedia.org/wiki/EPUB
+[LaTeXML]: http://dlmf.nist.gov/LaTeXML/
+[ReVIEW]: https://github.com/kmuto/review/
