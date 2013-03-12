@@ -232,6 +232,14 @@ public void onActivityResult(int requestCode, int resultCode, Intent data) {
 callback URL へアクセスしたときに，ブラウザにインテントを発行してもらう方法です．
 ユーザがPINコードを覚える必要がないので楽ちんです．
 
+** (2013-03-09追記) **
+この記事を公開したらギルティ言われてしまいました．
+([TwitterのOAuthの問題まとめ](https://gist.github.com/mala/5062931)・[TwitterのOAuthの問題の補足とか](https://gist.github.com/mala/5107120))
+「Consumer Key が漏れる可能性を否定できないクライアントアプリでは，Callback URL をつかべきではない」とのご指摘です．
+ごもっとなご意見です．
+この方法は** 非推奨 **です．
+PINコードを使った認証を使いましょう．
+
 その分開発は面倒ですが．
 ポイントは以下の点です．
 
