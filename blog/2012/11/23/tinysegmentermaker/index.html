@@ -1,0 +1,565 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>TinySegmenterの学習ツールを作ってみた - Shogo's Blog</title>
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="description" content="TinySegmenterは工藤さん作のJavaScriptだけで書かれたコンパクトな分かち書きソフトウェアです．
+わずか20kバイト程度のサイズしかなく，お手軽に使える分かち書きソフトウェアですが，
+当たり前のことながら学習データに使った新聞記事以外の文章の精度はイマイチ． &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://shogo82148.github.com/blog/2012/11/23/tinysegmentermaker/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  <link href="/atom.xml" rel="alternate" title="Shogo's Blog" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-4526627-4']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Shogo's Blog</a></h1>
+  
+    <h2>たぶんプログラミングとかについて書いていくブログ</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:shogo82148.github.com" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/blog/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">TinySegmenterの学習ツールを作ってみた</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-11-23T14:37:00+09:00" pubdate data-updated="true">Nov 23<span>rd</span>, 2012</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p><a href="http://chasen.org/~taku/software/TinySegmenter/">TinySegmenter</a>は工藤さん作のJavaScriptだけで書かれたコンパクトな分かち書きソフトウェアです．
+わずか20kバイト程度のサイズしかなく，お手軽に使える分かち書きソフトウェアですが，
+当たり前のことながら学習データに使った新聞記事以外の文章の精度はイマイチ．
+改善しようにも学習用のプログラムが公開されていないのでモデルの修正が大変です．</p>
+
+<p>ないなら作ってしまいましょう！</p>
+
+<!-- More -->
+
+
+<h2>ダウンロード</h2>
+
+<p>ソースはgithubで公開しています．cloneするなりzipファイルを落としてくるなりしてください．</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/TinySegmenterMaker">TinySegmenterMaker</a></li>
+</ul>
+
+
+<h2>学習方法</h2>
+
+<p>スペースで分かち書きしたコーパスをあらかじめ準備しておきます．
+コーパスから分かち書きの情報と素性を取り出します．</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>./extract &lt; corpus.txt &gt; features.txt
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>AdaBoostを用いて学習します．
+新しい弱分類器の分類精度が0.001以下，繰り返し回数が10000回以上となったら学習を終了します．</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>g++ -O3 -o train train.cpp <span class="c"># コンパイル</span>
+</span><span class='line'><span class="nv">$ </span>./train -t 0.001 -n 10000 features.txt model <span class="c"># 学習</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>きちんと分割できるが実際に試してみます．</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>./segment model
+</span><span class='line'>私の名前は中野です
+</span><span class='line'>私 の 名前 は 中野 です
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>ライブラリの作成</h2>
+
+<p><a href="http://chasen.org/~taku/software/TinySegmenter/">TinySegmenter</a>は実装が簡単なためいろいろな言語へ移植されています．
+モデルの更新のたびにそれらへの言語の移植バージョンを作るのは大変です．
+というわけで，makerコマンドで各種言語用のライブラリを作れます．
+学習結果のモデルはライブラリのなかに組み込まれ，ファイル単体で簡単に使用することができます．
+allを指定することで，対応しているすべての言語向けのライブラリを出力します．</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>./maker javascript &lt; model
+</span><span class='line'><span class="nv">$ </span>./maker perl &lt; model
+</span><span class='line'><span class="nv">$ </span>./maker ruby &lt; medel
+</span><span class='line'><span class="nv">$ </span>./maker python &lt; model
+</span><span class='line'><span class="nv">$ </span>./maker cpp &lt; model
+</span><span class='line'><span class="nv">$ </span>./maker all &lt; model <span class="c"># 上のライブラリをすべて作成します</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>AdaBoostについておさらい</h2>
+
+<p><a href="http://en.wikipedia.org/wiki/AdaBoost">AdaBoost</a>が面白そうだと前々から思っていて，
+現実逃避にこれを使っているという<a href="http://chasen.org/~taku/software/TinySegmenter/">TinySegmenter</a> の実装をしてみました．
+簡単に<a href="http://en.wikipedia.org/wiki/AdaBoost">AdaBoost</a>についてお勉強しておきましょう．</p>
+
+<p>性能が悪い分類器だってたくさん集まれば高性能な分類器になれるはず！という
+三人よれば文殊の知恵みたいな考え方としてBoostingがあります．
+その学習方法の一つが<a href="http://en.wikipedia.org/wiki/AdaBoost">AdaBoost</a>です．</p>
+
+<h3>初期化</h3>
+
+<p>データxが与えられたときのyを推定する問題を考えます．
+あらかじめm個の学習データが与えられたとしましょう．</p>
+
+<script type="math/tex; mode=display">
+(x_1, y_1), \cdots, (x_m, y_m) ただし，y_i \in \{-1, +1\}
+</script>
+
+
+<p>与えられたすべてのデータを判別するのが最終目標ですが，
+弱い分類器にそこまで求めるのは酷です．
+そこで分類器の評価の際に，間違えては困るデータに重み付けをすることにします．
+その重みをDとしましょう．
+はじめはどれが重要かわからないので重みは全て同じ，
+扱いやすいように合計1になるように正規化しておきます．</p>
+
+<script type="math/tex; mode=display">
+D_1(i) = \frac{1}{m}, i = 1, \cdots, m.
+</script>
+
+
+<h3>弱分類器の選択</h3>
+
+<p>弱分類器 h_t を選びます．
+弱分類器の作り方はなんでもいいのですが，+1か-1を結果として返し，<script type="math/tex">| 0.5 - \epsilon_t|</script> がなるべく大きくなるようなものを選びます．</p>
+
+<script type="math/tex">\epsilon_t</script>
+
+
+<p> は分類に失敗したデータの割合(重み考慮)で，次式で定義されます．</p>
+
+<script type="math/tex; mode=display">
+\epsilon_t = \sum_{i=1}^m D_t(i) [y_i \not = h_t]
+</script>
+
+
+<p>εが0か1に近い分類器は分類性能が高いということなので，最終的な分類器を構成するときに重みを大きくしたほうがいいような気がします．
+εが1に近いということはほとんどの分類に失敗しているということなので，性能が高いというのは変な気がするけど，
+必ず間違うのなら負号を反対にしてしまえばいいのです．</p>
+
+<p>整理すると，重み関数の条件は，0か1に近くなると絶対値が大きく，0.5以上で負，0.5以下で正となるような関数，ということになります．
+このような条件を満たす関数は無限に考えられますが，次の式使うといいらしいです(論理的背景があるんだろうけど理解はしていない)．</p>
+
+<script type="math/tex; mode=display">
+\alpha_t = \frac{1}{2} \log \frac{1-\epsilon_t}{\epsilon}
+</script>
+
+
+<h3>重みの更新</h3>
+
+<p>弱分類器の選択を何度も繰り返せば性能がどんどん上がっていくはずですが，ただ単に良い分類器を選ぶだけでは性能は上がりません．
+今ある弱分類器で正しく分類できなかったデータを正しく分類してくれる(つまり今の欠点を補ってくれる)
+弱分類器を次の候補とするべきです．</p>
+
+<p>そこで，うまく分類できたデータの重みを少なく，分類できなかったデータの重みを大きくしましょう．</p>
+
+<script type="math/tex; mode=display">
+D_{t+1}(i) = \frac{D_t(i)\exp (-\alpha_t y_i h_t(x_i))}{Z_t}
+</script>
+
+
+<p>Z_tは正規化のための係数です．
+弱分類器の選択と重みの更新を繰り返すことで分類精度が上がっていきます．</p>
+
+<h3>分類する</h3>
+
+<p>最終的な分類器は</p>
+
+<script type="math/tex; mode=display">
+H(x) = \sum_{t=1}^T \alpha_t h_t(x)
+</script>
+
+
+<p>となります．H(x)の負号が分類器の予測結果です．</p>
+
+<h2>実演</h2>
+
+<p>数式だけだとわかりにくと思うので分類の実演．
+青丸と赤丸をAdaBoostで分類するテスト．弱分類器として座標軸と平行な直線を選択します．
+重みの大きいデータは色が濃くなります．
+分類に失敗しているデータは色が濃く，優先的に分類されることを確認できると思います．</p>
+
+<script type="text/javascript" src="http://jsdo.it/blogparts/1XZV/js"></script>
+
+
+<h2>単語分割に応用</h2>
+
+<p>さて，学習の方法が分かったので単語分割への応用を考えます．
+<a href="http://chasen.org/~taku/software/TinySegmenter/">TinySegmenter</a>は，単語分割を文字と文字の間を分割するか/しないかという二値分類の問題と捉えます．
+分類の手がかりとなる素性には，前後の文字列，文字種，以前の分類結果を使っています．</p>
+
+<p>弱分類器には素性の有無を使っています．
+このようなxが○以上とか素性がある/ないみたいな
+ANDとかORを使わずに作れる弱分類器を 決定株(decision stump) というらしいです．
+こうすることで弱分類器の重みが，そのまま素性の重みになります．</p>
+
+<h2>再学習機能</h2>
+
+<p><a href="http://en.wikipedia.org/wiki/AdaBoost">AdaBoost</a>の更新式を眺めていると</p>
+
+<script type="math/tex; mode=display">
+D_{T}(i) = \frac{\exp (H(x_i))}{Z_T}
+</script>
+
+
+<p>と表すことができるということがわかります．
+これはつまり，学習済みのモデルから学習中に使う変数がすべて復元できるということです．</p>
+
+<p>この考えに基づいてTinySegmenterMakerでは再学習機能を実装してみました．</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>./train -t 0.0001 -n 10000 -M model_old features.txt model_new
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>この機能を使えば10000回とりあえず回してみて，不十分だからもう10000回追加，みたいなことができます．
+同じコーパスを使っていれば，10000+10000回と20000回の結果はほぼ同じ結果になるはずです(もちろん浮動小数点演算の誤差が多少あるけど)．</p>
+
+<p>この変数の復元は，元のモデルの学習に使ったものとは違うコーパスでも可能なので，
+リポジトリに登録されているモデルを元に自分で用意したコーパスで学習することも可能なはず．
+(どの程度性能が変わるのかとか論理的な解析・評価はしてないので，実際使えるものなのかはよくわからない)</p>
+
+<p>オリジナルTinySegmenterのモデルからも再学習は可能だけど，こちらはスケールをいじってあるから再学習の効果はもっとよくわからない．</p>
+
+<h2>ダイナミックプログラミング版TinySegmenter</h2>
+
+<p>分類器が返すスコアの絶対値は分類の確信度を表していると仮定して，
+文章全体の確信度の合計が最大になる単語分割を採用するプログラムも書いてみた(tinysegmenter.dp.jp)．
+AdaBoost自身がこの値をデータの重み付けに使っているくらいなので，この仮定はだいたいあっているんじゃないか
+と勝手に考えているけど，論理的な裏付けをとったわけじゃないし性能評価もしてない．</p>
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="http://chasen.org/~taku/software/TinySegmenter/">TinySegmenter</a></li>
+<li><a href="http://en.wikipedia.org/wiki/AdaBoost">Adaboost</a></li>
+<li><a href="http://ultraist.hatenablog.com/entry/20120603/1338675881">BimyouSegmenter</a></li>
+<li><a href="http://search.cpan.org/dist/Text-TinySegmenter/">Text::TinySegmenter</a></li>
+<li><a href="http://www.programming-magic.com/20080726203844/">TinySegmenterをPythonで書いてみた</a></li>
+<li><a href="http://d.hatena.ne.jp/llamerada/20080224/1203818061">TinySegmenterをRubyに移植</a></li>
+<li><a href="http://d.hatena.ne.jp/repeatedly/20101105/1288946662">TinySegmenter in D</a></li>
+<li><a href="http://code.google.com/p/tinysegmenter-cpp/">tinysegmenter-cpp</a></li>
+<li><a href="http://www.programming-magic.com/20080816010106/">PHP版TinySegmenter作ってみた</a></li>
+<li><a href="http://pub.ne.jp/arihagne/?entry_id=2768818">VBAでTinySegmenterしてみる</a></li>
+<li><a href="http://wiki.dobon.net/index.php?free%2FTinySegmenter.NET">TinySegmenter.NET : 分かち書きを行うC#のクラス</a></li>
+<li><a href="http://blog.bornneet.com/Entry/276/">TinySegmenterをiPhone(Objective-C)に移植してみました</a></li>
+<li><a href="http://blog.bornneet.com/Entry/277/">TinySegmenter.mをRegexKitLiteに対応させてみた</a></li>
+<li><a href="https://code.google.com/p/cmecab-java/">cmecab-java MeCabのJavaバインディング＋Lucene/Solr用トークナイザ・フィルタ</a>
+
+<ul>
+<li>おんなじインターフェースでTinySegmenterも使えるみたい</li>
+<li><a href="https://code.google.com/p/cmecab-java/source/browse/trunk/src/net/moraleboost/tinysegmenter/TinySegmenter.java">TinySegmenter.java</a></li>
+</ul>
+</li>
+<li><a href="http://miyamuko.s56.xrea.com/xyzzy/tiny-segmenter.html">tiny-segmenter - xyzzy Lisp だけで実装されたコンパクトな分かち書きソフトウェア</a></li>
+</ul>
+
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-11-23T14:37:00+09:00" pubdate data-updated="true">Nov 23<span>rd</span>, 2012</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/nlp/'>NLP</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.com/blog/2012/11/23/tinysegmentermaker/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.com/blog/2012/11/23/tinysegmentermaker/" data-via="shogo82148" data-counturl="http://shogo82148.github.com/blog/2012/11/23/tinysegmentermaker/" >Tweet</a>
+  
+  
+  <div class="g-plusone" data-size="medium"></div>
+  
+  
+    <div class="fb-like" data-send="true" data-width="450" data-show-faces="false"></div>
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2012/11/09/6saiconf-9/" title="Previous Post: 6さいカンファレンス 第9回「マスタリングの技法 ～音圧を上げよう～」まとめ">&laquo; 6さいカンファレンス 第9回「マスタリングの技法 ～音圧を上げよう～」まとめ</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2012/11/24/no-more-webview/" title="Next Post: OAuthの認証にWebViewを使うのはやめよう">OAuthの認証にWebViewを使うのはやめよう &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2013/03/05/emacsclient/">出、出〜〜〜〜wwww emacsをふたつ以上実行奴〜〜〜〜www(emacsclient編)</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/03/02/latex2epub/">LaTeX2EPUBで電子書籍を作ってみる</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/02/21/starting-aws/">AWSをはじめてみた</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/01/22/jo-ri-bot-1st-anniversary/">じょりぼっとが起動して一年がたちました</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/12/28/tunneling-udp-via-ssh/">UDPのパケットをSSHを通してトンネルする</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>GitHub Repos</h1>
+  <ul id="gh_repos">
+    <li class="loading">Status updating...</li>
+  </ul>
+  
+  <a href="https://github.com/shogo82148">@shogo82148</a> on GitHub
+  
+  <script type="text/javascript">
+    $.domReady(function(){
+        if (!window.jXHR){
+            var jxhr = document.createElement('script');
+            jxhr.type = 'text/javascript';
+            jxhr.src = '/javascripts/libs/jXHR.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(jxhr, s);
+        }
+
+        github.showRepos({
+            user: 'shogo82148',
+            count: 0,
+            skip_forks: true,
+            target: '#gh_repos'
+        });
+    });
+  </script>
+  <script src="/javascripts/github.js" type="text/javascript"> </script>
+</section>
+
+
+<section>
+  <h1>Latest Tweets</h1>
+  <ul id="tweets">
+    <li class="loading">Status updating...</li>
+  </ul>
+  <script type="text/javascript">
+    $.domReady(function(){
+      getTwitterFeed("shogo82148", 4, false);
+    });
+  </script>
+  <script src="/javascripts/twitter.js" type="text/javascript"> </script>
+  
+    <a href="http://twitter.com/shogo82148" class="twitter-follow-button" data-show-count="false">Follow @shogo82148</a>
+  
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2013 - Shogo Ichinose -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'shogosblog';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://shogo82148.github.com/blog/2012/11/23/tinysegmentermaker/';
+        var disqus_url = 'http://shogo82148.github.com/blog/2012/11/23/tinysegmentermaker/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) {return;}
+  js = d.createElement(s); js.id = id;
+  js.src = "//connect.facebook.net/en_US/all.js#appId=212934732101925&xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var script = document.createElement('script'); script.type = 'text/javascript'; script.async = true;
+      script.src = 'https://apis.google.com/js/plusone.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(script, s);
+    })();
+  </script>
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

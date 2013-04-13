@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: UDP | Shogo's Blog]]></title>
+  <link href="http://shogo82148.github.com/blog/categories/udp/atom.xml" rel="self"/>
+  <link href="http://shogo82148.github.com/"/>
+  <updated>2013-04-13T10:15:34+09:00</updated>
+  <id>http://shogo82148.github.com/</id>
+  <author>
+    <name><![CDATA[Shogo Ichinose]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[UDPのパケットをSSHを通してトンネルする]]></title>
+    <link href="http://shogo82148.github.com/blog/2012/12/28/tunneling-udp-via-ssh/"/>
+    <updated>2012-12-28T16:38:00+09:00</updated>
+    <id>http://shogo82148.github.com/blog/2012/12/28/tunneling-udp-via-ssh</id>
+    <content type="html"><![CDATA[<p>SSHには標準でTCPのトンネリング機能は付いているのですが，
+UDPはトンネリングしてくれません．
+なんとかできないものかと試行錯誤してみました．</p>
+
+<!-- More -->
+
+
+<h2>TCP をトンネル</h2>
+
+<p>TCPのトンネリングの復習から．
+以下のコマンドでクライアントの8080番ポートを，リモートの80番ポートに転送することができます．</p>
+
+<p><code>bash
+ssh -L 8080:localhost:80 remote
+</code></p>
+
+<p>SOCKS proxyとして動作させることも出来ます．
+ブラウザのプロキシとして設定すれば，リモートのサーバがすべての通信を中継してくれます．</p>
+
+<p><code>bash
+ssh -D 8080 remote
+</code></p>
+
+<h2>UDP をトンネル</h2>
+
+<p>NetCatを使うと TCP/UDP の通信内容と標準入出力をつなげることが出来るらしいです．
+これを使って，クライアント側で UDP サーバを立て，その通信内容をSSH経由でリモートの UDP クライアントに送ってあげます．
+最後にリモートからクライアント側へのパケットを名前付きパイプで転送してあげればトンネル完成です．</p>
+
+<p><code>bash
+mkfifo tunnel
+nc -ul 8080 &lt; tunnel | ssh remote nc -u localhost 8080 &gt; tunnel
+</code></p>
+
+<h2>Mosh をトンネル</h2>
+
+<p>なんでこんなことをしようと思ったかというと，<a href="http://mosh.mit.edu/">Mosh</a>をファイヤーウォール越しに使いたかったから．
+<a href="http://mosh.mit.edu/">Mosh</a>はUDPで通信しているので，SSHしか通らない環境では使えません．
+そこでUDPをSSHでトンネリングしてできないかとやって見ました．
+セッションの確立にSSHも使っているので，以下のようにして Mosh用のUDPトンネルと SSH用のTCPトンネルを作ります．</p>
+
+<p><code>bash
+mkfifo tunnel
+nc -ul 60000 &lt; tunnel | ssh -L 10000:localhost:22 remote nc -u localhost 60000 &gt; tunnel &amp;
+mosh -p 60000 --ssh="ssh -p 10000" localhost
+</code></p>
+
+<p>外部からのSSH通信が遅かったので，<a href="http://mosh.mit.edu/">Mosh</a>のローカルエコーでなんとかならないかと挑戦してみました．
+実際の効果は未確認．またあとで試してみます．</p>
+
+<h2>追記</h2>
+
+<p>試してみました．
+一応通信できることは確認したのですが，非常に不安定で頻繁に通信に失敗します．</p>
+
+<p>NetCatがパケットの境界を出力しないので，パケットがズタズタに切り裂かれ，
+パケットのデコードに失敗してしまうようです．</p>
+
+<p>回線が十分速い＆UDPパケットが非常に小さいときにしか上手く動きません．
+NetCat のオプションを見てみましたがパケット境界の指定はできないようです．
+ここでの方法はお手軽に試せるという利点はありますが，
+もっと安定したUDP通信を望むならUDP転送コマンドを真面目に作るか，
+いっそのことVPNを構築するのが一番ですね．</p>
+]]></content>
+  </entry>
+  
+</feed>

@@ -1,0 +1,422 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>CやC++でのincludeの優先順位 - Shogo's Blog</title>
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="description" content="こんにちは、gccのオプションを十個も言えない、非人のshogoです。 工藤氏作のTinySVMで遊ぼうとしていたところ、
+ヘッダファイルの読み込み順序ではまったのでメモ。 2つのinclude文 皆さんご存知の通り、Cプリプロセッサの#include文ではファイルの指定方法が2種類あります &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://shogo82148.github.com/blog/2012/06/26/c-include/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  <link href="/atom.xml" rel="alternate" title="Shogo's Blog" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-4526627-4']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Shogo's Blog</a></h1>
+  
+    <h2>たぶんプログラミングとかについて書いていくブログ</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:shogo82148.github.com" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/blog/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">CやC++でのincludeの優先順位</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-06-26T11:13:00+09:00" pubdate data-updated="true">Jun 26<span>th</span>, 2012</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>こんにちは、gccのオプションを十個も言えない、非人のshogoです。</p>
+
+<p>工藤氏作の<a href="http://chasen.org/~taku/software/TinySVM/">TinySVM</a>で遊ぼうとしていたところ、
+ヘッダファイルの読み込み順序ではまったのでメモ。</p>
+
+<!-- more -->
+
+
+<h2>2つのinclude文</h2>
+
+<p>皆さんご存知の通り、Cプリプロセッサの#include文ではファイルの指定方法が2種類あります。</p>
+
+<ol>
+<li>&#035;include &lt;somefile&gt; // システムにインストールされたライブラリを使う場合</li>
+<li>&#035;include &quot;somefile&quot; // 自作のヘッダファイルなどを読み込む場合</li>
+</ol>
+
+
+<p>大抵はコメントで書いたような使い分けをするんじゃないかと思います。
+両者の違いはファイルの検索対象となるディレクトリの違いにあります。
+前者はコンパイラが知っているディレクトリのみを検索するのに対して、
+後者はカレントディレクトリを検索したのち、&lt;>と同じディレクトリを検索します。</p>
+
+<p>コンパイラが知っているディレクトリは具体的に書くと次のようになっています。</p>
+
+<ol>
+<li>-I オプションで指定されたディレクトリ</li>
+<li>環境変数 C&#095;INCLUDE&#095;PATH や CPLUS&#095;INCLUDE&#095;PATH で指定されたディレクトリ</li>
+<li>システムによって予め決められたディレクトリ(/usr/local/includeとか)</li>
+</ol>
+
+
+<p>上にあるものほど優先順位高く、同名のファイルがあった場合、優先順位の高いディレクトリにあるものが読み込まれます。</p>
+
+<h2>標準のヘッダを使いたい</h2>
+
+<p>次のようなCのプログラムを考えてみます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cm">/* sample.c */</span>
+</span><span class='line'><span class="cp">#include &lt;stdio.h&gt; </span><span class="c1">// 標準ヘッダのstdio.hを取り込んでほしい！</span>
+</span><span class='line'><span class="cp">#include &quot;stdio.h&quot; </span><span class="c1">// ../userheaderディレクトリ内のstdio.hを取り込んでほしい！</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>最初のincludeではシステムに用意された標準ヘッダのstdio.hを、
+2つ目のincludeでは自前で用意したstdio.hを読み込もうとしています。
+しかし、自前で用意したstdio.hはuserheaderという別ディレクトリにあるので
+このままでは参照できません。</p>
+
+<p>別ディレクトリにあるヘッダファイルを参照する場合、一般的には-Iオプションを使って次のようにコンパイルすると思います。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>gcc -I../userheader sample.c
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>しかしこの例の場合はこの方法は上手く行きません。
+&lt;>で囲った場合も&#8221;&#8220;で囲った場合も、カレントディレクトリにはstdio.hは見つからないので、
+先の優先順位に従って次のような順番で検索を行います。</p>
+
+<ol>
+<li>userheader</li>
+<li>標準ヘッダstdio.hが入ったディレクトリ</li>
+</ol>
+
+
+<p>どちらの書き方でもuserheader内のstdio.hを先に発見してしまうので、
+標準ヘッダのstdio.hにはどう頑張ってもアクセスすることができません。</p>
+
+<h2>解決策</h2>
+
+<p>iquoteオプションを使うと、&quot;&quot;で囲った場合のみuserheaderを見に行くようになります。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>gcc -iquote../userheader sample.c
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>TinySVMの場合</h2>
+
+<p>TinySVM0.09(現時点での最新版)は一部環境でgetoptの違うというエラーが発生するようです。
+これは-Iオプションを使ってしまったため、標準ヘッダのgetopt.hと、自前で用意したgetopt.hの使い分けができていないのが原因です。</p>
+
+<p>TinySVMに同梱されたgetopt関数の引数を書き換えることで対処している例がほとんど
+(<a href="http://d.hatena.ne.jp/himorogi/20090621/1245536366">himorogiの日記</a>, <a href="http://rmecab.jp/wiki/index.php?%CF%C2%C9%DB%C9%F3%C2%BE%A5%A4%A5%F3%A5%B9%A5%C8%A1%BC%A5%EB">RとLinuxと&#8230;</a>,etc)
+ですが、大抵の環境にgetoptはあると思うのでgetopt.hを削除してしまったほうがいいかもしれません。
+(TinySVM最近更新されていないのでgetoptが古いし)</p>
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="http://ameblo.jp/mofu-mofu-alpaca/entry-10868656211.html">C言語のヘッダ読み込み順について</a></li>
+<li><a href="http://gcc.gnu.org/onlinedocs/gcc-4.7.1/gcc/Directory-Options.html">Directory Options - Using the GNU Compiler Collection (GCC)</a></li>
+<li><a href="http://gcc.gnu.org/onlinedocs/gcc-4.7.1/cpp.pdf">The C Preprocessor</a> pp.66-67</li>
+</ul>
+
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-06-26T11:13:00+09:00" pubdate data-updated="true">Jun 26<span>th</span>, 2012</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/c/'>C</a>, <a class='category' href='/blog/categories/c-/'>C++</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.com/blog/2012/06/26/c-include/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.com/blog/2012/06/26/c-include/" data-via="shogo82148" data-counturl="http://shogo82148.github.com/blog/2012/06/26/c-include/" >Tweet</a>
+  
+  
+  <div class="g-plusone" data-size="medium"></div>
+  
+  
+    <div class="fb-like" data-send="true" data-width="450" data-show-faces="false"></div>
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2012/04/20/semantic-knowledge/" title="Previous Post: 第1回 意味知識勉強会">&laquo; 第1回 意味知識勉強会</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2012/07/29/nds27/" title="Next Post: NDS27に参加してきた">NDS27に参加してきた &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2013/03/05/emacsclient/">出、出〜〜〜〜wwww emacsをふたつ以上実行奴〜〜〜〜www(emacsclient編)</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/03/02/latex2epub/">LaTeX2EPUBで電子書籍を作ってみる</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/02/21/starting-aws/">AWSをはじめてみた</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/01/22/jo-ri-bot-1st-anniversary/">じょりぼっとが起動して一年がたちました</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/12/28/tunneling-udp-via-ssh/">UDPのパケットをSSHを通してトンネルする</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>GitHub Repos</h1>
+  <ul id="gh_repos">
+    <li class="loading">Status updating...</li>
+  </ul>
+  
+  <a href="https://github.com/shogo82148">@shogo82148</a> on GitHub
+  
+  <script type="text/javascript">
+    $.domReady(function(){
+        if (!window.jXHR){
+            var jxhr = document.createElement('script');
+            jxhr.type = 'text/javascript';
+            jxhr.src = '/javascripts/libs/jXHR.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(jxhr, s);
+        }
+
+        github.showRepos({
+            user: 'shogo82148',
+            count: 0,
+            skip_forks: true,
+            target: '#gh_repos'
+        });
+    });
+  </script>
+  <script src="/javascripts/github.js" type="text/javascript"> </script>
+</section>
+
+
+<section>
+  <h1>Latest Tweets</h1>
+  <ul id="tweets">
+    <li class="loading">Status updating...</li>
+  </ul>
+  <script type="text/javascript">
+    $.domReady(function(){
+      getTwitterFeed("shogo82148", 4, false);
+    });
+  </script>
+  <script src="/javascripts/twitter.js" type="text/javascript"> </script>
+  
+    <a href="http://twitter.com/shogo82148" class="twitter-follow-button" data-show-count="false">Follow @shogo82148</a>
+  
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2013 - Shogo Ichinose -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'shogosblog';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://shogo82148.github.com/blog/2012/06/26/c-include/';
+        var disqus_url = 'http://shogo82148.github.com/blog/2012/06/26/c-include/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) {return;}
+  js = d.createElement(s); js.id = id;
+  js.src = "//connect.facebook.net/en_US/all.js#appId=212934732101925&xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var script = document.createElement('script'); script.type = 'text/javascript'; script.async = true;
+      script.src = 'https://apis.google.com/js/plusone.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(script, s);
+    })();
+  </script>
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

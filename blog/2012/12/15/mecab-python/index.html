@@ -1,0 +1,500 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>MeCabをPythonから使う注意点とか - Shogo's Blog</title>
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="description" content="日本語の文章をコンピュータで色々いじるときに，
+必ずと言っていいほどよく使うのが形態素解析器．
+スペースなどの明示的な区切りの無い日本語を単語に分割してくれるツールです．
+中でもMeCabが非常に有名で，さまざまなところで使われています． MeCabはいろいろな言語から呼び出すことができます． &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://shogo82148.github.com/blog/2012/12/15/mecab-python/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  <link href="/atom.xml" rel="alternate" title="Shogo's Blog" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-4526627-4']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Shogo's Blog</a></h1>
+  
+    <h2>たぶんプログラミングとかについて書いていくブログ</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:shogo82148.github.com" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/blog/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">MeCabをPythonから使う注意点とか</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-12-15T17:38:00+09:00" pubdate data-updated="true">Dec 15<span>th</span>, 2012</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>日本語の文章をコンピュータで色々いじるときに，
+必ずと言っていいほどよく使うのが形態素解析器．
+スペースなどの明示的な区切りの無い日本語を単語に分割してくれるツールです．
+中でもMeCabが非常に有名で，さまざまなところで使われています．</p>
+
+<p>MeCabはいろいろな言語から呼び出すことができます．
+自然言語処理の分野ではPythonが人気のようですね．僕も使っています．
+しかし，MeCabをPythonから使う場合，注意する点がいくつかあります．
+そこにハマっている後輩を見かけたので，文章として残しておくことにします．
+Python2系が対象です(3系はよくわからない)．
+注意するのは以下の二点です．</p>
+
+<ul>
+<li>MeCabに渡す文字列はencode，戻ってきた文字列はdecodeする</li>
+<li>MeCabに渡した文字列は必ず変数に入れておく</li>
+</ul>
+
+
+<!-- More -->
+
+
+<h2>EncodeとDecode</h2>
+
+<p>Python2系の文字列には，バイト列として扱われる文字列(str)と，Unicodeで表現された文字列(unicode)があります．
+日本語を扱う場合，strだといろいろ問題があるので，特に理由がなければunicodeを使うべきです．
+しかし，MeCabはstrしか受け付けません．
+そこでMeCabに渡す直前・直後でencode・decodeするようにします．</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="kn">import</span> <span class="nn">MeCab</span>
+</span><span class='line'><span class="n">tagger</span> <span class="o">=</span> <span class="n">MeCab</span><span class="o">.</span><span class="n">tagger</span><span class="p">(</span><span class="s">&#39;-Owakati&#39;</span><span class="p">)</span>
+</span><span class='line'><span class="n">text</span> <span class="o">=</span> <span class="s">u&#39;MeCabで遊んでみよう！&#39;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">result</span> <span class="o">=</span> <span class="n">tagger</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">text</span><span class="p">)</span> <span class="c"># エラー！</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">encoded_text</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s">&#39;utf-8&#39;</span><span class="p">)</span> <span class="c"># encodeが必要</span>
+</span><span class='line'><span class="n">encoded_result</span> <span class="o">=</span> <span class="n">tagger</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+</span><span class='line'><span class="n">result</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s">&#39;utf-8&#39;</span><span class="p">)</span> <span class="c"># 必ずdecode</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>'utf-8'</code>の部分は辞書の文字コードに合わせて適宜書き換えてください．
+デフォルトはeuc-jpですが，utf-8の方が幸せになれると思います．</p>
+
+<h2>必ず変数に入れる</h2>
+
+<p>次にMeCabの作ったノードに直接アクセスして，品詞情報などを取ってくることを考えます．
+適当に書いてみるとこんな感じでしょうか．</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="kn">import</span> <span class="nn">MeCab</span>
+</span><span class='line'><span class="n">tagger</span> <span class="o">=</span> <span class="n">MeCab</span><span class="o">.</span><span class="n">tagger</span><span class="p">(</span><span class="s">&#39;&#39;</span><span class="p">)</span>
+</span><span class='line'><span class="n">text</span> <span class="o">=</span> <span class="s">u&#39;MeCabで遊んでみよう！&#39;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">node</span> <span class="o">=</span> <span class="n">tagger</span><span class="o">.</span><span class="n">parseToNode</span><span class="p">(</span><span class="n">text</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s">&#39;utf-8&#39;</span><span class="p">))</span>
+</span><span class='line'><span class="k">while</span> <span class="n">node</span><span class="p">:</span>
+</span><span class='line'>    <span class="c">#printはstrを渡す必要があるのでdecodeは不要</span>
+</span><span class='line'>    <span class="k">print</span> <span class="n">node</span><span class="o">.</span><span class="n">surface</span> <span class="o">+</span> <span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span> <span class="o">+</span> <span class="n">node</span><span class="o">.</span><span class="n">feature</span>
+</span><span class='line'>    <span class="n">node</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">next</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>MeCabに渡す直前にencodeもしているので上手く動きそうです．
+(decodeしてないのはprintに渡すためなので気にしなくておｋ)
+しかし，このコードの出力は下のような悲惨なものとなるのです
+(ブラウザさんに配慮して一部修正，環境によっても違うと思います)</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>    BOS/EOS,*,*,*,*,*,*,*,*
+</span><span class='line'>MeCab   名詞,一般,*,*,*,*,*
+</span><span class='line'>    ??   助詞,格助詞,一般,*,*,*,で,デ,デ
+</span><span class='line'>?詞,?   動詞,自立,*,*,五段・バ行,連用タ接続,遊ぶ,アソン,アソン
+</span><span class='line'>???     助詞,接続助詞,*,*,*,*,で,デ,デ
+</span><span class='line'>??,*,*       動詞,非自立,*,*,一段,未然ウ接続,みる,ミヨ,ミヨ
+</span><span class='line'>,*,     助動詞,*,*,*,不変化型,基本形,う,ウ,ウ
+</span><span class='line'>*,*     記号,一般,*,*,*,*,！,！,！
+</span><span class='line'>    BOS/EOS,*,*,*,*,*,*,*,*</span></code></pre></td></tr></table></div></figure>
+
+
+<p>なぜこのようなことが起きてしまったのでしょう？
+答えは<code>text.encode('utf-8')</code>の戻り値の寿命と，MeCabノードの構造にあります．</p>
+
+<p>みんなさんが普段お使いのPythonは，C言語で実装されたCPythonだと思います．
+「CPythonでは、ガベージコレクションの方式として参照カウント方式とマーク・アンド・スイープ方式を併用」しています
+(<a href="http://ja.wikipedia.org/wiki/Python#.E3.83.87.E3.83.BC.E3.82.BF.E5.9E.8B">Python - Wikipedia</a>)．
+参照カウント方式おかげでCPythonは不要になったオブジェクトを不要になった瞬間に検出し，そのオブジェクトを解放することができます．
+つまり実際には5行目を少し細かく見ると，Pythonは以下の処理をします．</p>
+
+<ol>
+<li><code>text.encode('utf-8')</code>を呼び出し，&#8221;エンコード済みtext&#8221;を作成</li>
+<li><code>tagger.parseToNode</code>を呼び出し，結果を<code>node</code>に代入</li>
+<li>不要になった<strong> &#8220;エンコード済みtext&#8221;を破棄 </strong></li>
+</ol>
+
+
+<p>ポイントは3番ですね．6行目を実行する前に，&#8221;エンコード済みtext&#8221;は破棄されてしまいます．</p>
+
+<p>さて，次にMeCabがどのようにノードの情報を扱っているか見てみましょう．
+MeCabの言語バインディングのページには，ノードのsurfaceは文字列型であるような定義が書いてありますが，あれは嘘です．
+<a href="http://code.google.com/p/mecab/source/browse/trunk/mecab/src/mecab.h">ソース</a>を見ればわかりますが，みんな大好きポインタとして定義されています．
+実はこのポインタ，<strong> &#8220;エンコード済みtext&#8221;上の開始点を指し示しています </strong>．</p>
+
+<p>つまり，どういうことかというと，</p>
+
+<ul>
+<li>MeCabはsurfaceを作るのに毎回&#8221;エンコード済みtext&#8221;からコピペしてた</li>
+<li>しかし，MeCabはPythonにそのことを伝えていなかった</li>
+<li>不要と判断したPythonによって&#8221;エンコード済みtext&#8221;はすでに破棄されており，そこには何もなかった</li>
+</ul>
+
+
+<p>これを解決するにはPythonに&#8221;エンコード済みtext&#8221;が使用中であることを伝え，破棄されないようにする必要があります．
+一番簡単な方法は変数に保存しておくことです．変数のスコープにいる間は&#8221;エンコード済みtext&#8221;が破棄される心配はありません．</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="kn">import</span> <span class="nn">MeCab</span>
+</span><span class='line'><span class="n">tagger</span> <span class="o">=</span> <span class="n">MeCab</span><span class="o">.</span><span class="n">tagger</span><span class="p">(</span><span class="s">&#39;&#39;</span><span class="p">)</span>
+</span><span class='line'><span class="n">text</span> <span class="o">=</span> <span class="s">u&#39;MeCabで遊んでみよう！&#39;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">encoded_text</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s">&#39;utf-8&#39;</span><span class="p">)</span>
+</span><span class='line'><span class="n">node</span> <span class="o">=</span> <span class="n">tagger</span><span class="o">.</span><span class="n">parseToNode</span><span class="p">(</span><span class="n">encoded_text</span><span class="p">)</span> <span class="c"># 変数に入れる！</span>
+</span><span class='line'><span class="k">while</span> <span class="n">node</span><span class="p">:</span>
+</span><span class='line'>    <span class="k">print</span> <span class="n">node</span><span class="o">.</span><span class="n">surface</span> <span class="o">+</span> <span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span> <span class="o">+</span> <span class="n">node</span><span class="o">.</span><span class="n">feature</span>
+</span><span class='line'>    <span class="n">node</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">next</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>これで上手く行きます．</p>
+
+<p>encode_textとnodeの寿命が一致している必要があります．
+nodeの結果を何度も利用する場合は一度nodeの内容をすべてPythonのリストか何かに格納しましょう．
+一度変換してしまえば，ガーベージコレクションは正しく動きます．</p>
+
+<h2>まとめ</h2>
+
+<ul>
+<li>MeCabに渡す文字列はencode，戻ってきた文字列はdecodeする</li>
+<li>MeCabに渡した文字列は必ず変数に入れておく</li>
+</ul>
+
+
+<p>面倒なのでラッパーを書くかといいかもしれませんね．
+もしくは自前で実装とか．</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-12-15T17:38:00+09:00" pubdate data-updated="true">Dec 15<span>th</span>, 2012</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/mecab/'>MeCab</a>, <a class='category' href='/blog/categories/nlp/'>NLP</a>, <a class='category' href='/blog/categories/python/'>Python</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.com/blog/2012/12/15/mecab-python/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.com/blog/2012/12/15/mecab-python/" data-via="shogo82148" data-counturl="http://shogo82148.github.com/blog/2012/12/15/mecab-python/" >Tweet</a>
+  
+  
+  <div class="g-plusone" data-size="medium"></div>
+  
+  
+    <div class="fb-like" data-send="true" data-width="450" data-show-faces="false"></div>
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2012/12/05/kikoemasuka/" title="Previous Post: 聞こえますか…自動生成…してみた…よ…">&laquo; 聞こえますか…自動生成…してみた…よ…</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2012/12/16/tinysegmenter-for-tex/" title="Next Post: TinySegmenterをLaTeXに移植してみた">TinySegmenterをLaTeXに移植してみた &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2013/03/05/emacsclient/">出、出〜〜〜〜wwww emacsをふたつ以上実行奴〜〜〜〜www(emacsclient編)</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/03/02/latex2epub/">LaTeX2EPUBで電子書籍を作ってみる</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/02/21/starting-aws/">AWSをはじめてみた</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/01/22/jo-ri-bot-1st-anniversary/">じょりぼっとが起動して一年がたちました</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/12/28/tunneling-udp-via-ssh/">UDPのパケットをSSHを通してトンネルする</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>GitHub Repos</h1>
+  <ul id="gh_repos">
+    <li class="loading">Status updating...</li>
+  </ul>
+  
+  <a href="https://github.com/shogo82148">@shogo82148</a> on GitHub
+  
+  <script type="text/javascript">
+    $.domReady(function(){
+        if (!window.jXHR){
+            var jxhr = document.createElement('script');
+            jxhr.type = 'text/javascript';
+            jxhr.src = '/javascripts/libs/jXHR.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(jxhr, s);
+        }
+
+        github.showRepos({
+            user: 'shogo82148',
+            count: 0,
+            skip_forks: true,
+            target: '#gh_repos'
+        });
+    });
+  </script>
+  <script src="/javascripts/github.js" type="text/javascript"> </script>
+</section>
+
+
+<section>
+  <h1>Latest Tweets</h1>
+  <ul id="tweets">
+    <li class="loading">Status updating...</li>
+  </ul>
+  <script type="text/javascript">
+    $.domReady(function(){
+      getTwitterFeed("shogo82148", 4, false);
+    });
+  </script>
+  <script src="/javascripts/twitter.js" type="text/javascript"> </script>
+  
+    <a href="http://twitter.com/shogo82148" class="twitter-follow-button" data-show-count="false">Follow @shogo82148</a>
+  
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2013 - Shogo Ichinose -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'shogosblog';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://shogo82148.github.com/blog/2012/12/15/mecab-python/';
+        var disqus_url = 'http://shogo82148.github.com/blog/2012/12/15/mecab-python/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) {return;}
+  js = d.createElement(s); js.id = id;
+  js.src = "//connect.facebook.net/en_US/all.js#appId=212934732101925&xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var script = document.createElement('script'); script.type = 'text/javascript'; script.async = true;
+      script.src = 'https://apis.google.com/js/plusone.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(script, s);
+    })();
+  </script>
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

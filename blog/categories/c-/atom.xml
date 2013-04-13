@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: C++ | Shogo's Blog]]></title>
+  <link href="http://shogo82148.github.com/blog/categories/c-/atom.xml" rel="self"/>
+  <link href="http://shogo82148.github.com/"/>
+  <updated>2013-04-13T10:15:34+09:00</updated>
+  <id>http://shogo82148.github.com/</id>
+  <author>
+    <name><![CDATA[Shogo Ichinose]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[CやC++でのincludeの優先順位]]></title>
+    <link href="http://shogo82148.github.com/blog/2012/06/26/c-include/"/>
+    <updated>2012-06-26T11:13:00+09:00</updated>
+    <id>http://shogo82148.github.com/blog/2012/06/26/c-include</id>
+    <content type="html"><![CDATA[<p>こんにちは、gccのオプションを十個も言えない、非人のshogoです。</p>
+
+<p>工藤氏作の<a href="http://chasen.org/~taku/software/TinySVM/">TinySVM</a>で遊ぼうとしていたところ、
+ヘッダファイルの読み込み順序ではまったのでメモ。</p>
+
+<!-- more -->
+
+
+<h2>2つのinclude文</h2>
+
+<p>皆さんご存知の通り、Cプリプロセッサの#include文ではファイルの指定方法が2種類あります。</p>
+
+<ol>
+<li>&#035;include &lt;somefile&gt; // システムにインストールされたライブラリを使う場合</li>
+<li>&#035;include &quot;somefile&quot; // 自作のヘッダファイルなどを読み込む場合</li>
+</ol>
+
+
+<p>大抵はコメントで書いたような使い分けをするんじゃないかと思います。
+両者の違いはファイルの検索対象となるディレクトリの違いにあります。
+前者はコンパイラが知っているディレクトリのみを検索するのに対して、
+後者はカレントディレクトリを検索したのち、&lt;>と同じディレクトリを検索します。</p>
+
+<p>コンパイラが知っているディレクトリは具体的に書くと次のようになっています。</p>
+
+<ol>
+<li>-I オプションで指定されたディレクトリ</li>
+<li>環境変数 C&#095;INCLUDE&#095;PATH や CPLUS&#095;INCLUDE&#095;PATH で指定されたディレクトリ</li>
+<li>システムによって予め決められたディレクトリ(/usr/local/includeとか)</li>
+</ol>
+
+
+<p>上にあるものほど優先順位高く、同名のファイルがあった場合、優先順位の高いディレクトリにあるものが読み込まれます。</p>
+
+<h2>標準のヘッダを使いたい</h2>
+
+<p>次のようなCのプログラムを考えてみます。</p>
+
+<p>```c
+/<em> sample.c </em>/</p>
+
+<h1>include &lt;stdio.h> // 標準ヘッダのstdio.hを取り込んでほしい！</h1>
+
+<h1>include "stdio.h" // ../userheaderディレクトリ内のstdio.hを取り込んでほしい！</h1>
+
+<p>```</p>
+
+<p>最初のincludeではシステムに用意された標準ヘッダのstdio.hを、
+2つ目のincludeでは自前で用意したstdio.hを読み込もうとしています。
+しかし、自前で用意したstdio.hはuserheaderという別ディレクトリにあるので
+このままでは参照できません。</p>
+
+<p>別ディレクトリにあるヘッダファイルを参照する場合、一般的には-Iオプションを使って次のようにコンパイルすると思います。</p>
+
+<p><code>bash
+gcc -I../userheader sample.c
+</code></p>
+
+<p>しかしこの例の場合はこの方法は上手く行きません。
+&lt;>で囲った場合も""で囲った場合も、カレントディレクトリにはstdio.hは見つからないので、
+先の優先順位に従って次のような順番で検索を行います。</p>
+
+<ol>
+<li>userheader</li>
+<li>標準ヘッダstdio.hが入ったディレクトリ</li>
+</ol>
+
+
+<p>どちらの書き方でもuserheader内のstdio.hを先に発見してしまうので、
+標準ヘッダのstdio.hにはどう頑張ってもアクセスすることができません。</p>
+
+<h2>解決策</h2>
+
+<p>iquoteオプションを使うと、&quot;&quot;で囲った場合のみuserheaderを見に行くようになります。</p>
+
+<p><code>bash
+gcc -iquote../userheader sample.c
+</code></p>
+
+<h2>TinySVMの場合</h2>
+
+<p>TinySVM0.09(現時点での最新版)は一部環境でgetoptの違うというエラーが発生するようです。
+これは-Iオプションを使ってしまったため、標準ヘッダのgetopt.hと、自前で用意したgetopt.hの使い分けができていないのが原因です。</p>
+
+<p>TinySVMに同梱されたgetopt関数の引数を書き換えることで対処している例がほとんど
+(<a href="http://d.hatena.ne.jp/himorogi/20090621/1245536366">himorogiの日記</a>, <a href="http://rmecab.jp/wiki/index.php?%CF%C2%C9%DB%C9%F3%C2%BE%A5%A4%A5%F3%A5%B9%A5%C8%A1%BC%A5%EB">RとLinuxと...</a>,etc)
+ですが、大抵の環境にgetoptはあると思うのでgetopt.hを削除してしまったほうがいいかもしれません。
+(TinySVM最近更新されていないのでgetoptが古いし)</p>
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="http://ameblo.jp/mofu-mofu-alpaca/entry-10868656211.html">C言語のヘッダ読み込み順について</a></li>
+<li><a href="http://gcc.gnu.org/onlinedocs/gcc-4.7.1/gcc/Directory-Options.html">Directory Options - Using the GNU Compiler Collection (GCC)</a></li>
+<li><a href="http://gcc.gnu.org/onlinedocs/gcc-4.7.1/cpp.pdf">The C Preprocessor</a> pp.66-67</li>
+</ul>
+
+]]></content>
+  </entry>
+  
+</feed>

@@ -1,0 +1,395 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>UDPのパケットをSSHを通してトンネルする - Shogo's Blog</title>
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="description" content="SSHには標準でTCPのトンネリング機能は付いているのですが，
+UDPはトンネリングしてくれません．
+なんとかできないものかと試行錯誤してみました． TCP をトンネル TCPのトンネリングの復習から．
+以下のコマンドでクライアントの8080番ポートを， &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://shogo82148.github.com/blog/2012/12/28/tunneling-udp-via-ssh/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  <link href="/atom.xml" rel="alternate" title="Shogo's Blog" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-4526627-4']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Shogo's Blog</a></h1>
+  
+    <h2>たぶんプログラミングとかについて書いていくブログ</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:shogo82148.github.com" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/blog/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">UDPのパケットをSSHを通してトンネルする</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-12-28T16:38:00+09:00" pubdate data-updated="true">Dec 28<span>th</span>, 2012</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>SSHには標準でTCPのトンネリング機能は付いているのですが，
+UDPはトンネリングしてくれません．
+なんとかできないものかと試行錯誤してみました．</p>
+
+<!-- More -->
+
+
+<h2>TCP をトンネル</h2>
+
+<p>TCPのトンネリングの復習から．
+以下のコマンドでクライアントの8080番ポートを，リモートの80番ポートに転送することができます．</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>ssh -L 8080:localhost:80 remote
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>SOCKS proxyとして動作させることも出来ます．
+ブラウザのプロキシとして設定すれば，リモートのサーバがすべての通信を中継してくれます．</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>ssh -D 8080 remote
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>UDP をトンネル</h2>
+
+<p>NetCatを使うと TCP/UDP の通信内容と標準入出力をつなげることが出来るらしいです．
+これを使って，クライアント側で UDP サーバを立て，その通信内容をSSH経由でリモートの UDP クライアントに送ってあげます．
+最後にリモートからクライアント側へのパケットを名前付きパイプで転送してあげればトンネル完成です．</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>mkfifo tunnel
+</span><span class='line'>nc -ul 8080 &lt; tunnel | ssh remote nc -u localhost 8080 &gt; tunnel
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Mosh をトンネル</h2>
+
+<p>なんでこんなことをしようと思ったかというと，<a href="http://mosh.mit.edu/">Mosh</a>をファイヤーウォール越しに使いたかったから．
+<a href="http://mosh.mit.edu/">Mosh</a>はUDPで通信しているので，SSHしか通らない環境では使えません．
+そこでUDPをSSHでトンネリングしてできないかとやって見ました．
+セッションの確立にSSHも使っているので，以下のようにして Mosh用のUDPトンネルと SSH用のTCPトンネルを作ります．</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>mkfifo tunnel
+</span><span class='line'>nc -ul 60000 &lt; tunnel | ssh -L 10000:localhost:22 remote nc -u localhost 60000 &gt; tunnel &amp;
+</span><span class='line'>mosh -p 60000 --ssh<span class="o">=</span><span class="s2">&quot;ssh -p 10000&quot;</span> localhost
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>外部からのSSH通信が遅かったので，<a href="http://mosh.mit.edu/">Mosh</a>のローカルエコーでなんとかならないかと挑戦してみました．
+実際の効果は未確認．またあとで試してみます．</p>
+
+<h2>追記</h2>
+
+<p>試してみました．
+一応通信できることは確認したのですが，非常に不安定で頻繁に通信に失敗します．</p>
+
+<p>NetCatがパケットの境界を出力しないので，パケットがズタズタに切り裂かれ，
+パケットのデコードに失敗してしまうようです．</p>
+
+<p>回線が十分速い＆UDPパケットが非常に小さいときにしか上手く動きません．
+NetCat のオプションを見てみましたがパケット境界の指定はできないようです．
+ここでの方法はお手軽に試せるという利点はありますが，
+もっと安定したUDP通信を望むならUDP転送コマンドを真面目に作るか，
+いっそのことVPNを構築するのが一番ですね．</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-12-28T16:38:00+09:00" pubdate data-updated="true">Dec 28<span>th</span>, 2012</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/ssh/'>SSH</a>, <a class='category' href='/blog/categories/udp/'>UDP</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.com/blog/2012/12/28/tunneling-udp-via-ssh/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.com/blog/2012/12/28/tunneling-udp-via-ssh/" data-via="shogo82148" data-counturl="http://shogo82148.github.com/blog/2012/12/28/tunneling-udp-via-ssh/" >Tweet</a>
+  
+  
+  <div class="g-plusone" data-size="medium"></div>
+  
+  
+    <div class="fb-like" data-send="true" data-width="450" data-show-faces="false"></div>
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2012/12/24/wavezutazutajs/" title="Previous Post: JavaScript版WaveZutaZuta作ってみた">&laquo; JavaScript版WaveZutaZuta作ってみた</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2013/01/22/jo-ri-bot-1st-anniversary/" title="Next Post: じょりぼっとが起動して一年がたちました">じょりぼっとが起動して一年がたちました &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2013/03/05/emacsclient/">出、出〜〜〜〜wwww emacsをふたつ以上実行奴〜〜〜〜www(emacsclient編)</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/03/02/latex2epub/">LaTeX2EPUBで電子書籍を作ってみる</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/02/21/starting-aws/">AWSをはじめてみた</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/01/22/jo-ri-bot-1st-anniversary/">じょりぼっとが起動して一年がたちました</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/12/28/tunneling-udp-via-ssh/">UDPのパケットをSSHを通してトンネルする</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>GitHub Repos</h1>
+  <ul id="gh_repos">
+    <li class="loading">Status updating...</li>
+  </ul>
+  
+  <a href="https://github.com/shogo82148">@shogo82148</a> on GitHub
+  
+  <script type="text/javascript">
+    $.domReady(function(){
+        if (!window.jXHR){
+            var jxhr = document.createElement('script');
+            jxhr.type = 'text/javascript';
+            jxhr.src = '/javascripts/libs/jXHR.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(jxhr, s);
+        }
+
+        github.showRepos({
+            user: 'shogo82148',
+            count: 0,
+            skip_forks: true,
+            target: '#gh_repos'
+        });
+    });
+  </script>
+  <script src="/javascripts/github.js" type="text/javascript"> </script>
+</section>
+
+
+<section>
+  <h1>Latest Tweets</h1>
+  <ul id="tweets">
+    <li class="loading">Status updating...</li>
+  </ul>
+  <script type="text/javascript">
+    $.domReady(function(){
+      getTwitterFeed("shogo82148", 4, false);
+    });
+  </script>
+  <script src="/javascripts/twitter.js" type="text/javascript"> </script>
+  
+    <a href="http://twitter.com/shogo82148" class="twitter-follow-button" data-show-count="false">Follow @shogo82148</a>
+  
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2013 - Shogo Ichinose -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'shogosblog';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://shogo82148.github.com/blog/2012/12/28/tunneling-udp-via-ssh/';
+        var disqus_url = 'http://shogo82148.github.com/blog/2012/12/28/tunneling-udp-via-ssh/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) {return;}
+  js = d.createElement(s); js.id = id;
+  js.src = "//connect.facebook.net/en_US/all.js#appId=212934732101925&xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var script = document.createElement('script'); script.type = 'text/javascript'; script.async = true;
+      script.src = 'https://apis.google.com/js/plusone.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(script, s);
+    })();
+  </script>
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>
