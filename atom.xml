@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="http://shogo82148.github.com/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.com/"/>
-  <updated>2013-04-13T17:52:09+09:00</updated>
+  <updated>2013-05-09T23:58:17+09:00</updated>
   <id>http://shogo82148.github.com/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,159 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[tweepyでApplication-only authenticationしてみた]]></title>
+    <link href="http://shogo82148.github.com/blog/2013/05/09/application-only-authentication-with-tweepy/"/>
+    <updated>2013-05-09T23:29:00+09:00</updated>
+    <id>http://shogo82148.github.com/blog/2013/05/09/application-only-authentication-with-tweepy</id>
+    <content type="html"><![CDATA[<p>Twitter の API リファレンスを久しぶりに見たら、
+<a href="https://dev.twitter.com/docs/auth/application-only-auth">Application-only authentication</a>とかいうのを発見。
+特定のユーザと関連付けられない代わりに、普通に認証するより制限が緩いみたい。
+3月に追加されてたらしい。</p>
+
+<p>知らなかった・・・。
+最近API叩いてなかったからな・・・。</p>
+
+<p>便利そうなので、Python用のTwitterライブラリである<a href="https://github.com/tweepy/tweepy">Tweepy</a>から使ってみた。</p>
+
+<!-- More -->
+
+
+<h2>AuthHandler</h2>
+
+<p>Tweepy用のAuthHandler。
+認証部分は
+<a href="http://ktkrhr.hatenablog.com/entry/2013/03/27/002447">TwitterのApplication-only authenticationを試してみた</a>
+のページからほぼコピペ。</p>
+
+<figure class='code'><figcaption><span>AppAuthHandler.py</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="kn">import</span> <span class="nn">tweepy</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">urllib</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">urllib2</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">base64</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">json</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">class</span> <span class="nc">AppAuthHandler</span><span class="p">(</span><span class="n">tweepy</span><span class="o">.</span><span class="n">auth</span><span class="o">.</span><span class="n">AuthHandler</span><span class="p">):</span>
+</span><span class='line'>    <span class="n">TOKEN_URL</span> <span class="o">=</span> <span class="s">&#39;https://api.twitter.com/oauth2/token&#39;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">consumer_key</span><span class="p">,</span> <span class="n">consumer_secret</span><span class="p">):</span>
+</span><span class='line'>        <span class="n">token_credential</span> <span class="o">=</span> <span class="n">urllib</span><span class="o">.</span><span class="n">quote</span><span class="p">(</span><span class="n">consumer_key</span><span class="p">)</span> <span class="o">+</span> <span class="s">&#39;:&#39;</span> <span class="o">+</span> <span class="n">urllib</span><span class="o">.</span><span class="n">quote</span><span class="p">(</span><span class="n">consumer_secret</span><span class="p">)</span>
+</span><span class='line'>        <span class="n">credential</span> <span class="o">=</span> <span class="n">base64</span><span class="o">.</span><span class="n">b64encode</span><span class="p">(</span><span class="n">token_credential</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="n">value</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;grant_type&#39;</span><span class="p">:</span> <span class="s">&#39;client_credentials&#39;</span><span class="p">}</span>
+</span><span class='line'>        <span class="n">data</span> <span class="o">=</span> <span class="n">urllib</span><span class="o">.</span><span class="n">urlencode</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+</span><span class='line'>        <span class="n">req</span> <span class="o">=</span> <span class="n">urllib2</span><span class="o">.</span><span class="n">Request</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">TOKEN_URL</span><span class="p">)</span>
+</span><span class='line'>        <span class="n">req</span><span class="o">.</span><span class="n">add_header</span><span class="p">(</span><span class="s">&#39;Authorization&#39;</span><span class="p">,</span> <span class="s">&#39;Basic &#39;</span> <span class="o">+</span> <span class="n">credential</span><span class="p">)</span>
+</span><span class='line'>        <span class="n">req</span><span class="o">.</span><span class="n">add_header</span><span class="p">(</span><span class="s">&#39;Content-Type&#39;</span><span class="p">,</span> <span class="s">&#39;application/x-www-form-urlencoded;charset=UTF-8&#39;</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="n">response</span> <span class="o">=</span> <span class="n">urllib2</span><span class="o">.</span><span class="n">urlopen</span><span class="p">(</span><span class="n">req</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+</span><span class='line'>        <span class="n">json_response</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">response</span><span class="o">.</span><span class="n">read</span><span class="p">())</span>
+</span><span class='line'>        <span class="bp">self</span><span class="o">.</span><span class="n">_access_token</span> <span class="o">=</span> <span class="n">json_response</span><span class="p">[</span><span class="s">&#39;access_token&#39;</span><span class="p">]</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">def</span> <span class="nf">apply_auth</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">url</span><span class="p">,</span> <span class="n">method</span><span class="p">,</span> <span class="n">headers</span><span class="p">,</span> <span class="n">parameters</span><span class="p">):</span>
+</span><span class='line'>        <span class="n">headers</span><span class="p">[</span><span class="s">&#39;Authorization&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&#39;Bearer &#39;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_access_token</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>使ってみる</h2>
+
+<p>今まではOAuthHandlerを使っていたのを、上のAppAuthHandlerに置き換えるだけ。
+あとは今までどおりAPIを叩ける。
+以下は特定のユーザのツイートを取れるだけ取ってくる例。</p>
+
+<figure class='code'><figcaption><span>crawl.py</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="c">#!/usr/bin/env python</span>
+</span><span class='line'><span class="c"># -*- coding: utf-8 -*-</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="nn">tweepy</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">codecs</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">sys</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">AppAuthHandler</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">sys</span><span class="o">.</span><span class="n">stdin</span> <span class="o">=</span> <span class="n">codecs</span><span class="o">.</span><span class="n">getreader</span><span class="p">(</span><span class="s">&#39;utf-8&#39;</span><span class="p">)(</span><span class="n">sys</span><span class="o">.</span><span class="n">stdin</span><span class="p">)</span>
+</span><span class='line'><span class="n">sys</span><span class="o">.</span><span class="n">stdout</span> <span class="o">=</span> <span class="n">codecs</span><span class="o">.</span><span class="n">getwriter</span><span class="p">(</span><span class="s">&#39;utf-8&#39;</span><span class="p">)(</span><span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">CONSUMER_KEY</span> <span class="o">=</span> <span class="s">&#39;hogehoge&#39;</span>
+</span><span class='line'><span class="n">CONSUMER_SECRET</span> <span class="o">=</span> <span class="s">&#39;hogehoge&#39;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+</span><span class='line'>    <span class="n">user_id</span> <span class="o">=</span> <span class="s">&quot;JO_RI&quot;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">auth</span> <span class="o">=</span> <span class="n">AppAuthHandler</span><span class="o">.</span><span class="n">AppAuthHandler</span><span class="p">(</span><span class="n">CONSUMER_KEY</span><span class="p">,</span> <span class="n">CONSUMER_SECRET</span><span class="p">)</span>
+</span><span class='line'>    <span class="n">api</span> <span class="o">=</span> <span class="n">tweepy</span><span class="o">.</span><span class="n">API</span><span class="p">(</span><span class="n">auth</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">arg</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;id&#39;</span><span class="p">:</span> <span class="n">user_id</span><span class="p">,</span> <span class="s">&#39;include_rts&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">}</span>
+</span><span class='line'>    <span class="n">user_statuses</span> <span class="o">=</span> <span class="n">tweepy</span><span class="o">.</span><span class="n">Cursor</span><span class="p">(</span><span class="n">api</span><span class="o">.</span><span class="n">user_timeline</span><span class="p">,</span> <span class="o">**</span><span class="n">arg</span><span class="p">)</span><span class="o">.</span><span class="n">items</span><span class="p">(</span><span class="mi">3200</span><span class="p">)</span>
+</span><span class='line'>    <span class="k">for</span> <span class="n">user_status</span> <span class="ow">in</span> <span class="n">user_statuses</span><span class="p">:</span>
+</span><span class='line'>        <span class="k">print</span> <span class="n">user_status</span><span class="o">.</span><span class="n">text</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+</span><span class='line'>  <span class="n">main</span><span class="p">()</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="https://dev.twitter.com/docs/auth/application-only-auth">Application-only authentication</a></li>
+<li><a href="http://blog.k52.org/0162">TwitterAPIがApplication-only authenticationを公開。これを使うと検索API等の一部回数制限が大幅に緩和される。</a></li>
+<li><a href="http://www.macminiosx.com/2013/03/twitterapplication-only_authen.html">TwitterのApplication-only authenticationをperlで試す。</a></li>
+<li><a href="http://ktkrhr.hatenablog.com/entry/2013/03/27/002447">TwitterのApplication-only authenticationを試してみた</a></li>
+</ul>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[社内ISUCONに参加した]]></title>
@@ -3560,165 +3713,6 @@ DOMの操作だけでもなんとかなりそうだから、余力があれば�
 ツイート数に比例した回数だけjQueryのセレクタを呼び出している。
 jQueryのセレクタって結構重い処理だし、オーダーが O( n<sup>2</sup> ) になるわけで・・・。
 単なるソートにしては重すぎだろ、とは思ってはいたんだ。まさかこんな中身だとは。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[6さいカンファレンス 第6回「幼女を描いてみよう！　～原画から彩色まで～」まとめ]]></title>
-    <link href="http://shogo82148.github.com/blog/2012/10/12/6saiconf-6/"/>
-    <updated>2012-10-12T00:28:00+09:00</updated>
-    <id>http://shogo82148.github.com/blog/2012/10/12/6saiconf-6</id>
-    <content type="html"><![CDATA[<p>2012/10/11に<a href="https://twitter.com/kuina_tesso">くいなちゃん</a>さん主催で開催された6さいカンファレンスのまとめ。
-第6回は「幼女を描いてみよう！　～原画から彩色まで～」です。</p>
-
-<p>勝手にまとめてしまったので、何か問題があれば<a href="https://twitter.com/shogo82148">@shogo82148</a>まで。
-(カンファレンスの内容には<a href="https://twitter.com/kuina_tesso/status/211885730174222336">くいなちゃんライセンス</a>が適用されるらしいです．怖！)</p>
-
-<!-- more -->
-
-
-<h2>ゆるふわ☆タイム</h2>
-
-<p>くいなちゃん: 今日も、前回と引き続き、プログラミングのプの字も出てこない、ゆるふわ講義ですん☆</p>
-
-<p>くいなちゃん: テーマは 「幼女を描いてみよう！　～原画から彩色まで～」 ということなので、今回描いてみた絵を、いきなり完成形からご覧いただくことにします。
-３時間で描いたです。
-<a href="http://kuina.tes.so/6saiconf_6/img0.jpg">http://kuina.tes.so/6saiconf_6/img0.jpg</a></p>
-
-<p><img src="http://kuina.tes.so/6saiconf_6/img0.jpg" alt="幼女！" /></p>
-
-<h2>構図を描いてみるです！</h2>
-
-<p>くいなちゃん: では、順を追って、描いていくことにしましょう。
-最初はもちろん、カンヴァスは白紙です。
-そこに、まずは構図をﾃｷﾄｰに描いてみるです：
-<a href="http://kuina.tes.so/6saiconf_6/img1.jpg">http://kuina.tes.so/6saiconf_6/img1.jpg</a>
-はい、ここまではみなさん描けますね。
-まるで６さいが描いたようなﾃｷﾄｰな落書きです。</p>
-
-<p><img src="http://kuina.tes.so/6saiconf_6/img1.jpg" alt="構図" /></p>
-
-<p>くいなちゃん: ここでのポイントは、脳内に立体をイメージすることです。
-構図をイメージしやすいように、背景に線を引いていますが、無くてもイメージできるなら描く必要はありません。
-注意してほしいのは、2D絵を描くからといって、2Dで捉えないことです。
-アニメ絵でも同様ですん</p>
-
-<p>くいなちゃん: はい、キャラに、顔と髪を追加してみました。
-<a href="http://kuina.tes.so/6saiconf_6/img2.jpg">http://kuina.tes.so/6saiconf_6/img2.jpg</a>
-えっ、完成形と絵が違う？
-キニシナイ！
-あと、独りでは寂しいので、小鳥も追加しました。</p>
-
-<p><img src="http://kuina.tes.so/6saiconf_6/img2.jpg" alt="顔と髪と小鳥を追加" /></p>
-
-<h2>色を塗っていくです！</h2>
-
-<p>くいなちゃん: アニメ調の絵を描く場合は、ここからアニメ塗りをしていただけば完成しそうなんですが、せっかくなので、油彩画っぽく塗っていくことにします。</p>
-
-<p>くいなちゃん: まずは、べた塗りです。
-<a href="http://kuina.tes.so/6saiconf_6/img3.jpg">http://kuina.tes.so/6saiconf_6/img3.jpg</a></p>
-
-<p><img src="http://kuina.tes.so/6saiconf_6/img3.jpg" alt="べた塗り" /></p>
-
-<p>くいなちゃん: なんてことはありません。
-太いブラシで、ﾃｷﾄｰに塗っただけです。
-はみ出しまくってますね。　しかし、ブラシが太いので、細かな部分はそもそも塗れません。
-このくらいﾃｷﾄｰでもキニシナイでok</p>
-
-<p>くいなちゃん: 人物に影が、若干付けられていますが、原画を描くときに立体を意識したならば、光源を意識すればある程度付けられると思います。
-物理学的に考えるのです！</p>
-
-<h2>細部を塗っていくです！</h2>
-
-<p>くいなちゃん: はい、次は、もう少し細いブラシで、細部を塗っていきます。<a href="http://kuina.tes.so/6saiconf_6/img4.jpg">http://kuina.tes.so/6saiconf_6/img4.jpg</a>
-基本的には、最初に太いブラシで大まかに塗り、徐々にブラシを細くしていき、細部を描きこんでいく流れですね。
-ブラシの目安は、半々にしていくと良さそうです</p>
-
-<p><img src="http://kuina.tes.so/6saiconf_6/img4.jpg" alt="細部を塗っていく" /></p>
-
-<p>くいなちゃん: この時点で、服に謎の模様が描かれていますが、ﾃｷﾄｰです。
-その太さのブラシで表現できる粒度のものを塗ってください。</p>
-
-<p>くいなちゃん: で、更に細いブラシで塗っていきます(3段階目)　そして、このあたりまで塗ったら、試しに線画(原画)を外してみましょう。
-<a href="http://kuina.tes.so/6saiconf_6/img5.jpg">http://kuina.tes.so/6saiconf_6/img5.jpg</a>
-おや、線画が無くても 綺麗に見えますね！</p>
-
-<p><img src="http://kuina.tes.so/6saiconf_6/img5.jpg" alt="線画を外してみる" /></p>
-
-<p>くいなちゃん: 目を描きこんでいなかったのは、意図的です。
-最初のアニメ調の絵で完成させたい場合は、目も塗ってあげてください。</p>
-
-<h2>顔を描くです！</h2>
-
-<p>くいなちゃん: はい、それでは、もう線画が無くても輪郭が解りますので、線画は非表示にしたまま塗っていきましょう。
-更に細いブラシで塗ります。</p>
-
-<p>くいなちゃん: で、最後に、ちょー細いブラシで描きこんだらこうなりました。
-<a href="http://kuina.tes.so/6saiconf_6/img6.jpg">http://kuina.tes.so/6saiconf_6/img6.jpg</a>
-ついでに顔も描きこんでます。
-顔の書き方は、ひたすら練習＆お勉強する必要があるので、切磋琢磨しましょう。
-まあ、それは何を描くのにも当てはまるのですが。
-小鳥さんにも、目を描きました。</p>
-
-<p><img src="http://kuina.tes.so/6saiconf_6/img6.jpg" alt="顔を書き込んだところ" /></p>
-
-<p>くいなちゃん: 塗っているときは、果たして綺麗な絵に仕上がるのか…
-という不安もあると思います。
-が、だんだん細いブラシで塗っているうちに、あるとき急に「絵」となる瞬間が来るのです。
-信じて塗りましょう☆</p>
-
-<h2>Pho&#8230;色調補正</h2>
-
-<p>くいなちゃん: あとは、Pho&#8230;　色調を補正して、ﾃｷﾄｰにサインっぽいものを入れて、完成ですん☆
-<a href="http://kuina.tes.so/6saiconf_6/img0.jpg">http://kuina.tes.so/6saiconf_6/img0.jpg</a>
-かんたんでしょ？</p>
-
-<div style="height:500px;">
-<div style="position:relative">
-<img id="image0" src="http://kuina.tes.so/6saiconf_6/img1.jpg">
-<img id="image1" src="http://kuina.tes.so/6saiconf_6/img2.jpg">
-<img id="image2" src="http://kuina.tes.so/6saiconf_6/img3.jpg">
-<img id="image3" src="http://kuina.tes.so/6saiconf_6/img4.jpg">
-<img id="image4" src="http://kuina.tes.so/6saiconf_6/img5.jpg">
-<img id="image5" src="http://kuina.tes.so/6saiconf_6/img6.jpg">
-<img id="image6" src="http://kuina.tes.so/6saiconf_6/img0.jpg">
-</div>
-</div>
-
-
-<p><input type="range" id="range" min="0" max="600" value="600" style="width:100%;"></p>
-
-<script>
-window.addEventListener('load', function() {
-    var i, style;
-    for(i=0;i<=6;i++) {
-        style = $('image' + i).style;
-        style.position = 'absolute';
-        style.top = '0px';
-        style.left = '0px';
-    }
-
-    $("range").addEventListener('change', function() {
-        var i, style, val = $('range').value / 100 + 1;
-        var opacity;
-        for(i=0;i<=6;i++) {
-            style = $('image' + i).style;
-            opacity = val - i;
-            if(opacity<0) opacity = 0;
-            if(opacity>1) opacity = 1;
-            style.opacity = opacity;
-        }
-    });
-
-    function $(name) {
-        return document.getElementById(name);
-    }
-});
-</script>
-
-
-<p>くいなちゃん: 今回はデジタルでしたが、アナログで油彩画などを描く場合、今回のように線画を表示したまま塗ることはできません。
-その場合、まず鉛筆などで薄く線画を描き、べた塗りの段階である程度境界をしっかりさせておき、あとは脳内で頑張る必要がありますね。</p>
 ]]></content>
   </entry>
   
