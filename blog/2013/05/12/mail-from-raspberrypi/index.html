@@ -5,14 +5,15 @@
 <!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
 <head>
   <meta charset="utf-8">
-  <title>UDPのパケットをSSHを通してトンネルする - Shogo's Blog</title>
+  <title>RaspberryPiからメールを送る - Shogo's Blog</title>
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="description" content="SSHには標準でTCPのトンネリング機能は付いているのですが，
-UDPはトンネリングしてくれません．
-なんとかできないものかと試行錯誤してみました． TCP をトンネル TCPのトンネリングの復習から．
-以下のコマンドでクライアントの8080番ポートを， &hellip;">
+  <meta name="description" content="RaspberryPi に cron を仕込んで定期実行をやってみようと考えました。
+cron の設定自体は crontab -e コマンドを実行すれば簡単にできます。
+ただ、これだけだとちゃんと動いているか少し心配なので、
+エラーが起きた時に何か通知して欲しい。
+普通なら設定ファイルに &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -21,7 +22,7 @@ UDPはトンネリングしてくれません．
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   
-  <link rel="canonical" href="http://shogo82148.github.com/blog/2012/12/28/tunneling-udp-via-ssh/">
+  <link rel="canonical" href="http://shogo82148.github.com/blog/2013/05/12/mail-from-raspberrypi/">
   <link href="/favicon.png" rel="icon">
   <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
   <script src="/javascripts/modernizr-2.0.js"></script>
@@ -83,7 +84,7 @@ UDPはトンネリングしてくれません．
   
   <header>
     
-      <h1 class="entry-title">UDPのパケットをSSHを通してトンネルする</h1>
+      <h1 class="entry-title">RaspberryPiからメールを送る</h1>
     
     
       <p class="meta">
@@ -99,83 +100,116 @@ UDPはトンネリングしてくれません．
   
 
 
-<time datetime="2012-12-28T16:38:00+09:00" pubdate data-updated="true">Dec 28<span>th</span>, 2012</time>
+<time datetime="2013-05-12T21:50:00+09:00" pubdate data-updated="true">May 12<span>th</span>, 2013</time>
         
       </p>
     
   </header>
 
 
-<div class="entry-content"><p>SSHには標準でTCPのトンネリング機能は付いているのですが，
-UDPはトンネリングしてくれません．
-なんとかできないものかと試行錯誤してみました．</p>
+<div class="entry-content"><p>RaspberryPi に cron を仕込んで定期実行をやってみようと考えました。
+cron の設定自体は <code>crontab -e</code> コマンドを実行すれば簡単にできます。
+ただ、これだけだとちゃんと動いているか少し心配なので、
+エラーが起きた時に何か通知して欲しい。
+普通なら設定ファイルに <code>MAILTO=hogehoge@example.com</code> と書いておくと
+メールが送られるはずなのですが、
+メールサーバが動いてないのでうまくいかない・・・。</p>
+
+<p>そういうわけで、RaspberryPiからメールを送るための設定をしたのでメモ。</p>
 
 <!-- More -->
 
 
-<h2>TCP をトンネル</h2>
+<h2>MTAをインストールする</h2>
 
-<p>TCPのトンネリングの復習から．
-以下のコマンドでクライアントの8080番ポートを，リモートの80番ポートに転送することができます．</p>
+<p>Raspberry Pi には標準でMTA(Message Transfer Agent)が入ってないようなのでインストール。
+今回はPostfixを採用</p>
 
 <figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>ssh -L 8080:localhost:80 remote
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>sudo apt-get install postfix
 </span></code></pre></td></tr></table></div></figure>
 
 
-<p>SOCKS proxyとして動作させることも出来ます．
-ブラウザのプロキシとして設定すれば，リモートのサーバがすべての通信を中継してくれます．</p>
+<p>最初、Sendmailも試してみたんだけど、送信者マスカレードがなぜかうまく行かなったので断念。
+後述するように、この設定がないとスパムフィルタに引っかかってしまうのです。</p>
 
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>ssh -D 8080 remote
-</span></code></pre></td></tr></table></div></figure>
+<h2>プロバイダのSMTPにリレーしてもらう</h2>
 
+<p>実際にメールを送りには以下の条件を満たす必要があるようです。</p>
 
-<h2>UDP をトンネル</h2>
-
-<p>NetCatを使うと TCP/UDP の通信内容と標準入出力をつなげることが出来るらしいです．
-これを使って，クライアント側で UDP サーバを立て，その通信内容をSSH経由でリモートの UDP クライアントに送ってあげます．
-最後にリモートからクライアント側へのパケットを名前付きパイプで転送してあげればトンネル完成です．</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>mkfifo tunnel
-</span><span class='line'>nc -ul 8080 &lt; tunnel | ssh remote nc -u localhost 8080 &gt; tunnel
-</span></code></pre></td></tr></table></div></figure>
+<ul>
+<li>送信元のドメインを引ける</li>
+<li>固定IPからのアクセス</li>
+</ul>
 
 
-<h2>Mosh をトンネル</h2>
+<p>固定IPなんて自前で持ってないし、
+cron からのメールは送信元が pi@raspberrypi になってしまいドメインを引けません。
+そのためそのままではスパムメールとして扱われてしまい、メールが届きません。</p>
 
-<p>なんでこんなことをしようと思ったかというと，<a href="http://mosh.mit.edu/">Mosh</a>をファイヤーウォール越しに使いたかったから．
-<a href="http://mosh.mit.edu/">Mosh</a>はUDPで通信しているので，SSHしか通らない環境では使えません．
-そこでUDPをSSHでトンネリングしてできないかとやって見ました．
-セッションの確立にSSHも使っているので，以下のようにして Mosh用のUDPトンネルと SSH用のTCPトンネルを作ります．</p>
+<p>そこで、プロバイダが提供しているSMTPサーバにメールをリレーしてもらいます。
+<code>/etc/postfix/main.cf</code>に以下の行を追加します。</p>
 
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<figure class='code'><figcaption><span>/etc/postfix/main.cf</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>mkfifo tunnel
-</span><span class='line'>nc -ul 60000 &lt; tunnel | ssh -L 10000:localhost:22 remote nc -u localhost 60000 &gt; tunnel &amp;
-</span><span class='line'>mosh -p 60000 --ssh<span class="o">=</span><span class="s2">&quot;ssh -p 10000&quot;</span> localhost
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>sender_canonical_maps = regexp:/etc/postfix/canonical
+</span><span class='line'>
+</span><span class='line'>relayhost = [smtp.example.com]:587
+</span><span class='line'>smtp_sasl_auth_enable = yes
+</span><span class='line'>smtp_sasl_password_maps = hash:/etc/postfix/relay_password
+</span><span class='line'>smtp_sasl_security_options = noanonymous</span></code></pre></td></tr></table></div></figure>
+
+
+<p>プロバイダにリレーしてもらうには SMTP-Auth で認証する必要があるので、
+ユーザ名とパスワードを設定しておきます。</p>
+
+<figure class='code'><figcaption><span>/etc/postfix/elay_password</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>smtp.example.com hogehoge:your-password</span></code></pre></td></tr></table></div></figure>
+
+
+<p>postmapコマンドを使って、Postfixから扱える形式に変換します。</p>
+
+<figure class='code'><figcaption><span>command</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>postmap <span class="nb">hash</span>:/etc/postfix/relay_password
 </span></code></pre></td></tr></table></div></figure>
 
 
-<p>外部からのSSH通信が遅かったので，<a href="http://mosh.mit.edu/">Mosh</a>のローカルエコーでなんとかならないかと挑戦してみました．
-実際の効果は未確認．またあとで試してみます．</p>
+<p>さらに、エンベロープのFromがプロバイダから提供されたメールアドレスでないと
+メールをリレーしてくれないので、
+すべてのメールのFromをすべて書き換えるよう設定します。</p>
 
-<h2>追記</h2>
+<figure class='code'><figcaption><span>/etc/postfix/canonical</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>/.*/ hogehoge@example.com</span></code></pre></td></tr></table></div></figure>
 
-<p>試してみました．
-一応通信できることは確認したのですが，非常に不安定で頻繁に通信に失敗します．</p>
 
-<p>NetCatがパケットの境界を出力しないので，パケットがズタズタに切り裂かれ，
-パケットのデコードに失敗してしまうようです．</p>
+<p>最後にPostfixに設定を読み込ませて設定完了。
+cron からメールを送れるようになるはず。</p>
 
-<p>回線が十分速い＆UDPパケットが非常に小さいときにしか上手く動きません．
-NetCat のオプションを見てみましたがパケット境界の指定はできないようです．
-ここでの方法はお手軽に試せるという利点はありますが，
-もっと安定したUDP通信を望むならUDP転送コマンドを真面目に作るか，
-いっそのことVPNを構築するのが一番ですね．</p>
+<figure class='code'><figcaption><span>command</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>sudo /etc/init.d/postfix reload
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>・・・この設定にたどり着くのに非常に苦労した。
+メールなんてもう嫌だ・・・。</p>
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="http://blog.cohtan.org/2009/03/postfixtofrom.html">PostfixでメールのToやFromを書き換える方法</a></li>
+<li><a href="http://www.maruko2.com/mw/Postfix_%E3%81%A7%E3%83%A1%E3%83%BC%E3%83%AB%E3%83%AA%E3%83%AC%E3%83%BC%E3%81%AE%E8%A8%AD%E5%AE%9A_(SMTP_%E3%82%AF%E3%83%A9%E3%82%A4%E3%82%A2%E3%83%B3%E3%83%88_%2B_SMTP_Auth">Postfix でメールリレーの設定 (SMTP クライアント + SMTP Auth)</a>)</li>
+<li><a href="http://www.limemo.net/blog/2013/02/raspberry-pi-not-working-cron-on-raspbian.html">【トラブル】raspberry pi(ラズベリーパイ)を使ってみる - raspbianでcronがうまく動かないような…?</a>
+
+<ul>
+<li>Sendmailでの設定。なぜかうまく行かなかった。</li>
+</ul>
+</li>
+</ul>
+
 </div>
 
 
@@ -198,12 +232,12 @@ NetCat のオプションを見てみましたがパケット境界の指定は�
   
 
 
-<time datetime="2012-12-28T16:38:00+09:00" pubdate data-updated="true">Dec 28<span>th</span>, 2012</time>
+<time datetime="2013-05-12T21:50:00+09:00" pubdate data-updated="true">May 12<span>th</span>, 2013</time>
       
 
 <span class="categories">
   
-    <a class='category' href='/blog/categories/ssh/'>SSH</a>, <a class='category' href='/blog/categories/udp/'>UDP</a>
+    <a class='category' href='/blog/categories/raspberrypi/'>RaspberryPi</a>
   
 </span>
 
@@ -212,10 +246,10 @@ NetCat のオプションを見てみましたがパケット境界の指定は�
     
       <div class="sharing">
   
-  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.com/blog/2012/12/28/tunneling-udp-via-ssh/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.com/blog/2013/05/12/mail-from-raspberrypi/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
   
   
-  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.com/blog/2012/12/28/tunneling-udp-via-ssh/" data-via="shogo82148" data-counturl="http://shogo82148.github.com/blog/2012/12/28/tunneling-udp-via-ssh/" >Tweet</a>
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.com/blog/2013/05/12/mail-from-raspberrypi/" data-via="shogo82148" data-counturl="http://shogo82148.github.com/blog/2013/05/12/mail-from-raspberrypi/" >Tweet</a>
   
   
   <div class="g-plusone" data-size="medium"></div>
@@ -228,10 +262,8 @@ NetCat のオプションを見てみましたがパケット境界の指定は�
     
     <p class="meta">
       
-        <a class="basic-alignment left" href="/blog/2012/12/24/wavezutazutajs/" title="Previous Post: JavaScript版WaveZutaZuta作ってみた">&laquo; JavaScript版WaveZutaZuta作ってみた</a>
+        <a class="basic-alignment left" href="/blog/2013/05/12/raspberry-pi-https-connection/" title="Previous Post: RaspberryPiでhttps通信が失敗するのを何とかする">&laquo; RaspberryPiでhttps通信が失敗するのを何とかする</a>
       
-      
-        <a class="basic-alignment right" href="/blog/2013/01/22/jo-ri-bot-1st-anniversary/" title="Next Post: じょりぼっとが起動して一年がたちました">じょりぼっとが起動して一年がたちました &raquo;</a>
       
     </p>
   </footer>
@@ -343,8 +375,8 @@ NetCat のオプションを見てみましたがパケット境界の指定は�
       
         
         // var disqus_developer = 1;
-        var disqus_identifier = 'http://shogo82148.github.com/blog/2012/12/28/tunneling-udp-via-ssh/';
-        var disqus_url = 'http://shogo82148.github.com/blog/2012/12/28/tunneling-udp-via-ssh/';
+        var disqus_identifier = 'http://shogo82148.github.com/blog/2013/05/12/mail-from-raspberrypi/';
+        var disqus_url = 'http://shogo82148.github.com/blog/2013/05/12/mail-from-raspberrypi/';
         var disqus_script = 'embed.js';
       
     (function () {
