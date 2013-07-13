@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="http://shogo82148.github.com/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.com/"/>
-  <updated>2013-05-12T23:33:43+09:00</updated>
+  <updated>2013-07-14T00:17:42+09:00</updated>
   <id>http://shogo82148.github.com/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,788 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[ランダム抽出アルゴリズムについて考える]]></title>
+    <link href="http://shogo82148.github.com/blog/2013/07/13/random-sample/"/>
+    <updated>2013-07-13T22:13:00+09:00</updated>
+    <id>http://shogo82148.github.com/blog/2013/07/13/random-sample</id>
+    <content type="html"><![CDATA[<p>数日前に社内IRCで「スマートな非復元抽出の方法はないか」と話題になったので、
+ランダムサンプリングのアルゴリズムについて調べたり考えたりしてみた。</p>
+
+<!-- More -->
+
+
+<h2>復元抽出</h2>
+
+<p>非復元抽出の手法って調べてもなかなか出てこない・・・。
+ひとまず、復元抽出についてまとめてみましょう。</p>
+
+<h3>線形検索</h3>
+
+<p>一番簡単な実装方法。
+どの区間に入るかを線形検索して求める。
+選択肢の個数nとすると計算量はO(n)。</p>
+
+<figure class='code'><figcaption><span>linear_search_method.pl</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">strict</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">warnings</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="nn">List::</span><span class="n">Util</span> <span class="sx">qw(sum)</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">sub </span><span class="nf">linear_search_method</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$weights</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$num</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$sum</span> <span class="o">=</span> <span class="n">sum</span> <span class="nv">@$weights</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$length</span> <span class="o">=</span> <span class="nv">@$weights</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">@a</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">for</span> <span class="p">(</span><span class="mi">1</span><span class="o">..</span><span class="nv">$num</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="k">my</span> <span class="nv">$r</span> <span class="o">=</span> <span class="nb">rand</span><span class="p">(</span><span class="nv">$sum</span><span class="p">);</span>
+</span><span class='line'>        <span class="k">for</span> <span class="k">my</span> <span class="nv">$i</span><span class="p">(</span><span class="mi">0</span><span class="o">..</span><span class="nv">$length</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>            <span class="nv">$r</span> <span class="o">-=</span> <span class="nv">$weights</span><span class="o">-&gt;</span><span class="p">[</span><span class="nv">$i</span><span class="p">];</span>
+</span><span class='line'>            <span class="k">if</span><span class="p">(</span><span class="nv">$r</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>                <span class="nb">push</span> <span class="nv">@a</span><span class="p">,</span> <span class="nv">$i</span><span class="p">;</span>
+</span><span class='line'>                <span class="k">last</span><span class="p">;</span>
+</span><span class='line'>            <span class="p">}</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">return</span> <span class="o">\</span><span class="nv">@a</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">print</span> <span class="nb">join</span> <span class="s">&#39;, &#39;</span><span class="p">,</span> <span class="nv">@</span><span class="p">{</span><span class="n">linear_search_method</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">],</span> <span class="mi">100</span><span class="p">};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>バイナリサーチ</h3>
+
+<p>あらかじめ累積分布表を作っておき、どの区間に入るかをバイナリサーチ。
+準備にO(n)、選択に O(log n)かかる。</p>
+
+<figure class='code'><figcaption><span>binary_search_method.pl</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">strict</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">warnings</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="nn">List::</span><span class="n">Util</span> <span class="sx">qw(sum)</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">sub </span><span class="nf">binary_search_method</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$weights</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$num</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$length</span> <span class="o">=</span> <span class="nv">@$weights</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">@a</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">@b</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$sum</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">for</span> <span class="k">my</span> <span class="nv">$i</span><span class="p">(</span><span class="nv">@$weights</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="nb">push</span> <span class="nv">@a</span><span class="p">,</span> <span class="nv">$sum</span><span class="p">;</span>
+</span><span class='line'>        <span class="nv">$sum</span> <span class="o">+=</span> <span class="nv">$i</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="nb">push</span> <span class="nv">@a</span><span class="p">,</span> <span class="nv">$sum</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">for</span> <span class="p">(</span><span class="mi">1</span><span class="o">..</span><span class="nv">$num</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="k">my</span> <span class="nv">$r</span> <span class="o">=</span> <span class="nb">rand</span><span class="p">(</span><span class="nv">$sum</span><span class="p">);</span>
+</span><span class='line'>        <span class="k">my</span> <span class="p">(</span><span class="nv">$l</span><span class="p">,</span> <span class="nv">$h</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nv">$length</span> <span class="o">+</span> <span class="mi">1</span><span class="p">);</span>
+</span><span class='line'>        <span class="k">while</span><span class="p">(</span><span class="nv">$h</span> <span class="o">-</span> <span class="nv">$l</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>            <span class="k">my</span> <span class="nv">$i</span> <span class="o">=</span> <span class="p">(</span><span class="nv">$l</span> <span class="o">+</span> <span class="nv">$h</span><span class="p">)</span> <span class="o">&gt;&gt;</span> <span class="mi">1</span><span class="p">;</span>
+</span><span class='line'>            <span class="k">if</span><span class="p">(</span><span class="nv">$r</span> <span class="o">&lt;</span> <span class="nv">$a</span><span class="p">[</span><span class="nv">$i</span><span class="p">])</span> <span class="p">{</span>
+</span><span class='line'>                <span class="nv">$h</span> <span class="o">=</span> <span class="nv">$i</span><span class="p">;</span>
+</span><span class='line'>            <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>                <span class="nv">$l</span> <span class="o">=</span> <span class="nv">$i</span><span class="p">;</span>
+</span><span class='line'>            <span class="p">}</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>        <span class="nb">push</span> <span class="nv">@b</span><span class="p">,</span> <span class="nv">$l</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">return</span> <span class="o">\</span><span class="nv">@b</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">print</span> <span class="nb">join</span> <span class="s">&#39;, &#39;</span><span class="p">,</span> <span class="nv">@</span><span class="p">{</span><span class="n">binary_search_method</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">],</span> <span class="mi">100</span><span class="p">};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>Walker&#8217;s alias method</h3>
+
+<p>今回調べて初めて知ったアルゴリズム。
+準備にO(n)、ランダム選択はなんと定数時間O(1)でできる。</p>
+
+<figure class='code'><figcaption><span>walers_alias_method.pl</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">strict</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">warnings</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="nn">List::</span><span class="n">Util</span> <span class="sx">qw(sum)</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">sub </span><span class="nf">walkers_alias_method</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$weights</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$num</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$sum</span> <span class="o">=</span> <span class="n">sum</span> <span class="nv">@$weights</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$length</span> <span class="o">=</span> <span class="nv">@$weights</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">@p</span> <span class="o">=</span> <span class="nb">map</span> <span class="p">{</span> <span class="nv">$_</span> <span class="o">/</span> <span class="nv">$sum</span> <span class="o">*</span> <span class="nv">$length</span><span class="p">}</span> <span class="nv">@$weights</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">@a</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="o">..</span><span class="nv">$length</span><span class="o">-</span><span class="mi">1</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">my</span> <span class="p">(</span><span class="nv">$h</span><span class="p">,</span> <span class="nv">$l</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nv">$length</span> <span class="o">-</span> <span class="mi">1</span><span class="p">);</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">@hl</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">for</span> <span class="k">my</span> <span class="nv">$i</span><span class="p">(</span><span class="mi">0</span><span class="o">..</span><span class="nv">$length</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="k">if</span> <span class="p">(</span> <span class="nv">$p</span><span class="p">[</span><span class="nv">$i</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>            <span class="nv">$hl</span><span class="p">[</span><span class="nv">$h</span><span class="o">++</span><span class="p">]</span> <span class="o">=</span> <span class="nv">$i</span><span class="p">;</span>
+</span><span class='line'>        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>            <span class="nv">$hl</span><span class="p">[</span><span class="nv">$l</span><span class="o">--</span><span class="p">]</span> <span class="o">=</span> <span class="nv">$i</span><span class="p">;</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">while</span><span class="p">(</span><span class="nv">$h</span> <span class="o">!=</span> <span class="mi">0</span> <span class="o">&amp;&amp;</span> <span class="nv">$l</span> <span class="o">!=</span> <span class="nv">$length</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="k">my</span> <span class="p">(</span><span class="nv">$j</span><span class="p">,</span> <span class="nv">$k</span><span class="p">)</span> <span class="o">=</span> <span class="nv">@hl</span><span class="p">[</span><span class="nv">$l</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="nv">$h</span><span class="o">-</span><span class="mi">1</span><span class="p">];</span>
+</span><span class='line'>        <span class="nv">$a</span><span class="p">[</span><span class="nv">$j</span><span class="p">]</span> <span class="o">=</span> <span class="nv">$k</span><span class="p">;</span>
+</span><span class='line'>        <span class="nv">$p</span><span class="p">[</span><span class="nv">$k</span><span class="p">]</span> <span class="o">+=</span> <span class="nv">$p</span><span class="p">[</span><span class="nv">$j</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">;</span>
+</span><span class='line'>        <span class="nv">$l</span><span class="o">++</span><span class="p">;</span>
+</span><span class='line'>        <span class="k">if</span> <span class="p">(</span> <span class="nv">$p</span><span class="p">[</span><span class="nv">$k</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">1</span> <span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>            <span class="nv">$hl</span><span class="p">[</span><span class="nv">$l</span><span class="o">--</span><span class="p">]</span> <span class="o">=</span> <span class="nv">$k</span><span class="p">;</span>
+</span><span class='line'>            <span class="nv">$h</span><span class="o">--</span><span class="p">;</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">return</span> <span class="p">[</span><span class="nb">map</span> <span class="p">{</span>
+</span><span class='line'>        <span class="k">my</span> <span class="nv">$r</span> <span class="o">=</span> <span class="nb">rand</span><span class="p">(</span><span class="nv">$length</span><span class="p">);</span>
+</span><span class='line'>        <span class="k">my</span> <span class="nv">$k</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nv">$r</span><span class="p">);</span>
+</span><span class='line'>        <span class="nv">$r</span> <span class="o">-=</span> <span class="nv">$k</span><span class="p">;</span>
+</span><span class='line'>        <span class="nv">$r</span> <span class="o">&lt;</span> <span class="nv">$p</span><span class="p">[</span><span class="nv">$k</span><span class="p">]</span> <span class="p">?</span> <span class="nv">$k</span> <span class="p">:</span> <span class="nv">$a</span><span class="p">[</span><span class="nv">$k</span><span class="p">];</span>
+</span><span class='line'>    <span class="p">}</span> <span class="mi">1</span><span class="o">..</span><span class="nv">$num</span><span class="p">];</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">print</span> <span class="nb">join</span> <span class="s">&#39;, &#39;</span><span class="p">,</span> <span class="nv">@</span><span class="p">{</span><span class="n">walkers_alias_method</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">],</span> <span class="mi">100</span><span class="p">};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>非復元抽出</h2>
+
+<p>復元抽出のアルゴリズムを応用して、非復元抽出について考えてみましょう。
+一度出たものが2回でないよう、出たものの重みを0にします。</p>
+
+<h3>線形検索</h3>
+
+<p>線形検索の場合は、重みリストをほぼそのまま使っているので、更新は簡単。
+一度出たものの重みを0にして、総和を更新するだけ。</p>
+
+<figure class='code'><figcaption><span>linear_method.pl</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">strict</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">warnings</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="nn">List::</span><span class="n">Util</span> <span class="sx">qw(sum)</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">sub </span><span class="nf">linear_method</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$weights</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$num</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$sum</span> <span class="o">=</span> <span class="n">sum</span> <span class="nv">@$weights</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$length</span> <span class="o">=</span> <span class="nv">@$weights</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">@w</span> <span class="o">=</span> <span class="nv">@$weights</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">@a</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">for</span> <span class="p">(</span><span class="mi">1</span><span class="o">..</span><span class="nv">$num</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="k">my</span> <span class="nv">$r</span> <span class="o">=</span> <span class="nb">rand</span><span class="p">(</span><span class="nv">$sum</span><span class="p">);</span>
+</span><span class='line'>        <span class="k">for</span> <span class="k">my</span> <span class="nv">$i</span><span class="p">(</span><span class="mi">0</span><span class="o">..</span><span class="nv">$length</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>            <span class="nv">$r</span> <span class="o">-=</span> <span class="nv">$w</span><span class="p">[</span><span class="nv">$i</span><span class="p">];</span>
+</span><span class='line'>            <span class="k">if</span><span class="p">(</span><span class="nv">$r</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>                <span class="nb">push</span> <span class="nv">@a</span><span class="p">,</span> <span class="nv">$i</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>                 <span class="c1"># 一度出たものの重みを0にする</span>
+</span><span class='line'>                <span class="nv">$sum</span> <span class="o">-=</span> <span class="nv">$w</span><span class="p">[</span><span class="nv">$i</span><span class="p">];</span>
+</span><span class='line'>                <span class="nv">$w</span><span class="p">[</span><span class="nv">$i</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'>                <span class="k">last</span><span class="p">;</span>
+</span><span class='line'>            <span class="p">}</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">return</span> <span class="o">\</span><span class="nv">@a</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">print</span> <span class="nb">join</span> <span class="s">&#39;,&#39;</span><span class="p">,</span> <span class="n">linear_method</span><span class="p">([</span><span class="mi">1</span> <span class="o">..</span> <span class="mi">100000</span><span class="p">],</span> <span class="mi">500</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>二分木</h3>
+
+<p>バイナリサーチでは累積分布表を作成したけど、
+これの更新にはO(n)かかってしまうのでバイナリサーチの意味がなくなってしまう。
+そこで重みを二分木を使って管理することで、O(log n)で重みの更新ができる。</p>
+
+<figure class='code'><figcaption><span>tree.pl</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">strict</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">warnings</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="nn">List::</span><span class="n">Util</span> <span class="sx">qw(sum)</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">sub </span><span class="nf">binary_search_method</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$weights</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$num</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$length</span> <span class="o">=</span> <span class="nv">@$weights</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1"># 二分木を構築</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">@left_weight</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="n">x</span> <span class="p">(</span><span class="nv">$length</span> <span class="o">*</span> <span class="mi">2</span><span class="p">);</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">@right_weight</span> <span class="o">=</span> <span class="p">((</span><span class="mi">0</span><span class="p">)</span> <span class="n">x</span> <span class="nv">$length</span><span class="p">,</span> <span class="nv">@$weights</span><span class="p">);</span>
+</span><span class='line'>    <span class="k">for</span> <span class="p">(</span><span class="k">my</span> <span class="nv">$i</span> <span class="o">=</span> <span class="nv">$length</span><span class="o">-</span><span class="mi">1</span><span class="p">;</span> <span class="nv">$i</span><span class="o">&gt;</span><span class="mi">0</span><span class="p">;</span> <span class="o">--</span><span class="nv">$i</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="nv">$left_weight</span><span class="p">[</span><span class="nv">$i</span><span class="p">]</span> <span class="o">=</span> <span class="nv">$left_weight</span><span class="p">[</span><span class="nv">$i</span><span class="o">*</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="nv">$right_weight</span><span class="p">[</span><span class="nv">$i</span><span class="o">*</span><span class="mi">2</span><span class="p">];</span>
+</span><span class='line'>        <span class="nv">$right_weight</span><span class="p">[</span><span class="nv">$i</span><span class="p">]</span> <span class="o">=</span> <span class="nv">$left_weight</span><span class="p">[</span><span class="nv">$i</span><span class="o">*</span><span class="mi">2</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="nv">$right_weight</span><span class="p">[</span><span class="nv">$i</span><span class="o">*</span><span class="mi">2</span><span class="o">+</span><span class="mi">1</span><span class="p">];</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">@a</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">for</span> <span class="p">(</span><span class="mi">1</span><span class="o">..</span><span class="nv">$num</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="c1"># 二分木から検索</span>
+</span><span class='line'>        <span class="k">my</span> <span class="nv">$i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+</span><span class='line'>        <span class="k">my</span> <span class="nv">$r</span> <span class="o">=</span> <span class="nb">rand</span><span class="p">(</span><span class="nv">$left_weight</span><span class="p">[</span><span class="nv">$i</span><span class="p">]</span> <span class="o">+</span> <span class="nv">$right_weight</span><span class="p">[</span><span class="nv">$i</span><span class="p">]);</span>
+</span><span class='line'>        <span class="k">while</span><span class="p">(</span><span class="nv">$i</span> <span class="o">&lt;</span> <span class="nv">$length</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>            <span class="k">if</span><span class="p">(</span><span class="nv">$r</span> <span class="o">&lt;</span> <span class="nv">$left_weight</span><span class="p">[</span><span class="nv">$i</span><span class="p">])</span> <span class="p">{</span>
+</span><span class='line'>                <span class="nv">$i</span> <span class="o">=</span> <span class="nv">$i</span> <span class="o">*</span> <span class="mi">2</span><span class="p">;</span>
+</span><span class='line'>            <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>                <span class="nv">$r</span> <span class="o">-=</span> <span class="nv">$left_weight</span><span class="p">[</span><span class="nv">$i</span><span class="p">];</span>
+</span><span class='line'>                <span class="nv">$i</span> <span class="o">=</span> <span class="nv">$i</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">+</span> <span class="mi">1</span><span class="p">;</span>
+</span><span class='line'>            <span class="p">}</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>        <span class="nb">push</span> <span class="nv">@a</span><span class="p">,</span> <span class="nv">$i</span> <span class="o">-</span> <span class="nv">$length</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="c1"># 木を更新</span>
+</span><span class='line'>        <span class="k">my</span> <span class="nv">$w</span> <span class="o">=</span> <span class="nv">$weights</span><span class="o">-&gt;</span><span class="p">[</span><span class="nv">$i</span><span class="o">-</span><span class="nv">$length</span><span class="p">];</span>
+</span><span class='line'>        <span class="k">while</span><span class="p">(</span><span class="nv">$i</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>            <span class="k">if</span><span class="p">(</span><span class="nv">$i</span> <span class="nv">%</span> <span class="nv">2</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>                <span class="nv">$left_weight</span><span class="p">[</span><span class="nv">$i</span><span class="o">&gt;&gt;</span><span class="mi">1</span><span class="p">]</span> <span class="o">-=</span> <span class="nv">$w</span><span class="p">;</span>
+</span><span class='line'>            <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>                <span class="nv">$right_weight</span><span class="p">[</span><span class="nv">$i</span><span class="o">&gt;&gt;</span><span class="mi">1</span><span class="p">]</span> <span class="o">-=</span> <span class="nv">$w</span><span class="p">;</span>
+</span><span class='line'>            <span class="p">}</span>
+</span><span class='line'>            <span class="nv">$i</span> <span class="o">&gt;&gt;=</span> <span class="mi">1</span><span class="p">;</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">return</span> <span class="o">\</span><span class="nv">@a</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">print</span> <span class="nb">join</span> <span class="s">&#39;,&#39;</span><span class="p">,</span> <span class="n">binary_search_method</span><span class="p">([</span><span class="mi">1</span><span class="o">..</span><span class="mi">100000</span><span class="p">],</span> <span class="mi">500</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>その他</h2>
+
+<p>Walker&#8217;s alias method でも更新法を考えたけど、
+テーブルを一から再生成する以外にいい方法が思いつかない。</p>
+
+<p>抽出が高速であるという特徴を利用して、
+同じ物が出たらもう一度実行するというのが手っ取り早そう。
+Walker&#8217;s alias method が必要なときは n が十分に大きいはずなので、
+重複が起こる確率は小さく、これで十分なきがする。</p>
+
+<h2>まとめ</h2>
+
+<table>
+<tr>
+  <th>手法</th><th>準備</th><th>抽出</th><th>重み更新</th>
+</tr>
+<tr>
+  <td>線形検索</td><td>O(n)</td><td>O(n)</td><td>O(1)</td>
+</tr>
+<tr>
+  <td>バイナリサーチ</td><td>O(n)</td><td>O(log n)</td><td>O(log n)</td>
+</tr>
+<tr>
+  <td>Walker&#8217;s alias</td><td>O(n)</td><td>O(1)</td><td>O(n)</td>
+</tr>
+</table>
+
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="http://d.hatena.ne.jp/koiti_yano/20070826/p1">比較的高速な復元抽出アルゴリズム</a></li>
+<li><a href="http://tolstoy.newcastle.edu.au/R/devel/05/06/1403.html">efficiency of sample() with prob</a></li>
+</ul>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Google Cloud Messaging for Chrome を試してみた]]></title>
+    <link href="http://shogo82148.github.com/blog/2013/05/15/google-cloud-messaging-for-chrome/"/>
+    <updated>2013-05-15T11:26:00+09:00</updated>
+    <id>http://shogo82148.github.com/blog/2013/05/15/google-cloud-messaging-for-chrome</id>
+    <content type="html"><![CDATA[<p>少し前に<a href="http://developer.chrome.com/apps/cloudMessaging.html">Google Cloud Messaging for Chrome</a>
+が発表されました。
+Android向けに提供されていた Push 通信の仕組みである GCM の Chrome 版です。
+ちょうど GCM for Android に触っていたところだったので、
+for Chrome のほうも試してみることにしました。</p>
+
+<!-- More -->
+
+
+<h2>拡張機能の登録</h2>
+
+<p>公式ページの説明にしたがって、
+APIを使えるようにします。
+GCMはOAuth2.0で認証を行うので、</p>
+
+<ol>
+<li>クライアントIDを作る</li>
+<li>Refresh Token を作る</li>
+</ol>
+
+
+<p>という2ステップが必要。</p>
+
+<h3>クライアントIDを作る</h3>
+
+<p>まず、新しい OAuth2.0 のアプリを作成。
+拡張機能をアップロードする予定のGoogleアカウントで以下の作業して
+Client IDを作ります。</p>
+
+<ol>
+<li><a href="https://code.google.com/apis/console/">Google APIs Console</a> にログインする</li>
+<li><strong> Create&#8230; </strong> メニューから新しいプロジェクトを作成</li>
+<li>&#8220;Services&#8221; を開いて <strong> Google Cloud Messaging for Chrome API </strong> を有効化</li>
+<li>&#8220;API Access&#8221; を開いて <strong> Create an OAuth 2.0 cliend ID&#8230; </strong> というボタンをクリック</li>
+<li>branding information を適当に入力</li>
+<li>&#8220;Application Type&#8221; という項目の &#8220;Web application&#8221; を選択</li>
+<li>&#8220;Create client ID&#8221;！！</li>
+</ol>
+
+
+<p>Client ID と Client Secret が表示されるのでメモしておきましょう。</p>
+
+<h3>Refresh Token を取得する</h3>
+
+<p>次に作成したクライアントIDを使って、
+OAuth2.0認証。</p>
+
+<ol>
+<li>シークレットウィンドウを開く(複数アカウント持ってない場合は必要ない)</li>
+<li><a href="https://developers.google.com/oauthplayground/">OAuth 2.0 Playground</a>へアクセス</li>
+<li><strong> OAuth2.0 Configuration </strong> をクリック</li>
+<li>&#8220;Use your own OAuth credentials&#8221; にチェックを入れ、Client ID と Client Secret を入力。&#8221;Close&#8221;を押して画面を閉じる</li>
+<li>&#8220;Step 1&#8221;セクションの&#8221;Input your own scopes&#8221;に <code>https://www.googleapis.com/auth/gcm_for_chrome</code> を入力して、&#8221;Authorize APIs&#8221;ボタンを押す</li>
+<li>ログインページにリダイレクトされるので、拡張機能をアップロードする予定のアカウントで認証</li>
+<li>今度はアプリの認証画面に飛ぶので &#8220;Allow Access&#8221; をクリック</li>
+<li>&#8220;Step 2&#8221; セクションの &#8220;Exchange authorization code for tokens&#8221; ボタンをクリック</li>
+</ol>
+
+
+<p>以上の手順で Access Token と Refresh Token がもらえる。
+通知を送るには Access Token があれば十分なんだけど、有効期間が1時間程度しかない。
+有効期間が切れたら Refresh Token を使って再取得する必要がある。
+Refresh Token の方には有効期間は無いので、大事にとっておこう。</p>
+
+<p>(GCM for Android みたいに Sever key 作るだけじゃダメだったのかな・・・OAuth2.0認証面倒・・・)</p>
+
+<h2>拡張機能でGCMを使う</h2>
+
+<p>次は通知を受け取る拡張機能を作ります。</p>
+
+<h3>パーミッションを追加</h3>
+
+<p>まずはマニフェストを作成。
+permissions という項目に &#8220;pushMessaging&#8221; を追加しておくのがポイント。</p>
+
+<figure class='code'><figcaption><span>manifest.json</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class='javascript'><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="s2">&quot;manifest_version&quot;</span><span class="o">:</span> <span class="mi">2</span><span class="p">,</span>
+</span><span class='line'>    <span class="s2">&quot;name&quot;</span><span class="o">:</span> <span class="s2">&quot;Shogo GCM Test&quot;</span><span class="p">,</span>
+</span><span class='line'>    <span class="s2">&quot;description&quot;</span><span class="o">:</span> <span class="s2">&quot;It&#39;s test extension&quot;</span><span class="p">,</span>
+</span><span class='line'>    <span class="s2">&quot;version&quot;</span><span class="o">:</span> <span class="s2">&quot;1.0&quot;</span><span class="p">,</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="s2">&quot;permissions&quot;</span><span class="o">:</span> <span class="p">[</span>
+</span><span class='line'>        <span class="s2">&quot;pushMessaging&quot;</span><span class="p">,</span>
+</span><span class='line'>        <span class="s2">&quot;notifications&quot;</span>
+</span><span class='line'>    <span class="p">],</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="s2">&quot;background&quot;</span><span class="o">:</span> <span class="p">{</span>
+</span><span class='line'>        <span class="s2">&quot;scripts&quot;</span><span class="o">:</span> <span class="p">[</span><span class="s2">&quot;background.js&quot;</span><span class="p">]</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>JavaScript を書く</h3>
+
+<p>通知を受け取るプログラムを書いてみます。</p>
+
+<figure class='code'><figcaption><span>background.js</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class='javascript'><span class='line'><span class="c1">// ChannelIDを取得</span>
+</span><span class='line'><span class="nx">chrome</span><span class="p">.</span><span class="nx">pushMessaging</span><span class="p">.</span><span class="nx">getChannelId</span><span class="p">(</span><span class="kc">false</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">response</span><span class="p">){</span>
+</span><span class='line'>    <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">response</span><span class="p">);</span> <span class="c1">// 本当はサーバに送るんだけど、とりあえず、コンソールに出力しておく</span>
+</span><span class='line'><span class="p">});</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// 通知を受け取るイベントハンドラを登録</span>
+</span><span class='line'><span class="nx">chrome</span><span class="p">.</span><span class="nx">pushMessaging</span><span class="p">.</span><span class="nx">onMessage</span><span class="p">.</span><span class="nx">addListener</span><span class="p">(</span><span class="kd">function</span> <span class="p">(</span><span class="nx">message</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="c1">// デスクトップ通知で表示</span>
+</span><span class='line'>    <span class="kd">var</span> <span class="nx">notification</span> <span class="o">=</span> <span class="nx">webkitNotifications</span><span class="p">.</span><span class="nx">createNotification</span><span class="p">(</span>
+</span><span class='line'>        <span class="s1">&#39;&#39;</span><span class="p">,</span>
+</span><span class='line'>        <span class="s1">&#39;Message&#39;</span><span class="p">,</span>
+</span><span class='line'>        <span class="nx">message</span><span class="p">.</span><span class="nx">payload</span>
+</span><span class='line'>    <span class="p">);</span>
+</span><span class='line'>    <span class="nx">notification</span><span class="p">.</span><span class="nx">show</span><span class="p">();</span>
+</span><span class='line'><span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>マーケットに公開！</h3>
+
+<p>ローカル環境でも Channel ID の取得まではできるんだけど、
+実際に Push 通知を受信するには、マーケットへのアップロードが必要。</p>
+
+<p><a href="https://chrome.google.com/webstore/developer/dashboard">デベロッパーダッシュボード</a>で
+新しいアイテムを追加ボタンを押し、さっきのファイルをzipで固めたファイルを送ります。
+公開するには初回のみ5ドル必要です。
+さすがに開発中のものを全世界に公開するのはまずいので、
+テスターにのみ公開というオプションを選択しておきましょう。</p>
+
+<h2>Push 通知を送る</h2>
+
+<p>さあ、Push通知を送ってみましょう。</p>
+
+<h3>新しい Access Token を取得する</h3>
+
+<p>と、そのまえに</p>
+
+<p>そろそろ最初にもらった Access Token の有効期間が切れているころだと思うので、
+新しいものを取得しておきましょう。</p>
+
+<p>最近 Perler になりつつあるので、Perlで書いてみます。
+Client ID, Client Secret, Refresh Token を Post するだけの簡単なスクリプトです。</p>
+
+<figure class='code'><figcaption><span>refresh_token.pl</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="c1">#!/usr/bin/env perl</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">use</span> <span class="n">warnings</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">strict</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">Encode</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="nn">Data::</span><span class="n">Dumper</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">use</span> <span class="n">Furl</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="nn">JSON::</span><span class="n">XS</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$refresh</span> <span class="o">=</span> <span class="s">&#39;your_refresh_token&#39;</span><span class="p">;</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$client_id</span> <span class="o">=</span> <span class="s">&#39;your_client_id.apps.googleusercontent.com&#39;</span><span class="p">;</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$client_secret</span> <span class="o">=</span> <span class="s">&#39;your_client_secret&#39;</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$furl</span> <span class="o">=</span> <span class="n">Furl</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">;</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$res</span> <span class="o">=</span> <span class="nv">$furl</span><span class="o">-&gt;</span><span class="n">post</span><span class="p">(</span>
+</span><span class='line'>    <span class="s">&#39;https://accounts.google.com/o/oauth2/token&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="p">[</span> <span class="p">],</span>
+</span><span class='line'>    <span class="p">[</span>
+</span><span class='line'>        <span class="n">client_id</span> <span class="o">=&gt;</span> <span class="nv">$client_id</span><span class="p">,</span>
+</span><span class='line'>        <span class="n">client_secret</span> <span class="o">=&gt;</span> <span class="nv">$client_secret</span><span class="p">,</span>
+</span><span class='line'>        <span class="n">refresh_token</span> <span class="o">=&gt;</span> <span class="nv">$refresh</span><span class="p">,</span>
+</span><span class='line'>        <span class="n">grant_type</span> <span class="o">=&gt;</span> <span class="s">&#39;refresh_token&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="p">],</span>
+</span><span class='line'><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">print</span> <span class="n">Dumper</span> <span class="n">decode_json</span><span class="p">(</span><span class="nv">$res</span><span class="o">-&gt;</span><span class="n">content</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>Push! Push! Push!</h3>
+
+<p>さあ、ようやくPush！</p>
+
+<p>Access Token をヘッダにつけ、
+メッセージをChannel IDと一緒に POST するだけ。</p>
+
+<p>Channel ID は <code>chrome://extensions/</code> から自分の拡張機能の選択、
+ビューを調査: _generated_background_page.html というところをクリックすると、
+Consoleが見れるのでそこから確認できます。</p>
+
+<figure class='code'><figcaption><span>push.pl</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="c1">#!/usr/bin/env perl</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">use</span> <span class="n">warnings</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">strict</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">Encode</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">use</span> <span class="n">Furl</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="nn">JSON::</span><span class="n">XS</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$access</span> <span class="o">=</span> <span class="s">&#39;your_access_token&#39;</span><span class="p">;</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$channelId</span> <span class="o">=</span> <span class="s">&#39;your_channel_id&#39;</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$data</span> <span class="o">=</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">channelId</span> <span class="o">=&gt;</span> <span class="nv">$channelId</span><span class="p">,</span>
+</span><span class='line'>    <span class="n">subchannelId</span> <span class="o">=&gt;</span> <span class="s">&quot;0&quot;</span><span class="p">,</span>
+</span><span class='line'>    <span class="n">payload</span> <span class="o">=&gt;</span> <span class="n">decode_utf8</span><span class="p">(</span><span class="nb">join</span><span class="p">(</span><span class="s">&#39; &#39;</span><span class="p">,</span> <span class="nv">@ARGV</span><span class="p">)),</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$furl</span> <span class="o">=</span> <span class="n">Furl</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">;</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$res</span> <span class="o">=</span> <span class="nv">$furl</span><span class="o">-&gt;</span><span class="n">post</span><span class="p">(</span>
+</span><span class='line'>    <span class="s">&#39;https://www.googleapis.com/gcm_for_chrome/v1/messages&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="p">[</span>
+</span><span class='line'>        <span class="s">&#39;Content-Type&#39;</span> <span class="o">=&gt;</span> <span class="s">&#39;application/json&#39;</span><span class="p">,</span>
+</span><span class='line'>        <span class="s">&#39;Authorization&#39;</span> <span class="o">=&gt;</span> <span class="s">&quot;Bearer $access&quot;</span><span class="p">,</span>
+</span><span class='line'>    <span class="p">],</span>
+</span><span class='line'>    <span class="n">encode_json</span> <span class="nv">$data</span><span class="p">,</span>
+</span><span class='line'><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>Command</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>perl push.pl hogehoge
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>うまくいくと、デスクトップ通知が出るはず！</p>
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="http://developer.chrome.com/apps/cloudMessaging.html">Google Cloud Messaging for Chrome</a></li>
+<li><a href="http://blog.maripo.org/2013/05/gcm-for-chrome/">Google Cloud Messaging for Chromeを体験してみた</a></li>
+</ul>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[RaspberryPiからメールを送る]]></title>
@@ -3336,310 +4118,6 @@ pythonディレクトリにPython-bindingが入ってます．
 
 
 
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Togetterの編集作業便利にしたい]]></title>
-    <link href="http://shogo82148.github.com/blog/2012/10/28/togetter-helper/"/>
-    <updated>2012-10-28T01:11:00+09:00</updated>
-    <id>http://shogo82148.github.com/blog/2012/10/28/togetter-helper</id>
-    <content type="html"><![CDATA[<p><a href="http://togetter.com/">Togetter</a>はTwitterの投稿をまとめられる非常に便利なサイトですが，
-編集画面が異様に使いにくいです．
-そんなわけで<a href="http://shogo82148.github.com/blog/2012/10/13/semiauto-togetter/">前回</a>は
-自動的に検索ボタンを押してくれるブックマークレットを書いてみました．</p>
-
-<p>それをユーザスクリプトにして，
-ついでに編集画面の不便なところを修正してみました．</p>
-
-<!-- More -->
-
-
-<h2>編集を便利にするユーザスクリプト</h2>
-
-<p>スクリプトはGistにあげておきました．</p>
-
-<ul>
-<li><a href="https://gist.github.com/3953476">https://gist.github.com/3953476</a></li>
-<li><a href="https://gist.github.com/raw/3953476/TogetterHelper.user.js">インストールはこちら</a></li>
-</ul>
-
-
-<p>Chrome拡張<a href="https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo">Tampermonkey</a>
-で動作を確認しました．
-この拡張，ユーザスクリプトの管理ができてオススメです．</p>
-
-<h2>変更内容</h2>
-
-<p>ユーザスクリプトは編集画面に対して次のような変更をします．</p>
-
-<ul>
-<li>画面レイアウトの変更</li>
-<li>自動検索機能</li>
-<li>重複削除・ソートの高速化</li>
-<li>選択動作の変更</li>
-<li>元に戻す機能</li>
-<li>ショートカットキーの追加</li>
-</ul>
-
-
-<h3>画面レイアウトの変更</h3>
-
-<p><a href="http://togetter.com/">Togetter</a>の編集画面のレイアウト，非常に使いにくいです．
-ツイート一覧をスクロールしようとしたら画面全体がスクロールしてしまって，
-編集用のボタンが隠れてしまう，ということが編集中に何度もあってイライラします．</p>
-
-<p><strong> 余計なものでごちゃごちゃし過ぎなんだ！ </strong></p>
-
-<p><strong> 僕は編集に集中したいんだ！ </strong></p>
-
-<p>編集と関係の無いヘッダやナビゲーションは要らないので消えてもらうことにしました．
-ツイートの一覧が画面いっぱいに表示され，
-編集用のボタンは常常に画面上に表示されます．</p>
-
-<h3>自動検索機能</h3>
-
-<p>前回ブックマークレットで実現した機能です．
-検索キーワードと一回あたりの読み込み回数を設定し，
-「自動検索開始」ボタンを押しましょう．
-すると，繰り返し間隔を聞いてくるので秒単位で時間を指定しましょう．
-カウントダウンが始まり，周期的に検索・ソート・重複削除が行われます．</p>
-
-<h3>重複削除．ソートの高速化</h3>
-
-<p><a href="http://togetter.com/">Togetter</a>のソートのスピードはびっくりするほど遅いです．
-例えば，「<a href="http://togetter.com/li/374199">劇的ビフォーアフター佐世保高専ラグビー部部室をリフォーム</a>」には
-1190個のツイートが含まれています．
-これを時間順にソートしてみたところ，
-三回の平均で9.978秒(それぞれの結果は10.118秒, 9.925秒, 9.892秒)かかりました．
-1000ツイート程度のソートに<strong>約10秒</strong>です．遅い！</p>
-
-<p>ソート自体は数ミリ秒で終わるのになんでこんなに遅いというと，結果を画面に反映するのにjQueryのセレクタを大量に呼び出しているから．
-ソートのときに一回読み込んだものをキャッシュしておけばもっと速くなるはず．</p>
-
-<p>ってことで自前で実装してボタンを置き換えました．
-結果0.171秒(0.174, 0.177, 0.161)まで短縮することができました．
-<strong>約58倍</strong>の高速化！</p>
-
-<p>高速化とは直接関係ないけど，
-「選択したところだけソート」にしました．
-ツイートを内容ごとに分類してるときとかに，
-一部分だけソートできます(例:<a href="http://togetter.com/li/395528">ロボコン死亡かるた</a>)．
-何も選択されてないときは何もしません．
-全体をソートしたい時は明示的に全選択する必要があります．</p>
-
-<p>重複削除とかも実装しなおしました．
-約200ミリ秒かかってたのが約20ミリ秒に高速化！</p>
-
-<h3>選択動作の変更</h3>
-
-<p>もともとの編集画面では，ツイートをクリックするとクリックしたツイートの選択状態が切り替わります．
-他に選択しているツイートがある場合，そのツイートは選択されたままです．
-Excelとかではセルをクリックすると他のセルは非選択状態になるので，
-それに慣れているとなんだか違和感があるんですよね．
-そういうわけで，ツイートをクリックしたときは<strong>クリックしたツイートのみ</strong>選択されるようにしました．
-複数選択ができないのも困るので，
-Ctrlキーと同時クリックでクリックしたツイートを全部選択，
-Shiftキーと同時クリックで範囲内のツイートを全部選択にしました．
-Excelとかと一緒ですね．</p>
-
-<h3>元に戻す機能</h3>
-
-<p>ツイートの削除とか，時間順ソートとか，確認もなしにいきなりされるんですよ．
-ツイートの削除はまた検索しなおせばいいかもしれないけど，
-時間順ソートは凶悪です．
-「<a href="http://togetter.com/li/395528">ロボコン死亡かるた</a>」とかせっかくあいうえお順に並べたのに
-全部時間順にソートされてしまうんです．酷い！</p>
-
-<p>そういうわけで，元に戻す機能をつけておきました．
-間違ってツイートを削除してしまっても，間違えてソートしてしまっても，ボタンひとつで元通りです．</p>
-
-<h3>ショートカットキーの追加</h3>
-
-<p>マウスだけでの操作とか面倒なので，ショートカットキーを設定しました．</p>
-
-<ul>
-<li>Ctrl+S: 下書き保存</li>
-<li>Ctrl+A: ツイートの全選択</li>
-<li>Ctrl+Z: 元に戻す</li>
-<li>Ctrl+Y: やり直す(元に戻すを取り消す)</li>
-</ul>
-
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[6さいカンファレンス 第7回「Windowsのアプリをクラックしよう！(再)」まとめ]]></title>
-    <link href="http://shogo82148.github.com/blog/2012/10/27/6saiconf-7/"/>
-    <updated>2012-10-27T18:21:00+09:00</updated>
-    <id>http://shogo82148.github.com/blog/2012/10/27/6saiconf-7</id>
-    <content type="html"><![CDATA[<p>2012/10/25に<a href="https://twitter.com/kuina_tesso">くいなちゃん</a>さん主催で開催された6さいカンファレンスのまとめ。
-第7回は「Windowsのアプリをクラックしよう！(再)」です。</p>
-
-<p>第4回「Windowsのアプリをクラックしよう！」はどこへいってしまったのでしょう？
-頑張って探したけどこれしか情報が無い・・・？</p>
-
-<blockquote class="twitter-tweet" lang="ja"><p>昨日の ６さいカンファレンスは盛り上がりましたね (第４回 「Windowsのアプリをクラックしよう！」)　　　来週は、作曲講座をしようと思っています。　お楽しみに☆　<a href="https://twitter.com/search/%236saiconf">#6saiconf</a></p>&mdash; くいなちゃんさん (@kuina_tesso) <a href="https://twitter.com/kuina_tesso/status/251553054753701888" data-datetime="2012-09-28T05:24:56+00:00">9月 28, 2012</a></blockquote>
-
-
-<script src="http://shogo82148.github.com//platform.twitter.com/widgets.js" charset="utf-8"></script>
-
-
-<p>厳しい緘口令が敷かれているのか，参加者がくいなちゃんさんしか居なかったのか，そもそもそんなのなかったのか・・・．</p>
-
-<p>勝手にまとめてしまったので、何か問題があれば<a href="https://twitter.com/shogo82148">@shogo82148</a>まで。
-(カンファレンスの内容には<a href="https://twitter.com/kuina_tesso/status/211885730174222336">くいなちゃんライセンス</a>が適用されるらしいです．怖！)</p>
-
-<!-- more -->
-
-
-<h2>&#8212;&#8211;ｷﾘﾄﾘｾﾝ&#8212;&#8211;</h2>
-
-<p>くいなちゃん: 10/25(木) 21:00 から、第７回 ６さいカンファレンスを開催します。
-テーマは、「Windowsのアプリをクラックしよう！(再)」 です。
-<strong> (再) と付いていますが、前回やった記憶はございません。 </strong>
-参加されない方は、今のうちにご退場お願いします。
-ROMでの参加も歓迎ですん☆
-それでは、もうしばらくお待ちください。</p>
-
-<p>くいなちゃん: それでは、第７回　６さいカンファレンスを開催します。
-テーマは、「Windowsのアプリをクラックしよう！(再)」　ですん☆
-しかし、これを開始する前に、いくつかの免責事項をお伝えしなければなりません。
-(６さい的な事情)</p>
-
-<p>くいなちゃん: まず、実際に既存の Windowsアプリをクラックする、という流れで
-話を進めていきますが、実際にクラックを行っているわけではなく、
-また画像も合成です。
-実際に既存のアプリに対してクラックする行為は、
-場合によっては犯罪となりますので、<strong> 決してマネしないでください </strong>。
-本講座は、犯罪を助長する意図があるわけではなく、
-むしろ攻撃側を知ることで、防衛スキルを身に着けようというものです！</p>
-
-<h2>マインスイーパ！</h2>
-
-<p>くいなちゃん: はい、よろしいでしょうか。
-では、本日クラックするアプリはこちらです！
-<a href="http://kuina.tes.so/6saiconf_7/img0.png">http://kuina.tes.so/6saiconf_7/img0.png</a></p>
-
-<p><img src="http://kuina.tes.so/6saiconf_7/img0.png" alt="マインスイーパ" /></p>
-
-<p>くいなちゃん: みなさん大好きな、マインスイーパですん☆
-くいなちゃんは、マインスイーパが得意ではないので、上級をクリアする頃には、
-時間が999になってしまいます。
-そこで、この時間が経過しないよう、改造することを今日の目標としましょう。</p>
-
-<p>くいなちゃん: まず、<a href="http://www.ollydbg.de/">ollydbg</a> というフリーソフトを起動します。
-これは、主に アプリをクラックするのに使われるソフトです[要出典]
-<a href="http://kuina.tes.so/6saiconf_7/img1.png">http://kuina.tes.so/6saiconf_7/img1.png</a>
-画像は、<a href="http://www.ollydbg.de/">ollydbg</a> 上でマインスイーパを起動したところです。</p>
-
-<p><img src="http://kuina.tes.so/6saiconf_7/img1.png" alt="OllyDbg" /></p>
-
-<p>くいなちゃん: ollydbg には、ウインドウがいくつか分かれていますが、
-簡単に説明すると、左上が exeファイルを逆アセンブルしたコード、
-左下が 実行時のメモリの内容、右上が CPUのレジスタの内容、
-右下は…　コールスタックみたいに見えるけど、よくわからないからキニシナイ！</p>
-
-<p>くいなちゃん: ではここで、もう一つ フリーソフトを起動しましょう。
-<a href="http://www.vector.co.jp/soft/win95/hardware/se254476.html">スペシャルねこまんま５７号</a>　という、アレなアイコンとタイトルのソフトです。
-主に、実行しているアプリのメモリを監視したり書き換えたりするのに使います。
-<a href="http://kuina.tes.so/6saiconf_7/img2.png">http://kuina.tes.so/6saiconf_7/img2.png</a></p>
-
-<p><img src="http://kuina.tes.so/6saiconf_7/img2.png" alt="スペシャルねこまんま５７号" /></p>
-
-<h2>経過時間を格納している変数を捜索</h2>
-
-<p>くいなちゃん: このソフトは、ゲームのスコアをいじったり、RPGのパラメータを999にしたりするのに重宝します。
-画像は、マインスイーパの時間が 010 になった瞬間に、マインスイーパのメモリ上から 10 である部分を全部探索して、右下にリストアップしているところです (8026件)</p>
-
-<p>くいなちゃん: 更に、時間が020になった瞬間に、20 のメモリを探索し…
-とだんだん目的のメモリアドレスを絞り込んでいきます。
-そしてついに、経過時間を格納している変数が割り当てられているメモリのアドレスを突き止めました！
-<a href="http://kuina.tes.so/6saiconf_7/img3.png">http://kuina.tes.so/6saiconf_7/img3.png</a>
-1件に絞られていますね。　中央のウインドウは、該当メモリの前後の様子です。</p>
-
-<p><img src="http://kuina.tes.so/6saiconf_7/img3.png" alt="変数発見！" /></p>
-
-<p>くいなちゃん: この中央のウインドウの値を直接いじっても、値が反映されますので、RPGのパラメータを999にしたいときは、ここをいじれば ok です。
-しかし今回は、時間経過で1ずつ増加されていくプログラムそのものを書き換えたいので、この値は放置します。
-重要なのは、このメモリのアドレスが、0x0100579c であることです☆</p>
-
-<h2>ブレークポイントを設定</h2>
-
-<p>くいなちゃん: というわけで、ollydbg に戻って、左下ウインドウにあるメモリ上から、例の 0x0100579c を見つけます
-<a href="http://kuina.tes.so/6saiconf_7/img4.png">http://kuina.tes.so/6saiconf_7/img4.png</a></p>
-
-<p><img src="http://kuina.tes.so/6saiconf_7/img4.png" alt="変数発見！" /></p>
-
-<p>くいなちゃん: ありましたか。　6A 01 という値になっている箇所がありますね。
-ここを選択し、この値が書き換えられたらプログラムが一時停止するように、ブレークポイントを仕掛けます。
-つまり、マインスイーパで時間が経過するときに 1 ずつ加算されているプログラムの箇所を突き止めようというものです。</p>
-
-<p>くいなちゃん: はい、この画像は既にブレークポイントが設定され、マインスイーパが罠にかかった瞬間のスナップです。
-左上のウインドウを見ると、一番上に <code>INC DWORD PTR DS:[100579C]</code>とありますね。
-これは、メモリ 100579C 番地を INC (1ずつ加算する命令) することから、目的のプログラムであることが解ると思います</p>
-
-<p>くいなちゃん: まあ、C言語っぽく言いますと、<br>
-<code>int time; // 100579C番地に割り当てられる</code> <br>
-<code>time++; // 例の箇所</code><br>
-という感じでしょうか。</p>
-
-<h2>exeファイルを改造</h2>
-
-<p>くいなちゃん: では、いよいよプログラムの問題の箇所が特定できたので、マインスイーパのexeファイルを改造するですよー☆
-Visual Studio 付属の、exeダンプを使って、マインスイーパの構造をテキストファイルに吐き出します。
-<a href="http://kuina.tes.so/6saiconf_7/img5.png">http://kuina.tes.so/6saiconf_7/img5.png</a>
-このexeダンプは、逆アセンブルしたり、いろいろ使い道があります。</p>
-
-<p><img src="http://kuina.tes.so/6saiconf_7/img5.png" alt="数万円から数十万円するあれ" /></p>
-
-<p>くいなちゃん: 吐き出したテキストファイルがこちらです
-<a href="http://kuina.tes.so/6saiconf_7/img6.png">http://kuina.tes.so/6saiconf_7/img6.png</a>
-左のウインドウは、exeファイルのヘッダ情報になります。
-まあ、今回はあまり気にしなくてokです。
-右上は、exeファイルの、実際のプログラムが格納されている部分の情報になります。 file pointer to raw data を見ると、00000400 to 00003fff となっています。
-また、virtual address は 01001000 to 01004a55 となっています。
-これは、実行ファイル(バイナリ) の 400byte～ が、実行時の 01001000番地～ に割り付けられるということを意味しています。</p>
-
-<p><img src="http://kuina.tes.so/6saiconf_7/img6.png" alt="ダンプ結果" /></p>
-
-<p>くいなちゃん: 先ほどの <code>INC DWORD…</code>という命令は、メモリ上の 01002FF5 に存在していました
-(確認していなかったので、気になる人は<a href="http://kuina.tes.so/6saiconf_7/img4.png">img4.png</a> に戻ってください)
-右下のウインドウは、exeファイルの機械語バイナリとなっていますが、01002FF5 の例の命令を選択しています。
-<a href="http://kuina.tes.so/6saiconf_7/img4.png">img4.png</a> の命令(機械語) と一致していることが解ると思います。
-確認してみてください。</p>
-
-<p>くいなちゃん: はい、実行メモリ上の 01001000番地が、プログラムの 400byte部分に相当するとさっき解りました。
-ということなので、01002FF5 という、例の命令の番地は、01002FF5 - 01001000 + 400 = 23F5 byte に存在することになりますね。
-バイナリエディタで マインスイーパのexeファイルを開き、23F5 byte 目を確認してみましょう。
-<a href="http://kuina.tes.so/6saiconf_7/img7.png">http://kuina.tes.so/6saiconf_7/img7.png</a>
-ありましたね！</p>
-
-<p><img src="http://kuina.tes.so/6saiconf_7/img7.png" alt="バイナリエディタで確認" /></p>
-
-<p>くいなちゃん: つまり、これが、くいなちゃんを苦しめていた 時間経過命令なのです！
-この忌まわしい命令は、さっさと無効化しちゃいましょう。
-<a href="http://kuina.tes.so/6saiconf_7/img8.png">http://kuina.tes.so/6saiconf_7/img8.png</a>
-90 で埋めました。　90 というのは、機械語で <code>NOP</code> を意味し、何もしない命令になります。
-とりあえず、迷ったら 90 で埋めることを覚えましょう。</p>
-
-<p><img src="http://kuina.tes.so/6saiconf_7/img8.png" alt="NOP埋め" /></p>
-
-<h2>クラック成功！</h2>
-
-<p>くいなちゃん: これにより見事、時間経過命令は、NOPで埋められ、無効化されたので、このように時間経過しなくなりました。
-<a href="http://kuina.tes.so/6saiconf_7/img9.png">http://kuina.tes.so/6saiconf_7/img9.png</a>
-ずっと時間は 1 のままですん☆
-ハイスコアが狙えますね！！</p>
-
-<p><img src="http://kuina.tes.so/6saiconf_7/img9.png" alt="クラック成功" /></p>
-
-<p>くいなちゃん: というわけで、このような感じで Windowsアプリをクラックすることができます。
-今回は、マインスイーパの時間経過を止めるだけでしたが、この応用で、有料アプリのパスワードをクラックしたり、技術的には色々できます。
-ただ、最初でも言いましたが、クラックできることと、実際にすることは違います。
-素晴らしいアプリであれば 作者に対価を支払うべきでしょうし、素晴らしくないなら そもそも使うべきではありません。
-本講義では、このような攻撃手段を知ることで、自分がアプリを作るときに どうすればクラックされるのを防ぐことができるのかを考えるきっかけとなればと思い行いました。
-くれぐれも悪用はしないでくださいね☆</p>
 ]]></content>
   </entry>
   

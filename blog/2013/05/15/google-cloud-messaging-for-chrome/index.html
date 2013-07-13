@@ -1,0 +1,637 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Google Cloud Messaging for Chrome を試してみた - Shogo's Blog</title>
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="description" content="少し前にGoogle Cloud Messaging for Chrome
+が発表されました。
+Android向けに提供されていた Push 通信の仕組みである GCM の Chrome 版です。
+ちょうど GCM for Android に触っていたところだったので、
+for Chrome &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://shogo82148.github.com/blog/2013/05/15/google-cloud-messaging-for-chrome/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  <link href="/atom.xml" rel="alternate" title="Shogo's Blog" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-4526627-4']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Shogo's Blog</a></h1>
+  
+    <h2>たぶんプログラミングとかについて書いていくブログ</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:shogo82148.github.com" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/blog/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Google Cloud Messaging for Chrome を試してみた</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2013-05-15T11:26:00+09:00" pubdate data-updated="true">May 15<span>th</span>, 2013</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>少し前に<a href="http://developer.chrome.com/apps/cloudMessaging.html">Google Cloud Messaging for Chrome</a>
+が発表されました。
+Android向けに提供されていた Push 通信の仕組みである GCM の Chrome 版です。
+ちょうど GCM for Android に触っていたところだったので、
+for Chrome のほうも試してみることにしました。</p>
+
+<!-- More -->
+
+
+<h2>拡張機能の登録</h2>
+
+<p>公式ページの説明にしたがって、
+APIを使えるようにします。
+GCMはOAuth2.0で認証を行うので、</p>
+
+<ol>
+<li>クライアントIDを作る</li>
+<li>Refresh Token を作る</li>
+</ol>
+
+
+<p>という2ステップが必要。</p>
+
+<h3>クライアントIDを作る</h3>
+
+<p>まず、新しい OAuth2.0 のアプリを作成。
+拡張機能をアップロードする予定のGoogleアカウントで以下の作業して
+Client IDを作ります。</p>
+
+<ol>
+<li><a href="https://code.google.com/apis/console/">Google APIs Console</a> にログインする</li>
+<li><strong> Create&#8230; </strong> メニューから新しいプロジェクトを作成</li>
+<li>&#8220;Services&#8221; を開いて <strong> Google Cloud Messaging for Chrome API </strong> を有効化</li>
+<li>&#8220;API Access&#8221; を開いて <strong> Create an OAuth 2.0 cliend ID&#8230; </strong> というボタンをクリック</li>
+<li>branding information を適当に入力</li>
+<li>&#8220;Application Type&#8221; という項目の &#8220;Web application&#8221; を選択</li>
+<li>&#8220;Create client ID&#8221;！！</li>
+</ol>
+
+
+<p>Client ID と Client Secret が表示されるのでメモしておきましょう。</p>
+
+<h3>Refresh Token を取得する</h3>
+
+<p>次に作成したクライアントIDを使って、
+OAuth2.0認証。</p>
+
+<ol>
+<li>シークレットウィンドウを開く(複数アカウント持ってない場合は必要ない)</li>
+<li><a href="https://developers.google.com/oauthplayground/">OAuth 2.0 Playground</a>へアクセス</li>
+<li><strong> OAuth2.0 Configuration </strong> をクリック</li>
+<li>&#8220;Use your own OAuth credentials&#8221; にチェックを入れ、Client ID と Client Secret を入力。&#8221;Close&#8221;を押して画面を閉じる</li>
+<li>&#8220;Step 1&#8221;セクションの&#8221;Input your own scopes&#8221;に <code>https://www.googleapis.com/auth/gcm_for_chrome</code> を入力して、&#8221;Authorize APIs&#8221;ボタンを押す</li>
+<li>ログインページにリダイレクトされるので、拡張機能をアップロードする予定のアカウントで認証</li>
+<li>今度はアプリの認証画面に飛ぶので &#8220;Allow Access&#8221; をクリック</li>
+<li>&#8220;Step 2&#8221; セクションの &#8220;Exchange authorization code for tokens&#8221; ボタンをクリック</li>
+</ol>
+
+
+<p>以上の手順で Access Token と Refresh Token がもらえる。
+通知を送るには Access Token があれば十分なんだけど、有効期間が1時間程度しかない。
+有効期間が切れたら Refresh Token を使って再取得する必要がある。
+Refresh Token の方には有効期間は無いので、大事にとっておこう。</p>
+
+<p>(GCM for Android みたいに Sever key 作るだけじゃダメだったのかな・・・OAuth2.0認証面倒・・・)</p>
+
+<h2>拡張機能でGCMを使う</h2>
+
+<p>次は通知を受け取る拡張機能を作ります。</p>
+
+<h3>パーミッションを追加</h3>
+
+<p>まずはマニフェストを作成。
+permissions という項目に &#8220;pushMessaging&#8221; を追加しておくのがポイント。</p>
+
+<figure class='code'><figcaption><span>manifest.json</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class='javascript'><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="s2">&quot;manifest_version&quot;</span><span class="o">:</span> <span class="mi">2</span><span class="p">,</span>
+</span><span class='line'>    <span class="s2">&quot;name&quot;</span><span class="o">:</span> <span class="s2">&quot;Shogo GCM Test&quot;</span><span class="p">,</span>
+</span><span class='line'>    <span class="s2">&quot;description&quot;</span><span class="o">:</span> <span class="s2">&quot;It&#39;s test extension&quot;</span><span class="p">,</span>
+</span><span class='line'>    <span class="s2">&quot;version&quot;</span><span class="o">:</span> <span class="s2">&quot;1.0&quot;</span><span class="p">,</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="s2">&quot;permissions&quot;</span><span class="o">:</span> <span class="p">[</span>
+</span><span class='line'>        <span class="s2">&quot;pushMessaging&quot;</span><span class="p">,</span>
+</span><span class='line'>        <span class="s2">&quot;notifications&quot;</span>
+</span><span class='line'>    <span class="p">],</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="s2">&quot;background&quot;</span><span class="o">:</span> <span class="p">{</span>
+</span><span class='line'>        <span class="s2">&quot;scripts&quot;</span><span class="o">:</span> <span class="p">[</span><span class="s2">&quot;background.js&quot;</span><span class="p">]</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>JavaScript を書く</h3>
+
+<p>通知を受け取るプログラムを書いてみます。</p>
+
+<figure class='code'><figcaption><span>background.js</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class='javascript'><span class='line'><span class="c1">// ChannelIDを取得</span>
+</span><span class='line'><span class="nx">chrome</span><span class="p">.</span><span class="nx">pushMessaging</span><span class="p">.</span><span class="nx">getChannelId</span><span class="p">(</span><span class="kc">false</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">response</span><span class="p">){</span>
+</span><span class='line'>    <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">response</span><span class="p">);</span> <span class="c1">// 本当はサーバに送るんだけど、とりあえず、コンソールに出力しておく</span>
+</span><span class='line'><span class="p">});</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// 通知を受け取るイベントハンドラを登録</span>
+</span><span class='line'><span class="nx">chrome</span><span class="p">.</span><span class="nx">pushMessaging</span><span class="p">.</span><span class="nx">onMessage</span><span class="p">.</span><span class="nx">addListener</span><span class="p">(</span><span class="kd">function</span> <span class="p">(</span><span class="nx">message</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="c1">// デスクトップ通知で表示</span>
+</span><span class='line'>    <span class="kd">var</span> <span class="nx">notification</span> <span class="o">=</span> <span class="nx">webkitNotifications</span><span class="p">.</span><span class="nx">createNotification</span><span class="p">(</span>
+</span><span class='line'>        <span class="s1">&#39;&#39;</span><span class="p">,</span>
+</span><span class='line'>        <span class="s1">&#39;Message&#39;</span><span class="p">,</span>
+</span><span class='line'>        <span class="nx">message</span><span class="p">.</span><span class="nx">payload</span>
+</span><span class='line'>    <span class="p">);</span>
+</span><span class='line'>    <span class="nx">notification</span><span class="p">.</span><span class="nx">show</span><span class="p">();</span>
+</span><span class='line'><span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>マーケットに公開！</h3>
+
+<p>ローカル環境でも Channel ID の取得まではできるんだけど、
+実際に Push 通知を受信するには、マーケットへのアップロードが必要。</p>
+
+<p><a href="https://chrome.google.com/webstore/developer/dashboard">デベロッパーダッシュボード</a>で
+新しいアイテムを追加ボタンを押し、さっきのファイルをzipで固めたファイルを送ります。
+公開するには初回のみ5ドル必要です。
+さすがに開発中のものを全世界に公開するのはまずいので、
+テスターにのみ公開というオプションを選択しておきましょう。</p>
+
+<h2>Push 通知を送る</h2>
+
+<p>さあ、Push通知を送ってみましょう。</p>
+
+<h3>新しい Access Token を取得する</h3>
+
+<p>と、そのまえに</p>
+
+<p>そろそろ最初にもらった Access Token の有効期間が切れているころだと思うので、
+新しいものを取得しておきましょう。</p>
+
+<p>最近 Perler になりつつあるので、Perlで書いてみます。
+Client ID, Client Secret, Refresh Token を Post するだけの簡単なスクリプトです。</p>
+
+<figure class='code'><figcaption><span>refresh_token.pl</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="c1">#!/usr/bin/env perl</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">use</span> <span class="n">warnings</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">strict</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">Encode</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="nn">Data::</span><span class="n">Dumper</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">use</span> <span class="n">Furl</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="nn">JSON::</span><span class="n">XS</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$refresh</span> <span class="o">=</span> <span class="s">&#39;your_refresh_token&#39;</span><span class="p">;</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$client_id</span> <span class="o">=</span> <span class="s">&#39;your_client_id.apps.googleusercontent.com&#39;</span><span class="p">;</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$client_secret</span> <span class="o">=</span> <span class="s">&#39;your_client_secret&#39;</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$furl</span> <span class="o">=</span> <span class="n">Furl</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">;</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$res</span> <span class="o">=</span> <span class="nv">$furl</span><span class="o">-&gt;</span><span class="n">post</span><span class="p">(</span>
+</span><span class='line'>    <span class="s">&#39;https://accounts.google.com/o/oauth2/token&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="p">[</span> <span class="p">],</span>
+</span><span class='line'>    <span class="p">[</span>
+</span><span class='line'>        <span class="n">client_id</span> <span class="o">=&gt;</span> <span class="nv">$client_id</span><span class="p">,</span>
+</span><span class='line'>        <span class="n">client_secret</span> <span class="o">=&gt;</span> <span class="nv">$client_secret</span><span class="p">,</span>
+</span><span class='line'>        <span class="n">refresh_token</span> <span class="o">=&gt;</span> <span class="nv">$refresh</span><span class="p">,</span>
+</span><span class='line'>        <span class="n">grant_type</span> <span class="o">=&gt;</span> <span class="s">&#39;refresh_token&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="p">],</span>
+</span><span class='line'><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">print</span> <span class="n">Dumper</span> <span class="n">decode_json</span><span class="p">(</span><span class="nv">$res</span><span class="o">-&gt;</span><span class="n">content</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>Push! Push! Push!</h3>
+
+<p>さあ、ようやくPush！</p>
+
+<p>Access Token をヘッダにつけ、
+メッセージをChannel IDと一緒に POST するだけ。</p>
+
+<p>Channel ID は <code>chrome://extensions/</code> から自分の拡張機能の選択、
+ビューを調査: _generated_background_page.html というところをクリックすると、
+Consoleが見れるのでそこから確認できます。</p>
+
+<figure class='code'><figcaption><span>push.pl</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="c1">#!/usr/bin/env perl</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">use</span> <span class="n">warnings</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">strict</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">Encode</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">use</span> <span class="n">Furl</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="nn">JSON::</span><span class="n">XS</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$access</span> <span class="o">=</span> <span class="s">&#39;your_access_token&#39;</span><span class="p">;</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$channelId</span> <span class="o">=</span> <span class="s">&#39;your_channel_id&#39;</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$data</span> <span class="o">=</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">channelId</span> <span class="o">=&gt;</span> <span class="nv">$channelId</span><span class="p">,</span>
+</span><span class='line'>    <span class="n">subchannelId</span> <span class="o">=&gt;</span> <span class="s">&quot;0&quot;</span><span class="p">,</span>
+</span><span class='line'>    <span class="n">payload</span> <span class="o">=&gt;</span> <span class="n">decode_utf8</span><span class="p">(</span><span class="nb">join</span><span class="p">(</span><span class="s">&#39; &#39;</span><span class="p">,</span> <span class="nv">@ARGV</span><span class="p">)),</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$furl</span> <span class="o">=</span> <span class="n">Furl</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">;</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$res</span> <span class="o">=</span> <span class="nv">$furl</span><span class="o">-&gt;</span><span class="n">post</span><span class="p">(</span>
+</span><span class='line'>    <span class="s">&#39;https://www.googleapis.com/gcm_for_chrome/v1/messages&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="p">[</span>
+</span><span class='line'>        <span class="s">&#39;Content-Type&#39;</span> <span class="o">=&gt;</span> <span class="s">&#39;application/json&#39;</span><span class="p">,</span>
+</span><span class='line'>        <span class="s">&#39;Authorization&#39;</span> <span class="o">=&gt;</span> <span class="s">&quot;Bearer $access&quot;</span><span class="p">,</span>
+</span><span class='line'>    <span class="p">],</span>
+</span><span class='line'>    <span class="n">encode_json</span> <span class="nv">$data</span><span class="p">,</span>
+</span><span class='line'><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>Command</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>perl push.pl hogehoge
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>うまくいくと、デスクトップ通知が出るはず！</p>
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="http://developer.chrome.com/apps/cloudMessaging.html">Google Cloud Messaging for Chrome</a></li>
+<li><a href="http://blog.maripo.org/2013/05/gcm-for-chrome/">Google Cloud Messaging for Chromeを体験してみた</a></li>
+</ul>
+
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2013-05-15T11:26:00+09:00" pubdate data-updated="true">May 15<span>th</span>, 2013</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/chrome/'>Chrome</a>, <a class='category' href='/blog/categories/perl/'>Perl</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.com/blog/2013/05/15/google-cloud-messaging-for-chrome/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.com/blog/2013/05/15/google-cloud-messaging-for-chrome/" data-via="shogo82148" data-counturl="http://shogo82148.github.com/blog/2013/05/15/google-cloud-messaging-for-chrome/" >Tweet</a>
+  
+  
+  <div class="g-plusone" data-size="medium"></div>
+  
+  
+    <div class="fb-like" data-send="true" data-width="450" data-show-faces="false"></div>
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2013/05/12/mail-from-raspberrypi/" title="Previous Post: RaspberryPiからメールを送る">&laquo; RaspberryPiからメールを送る</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2013/07/13/random-sample/" title="Next Post: ランダム抽出アルゴリズムについて考える">ランダム抽出アルゴリズムについて考える &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2013/07/13/random-sample/">ランダム抽出アルゴリズムについて考える</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/05/15/google-cloud-messaging-for-chrome/">Google Cloud Messaging for Chrome を試してみた</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/05/12/mail-from-raspberrypi/">RaspberryPiからメールを送る</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/05/12/raspberry-pi-https-connection/">RaspberryPiでhttps通信が失敗するのを何とかする</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/05/09/application-only-authentication-with-tweepy/">tweepyでApplication-only authenticationしてみた</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>GitHub Repos</h1>
+  <ul id="gh_repos">
+    <li class="loading">Status updating...</li>
+  </ul>
+  
+  <a href="https://github.com/shogo82148">@shogo82148</a> on GitHub
+  
+  <script type="text/javascript">
+    $.domReady(function(){
+        if (!window.jXHR){
+            var jxhr = document.createElement('script');
+            jxhr.type = 'text/javascript';
+            jxhr.src = '/javascripts/libs/jXHR.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(jxhr, s);
+        }
+
+        github.showRepos({
+            user: 'shogo82148',
+            count: 0,
+            skip_forks: true,
+            target: '#gh_repos'
+        });
+    });
+  </script>
+  <script src="/javascripts/github.js" type="text/javascript"> </script>
+</section>
+
+
+<section>
+  <h1>Latest Tweets</h1>
+  <ul id="tweets">
+    <li class="loading">Status updating...</li>
+  </ul>
+  <script type="text/javascript">
+    $.domReady(function(){
+      getTwitterFeed("shogo82148", 4, false);
+    });
+  </script>
+  <script src="/javascripts/twitter.js" type="text/javascript"> </script>
+  
+    <a href="http://twitter.com/shogo82148" class="twitter-follow-button" data-show-count="false">Follow @shogo82148</a>
+  
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2013 - Shogo Ichinose -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'shogosblog';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://shogo82148.github.com/blog/2013/05/15/google-cloud-messaging-for-chrome/';
+        var disqus_url = 'http://shogo82148.github.com/blog/2013/05/15/google-cloud-messaging-for-chrome/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) {return;}
+  js = d.createElement(s); js.id = id;
+  js.src = "//connect.facebook.net/en_US/all.js#appId=212934732101925&xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var script = document.createElement('script'); script.type = 'text/javascript'; script.async = true;
+      script.src = 'https://apis.google.com/js/plusone.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(script, s);
+    })();
+  </script>
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>
