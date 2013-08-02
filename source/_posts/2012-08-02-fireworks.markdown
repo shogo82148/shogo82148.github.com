@@ -80,11 +80,14 @@ GPS測位ができない場合は、デフォルトの位置を使用します�
 ## ダウンロード
 
 [アプリをダウンロード](https://github.com/downloads/shogo82148/FireworksMeasure/FireworksMeasure.apk)
-![FireworksMeasure](https://chart.googleapis.com/chart?cht=qr&chs=300x300&chl=https://github.com/downloads/shogo82148/FireworksMeasure/FireworksMeasure.apk)
 
 野良アプリなので、「設定→アプリケーション→提供元不明のアプリ」をチェックする必要があります。
 スマートフォンの機能をフル活用するので権限をたくさん要求してきますが、きっとだいじょうぶ。
 そろそろマーケットでの公開も試してみたいですね。
+
+** Google Play にリリースしました！ **
+[Google Play からアプリをダウンロード](https://play.google.com/store/apps/details?id=net.sorablue.shogo.FWMeasure)
+![FireworksMeasure](https://chart.googleapis.com/chart?cht=qr&chs=300x300&chl=https://play.google.com/store/apps/details?id=net.sorablue.shogo.FWMeasure)
 
 ## まとめ
 
