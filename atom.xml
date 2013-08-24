@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="http://shogo82148.github.com/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.com/"/>
-  <updated>2013-08-01T19:49:27+09:00</updated>
+  <updated>2013-08-25T00:00:44+09:00</updated>
   <id>http://shogo82148.github.com/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,282 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Perl の Redis ライブラリを調べた]]></title>
+    <link href="http://shogo82148.github.com/blog/2013/08/24/perl-redis-libraries/"/>
+    <updated>2013-08-24T17:51:00+09:00</updated>
+    <id>http://shogo82148.github.com/blog/2013/08/24/perl-redis-libraries</id>
+    <content type="html"><![CDATA[<p>最近<a href="http://redis.io/">Redis</a> を使ったコードを書くようになったのですが、
+キー名を毎回指定するのがだるいです。
+Ruby には <a href="https://github.com/nateware/redis-objects">redis-objects</a> というのがあって、
+Redisのキーをオブジェクトとして扱うことができるようです。
+きっと、Perl にも似たようなのあるだろ、って思って調べてみました。</p>
+
+<!-- More -->
+
+
+<h2>ほしいもの</h2>
+
+<p>低レベルなRedisのライブラリはたいていメソッドとRedisのコマンドが一対一対応していて、
+次のようなコードになると思います。</p>
+
+<figure class='code'><figcaption><span>hogehoge.pl</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;key-name&#39;</span><span class="p">,</span> <span class="s">&#39;piyopiyo&#39;</span><span class="p">);</span>
+</span><span class='line'><span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;key_name&#39;</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>でも、Redisに何か操作をしたいわけじゃなくて、
+Redisのキーに対して操作をしたいので、
+次のように書けるべきだと思うんです。</p>
+
+<figure class='code'><figcaption><span>expected.pl</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">my</span> <span class="nv">$key</span> <span class="o">=</span> <span class="n">key</span><span class="p">(</span><span class="nv">$redis</span><span class="p">,</span> <span class="s">&#39;key-name&#39;</span><span class="p">);</span>
+</span><span class='line'><span class="nv">$key</span><span class="o">-&gt;</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;piyopiyo&#39;</span><span class="p">);</span>
+</span><span class='line'><span class="nv">$key</span><span class="o">-&gt;</span><span class="n">get</span><span class="p">();</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Redis::Hash, Redis::List</h2>
+
+<p><a href="http://search.cpan.org/~melo/Redis/lib/Redis/Hash.pm">Redis::Hash</a>と
+<a href="http://search.cpan.org/~melo/Redis/lib/Redis/List.pm">Redis::List</a>は
+Perlのハッシュや配列と同じ操作で Redis にアクセスできるようにするライブラリ。</p>
+
+<figure class='code'><figcaption><span>Redis::Hash</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">utf8</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">warnings</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">strict</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="mf">5.014</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">use</span> <span class="nn">Redis::</span><span class="n">Hash</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="nb">tie</span> <span class="k">my</span> <span class="nv">%my_hash</span><span class="p">,</span> <span class="s">&#39;Redis::Hash&#39;</span><span class="p">,</span> <span class="s">&#39;hash_prefix&#39;</span><span class="p">,</span> <span class="p">(</span><span class="n">server</span> <span class="o">=&gt;</span> <span class="s">&#39;localhost:6379&#39;</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1"># set hash_prefix:hogehoge piyopiyo</span>
+</span><span class='line'><span class="c1"># set hash_prefix:fugafuga fugufugu</span>
+</span><span class='line'><span class="nv">$my_hash</span><span class="p">{</span><span class="n">hogehoge</span><span class="p">}</span> <span class="o">=</span> <span class="s">&#39;piyopiyo&#39;</span><span class="p">;</span>
+</span><span class='line'><span class="nv">$my_hash</span><span class="p">{</span><span class="n">fugafuga</span><span class="p">}</span> <span class="o">=</span> <span class="s">&#39;fugufugu&#39;</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1"># get hash_prefix:hogehoge piyopiyo</span>
+</span><span class='line'><span class="n">say</span> <span class="nv">$my_hash</span><span class="p">{</span><span class="n">hogehoge</span><span class="p">};</span> <span class="c1"># piyopiyo</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1"># keys hash_prefix:*</span>
+</span><span class='line'><span class="n">say</span> <span class="nb">join</span> <span class="s">&#39;,&#39;</span><span class="p">,</span> <span class="nb">keys</span> <span class="nv">%my_hash</span><span class="p">;</span> <span class="c1">#fugafuga,hogehoge</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1"># keys hash_prefix:*</span>
+</span><span class='line'><span class="c1"># get hash_prefix:fugafuga</span>
+</span><span class='line'><span class="c1"># get hash_prefix:hogehoge</span>
+</span><span class='line'><span class="n">say</span> <span class="nb">join</span> <span class="s">&#39;,&#39;</span><span class="p">,</span> <span class="nb">values</span> <span class="nv">%my_hash</span><span class="p">;</span> <span class="c1">#fugufugu,piyopiyo</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1"># del hash_prefix:hogehoge</span>
+</span><span class='line'><span class="nb">delete</span> <span class="nv">$my_hash</span><span class="p">{</span><span class="n">hogehoge</span><span class="p">};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>tie とかよくわかない。
+Perl の黒魔術を見た気がしました。</p>
+
+<p>普通のハッシュや配列に見えるのは面白いけど、
+Redisっぽい機能がまったく使えないのはつらい。
+<code>tied(%my_hash)-&gt;cmd</code> って書けばコマンド発行できるけど、
+それなら最初から直接 <a href="http://search.cpan.org/~melo/Redis/lib/Redis.pm">Redis.pm</a> を
+使えよって話になります。</p>
+
+<p>あと、tie するごとにコネクションを張り直しているようなので、
+たくさんのハッシュやリストを作ると大変なことになりそうです。</p>
+
+<h2>Redis::Client</h2>
+
+<p>これも tie すると、Redis上のデータをハッシュや配列として扱うことができます。
+tie できるのは <a href="http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/String.pm">String</a>,
+<a href="http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/List.pm">List</a>,
+<a href="http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/Hash.pm">Hash</a>,
+<a href="http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/Set.pm">Set</a>,
+<a href="http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/Zset.pm">Zset</a>。
+それぞれがRedisで使えるデータ型に対応している。</p>
+
+<figure class='code'><figcaption><span>Redis::Client::String</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">utf8</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">warnings</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">strict</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="mf">5.014</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">use</span> <span class="nn">Redis::</span><span class="n">Client</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$client</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">Client</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">;</span>
+</span><span class='line'><span class="nb">tie</span> <span class="k">my</span> <span class="nv">$str</span><span class="p">,</span> <span class="s">&#39;Redis::Client::String&#39;</span><span class="p">,</span> <span class="n">key</span> <span class="o">=&gt;</span> <span class="s">&#39;my_string&#39;</span><span class="p">,</span> <span class="n">client</span> <span class="o">=&gt;</span> <span class="nv">$client</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="nv">$str</span> <span class="o">=</span> <span class="s">&#39;foo&#39;</span><span class="p">;</span>
+</span><span class='line'><span class="n">say</span> <span class="nv">$str</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>ひとつのキーに対してひとつのオブジェクトを割り当てるのは良さげ。
+また、ハッシュ型、セット型、ソート済みセット型といった、Redis特有のデータ型に対応しているのもGood。
+でも、ただストアするだけならこれで十分だけど、もう少し高度な機能も使いたい・・・。</p>
+
+<h2>Tie::Redis</h2>
+
+<p><a href="http://search.cpan.org/~dgl/Tie-Redis/lib/Tie/Redis/Hash.pm">Tie::Redis</a> も
+tie を使ってPerlのデータ構造っぽく扱えるようにするライブラリ。</p>
+
+<p>Redis全体を一つのハッシュとして扱ったり、
+Redisの文字列型、ハッシュ型、リスト型を扱えるみたい。</p>
+
+<h2>Redis::Object</h2>
+
+<p><a href="http://search.cpan.org/~ukautz/Redis-Object/README.pod">Redis::Oject</a>は
+ORM風なRedis用ライブラリ。</p>
+
+<figure class='code'><figcaption><span>RedisDatabase.pm</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="nb">package</span> <span class="n">MyRedisDatabase</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">use</span> <span class="n">Moose</span><span class="p">;</span>
+</span><span class='line'><span class="n">extends</span> <span class="sx">qw/ Redis::Object /</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">has</span> <span class="n">tables</span> <span class="o">=&gt;</span> <span class="p">(</span>
+</span><span class='line'>    <span class="n">isa</span>     <span class="o">=&gt;</span> <span class="s">&#39;ArrayRef[Str]&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="n">is</span>      <span class="o">=&gt;</span> <span class="s">&#39;ro&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="n">default</span> <span class="o">=&gt;</span> <span class="k">sub </span><span class="p">{</span> <span class="p">[</span> <span class="sx">qw/SomeTable/</span> <span class="p">]</span> <span class="p">},</span>
+</span><span class='line'><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">__PACKAGE__</span><span class="o">-&gt;</span><span class="n">meta</span><span class="o">-&gt;</span><span class="n">make_immutable</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>RedisDatabase/SomeTable.pm</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="nb">package</span> <span class="nn">MyRedisDatabase::</span><span class="n">SomeTable</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">use</span> <span class="n">Moose</span><span class="p">;</span>
+</span><span class='line'><span class="n">with</span> <span class="sx">qw/ Redis::Object::Table /</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">has</span> <span class="n">hoge</span> <span class="o">=&gt;</span> <span class="p">(</span> <span class="n">isa</span> <span class="o">=&gt;</span> <span class="s">&#39;Str&#39;</span><span class="p">,</span> <span class="n">is</span> <span class="o">=&gt;</span> <span class="s">&#39;rw&#39;</span><span class="p">,</span> <span class="n">default</span> <span class="o">=&gt;</span> <span class="s">&#39;Something&#39;</span> <span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">__PACKAGE__</span><span class="o">-&gt;</span><span class="n">meta</span><span class="o">-&gt;</span><span class="n">make_immutable</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>redis-object.pl</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">utf8</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">strict</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">warnings</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="mf">5.014</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">use</span> <span class="n">MyRedisDatabase</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1"># init database</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$db</span> <span class="o">=</span> <span class="n">MyRedisDatabase</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span>
+</span><span class='line'>    <span class="n">server</span> <span class="o">=&gt;</span> <span class="s">&#39;localhost:6379&#39;</span>
+</span><span class='line'><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1"># create item</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$item</span> <span class="o">=</span> <span class="nv">$db</span><span class="o">-&gt;</span><span class="n">create</span><span class="p">(</span> <span class="n">SomeTable</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">hoge</span> <span class="o">=&gt;</span> <span class="s">&quot;Hello&quot;</span><span class="p">,</span>
+</span><span class='line'><span class="p">}</span> <span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1"># fetch item by id</span>
+</span><span class='line'><span class="nv">$item</span> <span class="o">=</span> <span class="nv">$db</span><span class="o">-&gt;</span><span class="n">find</span><span class="p">(</span> <span class="n">SomeTable</span> <span class="o">=&gt;</span> <span class="nv">$item</span><span class="o">-&gt;</span><span class="n">id</span> <span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1"># update item</span>
+</span><span class='line'><span class="nv">$item</span><span class="o">-&gt;</span><span class="n">hoge</span><span class="p">(</span> <span class="s">&quot;piyo&quot;</span> <span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>ORMっぽいけど、あんまり複雑な検索はできないらしい。
+ここまでするなら普通にMySQLとORMつかったほうが良さそう。</p>
+
+<h2>まとめ</h2>
+
+<p>みんな tie が大好き。</p>
+
+<p>tie しないのがほしいな・・・。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[ランダム抽出アルゴリズムについて考える]]></title>
@@ -3813,311 +4089,6 @@ WordCountをして遊んでみました．</p>
 <p>HadoopというとWordCountが例としてあげられることが多く「それしかできないの？」と思っていましたが，
 <a href="http://mahout.apache.org/">Mahout</a>というライブラリを使うとHadoopの枠組みで数々の機械学習ができてしまうらしいです．
 応用範囲は広そうなのでもう少し高度なことをして遊んでみたいですね．</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[PythonでCaboChaを美味しくいただく]]></title>
-    <link href="http://shogo82148.github.com/blog/2012/11/01/cabocha/"/>
-    <updated>2012-11-01T23:02:00+09:00</updated>
-    <id>http://shogo82148.github.com/blog/2012/11/01/cabocha</id>
-    <content type="html"><![CDATA[<p>日本語構文解析器<a href="http://code.google.com/p/cabocha/">CaboCha</a>をPythonから使ってみたメモ．</p>
-
-<!-- More -->
-
-
-<h2>インストール</h2>
-
-<p><a href="http://code.google.com/p/cabocha/">CaboCha</a>自体のインストールは公式のドキュメントを参照．
-ググれば他の人のレポートも出てくるはず．</p>
-
-<p><a href="http://code.google.com/p/cabocha/">CaboCha</a>のソースコードを展開したディレクトリの中の
-pythonディレクトリにPython-bindingが入ってます．
-そこに移動した後，管理者権限で以下のコマンドを実行すればインストール完了．</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>python setup.py install
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>食べ方</h2>
-
-<h3>解析結果を文字列出力</h3>
-
-<p>python/test.py に書いてあるとおり．</p>
-
-<figure class='code'><figcaption><span>test.py</span><a href='http://code.google.com/p/cabocha/source/browse/trunk/python/test.py'>link</a></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="c">#!/usr/bin/python</span>
-</span><span class='line'><span class="c"># -*- coding: utf-8 -*-</span>
-</span><span class='line'>
-</span><span class='line'><span class="kn">import</span> <span class="nn">CaboCha</span>
-</span><span class='line'>
-</span><span class='line'><span class="c"># c = CaboCha.Parser(&quot;&quot;);</span>
-</span><span class='line'><span class="n">c</span> <span class="o">=</span> <span class="n">CaboCha</span><span class="o">.</span><span class="n">Parser</span><span class="p">()</span>
-</span><span class='line'>
-</span><span class='line'><span class="n">sentence</span> <span class="o">=</span> <span class="s">&quot;太郎はこの本を二郎を見た女性に渡した。&quot;</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">print</span> <span class="n">c</span><span class="o">.</span><span class="n">parseToString</span><span class="p">(</span><span class="n">sentence</span><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="n">tree</span> <span class="o">=</span>  <span class="n">c</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">sentence</span><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">print</span> <span class="n">tree</span><span class="o">.</span><span class="n">toString</span><span class="p">(</span><span class="n">CaboCha</span><span class="o">.</span><span class="n">FORMAT_TREE</span><span class="p">)</span>
-</span><span class='line'><span class="k">print</span> <span class="n">tree</span><span class="o">.</span><span class="n">toString</span><span class="p">(</span><span class="n">CaboCha</span><span class="o">.</span><span class="n">FORMAT_LATTICE</span><span class="p">)</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>以下のような結果が得られれば成功．</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-<span class='line-number'>37</span>
-<span class='line-number'>38</span>
-<span class='line-number'>39</span>
-<span class='line-number'>40</span>
-<span class='line-number'>41</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>&lt;PERSON&gt;太郎&lt;/PERSON&gt;は-----------D
-</span><span class='line'>                     この-D       |
-</span><span class='line'>                       本を---D   |
-</span><span class='line'>                       二郎を-D   |
-</span><span class='line'>                           見た-D |
-</span><span class='line'>                           女性に-D
-</span><span class='line'>                           渡した。
-</span><span class='line'>EOS
-</span><span class='line'>
-</span><span class='line'>&lt;PERSON&gt;太郎&lt;/PERSON&gt;は-----------D
-</span><span class='line'>                     この-D       |
-</span><span class='line'>                       本を---D   |
-</span><span class='line'>                       二郎を-D   |
-</span><span class='line'>                           見た-D |
-</span><span class='line'>                           女性に-D
-</span><span class='line'>                           渡した。
-</span><span class='line'>EOS
-</span><span class='line'>
-</span><span class='line'>* 0 6D 0/1 2.909358
-</span><span class='line'>太郎    名詞,固有名詞,人名,名,*,*,太郎,タロウ,タロー   B-PERSON
-</span><span class='line'>は   助詞,係助詞,*,*,*,*,は,ハ,ワ    O
-</span><span class='line'>* 1 2D 0/0 1.257926
-</span><span class='line'>この    連体詞,*,*,*,*,*,この,コノ,コノ    O
-</span><span class='line'>* 2 4D 0/1 0.638994
-</span><span class='line'>本   名詞,一般,*,*,*,*,本,ホン,ホン O
-</span><span class='line'>を   助詞,格助詞,一般,*,*,*,を,ヲ,ヲ   O
-</span><span class='line'>* 3 4D 1/2 1.696047
-</span><span class='line'>二   名詞,数,*,*,*,*,二,ニ,ニ  O
-</span><span class='line'>郎   名詞,一般,*,*,*,*,郎,ロウ,ロー O
-</span><span class='line'>を   助詞,格助詞,一般,*,*,*,を,ヲ,ヲ   O
-</span><span class='line'>* 4 5D 0/1 0.000000
-</span><span class='line'>見   動詞,自立,*,*,一段,連用形,見る,ミ,ミ   O
-</span><span class='line'>た   助動詞,*,*,*,特殊・タ,基本形,た,タ,タ  O
-</span><span class='line'>* 5 6D 0/1 0.000000
-</span><span class='line'>女性    名詞,一般,*,*,*,*,女性,ジョセイ,ジョセイ  O
-</span><span class='line'>に   助詞,格助詞,一般,*,*,*,に,ニ,ニ   O
-</span><span class='line'>* 6 -1D 0/1 0.000000
-</span><span class='line'>渡し    動詞,自立,*,*,五段・サ行,連用形,渡す,ワタシ,ワタシ  O
-</span><span class='line'>た   助動詞,*,*,*,特殊・タ,基本形,た,タ,タ  O
-</span><span class='line'>。   記号,句点,*,*,*,*,。,。,。   O
-</span><span class='line'>EOS</span></code></pre></td></tr></table></div></figure>
-
-
-<p><code>tree.toString(CaboCha.FORMAT_XML)</code>でXML形式の出力も可能です．</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-</pre></td><td class='code'><pre><code class='xml'><span class='line'><span class="nt">&lt;sentence&gt;</span>
-</span><span class='line'> <span class="nt">&lt;chunk</span> <span class="na">id=</span><span class="s">&quot;0&quot;</span> <span class="na">link=</span><span class="s">&quot;6&quot;</span> <span class="na">rel=</span><span class="s">&quot;D&quot;</span> <span class="na">score=</span><span class="s">&quot;2.909358&quot;</span> <span class="na">head=</span><span class="s">&quot;0&quot;</span> <span class="na">func=</span><span class="s">&quot;1&quot;</span><span class="nt">&gt;</span>
-</span><span class='line'>  <span class="nt">&lt;tok</span> <span class="na">id=</span><span class="s">&quot;0&quot;</span> <span class="na">feature=</span><span class="s">&quot;名詞,固有名詞,人名,名,*,*,太郎,タロウ,タロー&quot;</span> <span class="na">ne=</span><span class="s">&quot;B-PERSON&quot;</span><span class="nt">&gt;</span>太郎<span class="nt">&lt;/tok&gt;</span>
-</span><span class='line'>  <span class="nt">&lt;tok</span> <span class="na">id=</span><span class="s">&quot;1&quot;</span> <span class="na">feature=</span><span class="s">&quot;助詞,係助詞,*,*,*,*,は,ハ,ワ&quot;</span> <span class="na">ne=</span><span class="s">&quot;O&quot;</span><span class="nt">&gt;</span>は<span class="nt">&lt;/tok&gt;</span>
-</span><span class='line'> <span class="nt">&lt;/chunk&gt;</span>
-</span><span class='line'> <span class="nt">&lt;chunk</span> <span class="na">id=</span><span class="s">&quot;1&quot;</span> <span class="na">link=</span><span class="s">&quot;2&quot;</span> <span class="na">rel=</span><span class="s">&quot;D&quot;</span> <span class="na">score=</span><span class="s">&quot;1.257926&quot;</span> <span class="na">head=</span><span class="s">&quot;2&quot;</span> <span class="na">func=</span><span class="s">&quot;2&quot;</span><span class="nt">&gt;</span>
-</span><span class='line'>  <span class="nt">&lt;tok</span> <span class="na">id=</span><span class="s">&quot;2&quot;</span> <span class="na">feature=</span><span class="s">&quot;連体詞,*,*,*,*,*,この,コノ,コノ&quot;</span> <span class="na">ne=</span><span class="s">&quot;O&quot;</span><span class="nt">&gt;</span>この<span class="nt">&lt;/tok&gt;</span>
-</span><span class='line'> <span class="nt">&lt;/chunk&gt;</span>
-</span><span class='line'> <span class="nt">&lt;chunk</span> <span class="na">id=</span><span class="s">&quot;2&quot;</span> <span class="na">link=</span><span class="s">&quot;4&quot;</span> <span class="na">rel=</span><span class="s">&quot;D&quot;</span> <span class="na">score=</span><span class="s">&quot;0.638994&quot;</span> <span class="na">head=</span><span class="s">&quot;3&quot;</span> <span class="na">func=</span><span class="s">&quot;4&quot;</span><span class="nt">&gt;</span>
-</span><span class='line'>  <span class="nt">&lt;tok</span> <span class="na">id=</span><span class="s">&quot;3&quot;</span> <span class="na">feature=</span><span class="s">&quot;名詞,一般,*,*,*,*,本,ホン,ホン&quot;</span> <span class="na">ne=</span><span class="s">&quot;O&quot;</span><span class="nt">&gt;</span>本<span class="nt">&lt;/tok&gt;</span>
-</span><span class='line'>  <span class="nt">&lt;tok</span> <span class="na">id=</span><span class="s">&quot;4&quot;</span> <span class="na">feature=</span><span class="s">&quot;助詞,格助詞,一般,*,*,*,を,ヲ,ヲ&quot;</span> <span class="na">ne=</span><span class="s">&quot;O&quot;</span><span class="nt">&gt;</span>を<span class="nt">&lt;/tok&gt;</span>
-</span><span class='line'> <span class="nt">&lt;/chunk&gt;</span>
-</span><span class='line'> <span class="nt">&lt;chunk</span> <span class="na">id=</span><span class="s">&quot;3&quot;</span> <span class="na">link=</span><span class="s">&quot;4&quot;</span> <span class="na">rel=</span><span class="s">&quot;D&quot;</span> <span class="na">score=</span><span class="s">&quot;1.696047&quot;</span> <span class="na">head=</span><span class="s">&quot;6&quot;</span> <span class="na">func=</span><span class="s">&quot;7&quot;</span><span class="nt">&gt;</span>
-</span><span class='line'>  <span class="nt">&lt;tok</span> <span class="na">id=</span><span class="s">&quot;5&quot;</span> <span class="na">feature=</span><span class="s">&quot;名詞,数,*,*,*,*,二,ニ,ニ&quot;</span> <span class="na">ne=</span><span class="s">&quot;O&quot;</span><span class="nt">&gt;</span>二<span class="nt">&lt;/tok&gt;</span>
-</span><span class='line'>  <span class="nt">&lt;tok</span> <span class="na">id=</span><span class="s">&quot;6&quot;</span> <span class="na">feature=</span><span class="s">&quot;名詞,一般,*,*,*,*,郎,ロウ,ロー&quot;</span> <span class="na">ne=</span><span class="s">&quot;O&quot;</span><span class="nt">&gt;</span>郎<span class="nt">&lt;/tok&gt;</span>
-</span><span class='line'>  <span class="nt">&lt;tok</span> <span class="na">id=</span><span class="s">&quot;7&quot;</span> <span class="na">feature=</span><span class="s">&quot;助詞,格助詞,一般,*,*,*,を,ヲ,ヲ&quot;</span> <span class="na">ne=</span><span class="s">&quot;O&quot;</span><span class="nt">&gt;</span>を<span class="nt">&lt;/tok&gt;</span>
-</span><span class='line'> <span class="nt">&lt;/chunk&gt;</span>
-</span><span class='line'> <span class="nt">&lt;chunk</span> <span class="na">id=</span><span class="s">&quot;4&quot;</span> <span class="na">link=</span><span class="s">&quot;5&quot;</span> <span class="na">rel=</span><span class="s">&quot;D&quot;</span> <span class="na">score=</span><span class="s">&quot;0.000000&quot;</span> <span class="na">head=</span><span class="s">&quot;8&quot;</span> <span class="na">func=</span><span class="s">&quot;9&quot;</span><span class="nt">&gt;</span>
-</span><span class='line'>  <span class="nt">&lt;tok</span> <span class="na">id=</span><span class="s">&quot;8&quot;</span> <span class="na">feature=</span><span class="s">&quot;動詞,自立,*,*,一段,連用形,見る,ミ,ミ&quot;</span> <span class="na">ne=</span><span class="s">&quot;O&quot;</span><span class="nt">&gt;</span>見<span class="nt">&lt;/tok&gt;</span>
-</span><span class='line'>  <span class="nt">&lt;tok</span> <span class="na">id=</span><span class="s">&quot;9&quot;</span> <span class="na">feature=</span><span class="s">&quot;助動詞,*,*,*,特殊・タ,基本形,た,タ,タ&quot;</span> <span class="na">ne=</span><span class="s">&quot;O&quot;</span><span class="nt">&gt;</span>た<span class="nt">&lt;/tok&gt;</span>
-</span><span class='line'> <span class="nt">&lt;/chunk&gt;</span>
-</span><span class='line'> <span class="nt">&lt;chunk</span> <span class="na">id=</span><span class="s">&quot;5&quot;</span> <span class="na">link=</span><span class="s">&quot;6&quot;</span> <span class="na">rel=</span><span class="s">&quot;D&quot;</span> <span class="na">score=</span><span class="s">&quot;0.000000&quot;</span> <span class="na">head=</span><span class="s">&quot;10&quot;</span> <span class="na">func=</span><span class="s">&quot;11&quot;</span><span class="nt">&gt;</span>
-</span><span class='line'>  <span class="nt">&lt;tok</span> <span class="na">id=</span><span class="s">&quot;10&quot;</span> <span class="na">feature=</span><span class="s">&quot;名詞,一般,*,*,*,*,女性,ジョセイ,ジョセイ&quot;</span> <span class="na">ne=</span><span class="s">&quot;O&quot;</span><span class="nt">&gt;</span>女性<span class="nt">&lt;/tok&gt;</span>
-</span><span class='line'>  <span class="nt">&lt;tok</span> <span class="na">id=</span><span class="s">&quot;11&quot;</span> <span class="na">feature=</span><span class="s">&quot;助詞,格助詞,一般,*,*,*,に,ニ,ニ&quot;</span> <span class="na">ne=</span><span class="s">&quot;O&quot;</span><span class="nt">&gt;</span>に<span class="nt">&lt;/tok&gt;</span>
-</span><span class='line'> <span class="nt">&lt;/chunk&gt;</span>
-</span><span class='line'> <span class="nt">&lt;chunk</span> <span class="na">id=</span><span class="s">&quot;6&quot;</span> <span class="na">link=</span><span class="s">&quot;-1&quot;</span> <span class="na">rel=</span><span class="s">&quot;D&quot;</span> <span class="na">score=</span><span class="s">&quot;0.000000&quot;</span> <span class="na">head=</span><span class="s">&quot;12&quot;</span> <span class="na">func=</span><span class="s">&quot;13&quot;</span><span class="nt">&gt;</span>
-</span><span class='line'>  <span class="nt">&lt;tok</span> <span class="na">id=</span><span class="s">&quot;12&quot;</span> <span class="na">feature=</span><span class="s">&quot;動詞,自立,*,*,五段・サ行,連用形,渡す,ワタシ,ワタシ&quot;</span> <span class="na">ne=</span><span class="s">&quot;O&quot;</span><span class="nt">&gt;</span>渡し<span class="nt">&lt;/tok&gt;</span>
-</span><span class='line'>  <span class="nt">&lt;tok</span> <span class="na">id=</span><span class="s">&quot;13&quot;</span> <span class="na">feature=</span><span class="s">&quot;助動詞,*,*,*,特殊・タ,基本形,た,タ,タ&quot;</span> <span class="na">ne=</span><span class="s">&quot;O&quot;</span><span class="nt">&gt;</span>た<span class="nt">&lt;/tok&gt;</span>
-</span><span class='line'>  <span class="nt">&lt;tok</span> <span class="na">id=</span><span class="s">&quot;14&quot;</span> <span class="na">feature=</span><span class="s">&quot;記号,句点,*,*,*,*,。,。,。&quot;</span> <span class="na">ne=</span><span class="s">&quot;O&quot;</span><span class="nt">&gt;</span>。<span class="nt">&lt;/tok&gt;</span>
-</span><span class='line'> <span class="nt">&lt;/chunk&gt;</span>
-</span><span class='line'><span class="nt">&lt;/sentence&gt;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>しかし，このXML形式，<code>&amp;</code>や<code>"</code>，<code>&lt;</code>, <code>&gt;</code>などの特殊記号を置換してくれないので，
-この結果をXMLのパーサに通す場合などは注意が必要．</p>
-
-<p>そもそも標準の辞書ではこれらの文字を上手く扱えないので前処理を行ったほうがいいのかもしれない．
-半角の<code>&amp;</code>は辞書に登録されていおらず，全角の＆にする必要がある．</p>
-
-<h3>Treeの中身をいじってみる</h3>
-
-<p>一度文字列に変換してしまうと色々面倒なことが起こりそうなので，Treeの中身を直接いじってみる．
-ドキュメントが無いので<a href="http://code.google.com/p/cabocha/source/browse/trunk/src/cabocha.h">cabocha.h</a>
-の中身を見ながら試してみました．</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="c">#!/usr/bin/python</span>
-</span><span class='line'><span class="c"># -*- coding: utf-8 -*-</span>
-</span><span class='line'>
-</span><span class='line'><span class="kn">import</span> <span class="nn">CaboCha</span>
-</span><span class='line'><span class="n">c</span> <span class="o">=</span> <span class="n">CaboCha</span><span class="o">.</span><span class="n">Parser</span><span class="p">()</span>
-</span><span class='line'>
-</span><span class='line'><span class="n">sentence</span> <span class="o">=</span> <span class="s">&quot;太郎はこの本を渡した。&quot;</span>
-</span><span class='line'>
-</span><span class='line'><span class="n">tree</span> <span class="o">=</span>  <span class="n">c</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">sentence</span><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">tree</span><span class="o">.</span><span class="n">chunk_size</span><span class="p">()):</span>
-</span><span class='line'>    <span class="n">chunk</span> <span class="o">=</span> <span class="n">tree</span><span class="o">.</span><span class="n">chunk</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
-</span><span class='line'>    <span class="k">print</span> <span class="s">&#39;Chunk:&#39;</span><span class="p">,</span> <span class="n">i</span>
-</span><span class='line'>    <span class="k">print</span> <span class="s">&#39; Score:&#39;</span><span class="p">,</span> <span class="n">chunk</span><span class="o">.</span><span class="n">score</span>
-</span><span class='line'>    <span class="k">print</span> <span class="s">&#39; Link:&#39;</span><span class="p">,</span> <span class="n">chunk</span><span class="o">.</span><span class="n">link</span>
-</span><span class='line'>    <span class="k">print</span> <span class="s">&#39; Size:&#39;</span><span class="p">,</span> <span class="n">chunk</span><span class="o">.</span><span class="n">token_size</span>
-</span><span class='line'>    <span class="k">print</span> <span class="s">&#39; Pos:&#39;</span><span class="p">,</span> <span class="n">chunk</span><span class="o">.</span><span class="n">token_pos</span>
-</span><span class='line'>    <span class="k">print</span> <span class="s">&#39; Head:&#39;</span><span class="p">,</span> <span class="n">chunk</span><span class="o">.</span><span class="n">head_pos</span> <span class="c"># 主辞</span>
-</span><span class='line'>    <span class="k">print</span> <span class="s">&#39; Func:&#39;</span><span class="p">,</span> <span class="n">chunk</span><span class="o">.</span><span class="n">func_pos</span> <span class="c"># 機能語</span>
-</span><span class='line'>    <span class="k">print</span> <span class="s">&#39; Features:&#39;</span><span class="p">,</span>
-</span><span class='line'>    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">chunk</span><span class="o">.</span><span class="n">feature_list_size</span><span class="p">):</span>
-</span><span class='line'>        <span class="k">print</span> <span class="n">chunk</span><span class="o">.</span><span class="n">feature_list</span><span class="p">(</span><span class="n">j</span><span class="p">),</span>
-</span><span class='line'>    <span class="k">print</span>
-</span><span class='line'>    <span class="k">print</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">tree</span><span class="o">.</span><span class="n">token_size</span><span class="p">()):</span>
-</span><span class='line'>    <span class="n">token</span> <span class="o">=</span> <span class="n">tree</span><span class="o">.</span><span class="n">token</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
-</span><span class='line'>    <span class="k">print</span> <span class="s">&#39;Surface:&#39;</span><span class="p">,</span> <span class="n">token</span><span class="o">.</span><span class="n">surface</span>
-</span><span class='line'>    <span class="k">print</span> <span class="s">&#39; Normalized:&#39;</span><span class="p">,</span> <span class="n">token</span><span class="o">.</span><span class="n">normalized_surface</span>
-</span><span class='line'>    <span class="k">print</span> <span class="s">&#39; Feature:&#39;</span><span class="p">,</span> <span class="n">token</span><span class="o">.</span><span class="n">feature</span>
-</span><span class='line'>    <span class="k">print</span> <span class="s">&#39; NE:&#39;</span><span class="p">,</span> <span class="n">token</span><span class="o">.</span><span class="n">ne</span> <span class="c"># 固有表現</span>
-</span><span class='line'>    <span class="k">print</span> <span class="s">&#39; Info:&#39;</span><span class="p">,</span> <span class="n">token</span><span class="o">.</span><span class="n">additional_info</span>
-</span><span class='line'>    <span class="k">print</span> <span class="s">&#39; Chunk:&#39;</span><span class="p">,</span> <span class="n">token</span><span class="o">.</span><span class="n">chunk</span>
-</span><span class='line'>    <span class="k">print</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-
 ]]></content>
   </entry>
   
