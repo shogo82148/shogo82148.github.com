@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2013-09-24T23:45:24+09:00</updated>
+  <updated>2013-09-28T02:08:11+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,302 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Redis::Fastってモジュールを書いた]]></title>
+    <link href="http://shogo82148.github.io/blog/2013/09/28/redis-fast/"/>
+    <updated>2013-09-28T00:18:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2013/09/28/redis-fast</id>
+    <content type="html"><![CDATA[<p><a href="https://github.com/redis/hiredis">hiredis</a>をPerlから扱うためのライブラリとして
+<a href="http://search.cpan.org/~neophenix/Redis-hiredis/lib/Redis/hiredis.pm">Redis::hiredis</a>ってのがあるけど、
+なんだか微妙だって聞いたので自分でPerlのhiredisバインディング書いてみたよ。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/Redis-Fast">https://github.com/shogo82148/Redis-Fast</a></li>
+</ul>
+
+
+<p>(READMEからRedis.pmをそのまま持ってきたことがまるわかりですね。なんとかしよう。)</p>
+
+<!-- More -->
+
+
+<h2>使い方</h2>
+
+<p><a href="http://search.cpan.org/~melo/Redis-1.961/lib/Redis.pm">Redis.pm</a>と全く同じインターフェースなので、
+そのまま置換できる、はず。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="nn">Redis::</span><span class="n">Fast</span><span class="p">;</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$redis</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">Fast</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">### synchronize mode</span>
+</span><span class='line'><span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;hoge&#39;</span><span class="p">,</span> <span class="s">&#39;piyo&#39;</span><span class="p">);</span>
+</span><span class='line'><span class="k">print</span> <span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;hoge&#39;</span><span class="p">);</span>  <span class="c1"># piyo</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">### asynchronize mode</span>
+</span><span class='line'><span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;hoge&#39;</span><span class="p">,</span> <span class="k">sub </span><span class="p">{</span>
+</span><span class='line'>    <span class="k">my</span> <span class="p">(</span><span class="nv">$result</span><span class="p">,</span> <span class="nv">$error</span><span class="p">)</span> <span class="o">=</span> <span class="nv">@_</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">print</span> <span class="nv">$result</span><span class="p">;</span>  <span class="c1"># piyo</span>
+</span><span class='line'><span class="p">});</span>
+</span><span class='line'><span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">wait_all_responses</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">### pubsub</span>
+</span><span class='line'><span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">publish</span><span class="p">(</span><span class="s">&#39;fugu&#39;</span><span class="p">,</span> <span class="s">&#39;fuga&#39;</span><span class="p">);</span>
+</span><span class='line'><span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">subscribe</span><span class="p">(</span><span class="s">&#39;fugu&#39;</span><span class="p">,</span> <span class="k">sub </span><span class="p">{</span>
+</span><span class='line'>    <span class="k">my</span> <span class="p">(</span><span class="nv">$message</span><span class="p">,</span> <span class="nv">$topic</span><span class="p">,</span> <span class="nv">$subscribed_topic</span><span class="p">)</span> <span class="o">=</span> <span class="nv">@_</span><span class="p">;</span>
+</span><span class='line'><span class="p">});</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$timeout</span> <span class="o">=</span> <span class="mi">10</span><span class="p">;</span>
+</span><span class='line'><span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">wait_for_messages</span><span class="p">(</span><span class="nv">$timeout</span><span class="p">)</span> <span class="k">while</span> <span class="mi">1</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>以前作った、<a href="https://github.com/shogo82148/Redis-Namepace">Redis::Namespace</a>にもそのまま使えます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="nn">Redis::</span><span class="n">Fast</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="nn">Redis::</span><span class="n">Namespace</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$redis</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">Fast</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">;</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$ns</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">Namespace</span><span class="p">(</span><span class="n">redis</span> <span class="o">=&gt;</span> <span class="nv">$redis</span><span class="p">,</span> <span class="n">namespace</span> <span class="o">=&gt;</span> <span class="s">&#39;fugu&#39;</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="nv">$ns</span><span class="o">-&gt;</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;foo&#39;</span><span class="p">,</span> <span class="s">&#39;bar&#39;</span><span class="p">);</span>    <span class="c1"># $redis-&gt;set(&#39;fugu:foo&#39;, &#39;bar&#39;);</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$foo</span> <span class="o">=</span> <span class="nv">$ns</span><span class="o">-&gt;</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;foo&#39;</span><span class="p">);</span> <span class="c1"># my $foo = $redis-&gt;get(&#39;fugu:foo&#39;);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>ベンチマーク</h2>
+
+<h3>Redis.pm</h3>
+
+<figure class='code'><figcaption><span>Redis.pm</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>Benchmark: running 00_ping, 10_set, 11_set_r, 20_get, 21_get_r, 30_incr, 30_incr_r, 40_lpush, 50_lpop, 90_h_get, 90_h_set for at least 5 CPU seconds...
+</span><span class='line'>   00_ping:  8 wallclock secs ( 0.69 usr +  4.77 sys =  5.46 CPU) @ 5538.64/s (n=30241)
+</span><span class='line'>    10_set:  8 wallclock secs ( 1.07 usr +  4.01 sys =  5.08 CPU) @ 5794.09/s (n=29434)
+</span><span class='line'>  11_set_r:  7 wallclock secs ( 0.42 usr +  4.84 sys =  5.26 CPU) @ 5051.33/s (n=26570)
+</span><span class='line'>    20_get:  8 wallclock secs ( 0.69 usr +  4.82 sys =  5.51 CPU) @ 5080.40/s (n=27993)
+</span><span class='line'>  21_get_r:  7 wallclock secs ( 2.21 usr +  3.09 sys =  5.30 CPU) @ 5389.06/s (n=28562)
+</span><span class='line'>   30_incr:  7 wallclock secs ( 0.69 usr +  4.73 sys =  5.42 CPU) @ 5671.77/s (n=30741)
+</span><span class='line'> 30_incr_r:  7 wallclock secs ( 0.85 usr +  4.31 sys =  5.16 CPU) @ 5824.42/s (n=30054)
+</span><span class='line'>  40_lpush:  8 wallclock secs ( 0.60 usr +  4.77 sys =  5.37 CPU) @ 5832.59/s (n=31321)
+</span><span class='line'>   50_lpop:  7 wallclock secs ( 1.24 usr +  4.17 sys =  5.41 CPU) @ 5112.75/s (n=27660)
+</span><span class='line'>  90_h_get:  7 wallclock secs ( 0.63 usr +  4.65 sys =  5.28 CPU) @ 5716.29/s (n=30182)
+</span><span class='line'>  90_h_set:  7 wallclock secs ( 0.65 usr +  4.74 sys =  5.39 CPU) @ 5593.14/s (n=30147)</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>Redis::hiredis</h3>
+
+<figure class='code'><figcaption><span>Redis::hiredis</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>Benchmark: running 00_ping, 10_set, 11_set_r, 20_get, 21_get_r, 30_incr, 30_incr_r, 40_lpush, 50_lpop for at least 5 CPU seconds...
+</span><span class='line'>   00_ping: 10 wallclock secs ( 0.15 usr +  5.13 sys =  5.28 CPU) @ 8998.48/s (n=47512)
+</span><span class='line'>    10_set:  9 wallclock secs ( 0.12 usr +  4.90 sys =  5.02 CPU) @ 8552.39/s (n=42933)
+</span><span class='line'>  11_set_r:  9 wallclock secs ( 0.14 usr +  4.95 sys =  5.09 CPU) @ 8555.01/s (n=43545)
+</span><span class='line'>    20_get:  9 wallclock secs ( 0.09 usr +  5.42 sys =  5.51 CPU) @ 8785.48/s (n=48408)
+</span><span class='line'>  21_get_r:  9 wallclock secs ( 0.20 usr +  4.94 sys =  5.14 CPU) @ 8181.52/s (n=42053)
+</span><span class='line'>   30_incr:  9 wallclock secs ( 0.12 usr +  5.29 sys =  5.41 CPU) @ 8622.55/s (n=46648)
+</span><span class='line'> 30_incr_r:  8 wallclock secs ( 0.16 usr +  4.92 sys =  5.08 CPU) @ 8113.39/s (n=41216)
+</span><span class='line'>  40_lpush:  9 wallclock secs ( 0.21 usr +  5.15 sys =  5.36 CPU) @ 8547.57/s (n=45815)
+</span><span class='line'>   50_lpop:  8 wallclock secs ( 0.12 usr +  4.91 sys =  5.03 CPU) @ 9024.06/s (n=45391)</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>Redis::Fast</h3>
+
+<p>Redis.pm の3〜5割増しくらいで速くなる。
+Redis::hiredisと比べると1割〜2割くらい遅い。</p>
+
+<figure class='code'><figcaption><span>Redis::Fast</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>Benchmark: running 00_ping, 10_set, 11_set_r, 20_get, 21_get_r, 30_incr, 30_incr_r, 40_lpush, 50_lpop, 90_h_get, 90_h_set for at least 5 CPU seconds...
+</span><span class='line'>   00_ping:  9 wallclock secs ( 0.18 usr +  4.84 sys =  5.02 CPU) @ 7939.24/s (n=39855)
+</span><span class='line'>    10_set: 10 wallclock secs ( 0.31 usr +  5.40 sys =  5.71 CPU) @ 7454.64/s (n=42566)
+</span><span class='line'>  11_set_r:  9 wallclock secs ( 0.31 usr +  4.87 sys =  5.18 CPU) @ 7993.05/s (n=41404)
+</span><span class='line'>    20_get: 10 wallclock secs ( 0.27 usr +  4.84 sys =  5.11 CPU) @ 8350.68/s (n=42672)
+</span><span class='line'>  21_get_r: 10 wallclock secs ( 0.32 usr +  5.17 sys =  5.49 CPU) @ 8238.62/s (n=45230)
+</span><span class='line'>   30_incr:  9 wallclock secs ( 0.23 usr +  5.27 sys =  5.50 CPU) @ 8221.82/s (n=45220)
+</span><span class='line'> 30_incr_r:  8 wallclock secs ( 0.28 usr +  4.91 sys =  5.19 CPU) @ 8092.29/s (n=41999)
+</span><span class='line'>  40_lpush:  9 wallclock secs ( 0.18 usr +  5.06 sys =  5.24 CPU) @ 8312.02/s (n=43555)
+</span><span class='line'>   50_lpop:  9 wallclock secs ( 0.20 usr +  4.84 sys =  5.04 CPU) @ 8010.12/s (n=40371)
+</span><span class='line'>  90_h_get:  9 wallclock secs ( 0.19 usr +  5.51 sys =  5.70 CPU) @ 7467.72/s (n=42566)
+</span><span class='line'>  90_h_set:  8 wallclock secs ( 0.28 usr +  4.83 sys =  5.11 CPU) @ 7724.07/s (n=39470)</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>pipeline mode</h3>
+
+<p>毎回レスポンスを待っているとI/Oがボトルネックになってあんまり速度上がらないけど、
+レスポンスを待たずにコマンドをどんどん送りつけると差が原著になります。</p>
+
+<figure class='code'><figcaption><span>bench.pl</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="c1">#!/usr/bin/perl</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">use</span> <span class="n">warnings</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">strict</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">use</span> <span class="nn">Time::</span><span class="n">HiRes</span> <span class="sx">qw/time/</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">Redis</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="nn">Redis::</span><span class="n">Fast</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="nn">Redis::</span><span class="n">hiredis</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$count</span> <span class="o">=</span> <span class="mi">100000</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$r</span> <span class="o">=</span> <span class="n">Redis</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$start</span> <span class="o">=</span> <span class="nb">time</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">for</span><span class="p">(</span><span class="mi">1</span><span class="o">..</span><span class="nv">$count</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="nv">$r</span><span class="o">-&gt;</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;hoge&#39;</span><span class="p">,</span> <span class="s">&#39;fuga&#39;</span><span class="p">,</span> <span class="n">sub</span><span class="p">{});</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="nv">$r</span><span class="o">-&gt;</span><span class="n">wait_all_responses</span><span class="p">;</span>
+</span><span class='line'>    <span class="nb">printf</span> <span class="s">&quot;Redis.pm:\n%.2f/s\n&quot;</span><span class="p">,</span> <span class="nv">$count</span> <span class="o">/</span> <span class="p">(</span><span class="nb">time</span> <span class="o">-</span> <span class="nv">$start</span><span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$r</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">hiredis</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">;</span>
+</span><span class='line'>    <span class="nv">$r</span><span class="o">-&gt;</span><span class="nb">connect</span><span class="p">(</span><span class="s">&quot;127.0.0.1&quot;</span><span class="p">,</span> <span class="mi">6379</span><span class="p">);</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$start</span> <span class="o">=</span> <span class="nb">time</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">for</span><span class="p">(</span><span class="mi">1</span><span class="o">..</span><span class="nv">$count</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="nv">$r</span><span class="o">-&gt;</span><span class="n">append_command</span><span class="p">(</span><span class="s">&#39;set hoge fuga&#39;</span><span class="p">);</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">for</span><span class="p">(</span><span class="mi">1</span><span class="o">..</span><span class="nv">$count</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="nv">$r</span><span class="o">-&gt;</span><span class="n">get_reply</span><span class="p">();</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="nb">printf</span> <span class="s">&quot;Redis::hiredis:\n%.2f/s\n&quot;</span><span class="p">,</span> <span class="nv">$count</span> <span class="o">/</span> <span class="p">(</span><span class="nb">time</span> <span class="o">-</span> <span class="nv">$start</span><span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$r</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">Fast</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$start</span> <span class="o">=</span> <span class="nb">time</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">for</span><span class="p">(</span><span class="mi">1</span><span class="o">..</span><span class="nv">$count</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="nv">$r</span><span class="o">-&gt;</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;hoge&#39;</span><span class="p">,</span> <span class="s">&#39;fuga&#39;</span><span class="p">,</span> <span class="n">sub</span><span class="p">{});</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="nv">$r</span><span class="o">-&gt;</span><span class="n">wait_all_responses</span><span class="p">;</span>
+</span><span class='line'>    <span class="nb">printf</span> <span class="s">&quot;Redis::Fast:\n%.2f/s\n&quot;</span><span class="p">,</span> <span class="nv">$count</span> <span class="o">/</span> <span class="p">(</span><span class="nb">time</span> <span class="o">-</span> <span class="nv">$start</span><span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>大体Redis.pmの4倍速い。でもRedis::hiredisと比べると2割ほど遅い。
+Fastを名乗るのは早すぎた。</p>
+
+<figure class='code'><figcaption><span>bench</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>Redis.pm:
+</span><span class='line'>22588.95/s
+</span><span class='line'>Redis::hiredis:
+</span><span class='line'>105159.88/s
+</span><span class='line'>Redis::Fast:
+</span><span class='line'>81098.01/s</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Perl API よくわからない。Socket通信まったくわからない。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[YAPCへ行ってきた(二日目)]]></title>
@@ -2897,677 +3193,6 @@ Recallが8割しかありませんが，人によるばらつきが大きそう�
 検証してみると微妙に内容が違うらしい．
 もちろん影響は受けているんだろうけどね．
 マンガとかゲームで始めて心に直接語りかけたのって何なんだろう？</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[OAuthの認証にWebViewを使うのはやめよう]]></title>
-    <link href="http://shogo82148.github.io/blog/2012/11/24/no-more-webview/"/>
-    <updated>2012-11-24T23:06:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2012/11/24/no-more-webview</id>
-    <content type="html"><![CDATA[<p>AndroidからTwitterへアクセスするためのライブラリとして，<a href="http://twitter4j.org/ja/index.html">Twitter4J</a>が有名です．
-これを使ってみようと，「Android Twitter4J」と検索すると
-認証にWebViewを使った例がたくさん出てきます．</p>
-
-<p>・・・いや，ちょっとまて．
-それはちょっとまずいだろう．</p>
-
-<p>そういうわけでもうちょっと賢い方法を探してみました．</p>
-
-<!-- More -->
-
-
-<h2>何がまずいのさ</h2>
-
-<p>「Android Twitter4J」と検索すると，上位にこんなページが出てきます．</p>
-
-<ul>
-<li><a href="http://andante.in/i/android%E3%82%A2%E3%83%97%E3%83%AAtips/twitter4j%E3%82%92%E4%BD%BF%E3%81%A3%E3%81%A6oauth%E8%AA%8D%E8%A8%BC%E3%82%92%E3%82%A2%E3%83%97%E3%83%AA%E5%86%85%E3%81%A7%E8%A1%8C%E3%81%86%E6%96%B9%E6%B3%95/">Twitter4jを使ってOAuth認証をアプリ内で行う方法</a></li>
-<li><a href="http://blog.kyosuke25.com/2011/12/twitter4j-22xoauth.html">Twitter4j-2.2.xを使ったOAuth認証のコーディング例</a></li>
-<li><a href="http://init0.net/wp/archives/171">twitter4jでツイートする</a></li>
-<li><a href="http://wada811.blog.fc2.com/blog-entry-103.html">Android+Twitter4JでOAuthするためのソースコード</a></li>
-</ul>
-
-
-<p>上のサイトでは次の様は方法をとっています．</p>
-
-<ul>
-<li>アプリ内にWebViewを貼り付け</li>
-<li>WebViewでTwitterの認証画面を表示</li>
-<li>onPageStarted や onPageFinished をオーバーライドして callback URL へのアクセスを検出</li>
-<li>URL に入っている認証コードで認証</li>
-</ul>
-
-
-<p>アプリ内でWebViewを使うとURLが表示されません．
-つまり <strong> 本当にツイッターにアクセスしているかわからない </strong> のです．
-もし，表示されるのが偽の認証画面だったら，アプリから簡単にパスワードがわかってしまいます．</p>
-
-<p>じゃあ，URL を表示させればいいかというとそういうわけでもありません．
-画面上のURL表示なんて簡単に偽装できてしまいます．
-どんな工夫をしても <strong> アプリがパスワードの要求をしていることには変わりありません </strong> ．
-アプリはパスワードを簡単に取得できます．</p>
-
-<p>アプリのユーザはTwitterに限らずSNSへのログイン時にブラウザを開かないアプリは信用しないようにしましょう．
-どこかでパスワードの抜かれている可能性があります．
-(ただし，公式アプリは除く．公式アプリが信用できないならそもそもサービスを利用できないもんね．)</p>
-
-<h2>じゃあどうするのさ</h2>
-
-<p>じゃあ，開発者はどうするのかって話ですが，もう少し詳しく検索してみましょう．
-他の方法を使っているページもでてきます．</p>
-
-<ul>
-<li>PINコードを利用
-
-<ul>
-<li><a href="http://techbooster.org/android/mashup/14064/">TwitterでPIN番号認証を行う</a></li>
-</ul>
-</li>
-<li>Intent Fileterを利用しコールバック
-
-<ul>
-<li><a href="http://d.hatena.ne.jp/yujimny/20110204/1296805905">twitter4jを使用したAndroid Twitterアプリケーション作成</a></li>
-<li><a href="http://d.hatena.ne.jp/itog/20120214/1329193954">Twitter4Jを使ってAndroidアプリでStreamingAPIのUserTimelineを取得する</a></li>
-<li>TwitterでOAuth認証を行う
-
-<ol>
-<li><a href="http://techbooster.org/android/mashup/4525/">Twitterへのアプリケーション登録</a></li>
-<li><a href="http://techbooster.org/android/5040/">Twitterの認証ページをブラウザで開く</a></li>
-<li><a href="http://techbooster.org/android/mashup/5301/">Access Tokenを取得する</a></li>
-</ol>
-</li>
-</ul>
-</li>
-</ul>
-
-
-<h3>PIN コードを利用</h3>
-
-<p>一つ目の方法はPC版クライアントでよく使われる方法．
-認証後にPINコードと呼ばれる数字が表示されるので，それをアプリに入力します．
-twiccaなんかでも使われてますね．
-Twitter へのアプリケーション登録のときにコールバックURLを入力しないとこの認証方式になります．</p>
-
-<p>認証画面に，ブラウザを開くボタン，PINコードの入力ボックス，ログインボタンを用意しておきます．</p>
-
-<figure class='code'><figcaption><span>activity_oauth.xml</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-</pre></td><td class='code'><pre><code class='xml'><span class='line'><span class="cp">&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;</span>
-</span><span class='line'><span class="nt">&lt;LinearLayout</span> <span class="na">xmlns:android=</span><span class="s">&quot;http://schemas.android.com/apk/res/android&quot;</span>
-</span><span class='line'>    <span class="na">android:layout_width=</span><span class="s">&quot;match_parent&quot;</span>
-</span><span class='line'>    <span class="na">android:layout_height=</span><span class="s">&quot;match_parent&quot;</span>
-</span><span class='line'>    <span class="na">android:orientation=</span><span class="s">&quot;vertical&quot;</span> <span class="nt">&gt;</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="nt">&lt;Button</span>
-</span><span class='line'>        <span class="na">android:id=</span><span class="s">&quot;@+id/button_start_login&quot;</span>
-</span><span class='line'>        <span class="na">android:layout_width=</span><span class="s">&quot;wrap_content&quot;</span>
-</span><span class='line'>        <span class="na">android:layout_height=</span><span class="s">&quot;wrap_content&quot;</span>
-</span><span class='line'>        <span class="na">android:text=</span><span class="s">&quot;Twitterへアクセス&quot;</span> <span class="nt">/&gt;</span>
-</span><span class='line'>
-</span><span class='line'>   <span class="nt">&lt;EditText</span>
-</span><span class='line'>      <span class="na">android:id=</span><span class="s">&quot;@+id/edit_pin_code&quot;</span>
-</span><span class='line'>      <span class="na">android:layout_width=</span><span class="s">&quot;wrap_content&quot;</span>
-</span><span class='line'>      <span class="na">android:layout_height=</span><span class="s">&quot;wrap_content&quot;</span>
-</span><span class='line'>      <span class="na">android:ems=</span><span class="s">&quot;10&quot;</span>
-</span><span class='line'>      <span class="na">android:inputType=</span><span class="s">&quot;number&quot;</span> <span class="nt">/&gt;</span>
-</span><span class='line'>
-</span><span class='line'>   <span class="nt">&lt;Button</span>
-</span><span class='line'>      <span class="na">android:id=</span><span class="s">&quot;@+id/button_login&quot;</span>
-</span><span class='line'>      <span class="na">android:layout_width=</span><span class="s">&quot;wrap_content&quot;</span>
-</span><span class='line'>      <span class="na">android:layout_height=</span><span class="s">&quot;wrap_content&quot;</span>
-</span><span class='line'>      <span class="na">android:layout_below=</span><span class="s">&quot;@+id/edit_pin_code&quot;</span>
-</span><span class='line'>      <span class="na">android:text=</span><span class="s">&quot;ログイン&quot;</span> <span class="nt">/&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="nt">&lt;/LinearLayout&gt;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>あとはボタンが押されたときにブラウザを呼ぶだけです．
-認証したらPINコードを入力してもらいます．</p>
-
-<figure class='code'><figcaption><span>OAuthActivity.java</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-<span class='line-number'>37</span>
-<span class='line-number'>38</span>
-<span class='line-number'>39</span>
-<span class='line-number'>40</span>
-<span class='line-number'>41</span>
-<span class='line-number'>42</span>
-<span class='line-number'>43</span>
-<span class='line-number'>44</span>
-<span class='line-number'>45</span>
-<span class='line-number'>46</span>
-<span class='line-number'>47</span>
-<span class='line-number'>48</span>
-<span class='line-number'>49</span>
-<span class='line-number'>50</span>
-<span class='line-number'>51</span>
-<span class='line-number'>52</span>
-<span class='line-number'>53</span>
-<span class='line-number'>54</span>
-<span class='line-number'>55</span>
-<span class='line-number'>56</span>
-<span class='line-number'>57</span>
-<span class='line-number'>58</span>
-<span class='line-number'>59</span>
-<span class='line-number'>60</span>
-<span class='line-number'>61</span>
-<span class='line-number'>62</span>
-<span class='line-number'>63</span>
-<span class='line-number'>64</span>
-<span class='line-number'>65</span>
-<span class='line-number'>66</span>
-<span class='line-number'>67</span>
-<span class='line-number'>68</span>
-<span class='line-number'>69</span>
-<span class='line-number'>70</span>
-<span class='line-number'>71</span>
-<span class='line-number'>72</span>
-<span class='line-number'>73</span>
-<span class='line-number'>74</span>
-<span class='line-number'>75</span>
-<span class='line-number'>76</span>
-<span class='line-number'>77</span>
-<span class='line-number'>78</span>
-<span class='line-number'>79</span>
-<span class='line-number'>80</span>
-<span class='line-number'>81</span>
-<span class='line-number'>82</span>
-<span class='line-number'>83</span>
-<span class='line-number'>84</span>
-<span class='line-number'>85</span>
-<span class='line-number'>86</span>
-<span class='line-number'>87</span>
-<span class='line-number'>88</span>
-<span class='line-number'>89</span>
-</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kn">package</span> <span class="n">net</span><span class="o">.</span><span class="na">sorablue</span><span class="o">.</span><span class="na">shogo82148</span><span class="o">.</span><span class="na">yuire</span><span class="o">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="kn">import</span> <span class="nn">twitter4j.AsyncTwitter</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">twitter4j.AsyncTwitterFactory</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">twitter4j.TwitterAdapter</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">twitter4j.TwitterException</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">twitter4j.TwitterListener</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">twitter4j.TwitterMethod</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">twitter4j.auth.AccessToken</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">twitter4j.auth.RequestToken</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">android.net.Uri</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">android.os.Bundle</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">android.app.Activity</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">android.content.Intent</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">android.view.View.OnClickListener</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">android.widget.EditText</span><span class="o">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">public</span> <span class="kd">class</span> <span class="nc">OAuthActivity</span> <span class="kd">extends</span> <span class="n">Activity</span> <span class="kd">implements</span> <span class="n">OnClickListener</span> <span class="o">{</span>
-</span><span class='line'>    <span class="kd">public</span> <span class="kd">final</span> <span class="kd">static</span> <span class="n">String</span> <span class="n">EXTRA_CONSUMER_KEY</span> <span class="o">=</span> <span class="s">&quot;consumer_key&quot;</span><span class="o">;</span>
-</span><span class='line'>    <span class="kd">public</span> <span class="kd">final</span> <span class="kd">static</span> <span class="n">String</span> <span class="n">EXTRA_CONSUMER_SECRET</span> <span class="o">=</span> <span class="s">&quot;consumer_secret&quot;</span><span class="o">;</span>
-</span><span class='line'>    <span class="kd">public</span> <span class="kd">final</span> <span class="kd">static</span> <span class="n">String</span> <span class="n">EXTRA_ACCESS_TOKEN</span> <span class="o">=</span> <span class="s">&quot;access_token&quot;</span><span class="o">;</span>
-</span><span class='line'>    <span class="kd">public</span> <span class="kd">final</span> <span class="kd">static</span> <span class="n">String</span> <span class="n">EXTRA_ACCESS_TOKEN_SECRET</span> <span class="o">=</span> <span class="s">&quot;access_token_secret&quot;</span><span class="o">;</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="kd">private</span> <span class="n">RequestToken</span> <span class="n">mRequestToken</span><span class="o">;</span>
-</span><span class='line'>    <span class="kd">final</span> <span class="n">AsyncTwitterFactory</span> <span class="n">factory</span> <span class="o">=</span> <span class="k">new</span> <span class="n">AsyncTwitterFactory</span><span class="o">();</span>
-</span><span class='line'>    <span class="kd">final</span> <span class="n">AsyncTwitter</span> <span class="n">twitter</span> <span class="o">=</span> <span class="n">factory</span><span class="o">.</span><span class="na">getInstance</span><span class="o">();</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="c1">// 非同期版 Twitter4J のリスナ</span>
-</span><span class='line'>    <span class="kd">private</span> <span class="kd">final</span> <span class="n">TwitterListener</span> <span class="n">listener</span> <span class="o">=</span> <span class="k">new</span> <span class="n">TwitterAdapter</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>            <span class="nd">@Override</span>
-</span><span class='line'>            <span class="kd">public</span> <span class="kt">void</span> <span class="nf">gotOAuthRequestToken</span><span class="o">(</span><span class="n">RequestToken</span> <span class="n">token</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>                <span class="n">mRequestToken</span> <span class="o">=</span> <span class="n">token</span><span class="o">;</span>
-</span><span class='line'>            <span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'>            <span class="nd">@Override</span>
-</span><span class='line'>            <span class="kd">public</span> <span class="kt">void</span> <span class="nf">gotOAuthAccessToken</span><span class="o">(</span><span class="n">AccessToken</span> <span class="n">token</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>                <span class="c1">// Access Token 取得成功</span>
-</span><span class='line'>                <span class="c1">// 呼び出し元に Access Token を返す</span>
-</span><span class='line'>                <span class="kd">final</span> <span class="n">Intent</span> <span class="n">intent</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Intent</span><span class="o">();</span>
-</span><span class='line'>                <span class="n">intent</span><span class="o">.</span><span class="na">putExtra</span><span class="o">(</span><span class="n">EXTRA_ACCESS_TOKEN</span><span class="o">,</span> <span class="n">token</span><span class="o">.</span><span class="na">getToken</span><span class="o">());</span>
-</span><span class='line'>                <span class="n">intent</span><span class="o">.</span><span class="na">putExtra</span><span class="o">(</span><span class="n">EXTRA_ACCESS_TOKEN_SECRET</span><span class="o">,</span> <span class="n">token</span><span class="o">.</span><span class="na">getTokenSecret</span><span class="o">());</span>
-</span><span class='line'>                <span class="n">setResult</span><span class="o">(</span><span class="n">Activity</span><span class="o">.</span><span class="na">RESULT_OK</span><span class="o">,</span> <span class="n">intent</span><span class="o">);</span>
-</span><span class='line'>                <span class="n">finish</span><span class="o">();</span>
-</span><span class='line'>            <span class="o">}</span>
-</span><span class='line'>        <span class="o">};</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="nd">@Override</span>
-</span><span class='line'>    <span class="kd">public</span> <span class="kt">void</span> <span class="nf">onCreate</span><span class="o">(</span><span class="n">Bundle</span> <span class="n">savedInstanceState</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>        <span class="kd">super</span><span class="o">.</span><span class="na">onCreate</span><span class="o">(</span><span class="n">savedInstanceState</span><span class="o">);</span>
-</span><span class='line'>        <span class="n">setContentView</span><span class="o">(</span><span class="n">R</span><span class="o">.</span><span class="na">layout</span><span class="o">.</span><span class="na">activity_oauth</span><span class="o">);</span>
-</span><span class='line'>
-</span><span class='line'>        <span class="c1">// Request Token をリクエスト</span>
-</span><span class='line'>        <span class="kd">final</span> <span class="n">Intent</span> <span class="n">intent</span> <span class="o">=</span> <span class="n">getIntent</span><span class="o">();</span>
-</span><span class='line'>        <span class="kd">final</span> <span class="n">String</span> <span class="n">consumer_key</span> <span class="o">=</span> <span class="n">intent</span><span class="o">.</span><span class="na">getStringExtra</span><span class="o">(</span><span class="n">EXTRA_CONSUMER_KEY</span><span class="o">);</span>
-</span><span class='line'>        <span class="kd">final</span> <span class="n">String</span> <span class="n">consumer_secret</span> <span class="o">=</span> <span class="n">intent</span><span class="o">.</span><span class="na">getStringExtra</span><span class="o">(</span><span class="n">EXTRA_CONSUMER_SECRET</span><span class="o">);</span>
-</span><span class='line'>        <span class="n">twitter</span><span class="o">.</span><span class="na">addListener</span><span class="o">(</span><span class="n">listener</span><span class="o">);</span>
-</span><span class='line'>        <span class="n">twitter</span><span class="o">.</span><span class="na">setOAuthConsumer</span><span class="o">(</span><span class="n">consumer_key</span><span class="o">,</span> <span class="n">consumer_secret</span><span class="o">);</span>
-</span><span class='line'>        <span class="n">twitter</span><span class="o">.</span><span class="na">getOAuthRequestTokenAsync</span><span class="o">();</span>
-</span><span class='line'>
-</span><span class='line'>        <span class="c1">// EventListener をセット</span>
-</span><span class='line'>        <span class="kd">final</span> <span class="n">View</span> <span class="n">start_login</span> <span class="o">=</span> <span class="n">findViewById</span><span class="o">(</span><span class="n">R</span><span class="o">.</span><span class="na">id</span><span class="o">.</span><span class="na">button_start_login</span><span class="o">);</span>
-</span><span class='line'>        <span class="n">start_login</span><span class="o">.</span><span class="na">setOnClickListener</span><span class="o">(</span><span class="k">this</span><span class="o">);</span>
-</span><span class='line'>        <span class="kd">final</span> <span class="n">View</span> <span class="n">login</span> <span class="o">=</span> <span class="n">findViewById</span><span class="o">(</span><span class="n">R</span><span class="o">.</span><span class="na">id</span><span class="o">.</span><span class="na">button_login</span><span class="o">);</span>
-</span><span class='line'>        <span class="n">login</span><span class="o">.</span><span class="na">setOnClickListener</span><span class="o">(</span><span class="k">this</span><span class="o">);</span>
-</span><span class='line'>    <span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="nd">@Override</span>
-</span><span class='line'>    <span class="kd">public</span> <span class="kt">void</span> <span class="nf">onClick</span><span class="o">(</span><span class="n">View</span> <span class="n">v</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>        <span class="k">switch</span><span class="o">(</span><span class="n">v</span><span class="o">.</span><span class="na">getId</span><span class="o">())</span> <span class="o">{</span>
-</span><span class='line'>        <span class="k">case</span> <span class="n">R</span><span class="o">.</span><span class="na">id</span><span class="o">.</span><span class="na">button_start_login</span><span class="o">:</span>
-</span><span class='line'>            <span class="o">{</span>
-</span><span class='line'>                <span class="c1">// 認証画面をブラウザで開く</span>
-</span><span class='line'>                <span class="kd">final</span> <span class="n">Intent</span> <span class="n">intent</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Intent</span><span class="o">(</span><span class="n">Intent</span><span class="o">.</span><span class="na">ACTION_VIEW</span><span class="o">,</span>
-</span><span class='line'>                                                 <span class="n">Uri</span><span class="o">.</span><span class="na">parse</span><span class="o">(</span><span class="n">mRequestToken</span><span class="o">.</span><span class="na">getAuthorizationURL</span><span class="o">()));</span>
-</span><span class='line'>                <span class="n">startActivity</span><span class="o">(</span><span class="n">intent</span><span class="o">);</span>
-</span><span class='line'>            <span class="o">}</span>
-</span><span class='line'>            <span class="k">break</span><span class="o">;</span>
-</span><span class='line'>        <span class="k">case</span> <span class="n">R</span><span class="o">.</span><span class="na">id</span><span class="o">.</span><span class="na">button_login</span><span class="o">:</span>
-</span><span class='line'>            <span class="o">{</span>
-</span><span class='line'>                <span class="c1">// PINコードを取得</span>
-</span><span class='line'>                <span class="kd">final</span> <span class="n">String</span> <span class="n">pin</span> <span class="o">=</span> <span class="n">editPin</span><span class="o">.</span><span class="na">getText</span><span class="o">().</span><span class="na">toString</span><span class="o">();</span>
-</span><span class='line'>
-</span><span class='line'>                <span class="c1">// Access Token をリクエスト</span>
-</span><span class='line'>                <span class="n">twitter</span><span class="o">.</span><span class="na">getOAuthAccessTokenAsync</span><span class="o">(</span><span class="n">mRequestToken</span><span class="o">,</span> <span class="n">pin</span><span class="o">);</span>
-</span><span class='line'>            <span class="o">}</span>
-</span><span class='line'>            <span class="k">break</span><span class="o">;</span>
-</span><span class='line'>        <span class="o">}</span>
-</span><span class='line'>    <span class="o">}</span>
-</span><span class='line'><span class="o">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Token の取得にはインターネットアクセスが必要なので，
-Twitter4J に含まれている非同期版のライブラリを使っています．</p>
-
-<p>Consumer Key と Consumer Secret はアクティビティの呼び出し時にインテントに設定します．</p>
-
-<figure class='code'><figcaption><span>MainActivity.java</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kd">final</span> <span class="kt">int</span> <span class="n">REQUEST_ACCESS_TOKEN</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span>
-</span><span class='line'><span class="kd">final</span> <span class="n">Intent</span> <span class="n">intent</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Intent</span><span class="o">(</span><span class="k">this</span><span class="o">,</span> <span class="n">OAuthActivity</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
-</span><span class='line'><span class="n">intent</span><span class="o">.</span><span class="na">setExtraString</span><span class="o">(</span><span class="n">OAuthActivity</span><span class="o">.</span><span class="na">EXTRA_CONSUMER_KEY</span><span class="o">,</span> <span class="s">&quot;Your Cosumer Key&quot;</span><span class="o">);</span>
-</span><span class='line'><span class="n">intent</span><span class="o">.</span><span class="na">setExtraString</span><span class="o">(</span><span class="n">OAuthActivity</span><span class="o">.</span><span class="na">EXTRA_CONSUMER_SECRET</span><span class="o">,</span> <span class="s">&quot;Your Consumer Secret&quot;</span><span class="o">);</span>
-</span><span class='line'><span class="n">startActivityForResult</span><span class="o">(</span><span class="n">intent</span><span class="o">,</span> <span class="n">REQUEST_ACCESS_TOKEN</span><span class="o">);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>認証が完了すると <code>onAcivityResult</code> が呼び出されるので，
-Access Token を保存するなり，つぶやくのに使うだけです．</p>
-
-<figure class='code'><figcaption><span>MainActivity.java</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="nd">@Override</span>
-</span><span class='line'><span class="kd">public</span> <span class="kt">void</span> <span class="nf">onActivityResult</span><span class="o">(</span><span class="kt">int</span> <span class="n">requestCode</span><span class="o">,</span> <span class="kt">int</span> <span class="n">resultCode</span><span class="o">,</span> <span class="n">Intent</span> <span class="n">data</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>    <span class="k">if</span><span class="o">(</span><span class="n">requestCode</span> <span class="o">==</span> <span class="n">REQUEST_ACCESS_TOKEN</span> <span class="o">&amp;&amp;</span> <span class="n">resultCode</span> <span class="o">==</span> <span class="n">Activity</span><span class="o">.</span><span class="na">RESULT_OK</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>        <span class="kd">final</span> <span class="n">String</span> <span class="n">token</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="na">getStringExtra</span><span class="o">(</span><span class="n">OAuthActivity</span><span class="o">.</span><span class="na">EXTRA_ACCESS_TOKEN</span><span class="o">);</span>
-</span><span class='line'>        <span class="kd">final</span> <span class="n">String</span> <span class="n">token_secret</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="na">getStringExtra</span><span class="o">(</span><span class="n">OAuthActivity</span><span class="o">.</span><span class="na">EXTRA_ACCESS_TOKEN_SECRET</span><span class="o">);</span>
-</span><span class='line'>        <span class="n">twitter</span><span class="o">.</span><span class="na">setOAuthAccessToken</span><span class="o">(</span><span class="k">new</span> <span class="n">AccessToken</span><span class="o">(</span><span class="n">token</span><span class="o">,</span> <span class="n">token_secret</span><span class="o">));</span>
-</span><span class='line'>    <span class="o">}</span>
-</span><span class='line'><span class="o">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h3>Intent Filterを利用</h3>
-
-<p>二つ目の方法は Intent Fileter を使って
-callback URL へアクセスしたときに，ブラウザにインテントを発行してもらう方法です．
-ユーザがPINコードを覚える必要がないので楽ちんです．</p>
-
-<p><strong> (2013-03-09追記) </strong>
-この記事を公開したらギルティ言われてしまいました．
-(<a href="https://gist.github.com/mala/5062931">TwitterのOAuthの問題まとめ</a>・<a href="https://gist.github.com/mala/5107120">TwitterのOAuthの問題の補足とか</a>)
-「Consumer Key が漏れる可能性を否定できないクライアントアプリでは，Callback URL をつかべきではない」とのご指摘です．
-ごもっとなご意見です．
-この方法は<strong> 非推奨 </strong>です．
-PINコードを使った認証を使いましょう．</p>
-
-<p>その分開発は面倒ですが．
-ポイントは以下の点です．</p>
-
-<ul>
-<li>Twitter へのアプリケーション登録時に Callback URL にテキトーなURLを入れておく</li>
-<li>独自スキーマを定義して，受け取れるようにしておく</li>
-<li><code>getOAuthRequestToken</code> 呼び出し時に，Callback URL を明示的に渡す</li>
-<li>アクティビティの多重起動を防止しておく</li>
-</ul>
-
-
-<p>Intent Filter に http:// で始まるURLでも設定してしまうと，
-アプリケーションの選択画面が開いてしまったり，
-ブラウザによってはリダイレクト時にインテントを飛ばしてくれなかったりします．
-そのため， myapplication:// のような独自スキーマを使う必要があるのですが，
-Twitterへアプリケーション登録時に設定する Callback URL は http:// で始まっていないと受け付けてくれません．
-かと言って空にしておくとうまく動かないので callback URL にはテキトーな URL を入れておいて，
-<code>getOAuthRequestToken</code> 呼び出し時に Callback URL を指定します(なぜかこっちは独自スキーマが使える)．</p>
-
-<p>具体的なプログラムは以下のような感じ．</p>
-
-<figure class='code'><figcaption><span>MainActivity.java</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-<span class='line-number'>37</span>
-<span class='line-number'>38</span>
-<span class='line-number'>39</span>
-<span class='line-number'>40</span>
-<span class='line-number'>41</span>
-<span class='line-number'>42</span>
-<span class='line-number'>43</span>
-<span class='line-number'>44</span>
-<span class='line-number'>45</span>
-<span class='line-number'>46</span>
-<span class='line-number'>47</span>
-<span class='line-number'>48</span>
-<span class='line-number'>49</span>
-<span class='line-number'>50</span>
-<span class='line-number'>51</span>
-<span class='line-number'>52</span>
-<span class='line-number'>53</span>
-<span class='line-number'>54</span>
-<span class='line-number'>55</span>
-<span class='line-number'>56</span>
-<span class='line-number'>57</span>
-<span class='line-number'>58</span>
-<span class='line-number'>59</span>
-<span class='line-number'>60</span>
-<span class='line-number'>61</span>
-<span class='line-number'>62</span>
-<span class='line-number'>63</span>
-</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kn">package</span> <span class="n">net</span><span class="o">.</span><span class="na">sorablue</span><span class="o">.</span><span class="na">shogo82148</span><span class="o">.</span><span class="na">yuire</span><span class="o">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="kn">import</span> <span class="nn">twitter4j.AsyncTwitter</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">twitter4j.AsyncTwitterFactory</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">twitter4j.TwitterAdapter</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">twitter4j.TwitterException</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">twitter4j.TwitterListener</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">twitter4j.TwitterMethod</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">twitter4j.auth.AccessToken</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">twitter4j.auth.RequestToken</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">android.net.Uri</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">android.os.Bundle</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">android.os.Handler</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">android.app.Activity</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">android.content.Intent</span><span class="o">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">public</span> <span class="kd">class</span> <span class="nc">MainActivity</span> <span class="kd">extends</span> <span class="n">Activity</span> <span class="o">{</span>
-</span><span class='line'>    <span class="kd">public</span> <span class="kd">final</span> <span class="kd">static</span> <span class="n">String</span> <span class="n">CALLBACK</span> <span class="o">=</span> <span class="s">&quot;myappsheme://callback/&quot;</span><span class="o">;</span>
-</span><span class='line'>    <span class="kd">public</span> <span class="kd">final</span> <span class="kd">static</span> <span class="n">String</span> <span class="n">CONSUMER_KEY</span> <span class="o">=</span> <span class="s">&quot;Your consumer_key&quot;</span><span class="o">;</span>
-</span><span class='line'>    <span class="kd">public</span> <span class="kd">final</span> <span class="kd">static</span> <span class="n">String</span> <span class="n">CONSUMER_SECRET</span> <span class="o">=</span> <span class="s">&quot;Your consumer secret&quot;</span><span class="o">;</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="kd">private</span> <span class="n">RequestToken</span> <span class="n">mRequestToken</span><span class="o">;</span>
-</span><span class='line'>    <span class="kd">final</span> <span class="n">AsyncTwitterFactory</span> <span class="n">factory</span> <span class="o">=</span> <span class="k">new</span> <span class="n">AsyncTwitterFactory</span><span class="o">();</span>
-</span><span class='line'>    <span class="kd">final</span> <span class="n">AsyncTwitter</span> <span class="n">twitter</span> <span class="o">=</span> <span class="n">factory</span><span class="o">.</span><span class="na">getInstance</span><span class="o">();</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="kd">private</span> <span class="kd">final</span> <span class="n">TwitterListener</span> <span class="n">listener</span> <span class="o">=</span> <span class="k">new</span> <span class="n">TwitterAdapter</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>            <span class="nd">@Override</span>
-</span><span class='line'>            <span class="kd">public</span> <span class="kt">void</span> <span class="nf">gotOAuthRequestToken</span><span class="o">(</span><span class="n">RequestToken</span> <span class="n">token</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>                <span class="c1">// ブラウザを開く</span>
-</span><span class='line'>                <span class="n">mRequestToken</span> <span class="o">=</span> <span class="n">token</span><span class="o">;</span>
-</span><span class='line'>                <span class="kd">final</span> <span class="n">Intent</span> <span class="n">intent</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Intent</span><span class="o">(</span><span class="n">Intent</span><span class="o">.</span><span class="na">ACTION_VIEW</span><span class="o">,</span>
-</span><span class='line'>                                                 <span class="n">Uri</span><span class="o">.</span><span class="na">parse</span><span class="o">(</span><span class="n">mRequestToken</span><span class="o">.</span><span class="na">getAuthorizationURL</span><span class="o">()));</span>
-</span><span class='line'>                <span class="n">startActivity</span><span class="o">(</span><span class="n">intent</span><span class="o">);</span>
-</span><span class='line'>            <span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'>            <span class="nd">@Override</span>
-</span><span class='line'>            <span class="kd">public</span> <span class="kt">void</span> <span class="nf">gotOAuthAccessToken</span><span class="o">(</span><span class="n">AccessToken</span> <span class="n">token</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>                <span class="c1">// 永続化とかする</span>
-</span><span class='line'>            <span class="o">}</span>
-</span><span class='line'>        <span class="o">};</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="nd">@Override</span>
-</span><span class='line'>    <span class="kd">public</span> <span class="kt">void</span> <span class="nf">onCreate</span><span class="o">(</span><span class="n">Bundle</span> <span class="n">savedInstanceState</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>        <span class="kd">super</span><span class="o">.</span><span class="na">onCreate</span><span class="o">(</span><span class="n">savedInstanceState</span><span class="o">);</span>
-</span><span class='line'>        <span class="n">setContentView</span><span class="o">(</span><span class="n">R</span><span class="o">.</span><span class="na">layout</span><span class="o">.</span><span class="na">activity_oauth</span><span class="o">);</span>
-</span><span class='line'>
-</span><span class='line'>        <span class="n">twitter</span><span class="o">.</span><span class="na">addListener</span><span class="o">(</span><span class="n">listener</span><span class="o">);</span>
-</span><span class='line'>        <span class="n">twitter</span><span class="o">.</span><span class="na">setOAuthConsumer</span><span class="o">(</span><span class="n">CONSUMER_KEY</span><span class="o">,</span> <span class="n">CONSUMER_SECRET</span><span class="o">);</span>
-</span><span class='line'>
-</span><span class='line'>        <span class="c1">// 認証開始</span>
-</span><span class='line'>        <span class="c1">// Request Token を取得する</span>
-</span><span class='line'>        <span class="n">twitter</span><span class="o">.</span><span class="na">getOAuthRequestTokenAsync</span><span class="o">(</span><span class="n">CALLBACK</span><span class="o">);</span> <span class="c1">// ここで CALLBACK URL を渡す！</span>
-</span><span class='line'>    <span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="nd">@Override</span>
-</span><span class='line'>    <span class="kd">public</span> <span class="kt">void</span> <span class="nf">onNewIntent</span><span class="o">(</span><span class="n">Intent</span> <span class="n">intent</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>        <span class="c1">// callback してきた</span>
-</span><span class='line'>        <span class="kd">final</span> <span class="n">Uri</span> <span class="n">uri</span> <span class="o">=</span> <span class="n">intent</span><span class="o">.</span><span class="na">getData</span><span class="o">();</span>
-</span><span class='line'>        <span class="k">if</span><span class="o">(</span><span class="n">uri</span> <span class="o">==</span> <span class="kc">null</span><span class="o">)</span> <span class="k">return</span> <span class="o">;</span>
-</span><span class='line'>        <span class="kd">final</span> <span class="n">String</span> <span class="n">verifier</span> <span class="o">=</span> <span class="n">uri</span><span class="o">.</span><span class="na">getQueryParameter</span><span class="o">(</span><span class="s">&quot;oauth_verifier&quot;</span><span class="o">);</span>
-</span><span class='line'>        <span class="n">twitter</span><span class="o">.</span><span class="na">getOAuthAccessTokenAsync</span><span class="o">(</span><span class="n">mRequestToken</span><span class="o">,</span> <span class="n">verifier</span><span class="o">);</span>
-</span><span class='line'>    <span class="o">}</span>
-</span><span class='line'><span class="o">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>多重起動防止と独自スキーマの定義はマニフェストに記述します．</p>
-
-<figure class='code'><figcaption><span>Manifest.xml</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-</pre></td><td class='code'><pre><code class='xml'><span class='line'><span class="nt">&lt;activity</span>
-</span><span class='line'>    <span class="na">android:name=</span><span class="s">&quot;.MainActivity&quot;</span>
-</span><span class='line'>    <span class="na">android:label=</span><span class="s">&quot;@string/title_activity_main&quot;</span>
-</span><span class='line'>    <span class="na">android:launchMode=</span><span class="s">&quot;singleTask&quot;</span> <span class="nt">&gt;</span> <span class="c">&lt;!-- 多重起動防止 --&gt;</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="nt">&lt;intent-filter&gt;</span>
-</span><span class='line'>        <span class="nt">&lt;action</span> <span class="na">android:name=</span><span class="s">&quot;android.intent.action.MAIN&quot;</span> <span class="nt">/&gt;</span>
-</span><span class='line'>        <span class="nt">&lt;category</span> <span class="na">android:name=</span><span class="s">&quot;android.intent.category.LAUNCHER&quot;</span> <span class="nt">/&gt;</span>
-</span><span class='line'>    <span class="nt">&lt;/intent-filter&gt;</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="c">&lt;!-- 独自スキーマの定義 --&gt;</span>
-</span><span class='line'>    <span class="nt">&lt;intent-filter&gt;</span>
-</span><span class='line'>        <span class="nt">&lt;action</span> <span class="na">android:name=</span><span class="s">&quot;android.intent.action.VIEW&quot;</span> <span class="nt">/&gt;</span>
-</span><span class='line'>        <span class="nt">&lt;category</span> <span class="na">android:name=</span><span class="s">&quot;android.intent.category.DEFAULT&quot;</span> <span class="nt">/&gt;</span>
-</span><span class='line'>        <span class="nt">&lt;category</span> <span class="na">android:name=</span><span class="s">&quot;android.intent.category.BROWSABLE&quot;</span><span class="nt">/&gt;</span>
-</span><span class='line'>        <span class="nt">&lt;data</span> <span class="na">android:scheme=</span><span class="s">&quot;myappsheme&quot;</span> <span class="nt">/&gt;</span>
-</span><span class='line'>    <span class="nt">&lt;/intent-filter&gt;</span>
-</span><span class='line'><span class="nt">&lt;/activity&gt;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p><code>launchMode</code> に <code>singleTask</code> を指定すると，
-多重起動のときに新しいアクティビティを起動する代わりに，すでに起動していたアクティビティの <code>onNewIntent</code> が実行されます．</p>
-
-<p>PINコードを同じインターフェース(<code>startActivityForResult</code> で認証用アクティビティを呼び出すと，戻り値に Access Token が入っている)にしたかったけど，
-認証用アクティビティが <code>singleTask</code> だと，ブラウザを開いた時に呼び出し元の<code>onActivityResult</code>が呼び出されてしまう．
-誰かいい案ありません？</p>
-
-<h2>まとめ</h2>
-
-<p>WebViewはアプリからブラウザの機能を扱うのに非常に便利ですが，
-あくまでもアプリの管理下にあるもので，ブラウザとは少し性質が違うものということに注意．
-<a href="http://ierae.co.jp/uploads/webview.pdf">WebViewの脆弱性</a>に関する資料を見つけてビクビクしています．
-認証画面にかぎらず WebView を使うときはセキュリティに注意しましょう．</p>
-
-<p>今回調べたことを使って，
-じょりぼっとにお湯入れたとつぶやくだけのアプリ<a href="https://github.com/shogo82148/yuire">「お湯入れた」</a>を
-作りました．
-3分間計りたいときにどうぞ．</p>
-
-<p><a href="https://twitter.com/JO_RI_bot" class="twitter-follow-button" data-show-count="false" data-lang="ja">@JO_RI_botさんをフォロー</a></p>
-
-<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0];if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src="//platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);}}(document,"script","twitter-wjs");</script>
-
-
-<h2>おへんじ</h2>
-
-<p>たくさんシェアしてもらったのでお返事書いておきます．</p>
-
-<blockquote class="twitter-tweet" lang="ja"><p>たしかにそうなんだけど、PIN形式は実装が手間だし、PINコピペするのも手間だし、IntentFilter形式は空のブラウザー窓が残るのがものすごく気になるんだよなぁ… / “OAuthの認証にWebViewを使うのはやめよう - S…” <a href="http://t.co/NS0kyGg2" title="http://htn.to/hZZLhx">htn.to/hZZLhx</a></p>&mdash; たくじさん (@takuji31) <a href="https://twitter.com/takuji31/status/272987171202424833" data-datetime="2012-11-26T08:56:28+00:00">11月 26, 2012</a></blockquote>
-
-
-<script src="http://shogo82148.github.io//platform.twitter.com/widgets.js" charset="utf-8"></script>
-
-
-<p>WebViewでURLフックを入れるよりは，PINコードのほうがコードもわかりやすく簡単かと．
-ただPINコードのコピペが面倒なのはそのとおりなので，Android アプリの場合採用は難しいかもしれません．</p>
-
-<p>Intent Filterはマニフェストに手を入れる必要がある分面倒．ブラウザにタブが残るのも厄介です．
-ここは利便性とセキュリティとのトレードオフと割り切るしか無いでしょう．
-Web上での本人確認の方法がパスワードくらいしかない以上，パスワード流出の危険性はかなり重大な欠陥だと言えます．
-手間なのは最初の一回だけですし，Intent Filter を使うのが賢い方法だと思います．</p>
-
-<blockquote class="twitter-tweet" lang="ja"><p>追記。あと標準ブラウザも絶対ダメ。。→そもそもWebViewを使っちゃダメなのよ。。Android版のChromeだけ使いましょう。。 / “OAuthの認証にWebViewを使うのはやめよう - Shogo&#8217;s Blog” <a href="http://t.co/jjo1o4Gb" title="http://htn.to/ybxt7Y">htn.to/ybxt7Y</a></p>&mdash; Kietaさん (@typex20) <a href="https://twitter.com/typex20/status/273001101798813696" data-datetime="2012-11-26T09:51:49+00:00">11月 26, 2012</a></blockquote>
-
-
-<script src="http://shogo82148.github.io//platform.twitter.com/widgets.js" charset="utf-8"></script>
-
-
-<p>はい．おっしゃるとおりです．
-わざわざ反論してまで WebView を使う理由が思い浮かびません．
-代替手法を考えるべきだと思います．</p>
-
-<blockquote class="twitter-tweet" lang="ja"><p>安全に実装できるんならこしたことはないけど、悪意のある実装を前提にするのならWebViewでも他のコンポーネントでもかわらないかな。どっちかというと外部サイトビューワーの役割を持つWebViewでフィッシング開くじょとの方がリスク高そう<a href="http://t.co/QB2HoJSc" title="http://shogo82148.github.com/blog/2012/11/24/no-more-webview/">shogo82148.github.com/blog/2012/11/2…</a></p>&mdash; laiso(レイソー)さん (@laiso) <a href="https://twitter.com/laiso/status/273027828126187520" data-datetime="2012-11-26T11:38:01+00:00">11月 26, 2012</a></blockquote>
-
-
-<script src="http://shogo82148.github.io//platform.twitter.com/widgets.js" charset="utf-8"></script>
-
-
-
-
-<blockquote class="twitter-tweet" data-in-reply-to="273027828126187520" lang="ja"><p>@<a href="https://twitter.com/laiso">laiso</a> 普段使ってるブラウザでログイン済みの場合なら、少なくともパスワード取られないことが保証できるので、WebViewだろうとブラウザっぽいものだろうとパスワード聞かれたタイミングで警戒すべき、という方が分かりやすいんじゃないかと思う。</p>&mdash; malaさん (@bulkneets) <a href="https://twitter.com/bulkneets/status/273029308254154753" data-datetime="2012-11-26T11:43:54+00:00">11月 26, 2012</a></blockquote>
-
-
-<script src="http://shogo82148.github.io//platform.twitter.com/widgets.js" charset="utf-8"></script>
-
-
-<p>このポストで取り上げているのは「認証画面を偽装してパスワードを盗む」ことが可能という，まさしくフィッシングの話題です．
-開発者は，自前で「<strong> ブラウザっぽいもの </strong> 」を実装するのではなく，「 <strong> 本物のブラウザ </strong> 」を使いましょう，という紹介でした．</p>
-
-<p>問題なのは「パスワードを聞かれる or 聞かれない」ではなく，「どのアプリがパスワードを聞いているか」です．
-ログインしていなければ当然Webブラウザでもパスワードは聞かれます．
-認証を求めているアプリとは別の，<strong> 信用のできるアプリ </strong> がパスワードを聞いてくるということが重要なのです．
-Webブラウザを信用出来ないというのであれば，そもそもWebサービスを使うべきではありません．</p>
-
-<blockquote class="twitter-tweet" lang="ja"><p>OAuthの認証にWebViewを使うのはやめよう - Shogo&#8217;s Blog<a href="http://t.co/EQElowcq" title="http://bit.ly/S75tRa">bit.ly/S75tRa</a> WebView使って怪し気な事してたらどうせパケットキャプチャでばれない？ まぁ、PINの方が確実に安全だと思うのでそこは賛成だけど</p>&mdash; nakamura001さん (@nakamura001) <a href="https://twitter.com/nakamura001/status/273012182357266432" data-datetime="2012-11-26T10:35:51+00:00">11月 26, 2012</a></blockquote>
-
-
-<script src="http://shogo82148.github.io//platform.twitter.com/widgets.js" charset="utf-8"></script>
-
-
-<p>パケットキャプチャだけでは見抜けないと思います．
-認証画面のDOM要素を直接見れば，通信にまったく介入しなくてもパスワードなんて簡単に抜けます．
-実際には WebView からDOM要素を見ることはできないようですが，
-DOM 操作が可能な WebView を自前実装することだって技術的には可能です．
-そのため，パスワードを盗みとっているかどうかを外からみた動作だけで判断することは非常に難しく，
-内部構造を解析する必要があると思います．</p>
-
-<p>パケットキャプチャやらリバースエンジニアリングを駆使すれば理論的はすべての不正は防げるとは思いますが，
-それをすべてのアプリでやるのは非常に面倒ですし，一般ユーザが実践するのは困難です．
-こういうことをやらなくてもある程度安全にサービスを使えるようにするのが OAuth の役割．
-積極的に利用していくべきでしょう．</p>
 ]]></content>
   </entry>
   

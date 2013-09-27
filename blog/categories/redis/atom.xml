@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
 
-  <title><![CDATA[Category: redis | Shogo's Blog]]></title>
+  <title><![CDATA[Category: Redis | Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/blog/categories/redis/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2013-09-24T23:45:24+09:00</updated>
+  <updated>2013-09-28T02:08:11+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -14,247 +14,223 @@
 
   
   <entry>
-    <title type="html"><![CDATA[Redis::NamespaceのPerl版書いた]]></title>
-    <link href="http://shogo82148.github.io/blog/2013/09/14/redis-namespace-perl/"/>
-    <updated>2013-09-14T18:36:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2013/09/14/redis-namespace-perl</id>
-    <content type="html"><![CDATA[<p><a href="http://redis.io/">Redis</a> のキーにプリフィックスつけるの面倒だなー自動的につけてくれないかなーと思い、
-調べてみると Ruby に <a href="https://github.com/resque/redis-namespace">Redis-Namespace</a> というものがあるらしい。
-だけども、Perl では探しても見つからなかったので書いてみた。</p>
+    <title type="html"><![CDATA[Redis::Fastってモジュールを書いた]]></title>
+    <link href="http://shogo82148.github.io/blog/2013/09/28/redis-fast/"/>
+    <updated>2013-09-28T00:18:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2013/09/28/redis-fast</id>
+    <content type="html"><![CDATA[<p><a href="https://github.com/redis/hiredis">hiredis</a>をPerlから扱うためのライブラリとして
+<a href="http://search.cpan.org/~neophenix/Redis-hiredis/lib/Redis/hiredis.pm">Redis::hiredis</a>ってのがあるけど、
+なんだか微妙だって聞いたので自分でPerlのhiredisバインディング書いてみたよ。</p>
 
-<p>レポジトリはこちら→<a href="https://github.com/shogo82148/Redis-Namepace">Redis::Namespace</a></p>
+<ul>
+<li><a href="https://github.com/shogo82148/Redis-Fast">https://github.com/shogo82148/Redis-Fast</a></li>
+</ul>
+
+
+<p>(READMEからRedis.pmをそのまま持ってきたことがまるわかりですね。なんとかしよう。)</p>
 
 <!-- More -->
 
 
 <h2>使い方</h2>
 
-<p>インターフェースは <a href="http://search.cpan.org/~melo/Redis/">Perl Redis</a> と一緒。
-コマンドのキー名に当たる部分に、自動的にプレフィックスをつけてくれる。</p>
+<p><a href="http://search.cpan.org/~melo/Redis-1.961/lib/Redis.pm">Redis.pm</a>と全く同じインターフェースなので、
+そのまま置換できる、はず。</p>
 
 <p>``` perl
-use Redis;
+use Redis::Fast;
+my $redis = Redis::Fast->new;</p>
+
+<h3>synchronize mode</h3>
+
+<p>$redis->set('hoge', 'piyo');
+print $redis->get('hoge');  # piyo</p>
+
+<h3>asynchronize mode</h3>
+
+<p>$redis->get('hoge', sub {</p>
+
+<pre><code>my ($result, $error) = @_;
+print $result;  # piyo
+</code></pre>
+
+<p>});
+$redis->wait_all_responses;</p>
+
+<h3>pubsub</h3>
+
+<p>$redis->publish('fugu', 'fuga');
+$redis->subscribe('fugu', sub {</p>
+
+<pre><code>my ($message, $topic, $subscribed_topic) = @_;
+</code></pre>
+
+<p>});</p>
+
+<p>my $timeout = 10;
+$redis->wait_for_messages($timeout) while 1;
+```</p>
+
+<p>以前作った、<a href="https://github.com/shogo82148/Redis-Namepace">Redis::Namespace</a>にもそのまま使えます。</p>
+
+<p>``` perl
+use Redis::Fast;
 use Redis::Namespace;</p>
 
-<p>my $redis = Redis->new;
+<p>my $redis = Redis::Fast->new;
 my $ns = Redis::Namespace(redis => $redis, namespace => 'fugu');</p>
 
 <p>$ns->set('foo', 'bar');    # $redis->set('fugu:foo', 'bar');
 my $foo = $ns->get('foo'); # my $foo = $redis->get('fugu:foo');
 ```</p>
 
-<p>大体のコマンドには対応したつもり。
-別のプレフィックスがついたキーには基本的にアクセスできなくなるので、
-キー名の管理が少し楽になると思います。</p>
+<h2>ベンチマーク</h2>
 
-<p>でも、flushdb とか flushall すると全部消えるので気をつけてね！</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Perl の Redis ライブラリを調べた]]></title>
-    <link href="http://shogo82148.github.io/blog/2013/08/24/perl-redis-libraries/"/>
-    <updated>2013-08-24T17:51:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2013/08/24/perl-redis-libraries</id>
-    <content type="html"><![CDATA[<p>最近<a href="http://redis.io/">Redis</a> を使ったコードを書くようになったのですが、
-キー名を毎回指定するのがだるいです。
-Ruby には <a href="https://github.com/nateware/redis-objects">redis-objects</a> というのがあって、
-Redisのキーをオブジェクトとして扱うことができるようです。
-きっと、Perl にも似たようなのあるだろ、って思って調べてみました。</p>
+<h3>Redis.pm</h3>
 
-<!-- More -->
+<p>``` plain Redis.pm
+Benchmark: running 00_ping, 10_set, 11_set_r, 20_get, 21_get_r, 30_incr, 30_incr_r, 40_lpush, 50_lpop, 90_h_get, 90_h_set for at least 5 CPU seconds...
+   00_ping:  8 wallclock secs ( 0.69 usr +  4.77 sys =  5.46 CPU) @ 5538.64/s (n=30241)</p>
 
+<pre><code>10_set:  8 wallclock secs ( 1.07 usr +  4.01 sys =  5.08 CPU) @ 5794.09/s (n=29434)
+</code></pre>
 
-<h2>ほしいもの</h2>
+<p>  11_set_r:  7 wallclock secs ( 0.42 usr +  4.84 sys =  5.26 CPU) @ 5051.33/s (n=26570)</p>
 
-<p>低レベルなRedisのライブラリはたいていメソッドとRedisのコマンドが一対一対応していて、
-次のようなコードになると思います。</p>
+<pre><code>20_get:  8 wallclock secs ( 0.69 usr +  4.82 sys =  5.51 CPU) @ 5080.40/s (n=27993)
+</code></pre>
 
-<p><code>perl hogehoge.pl
-$redis-&gt;set('key-name', 'piyopiyo');
-$redis-&gt;get('key_name');
+<p>  21_get_r:  7 wallclock secs ( 2.21 usr +  3.09 sys =  5.30 CPU) @ 5389.06/s (n=28562)
+   30_incr:  7 wallclock secs ( 0.69 usr +  4.73 sys =  5.42 CPU) @ 5671.77/s (n=30741)
+ 30_incr_r:  7 wallclock secs ( 0.85 usr +  4.31 sys =  5.16 CPU) @ 5824.42/s (n=30054)
+  40_lpush:  8 wallclock secs ( 0.60 usr +  4.77 sys =  5.37 CPU) @ 5832.59/s (n=31321)
+   50_lpop:  7 wallclock secs ( 1.24 usr +  4.17 sys =  5.41 CPU) @ 5112.75/s (n=27660)
+  90_h_get:  7 wallclock secs ( 0.63 usr +  4.65 sys =  5.28 CPU) @ 5716.29/s (n=30182)
+  90_h_set:  7 wallclock secs ( 0.65 usr +  4.74 sys =  5.39 CPU) @ 5593.14/s (n=30147)
+```</p>
+
+<h3>Redis::hiredis</h3>
+
+<p>``` plain Redis::hiredis
+Benchmark: running 00_ping, 10_set, 11_set_r, 20_get, 21_get_r, 30_incr, 30_incr_r, 40_lpush, 50_lpop for at least 5 CPU seconds...
+   00_ping: 10 wallclock secs ( 0.15 usr +  5.13 sys =  5.28 CPU) @ 8998.48/s (n=47512)</p>
+
+<pre><code>10_set:  9 wallclock secs ( 0.12 usr +  4.90 sys =  5.02 CPU) @ 8552.39/s (n=42933)
+</code></pre>
+
+<p>  11_set_r:  9 wallclock secs ( 0.14 usr +  4.95 sys =  5.09 CPU) @ 8555.01/s (n=43545)</p>
+
+<pre><code>20_get:  9 wallclock secs ( 0.09 usr +  5.42 sys =  5.51 CPU) @ 8785.48/s (n=48408)
+</code></pre>
+
+<p>  21_get_r:  9 wallclock secs ( 0.20 usr +  4.94 sys =  5.14 CPU) @ 8181.52/s (n=42053)
+   30_incr:  9 wallclock secs ( 0.12 usr +  5.29 sys =  5.41 CPU) @ 8622.55/s (n=46648)
+ 30_incr_r:  8 wallclock secs ( 0.16 usr +  4.92 sys =  5.08 CPU) @ 8113.39/s (n=41216)
+  40_lpush:  9 wallclock secs ( 0.21 usr +  5.15 sys =  5.36 CPU) @ 8547.57/s (n=45815)
+   50_lpop:  8 wallclock secs ( 0.12 usr +  4.91 sys =  5.03 CPU) @ 9024.06/s (n=45391)
+```</p>
+
+<h3>Redis::Fast</h3>
+
+<p>Redis.pm の3〜5割増しくらいで速くなる。
+Redis::hiredisと比べると1割〜2割くらい遅い。</p>
+
+<p>``` plain Redis::Fast
+Benchmark: running 00_ping, 10_set, 11_set_r, 20_get, 21_get_r, 30_incr, 30_incr_r, 40_lpush, 50_lpop, 90_h_get, 90_h_set for at least 5 CPU seconds...
+   00_ping:  9 wallclock secs ( 0.18 usr +  4.84 sys =  5.02 CPU) @ 7939.24/s (n=39855)</p>
+
+<pre><code>10_set: 10 wallclock secs ( 0.31 usr +  5.40 sys =  5.71 CPU) @ 7454.64/s (n=42566)
+</code></pre>
+
+<p>  11_set_r:  9 wallclock secs ( 0.31 usr +  4.87 sys =  5.18 CPU) @ 7993.05/s (n=41404)</p>
+
+<pre><code>20_get: 10 wallclock secs ( 0.27 usr +  4.84 sys =  5.11 CPU) @ 8350.68/s (n=42672)
+</code></pre>
+
+<p>  21_get_r: 10 wallclock secs ( 0.32 usr +  5.17 sys =  5.49 CPU) @ 8238.62/s (n=45230)
+   30_incr:  9 wallclock secs ( 0.23 usr +  5.27 sys =  5.50 CPU) @ 8221.82/s (n=45220)
+ 30_incr_r:  8 wallclock secs ( 0.28 usr +  4.91 sys =  5.19 CPU) @ 8092.29/s (n=41999)
+  40_lpush:  9 wallclock secs ( 0.18 usr +  5.06 sys =  5.24 CPU) @ 8312.02/s (n=43555)
+   50_lpop:  9 wallclock secs ( 0.20 usr +  4.84 sys =  5.04 CPU) @ 8010.12/s (n=40371)
+  90_h_get:  9 wallclock secs ( 0.19 usr +  5.51 sys =  5.70 CPU) @ 7467.72/s (n=42566)
+  90_h_set:  8 wallclock secs ( 0.28 usr +  4.83 sys =  5.11 CPU) @ 7724.07/s (n=39470)
+```</p>
+
+<h3>pipeline mode</h3>
+
+<p>毎回レスポンスを待っているとI/Oがボトルネックになってあんまり速度上がらないけど、
+レスポンスを待たずにコマンドをどんどん送りつけると差が原著になります。</p>
+
+<p>``` perl bench.pl</p>
+
+<h1>!/usr/bin/perl</h1>
+
+<p>use warnings;
+use strict;</p>
+
+<p>use Time::HiRes qw/time/;
+use Redis;
+use Redis::Fast;
+use Redis::hiredis;</p>
+
+<p>my $count = 100000;</p>
+
+<p>{</p>
+
+<pre><code>my $r = Redis-&gt;new;
+my $start = time;
+for(1..$count) {
+    $r-&gt;set('hoge', 'fuga', sub{});
+}
+$r-&gt;wait_all_responses;
+printf "Redis.pm:\n%.2f/s\n", $count / (time - $start);
+</code></pre>
+
+<p>}</p>
+
+<p>{</p>
+
+<pre><code>my $r = Redis::hiredis-&gt;new;
+$r-&gt;connect("127.0.0.1", 6379);
+my $start = time;
+for(1..$count) {
+    $r-&gt;append_command('set hoge fuga');
+}
+for(1..$count) {
+    $r-&gt;get_reply();
+}
+printf "Redis::hiredis:\n%.2f/s\n", $count / (time - $start);
+</code></pre>
+
+<p>}</p>
+
+<p>{</p>
+
+<pre><code>my $r = Redis::Fast-&gt;new;
+my $start = time;
+for(1..$count) {
+    $r-&gt;set('hoge', 'fuga', sub{});
+}
+$r-&gt;wait_all_responses;
+printf "Redis::Fast:\n%.2f/s\n", $count / (time - $start);
+</code></pre>
+
+<p>}
+```</p>
+
+<p>大体Redis.pmの4倍速い。でもRedis::hiredisと比べると2割ほど遅い。
+Fastを名乗るのは早すぎた。</p>
+
+<p><code>plain bench
+Redis.pm:
+22588.95/s
+Redis::hiredis:
+105159.88/s
+Redis::Fast:
+81098.01/s
 </code></p>
 
-<p>でも、Redisに何か操作をしたいわけじゃなくて、
-Redisのキーに対して操作をしたいので、
-次のように書けるべきだと思うんです。</p>
-
-<p><code>perl expected.pl
-my $key = key($redis, 'key-name');
-$key-&gt;set('piyopiyo');
-$key-&gt;get();
-</code></p>
-
-<h2>Redis::Hash, Redis::List</h2>
-
-<p><a href="http://search.cpan.org/~melo/Redis/lib/Redis/Hash.pm">Redis::Hash</a>と
-<a href="http://search.cpan.org/~melo/Redis/lib/Redis/List.pm">Redis::List</a>は
-Perlのハッシュや配列と同じ操作で Redis にアクセスできるようにするライブラリ。</p>
-
-<p>``` perl Redis::Hash
-use utf8;
-use warnings;
-use strict;
-use 5.014;</p>
-
-<p>use Redis::Hash;</p>
-
-<p>tie my %my_hash, 'Redis::Hash', 'hash_prefix', (server => 'localhost:6379');</p>
-
-<h1>set hash_prefix:hogehoge piyopiyo</h1>
-
-<h1>set hash_prefix:fugafuga fugufugu</h1>
-
-<p>$my_hash{hogehoge} = 'piyopiyo';
-$my_hash{fugafuga} = 'fugufugu';</p>
-
-<h1>get hash_prefix:hogehoge piyopiyo</h1>
-
-<p>say $my_hash{hogehoge}; # piyopiyo</p>
-
-<h1>keys hash_prefix:*</h1>
-
-<p>say join ',', keys %my_hash; #fugafuga,hogehoge</p>
-
-<h1>keys hash_prefix:*</h1>
-
-<h1>get hash_prefix:fugafuga</h1>
-
-<h1>get hash_prefix:hogehoge</h1>
-
-<p>say join ',', values %my_hash; #fugufugu,piyopiyo</p>
-
-<h1>del hash_prefix:hogehoge</h1>
-
-<p>delete $my_hash{hogehoge};
-```</p>
-
-<p>tie とかよくわかない。
-Perl の黒魔術を見た気がしました。</p>
-
-<p>普通のハッシュや配列に見えるのは面白いけど、
-Redisっぽい機能がまったく使えないのはつらい。
-<code>tied(%my_hash)-&gt;cmd</code> って書けばコマンド発行できるけど、
-それなら最初から直接 <a href="http://search.cpan.org/~melo/Redis/lib/Redis.pm">Redis.pm</a> を
-使えよって話になります。</p>
-
-<p>あと、tie するごとにコネクションを張り直しているようなので、
-たくさんのハッシュやリストを作ると大変なことになりそうです。</p>
-
-<h2>Redis::Client</h2>
-
-<p>これも tie すると、Redis上のデータをハッシュや配列として扱うことができます。
-tie できるのは <a href="http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/String.pm">String</a>,
-<a href="http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/List.pm">List</a>,
-<a href="http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/Hash.pm">Hash</a>,
-<a href="http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/Set.pm">Set</a>,
-<a href="http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/Zset.pm">Zset</a>。
-それぞれがRedisで使えるデータ型に対応している。</p>
-
-<p>``` perl Redis::Client::String
-use utf8;
-use warnings;
-use strict;
-use 5.014;</p>
-
-<p>use Redis::Client;</p>
-
-<p>my $client = Redis::Client->new;
-tie my $str, 'Redis::Client::String', key => 'my_string', client => $client;</p>
-
-<p>$str = 'foo';
-say $str;
-```</p>
-
-<p>ひとつのキーに対してひとつのオブジェクトを割り当てるのは良さげ。
-また、ハッシュ型、セット型、ソート済みセット型といった、Redis特有のデータ型に対応しているのもGood。
-でも、ただストアするだけならこれで十分だけど、もう少し高度な機能も使いたい・・・。</p>
-
-<h2>Tie::Redis</h2>
-
-<p><a href="http://search.cpan.org/~dgl/Tie-Redis/lib/Tie/Redis/Hash.pm">Tie::Redis</a> も
-tie を使ってPerlのデータ構造っぽく扱えるようにするライブラリ。</p>
-
-<p>Redis全体を一つのハッシュとして扱ったり、
-Redisの文字列型、ハッシュ型、リスト型を扱えるみたい。</p>
-
-<h2>Redis::Object</h2>
-
-<p><a href="http://search.cpan.org/~ukautz/Redis-Object/README.pod">Redis::Oject</a>は
-ORM風なRedis用ライブラリ。</p>
-
-<p>``` perl RedisDatabase.pm
-package MyRedisDatabase;</p>
-
-<p>use Moose;
-extends qw/ Redis::Object /;</p>
-
-<p>has tables => (</p>
-
-<pre><code>isa     =&gt; 'ArrayRef[Str]',
-is      =&gt; 'ro',
-default =&gt; sub { [ qw/SomeTable/ ] },
-</code></pre>
-
-<p>);</p>
-
-<p><strong>PACKAGE</strong>->meta->make_immutable;
-```</p>
-
-<p>``` perl RedisDatabase/SomeTable.pm
-package MyRedisDatabase::SomeTable;</p>
-
-<p>use Moose;
-with qw/ Redis::Object::Table /;</p>
-
-<p>has hoge => ( isa => 'Str', is => 'rw', default => 'Something' );</p>
-
-<p><strong>PACKAGE</strong>->meta->make_immutable;
-```</p>
-
-<p>``` perl redis-object.pl
-use utf8;
-use strict;
-use warnings;
-use 5.014;</p>
-
-<p>use MyRedisDatabase;</p>
-
-<h1>init database</h1>
-
-<p>my $db = MyRedisDatabase->new(</p>
-
-<pre><code>server =&gt; 'localhost:6379'
-</code></pre>
-
-<p>);</p>
-
-<h1>create item</h1>
-
-<p>my $item = $db->create( SomeTable => {</p>
-
-<pre><code>hoge =&gt; "Hello",
-</code></pre>
-
-<p>} );</p>
-
-<h1>fetch item by id</h1>
-
-<p>$item = $db->find( SomeTable => $item->id );</p>
-
-<h1>update item</h1>
-
-<p>$item->hoge( "piyo" );
-```</p>
-
-<p>ORMっぽいけど、あんまり複雑な検索はできないらしい。
-ここまでするなら普通にMySQLとORMつかったほうが良さそう。</p>
-
-<h2>まとめ</h2>
-
-<p>みんな tie が大好き。</p>
-
-<p>tie しないのがほしいな・・・。</p>
+<p>Perl API よくわからない。Socket通信まったくわからない。</p>
 ]]></content>
   </entry>
   
