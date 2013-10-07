@@ -4,7 +4,7 @@
   <title><![CDATA[Category: perl | Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/blog/categories/perl/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2013-09-28T02:08:11+09:00</updated>
+  <updated>2013-10-07T22:59:29+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,108 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[ISUCON3の予選に参加してきた]]></title>
+    <link href="http://shogo82148.github.io/blog/2013/10/07/isucon3-qualify/"/>
+    <updated>2013-10-07T13:03:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2013/10/07/isucon3-qualify</id>
+    <content type="html"><![CDATA[<p>こんにちは、いつの間にかチームぽわわ2のメンバーになっていたいっちーです。</p>
+
+<p><a href="https://twitter.com/9re">@9re</a>さんと
+<a href="https://twitter.com/mackee_w">@mackee_w</a>さんとでISUCON3の予選に参加してきました。
+主にアプリの書き換えを担当していたので、やったことを残しておきます。
+チーム全体の方針とか役割分担とかはまこぴー先生の<a href="http://mackee.hatenablog.com/entry/2013/10/06/230412">#isucon 予選でとりあえず10位だった</a>を参照。</p>
+
+<!-- More -->
+
+
+<h2>お題</h2>
+
+<p>gistみたいなWebアプリ。
+<a href="http://shogo82148.github.io/blog/2013/04/13/isucon/">社内ISUCON</a>のときと似たようなお題ですね。
+違いは...</p>
+
+<ul>
+<li>スターは無い</li>
+<li>Recent Postsのサイドバーが無い代わりに、ページングしてたどっていけるページがある</li>
+<li>privateな投稿ができる</li>
+<li>Markdown形式で投稿できて、表示はHTMLでレンダリングされる</li>
+</ul>
+
+
+<p>詳しくは、れもんさんの<a href="http://isucon.net/archives/32853582.html">#isucon 2013年予選問題の解説など</a>を参照。</p>
+
+<h2>やったこと</h2>
+
+<p>一言で言えば、Redisにキャッシュするようにしました。</p>
+
+<h3>RecentをRedisのリストで管理</h3>
+
+<p>Recentの表示で日付順ソートしているのが重たそうだったので、
+公開メモのソート結果をあらかじめRedisのリストに入れておく作戦。</p>
+
+<p>Redisの<code>SORT</code>コマンドが高機能で面白いなーって思ってたので使ってみました。
+リストにはメモのIDだけ入れておいて、メモの実体は別のキーを参照する、なんてことができます。
+このコマンド、<code>SORT</code>って名前なのに「ソートしない」ってオプションあるところがいいですよね！</p>
+
+<p>MySQLがボトルネックになっているのはこれで解消できました。</p>
+
+<h3>bin/markdownを使わない＆レンダリング結果をキャッシュ</h3>
+
+<p>Markdownのレンダリングを外部コマンド叩いてやっていたので、
+<a href="https://metacpan.org/module/Text::Markdown::Discount">Text::Markdown::Discount</a>を使ってレンダリングするように変更。
+qx{hoge}って記法はじめて見ました。Perlってやつはいろんな書き方があってよくわからないです。</p>
+
+<p>Markdownの文法って亜種が結構あるので、レンダラをかえるのはちょっと怖かったんですが、全く問題なし。
+スコアも3000くらい上がってかなり効果がありました。</p>
+
+<p>さらにレンダリング結果をRedisに入れてキャッシュで+1000くらい。</p>
+
+<h3>Recentのレンダリング結果をキャッシュ</h3>
+
+<p>RecentをRedisでさばくようにしたけど、そもそも100要素もあるHTMLのレンダリングそうとう重いはず。
+と、いうわけでここもRedisにキャッシュするようにしました。
+公開メモが投稿されたらRecent/:pageのキャッシュを全部削除。
+Postのたびにキャッシュクリアされるのであんまり効果ないかなーと思っていたけど、わりと効果あったみたい？
+(正確なスコアよく見てなかった)</p>
+
+<h3>Redis::Fast!!</h3>
+
+<p>残り時間も少なくなり時間内にできることも限られれきたので、最後の最後で<a href="https://github.com/shogo82148/Redis-Fast">Redis::Fast</a>を投入。
+これで+1000くらい上がったらしい。(正確なスコアよく見てなかった)</p>
+
+<p>s/Redis/Redis::Fast/ するだけの簡単なお仕事の予定が、githubからのインストールに一番手間取った。
+cpanfileにgitのレポジトリを書くと(非公式だけど)インストールできるよ！ってどこかで見た気がするけどなかなかうまく行かず、
+自分で<code>git clone</code>してそのディレクトリを指定してインストール(したってまこぴー先生が言ってた)。
+(<code>hiredis.h</code>が無い！って叫んでいたから、cartonがsubmoduleをうまく処理できていなかったと予想。
+非公式の機能に頼るの良くないね。)</p>
+
+<h2>できなかったこと</h2>
+
+<ul>
+<li>my.cnf？なにそれ美味しいの？</li>
+<li>SQLクエリをいじる余裕がなかった
+
+<ul>
+<li>Newer/Olderのクエリが残念なのはわかってたけど、結局いじってない</li>
+</ul>
+</li>
+<li>Nginxでキャッシュしたい</li>
+<li>必要なモジュールは事前にCPANにあげておこう。</li>
+</ul>
+
+
+<h2>まとめ</h2>
+
+<p>結果は13192.1点で10位でした。
+特に問題がなければこのまま予選突破できるはず・・・！</p>
+
+<p>ところで、魔王軍が学生枠を制圧していて恐ろしいですね。
+てか、<a href="http://shiro-goma.hatenablog.com/entry/2013/10/07/202913">僕らのチームとの差、500点程度しか無いじゃないですか</a>。怖！！！
+これ以上の侵攻はなんとしてでも食い止めなければ。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Redis::NamespaceのPerl版書いた]]></title>
