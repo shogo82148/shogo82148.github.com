@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2013-10-13T23:30:01+09:00</updated>
+  <updated>2013-10-19T01:13:08+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,116 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Redis::NamespaceとRedis::Keyをリリースしました]]></title>
+    <link href="http://shogo82148.github.io/blog/2013/10/18/redis-namespace-and-redis-key/"/>
+    <updated>2013-10-18T23:21:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2013/10/18/redis-namespace-and-redis-key</id>
+    <content type="html"><![CDATA[<p>こんばんは、最近シングルトン恐怖症になっているいっちーです。
+<a href="https://metacpan.org/release/Redis-Namespace">Redis::Namespace</a>と
+<a href="https://metacpan.org/release/Redis-Key">Redis::Key</a>をリリースしました。</p>
+
+<!-- More -->
+
+
+<h2>Redis::Namespace</h2>
+
+<p>「<a href="http://shogo82148.github.io/blog/2013/09/14/redis-namespace-perl/">Redis::NamespaceのPerl版書いた</a>」
+で紹介したモジュールをCPANizeしました。
+コマンドのキー名に当たる部分に、自動にプレフィックスをつけてくれる賢い奴です。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">Redis</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="nn">Redis::</span><span class="n">Namespace</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$redis</span> <span class="o">=</span> <span class="n">Redis</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">;</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$ns</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">Namespace</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span><span class="n">redis</span> <span class="o">=&gt;</span> <span class="nv">$redis</span><span class="p">,</span> <span class="n">namespace</span> <span class="o">=&gt;</span> <span class="s">&#39;fugu&#39;</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="nv">$ns</span><span class="o">-&gt;</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;foo&#39;</span><span class="p">,</span> <span class="s">&#39;bar&#39;</span><span class="p">);</span>    <span class="c1"># $redis-&gt;set(&#39;fugu:foo&#39;, &#39;bar&#39;);</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$foo</span> <span class="o">=</span> <span class="nv">$ns</span><span class="o">-&gt;</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;foo&#39;</span><span class="p">);</span> <span class="c1"># my $foo = $redis-&gt;get(&#39;fugu:foo&#39;);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>RedisにはKey-Value Storeなんてかっこいい名前が付いているけど、
+結局はシステム全体で使えるグローバル変数なわけです。
+グローバル変数は駆逐するべきです。
+いちいちプレフィックスつけて名前の衝突を回避するなんて人間のやることとは思えません。</p>
+
+<p>せめてモジュールローカルとか、クラスローカルとかある程度スコープを制限したいですよね。
+Redis::Namespaceを使えば簡単に実現できます。</p>
+
+<h2>Redis::Key</h2>
+
+<p>Redis::Key は Redisのキーの簡単なラッパークラスです。
+毎回毎回「接続先のRedisサーバ」と「キーの名前」を指定するのは面倒です。
+この2つをセットにして、一つのオブジェクトとして扱うことができます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">Redis</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="nn">Redis::</span><span class="n">Key</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$redis</span> <span class="o">=</span> <span class="n">Redis</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">;</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$key</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">Key</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span><span class="n">redis</span> <span class="o">=&gt;</span> <span class="nv">$redis</span><span class="p">,</span> <span class="n">key</span> <span class="o">=&gt;</span> <span class="s">&#39;hoge&#39;</span><span class="p">);</span>
+</span><span class='line'><span class="nv">$key</span><span class="o">-&gt;</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;fugu&#39;</span><span class="p">);</span> <span class="c1"># $redis-&gt;set(&#39;hoge&#39;, &#39;fuga&#39;);</span>
+</span><span class='line'><span class="nv">$key</span><span class="o">-&gt;</span><span class="n">get</span><span class="p">;</span>         <span class="c1"># $redis-&gt;get(&#39;hoge&#39;);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>普通に使っている限りは他のキーにアクセスすることができなくなるので、
+Redis::Keyのオブジェクトを他のクラスに渡す、とかしても安心です。</p>
+
+<p>あと、キーの名前の一部をプレースホルダーにして、あとから値を埋め込むこともできます。
+キー名の一部に日付やIDを埋め込むっていうことが多いのでつけてみました。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">my</span> <span class="nv">$user_keys</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">Key</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span><span class="n">redis</span> <span class="o">=&gt;</span> <span class="nv">$redis</span><span class="p">,</span> <span class="n">key</span> <span class="o">=&gt;</span> <span class="s">&#39;user:{id}&#39;</span><span class="p">,</span> <span class="n">need_bind</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">);</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$user</span> <span class="o">=</span> <span class="nv">$user_keys</span><span class="o">-&gt;</span><span class="nb">bind</span><span class="p">(</span><span class="n">id</span> <span class="o">=&gt;</span> <span class="mi">1001</span><span class="p">);</span>
+</span><span class='line'><span class="nv">$user</span><span class="o">-&gt;</span><span class="n">get</span><span class="p">;</span>  <span class="c1"># $redis-&gt;get(&#39;user:1001&#39;);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Key-Value Store はお手軽ではありますが、キーの名前に一定のルールを設けてあげないと
+さすがに管理できなくなります。
+Redis::Key を使ってルールを書くのが楽になるといいですね。</p>
+
+<h2>Redis::Fast と Redis::Namespace と Redis::Key を組み合わせる</h2>
+
+<p>Redis::Fast と Redis::Namespace は Redis.pm 互換なので組み合わせて使えます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">my</span> <span class="nv">$redis</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">Fast</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">;</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$ns1</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">Namespace</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span><span class="n">redis</span> <span class="o">=&gt;</span> <span class="nv">$redis</span><span class="p">,</span> <span class="n">namespace</span> <span class="o">=&gt;</span> <span class="s">&#39;hoge&#39;</span><span class="p">);</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$ns2</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">Namespace</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span><span class="n">redis</span> <span class="o">=&gt;</span> <span class="nv">$ns1</span><span class="p">,</span> <span class="n">namespace</span> <span class="o">=&gt;</span> <span class="s">&#39;fuga&#39;</span><span class="p">);</span> <span class="c1"># Redis::Namespaceのネストもできる</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$key</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">Key</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span><span class="n">redis</span> <span class="o">=&gt;</span> <span class="nv">$ns2</span><span class="p">,</span> <span class="n">key</span> <span class="o">=&gt;</span> <span class="s">&#39;key&#39;</span><span class="p">);</span> <span class="c1"># hoge:fuga:key という名前になる</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>なんだか最近Redis関連のモジュールばかり書いてますが、
+なんでもRedisに突っ込めばいいと思っているわけではありません。
+Redisを使ったコードを読んでいたら目眩がしたからです。
+ISUCON3の予選で使ったのはRedisを使いたかったらというより、
+Redis::Fastを使いたかったからです。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Redis::Fastをcpanize＆アップデートしました]]></title>
@@ -2946,115 +3056,6 @@ WeveZutaZutaJSではこの配列を切り貼りしてずたずたにしていま
 </span><span class='line'><span class="p">};</span>
 </span><span class='line'><span class="nx">node</span><span class="p">.</span><span class="nx">connect</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nx">destination</span><span class="p">);</span>
 </span></code></pre></td></tr></table></div></figure>
-
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[TinySegmenterをLaTeXに移植してみた]]></title>
-    <link href="http://shogo82148.github.io/blog/2012/12/16/tinysegmenter-for-tex/"/>
-    <updated>2012-12-16T13:11:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2012/12/16/tinysegmenter-for-tex</id>
-    <content type="html"><![CDATA[<p>この記事は<a href="http://atnd.org/events/34318">TeX &amp; LaTeX Advent Calendar</a>の傘下記事です．
-15日はk16.shikanoさんの「<a href="http://note.golden-lucky.net/2012/12/tex.html">TeX がむかついたので実装したけど挫折してる話</a>」,
-17日は@egtraさんの「<a href="http://dev.activebasic.com/egtra/2012/12/18/522/">LCDF TypetoolsでOpenTypeフォントを使う(DVIPDFMXで)</a>」です．</p>
-
-<p>neruko3114が参加しているのを見てなんだか楽しそうだったで参加してみました．
-とはいってもネタも思いつかなったので，過去に作ったものをTeXに移植してみました．
-ターゲットは<a href="http://chasen.org/~taku/software/TinySegmenter/">TinySegmenter</a>．
-以前作った<a href="https://github.com/shogo82148/TinySegmenterMaker">TinySegmenterMaker</a>でLaTeXを出力できるようになったよ！</p>
-
-<!-- More -->
-
-
-<h2>使ってみる</h2>
-
-<p><a href="https://github.com/shogo82148/TinySegmenterMaker">TinySegmenterMaker</a>のレポジトリをダウンロードするなり<code>git clone</code>するなりして
-落としてきます．
-レポジトリに入っているのはモデルファイルとスクリプトだけです．
-これらを使ってTeXのスタイルファイルを作ります．</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span><span class="nb">cd</span> /path/to/TinySegmenterMaker/
-</span><span class='line'><span class="nv">$ </span>./maker tex &lt; RWCP.model
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>カレントディレクトリにtinysegmenter.styができます．
-TeX から見えるところにおいておきましょう．
-これを使うソースコードは次のようになります．</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class='tex'><span class='line'><span class="k">\documentclass</span><span class="nb">{</span>jarticle<span class="nb">}</span>
-</span><span class='line'><span class="k">\usepackage</span><span class="nb">{</span>tinysegmenter<span class="nb">}</span>
-</span><span class='line'><span class="k">\begin</span><span class="nb">{</span>document<span class="nb">}</span>
-</span><span class='line'><span class="k">\TinySegmenter</span><span class="nb">{</span>-<span class="nb">}{</span>私の名前は中野です<span class="nb">}</span>
-</span><span class='line'><span class="k">\end</span><span class="nb">{</span>document<span class="nb">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>platexで処理するとこんな感じに表示されるはず．</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>私-の-名前-は-中野-です</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>仕組み</h2>
-
-<p>TinySegmeneterは元の文章の一部を切り取ってハッシュに入れる動作をしている．
-でも，LaTeXにはハッシュみたいなデータ構造がないのでコントロールシーケンスで代用．
-<code>\@ifundefined</code>で有無を確認し，<code>\csname\endcsname</code>で置き換え．
-コントロールシーケンスの一部に日本語を使わないといけないので，日本語LaTeX環境でしか動かない．
-ただ，一部句点などの扱いが違う？よくわからない．</p>
-
-<p>あとは，文字種の取得が必要なんだけど，ここでも同じことをしてます．
-すべてのアルファベット・ひらがな・カタカナ・数字について，その文字種をベタ書き．
-それ以外は全部漢字扱い．
-そのため，それ以外の文字を使うとオリジナルとは違う結果になるかも．</p>
-
-<p>最後は足し算．これはカウンタを使えば簡単ですね．</p>
-
-<h2>応用編</h2>
-
-<p>TinySegmenterMakerでは自由にモデルを差し替えることができます．
-以前JavaScript版のTinySegmenterを使って，
-<a href="http://shogo82148.github.com/blog/2012/12/05/kikoemasuka/">聞こえますか…自動生成…してみた…よ…</a>
-ということをしてみました．
-LaTeXだってできるはず．</p>
-
-<p><a href="https://github.com/shogo82148/kikoemasuka">聞こえますか…</a>
-に心に呼びかけるためのモデルファイルが含まれています．
-これをダウンロードして読み込ませます．</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>./maker tex &lt; model
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>これを自分のドキュメントに読み込ませてみます．</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class='tex'><span class='line'><span class="k">\documentclass</span><span class="nb">{</span>jarticle<span class="nb">}</span>
-</span><span class='line'><span class="k">\usepackage</span><span class="nb">{</span>tinysegmenter<span class="nb">}</span>
-</span><span class='line'><span class="k">\begin</span><span class="nb">{</span>document<span class="nb">}</span>
-</span><span class='line'>(…<span class="k">\TinySegmenter</span><span class="nb">{</span>…<span class="nb">}{</span>聞こえますか聞こえますかあなたの心に直接語りかけています<span class="nb">}</span>…)
-</span><span class='line'><span class="k">\end</span><span class="nb">{</span>document<span class="nb">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>私の声が聞こえましたか・・・？</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>(…聞こえますか…聞こえますか…あなたの…心に…直接語りかけています…)</span></code></pre></td></tr></table></div></figure>
 
 ]]></content>
   </entry>

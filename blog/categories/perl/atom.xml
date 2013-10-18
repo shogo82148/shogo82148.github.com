@@ -4,7 +4,7 @@
   <title><![CDATA[Category: perl | Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/blog/categories/perl/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2013-10-13T23:30:01+09:00</updated>
+  <updated>2013-10-19T01:13:08+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,94 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Redis::NamespaceとRedis::Keyをリリースしました]]></title>
+    <link href="http://shogo82148.github.io/blog/2013/10/18/redis-namespace-and-redis-key/"/>
+    <updated>2013-10-18T23:21:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2013/10/18/redis-namespace-and-redis-key</id>
+    <content type="html"><![CDATA[<p>こんばんは、最近シングルトン恐怖症になっているいっちーです。
+<a href="https://metacpan.org/release/Redis-Namespace">Redis::Namespace</a>と
+<a href="https://metacpan.org/release/Redis-Key">Redis::Key</a>をリリースしました。</p>
+
+<!-- More -->
+
+
+<h2>Redis::Namespace</h2>
+
+<p>「<a href="http://shogo82148.github.io/blog/2013/09/14/redis-namespace-perl/">Redis::NamespaceのPerl版書いた</a>」
+で紹介したモジュールをCPANizeしました。
+コマンドのキー名に当たる部分に、自動にプレフィックスをつけてくれる賢い奴です。</p>
+
+<p>```perl
+use Redis;
+use Redis::Namespace;</p>
+
+<p>my $redis = Redis->new;
+my $ns = Redis::Namespace->new(redis => $redis, namespace => 'fugu');</p>
+
+<p>$ns->set('foo', 'bar');    # $redis->set('fugu:foo', 'bar');
+my $foo = $ns->get('foo'); # my $foo = $redis->get('fugu:foo');
+```</p>
+
+<p>RedisにはKey-Value Storeなんてかっこいい名前が付いているけど、
+結局はシステム全体で使えるグローバル変数なわけです。
+グローバル変数は駆逐するべきです。
+いちいちプレフィックスつけて名前の衝突を回避するなんて人間のやることとは思えません。</p>
+
+<p>せめてモジュールローカルとか、クラスローカルとかある程度スコープを制限したいですよね。
+Redis::Namespaceを使えば簡単に実現できます。</p>
+
+<h2>Redis::Key</h2>
+
+<p>Redis::Key は Redisのキーの簡単なラッパークラスです。
+毎回毎回「接続先のRedisサーバ」と「キーの名前」を指定するのは面倒です。
+この2つをセットにして、一つのオブジェクトとして扱うことができます。</p>
+
+<p>```perl
+use Redis;
+use Redis::Key;</p>
+
+<p>my $redis = Redis->new;
+my $key = Redis::Key->new(redis => $redis, key => 'hoge');
+$key->set('fugu'); # $redis->set('hoge', 'fuga');
+$key->get;         # $redis->get('hoge');
+```</p>
+
+<p>普通に使っている限りは他のキーにアクセスすることができなくなるので、
+Redis::Keyのオブジェクトを他のクラスに渡す、とかしても安心です。</p>
+
+<p>あと、キーの名前の一部をプレースホルダーにして、あとから値を埋め込むこともできます。
+キー名の一部に日付やIDを埋め込むっていうことが多いのでつけてみました。</p>
+
+<p><code>perl
+my $user_keys = Redis::Key-&gt;new(redis =&gt; $redis, key =&gt; 'user:{id}', need_bind =&gt; 1);
+my $user = $user_keys-&gt;bind(id =&gt; 1001);
+$user-&gt;get;  # $redis-&gt;get('user:1001');
+</code></p>
+
+<p>Key-Value Store はお手軽ではありますが、キーの名前に一定のルールを設けてあげないと
+さすがに管理できなくなります。
+Redis::Key を使ってルールを書くのが楽になるといいですね。</p>
+
+<h2>Redis::Fast と Redis::Namespace と Redis::Key を組み合わせる</h2>
+
+<p>Redis::Fast と Redis::Namespace は Redis.pm 互換なので組み合わせて使えます。</p>
+
+<p><code>perl
+my $redis = Redis::Fast-&gt;new;
+my $ns1 = Redis::Namespace-&gt;new(redis =&gt; $redis, namespace =&gt; 'hoge');
+my $ns2 = Redis::Namespace-&gt;new(redis =&gt; $ns1, namespace =&gt; 'fuga'); # Redis::Namespaceのネストもできる
+my $key = Redis::Key-&gt;new(redis =&gt; $ns2, key =&gt; 'key'); # hoge:fuga:key という名前になる
+</code></p>
+
+<p>なんだか最近Redis関連のモジュールばかり書いてますが、
+なんでもRedisに突っ込めばいいと思っているわけではありません。
+Redisを使ったコードを読んでいたら目眩がしたからです。
+ISUCON3の予選で使ったのはRedisを使いたかったらというより、
+Redis::Fastを使いたかったからです。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Redis::Fastをcpanize＆アップデートしました]]></title>
@@ -388,303 +476,6 @@ use 5.014;</p>
 <p>みんな tie が大好き。</p>
 
 <p>tie しないのがほしいな・・・。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[ランダム抽出アルゴリズムについて考える]]></title>
-    <link href="http://shogo82148.github.io/blog/2013/07/13/random-sample/"/>
-    <updated>2013-07-13T22:13:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2013/07/13/random-sample</id>
-    <content type="html"><![CDATA[<p>数日前に社内IRCで「スマートな非復元抽出の方法はないか」と話題になったので、
-ランダムサンプリングのアルゴリズムについて調べたり考えたりしてみた。</p>
-
-<!-- More -->
-
-
-<h2>復元抽出</h2>
-
-<p>非復元抽出の手法って調べてもなかなか出てこない・・・。
-ひとまず、復元抽出についてまとめてみましょう。</p>
-
-<h3>線形検索</h3>
-
-<p>一番簡単な実装方法。
-どの区間に入るかを線形検索して求める。
-選択肢の個数nとすると計算量はO(n)。</p>
-
-<p>``` perl linear_search_method.pl
-use strict;
-use warnings;
-use List::Util qw(sum);</p>
-
-<p>sub linear_search_method {</p>
-
-<pre><code>my $weights = shift;
-my $num = shift;
-my $sum = sum @$weights;
-my $length = @$weights;
-my @a;
-
-for (1..$num) {
-    my $r = rand($sum);
-    for my $i(0..$length-1) {
-        $r -= $weights-&gt;[$i];
-        if($r &lt; 0) {
-            push @a, $i;
-            last;
-        }
-    }
-}
-return \@a;
-</code></pre>
-
-<p>}</p>
-
-<p>print join ', ', @{linear_search_method [1,2,3], 100};
-```</p>
-
-<h3>バイナリサーチ</h3>
-
-<p>あらかじめ累積分布表を作っておき、どの区間に入るかをバイナリサーチ。
-準備にO(n)、選択に O(log n)かかる。</p>
-
-<p>``` perl binary_search_method.pl
-use strict;
-use warnings;
-use List::Util qw(sum);</p>
-
-<p>sub binary_search_method {</p>
-
-<pre><code>my $weights = shift;
-my $num = shift;
-my $length = @$weights;
-my @a;
-my @b;
-
-my $sum = 0;
-for my $i(@$weights) {
-    push @a, $sum;
-    $sum += $i;
-}
-push @a, $sum;
-
-for (1..$num) {
-    my $r = rand($sum);
-    my ($l, $h) = (0, $length + 1);
-    while($h - $l &gt; 1) {
-        my $i = ($l + $h) &gt;&gt; 1;
-        if($r &lt; $a[$i]) {
-            $h = $i;
-        } else {
-            $l = $i;
-        }
-    }
-    push @b, $l;
-}
-return \@b;
-</code></pre>
-
-<p>}</p>
-
-<p>print join ', ', @{binary_search_method [1,2,3], 100};
-```</p>
-
-<h3>Walker's alias method</h3>
-
-<p>今回調べて初めて知ったアルゴリズム。
-準備にO(n)、ランダム選択はなんと定数時間O(1)でできる。</p>
-
-<p>``` perl walers_alias_method.pl
-use strict;
-use warnings;
-use List::Util qw(sum);</p>
-
-<p>sub walkers_alias_method {</p>
-
-<pre><code>my $weights = shift;
-my $num = shift;
-my $sum = sum @$weights;
-my $length = @$weights;
-
-my @p = map { $_ / $sum * $length} @$weights;
-my @a = (0..$length-1);
-
-my ($h, $l) = (0, $length - 1);
-my @hl;
-for my $i(0..$length-1) {
-    if ( $p[$i] &gt;= 1) {
-        $hl[$h++] = $i;
-    } else {
-        $hl[$l--] = $i;
-    }
-}
-
-while($h != 0 &amp;&amp; $l != $length - 1) {
-    my ($j, $k) = @hl[$l+1, $h-1];
-    $a[$j] = $k;
-    $p[$k] += $p[$j] - 1;
-    $l++;
-    if ( $p[$k] &lt; 1 ) {
-        $hl[$l--] = $k;
-        $h--;
-    }
-}
-
-return [map {
-    my $r = rand($length);
-    my $k = int($r);
-    $r -= $k;
-    $r &lt; $p[$k] ? $k : $a[$k];
-} 1..$num];
-</code></pre>
-
-<p>}</p>
-
-<p>print join ', ', @{walkers_alias_method [1,2,3], 100};
-```</p>
-
-<h2>非復元抽出</h2>
-
-<p>復元抽出のアルゴリズムを応用して、非復元抽出について考えてみましょう。
-一度出たものが2回でないよう、出たものの重みを0にします。</p>
-
-<h3>線形検索</h3>
-
-<p>線形検索の場合は、重みリストをほぼそのまま使っているので、更新は簡単。
-一度出たものの重みを0にして、総和を更新するだけ。</p>
-
-<p>``` perl linear_method.pl
-use strict;
-use warnings;
-use List::Util qw(sum);</p>
-
-<p>sub linear_method {</p>
-
-<pre><code>my $weights = shift;
-my $num = shift;
-my $sum = sum @$weights;
-my $length = @$weights;
-my @w = @$weights;
-my @a;
-
-for (1..$num) {
-    my $r = rand($sum);
-    for my $i(0..$length-1) {
-        $r -= $w[$i];
-        if($r &lt; 0) {
-            push @a, $i;
-
-             # 一度出たものの重みを0にする
-            $sum -= $w[$i];
-            $w[$i] = 0;
-            last;
-        }
-    }
-}
-return \@a;
-</code></pre>
-
-<p>}</p>
-
-<p>print join ',', linear_method([1 .. 100000], 500);
-```</p>
-
-<h3>二分木</h3>
-
-<p>バイナリサーチでは累積分布表を作成したけど、
-これの更新にはO(n)かかってしまうのでバイナリサーチの意味がなくなってしまう。
-そこで重みを二分木を使って管理することで、O(log n)で重みの更新ができる。</p>
-
-<p>``` perl tree.pl
-use strict;
-use warnings;
-use List::Util qw(sum);</p>
-
-<p>sub binary_search_method {</p>
-
-<pre><code>my $weights = shift;
-my $num = shift;
-my $length = @$weights;
-
-# 二分木を構築
-my @left_weight = (0) x ($length * 2);
-my @right_weight = ((0) x $length, @$weights);
-for (my $i = $length-1; $i&gt;0; --$i) {
-    $left_weight[$i] = $left_weight[$i*2] + $right_weight[$i*2];
-    $right_weight[$i] = $left_weight[$i*2+1] + $right_weight[$i*2+1];
-}
-
-my @a;
-for (1..$num) {
-    # 二分木から検索
-    my $i = 1;
-    my $r = rand($left_weight[$i] + $right_weight[$i]);
-    while($i &lt; $length) {
-        if($r &lt; $left_weight[$i]) {
-            $i = $i * 2;
-        } else {
-            $r -= $left_weight[$i];
-            $i = $i * 2 + 1;
-        }
-    }
-    push @a, $i - $length;
-
-    # 木を更新
-    my $w = $weights-&gt;[$i-$length];
-    while($i &gt; 0) {
-        if($i % 2 == 0) {
-            $left_weight[$i&gt;&gt;1] -= $w;
-        } else {
-            $right_weight[$i&gt;&gt;1] -= $w;
-        }
-        $i &gt;&gt;= 1;
-    }
-}
-
-return \@a;
-</code></pre>
-
-<p>}</p>
-
-<p>print join ',', binary_search_method([1..100000], 500);
-```</p>
-
-<h2>その他</h2>
-
-<p>Walker's alias method でも更新法を考えたけど、
-テーブルを一から再生成する以外にいい方法が思いつかない。</p>
-
-<p>抽出が高速であるという特徴を利用して、
-同じ物が出たらもう一度実行するというのが手っ取り早そう。
-Walker's alias method が必要なときは n が十分に大きいはずなので、
-重複が起こる確率は小さく、これで十分なきがする。</p>
-
-<h2>まとめ</h2>
-
-<table>
-<tr>
-  <th>手法</th><th>準備</th><th>抽出</th><th>重み更新</th>
-</tr>
-<tr>
-  <td>線形検索</td><td>O(n)</td><td>O(n)</td><td>O(1)</td>
-</tr>
-<tr>
-  <td>バイナリサーチ</td><td>O(n)</td><td>O(log n)</td><td>O(log n)</td>
-</tr>
-<tr>
-  <td>Walker's alias</td><td>O(n)</td><td>O(1)</td><td>O(n)</td>
-</tr>
-</table>
-
-
-<h2>参考</h2>
-
-<ul>
-<li><a href="http://d.hatena.ne.jp/koiti_yano/20070826/p1">比較的高速な復元抽出アルゴリズム</a></li>
-<li><a href="http://tolstoy.newcastle.edu.au/R/devel/05/06/1403.html">efficiency of sample() with prob</a></li>
-</ul>
-
 ]]></content>
   </entry>
   
