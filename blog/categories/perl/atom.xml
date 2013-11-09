@@ -4,7 +4,7 @@
   <title><![CDATA[Category: perl | Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/blog/categories/perl/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2013-10-30T23:55:48+09:00</updated>
+  <updated>2013-11-10T01:26:48+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,114 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[ISUCON3の本戦に参加してきた]]></title>
+    <link href="http://shogo82148.github.io/blog/2013/11/09/isucon3/"/>
+    <updated>2013-11-09T23:58:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2013/11/09/isucon3</id>
+    <content type="html"><![CDATA[<p><a href="http://shogo82148.github.io/blog/2013/10/07/isucon3-qualify/">ISUCON3の予選</a>を何とか通過し、
+本戦へと参戦してきました。</p>
+
+<p>大会中の方針とか考えたこととかメモ。</p>
+
+<h2>お題</h2>
+
+<ul>
+<li>Tw○tter--likeな画像投稿サービス
+
+<ul>
+<li>ユーザをフォローできる</li>
+<li>フォローしたユーザが画像を投稿すると、タイムラインに画像が流れる</li>
+<li>公開範囲を全員に公開・フォロワーのみに公開・自分だけに公開から選べる</li>
+</ul>
+</li>
+<li>タイムラインはロングポーリングを使ってリアルタイム反映
+
+<ul>
+<li>JSON-APIが用意されていて、Javascriptから叩く</li>
+</ul>
+</li>
+<li>使用できるサーバは5台</li>
+</ul>
+
+
+<p>画像を扱うお題と聞いて、会場がざわめきました。</p>
+
+<h2>MySQLのクエリを見てみる</h2>
+
+<p>開始直後、鍵を用意したり、gitのレポジトリを立てたりなんだりした後、
+一回目の計測。</p>
+
+<p>topコマンドで走っているプロセスを見ていると、大量のconvertが！！
+プロセス名とお題から考えるに、こいつら確実にImage Magickだ・・・。
+CPUのほとんどが画像の変換にくわれていたので、
+まずは「どこかでキャッシュする」作戦をとることに。
+キャッシュするならフロントに近いほうがいいだろうということで、
+フロントのnginxでキャッシュする作戦をとることにしました。</p>
+
+<p>僕はnginxがconvertを駆逐してくれると信じて、MySQLに投げているクエリを中心にPerlのコードを見てました。
+役割分担はこんな感じ。</p>
+
+<ul>
+<li>サーバの設定とか(@mackee_wさん)</li>
+<li>nginxでキャッシュする設定(@9reさん)</li>
+<li>コード読む、主にMySQLに投げてるクエリとか(@shogo82148)</li>
+</ul>
+
+
+<p>毎回、ひどいクエリが仕込まれているようなイメージがあったけど、
+今回はそこまでひどくない。
+クエリチューニング全然効果なさそうと判断して、次の作戦を考えることにしました。</p>
+
+<h2>No Image Magick, use Imager!</h2>
+
+<p>やっぱり一番のボトルネックは画像変換。
+nginxでキャッシュするとはいえ軽いほうがいいよね、ということで、
+外部プロセスで実行している画像変換をImmagerを使ってPerlと同じプロセスでやる作戦。</p>
+
+<p>Imagerに置き換え後ベンチにかけたら、若干スコアが・・・上がった・・・ような・・・？
+しかし、画像が変化していると怒られて、スコアは無効。
+画像エラーを修正するコストと、スコアの上がり具合を見て、Image Magickのままにすることにしました。</p>
+
+<p>予選でも同じように外部プロセス起動している部分をPerlのライブラリにしたけど、
+その時はあっさり動いた。
+あれは外部プロセス起動をやめたらスコア上がると思い込ませるための布石だったんだ・・・。
+(今回の場合、プロセスの起動より画像の変換のほうが重いので、スコアが上がらないのは当たり前)</p>
+
+<h2>いろいろ諦めてPerl側でファイルキャッシュ</h2>
+
+<p>Imagerはテストを通らず、nginxの設定キャッシュ設定も上手く動作しなかったので、
+Perlでファイルキャッシュする方針に変更。
+convertの結果にmvで適当な場所にコピーして保存。
+これだけでスコアが5倍くらいに跳ね上がり、一気に上位に浮上！
+最初からやっておくべきだった・・・。
+もうちょっと早ければ特別賞もらえたかもしれないのに。</p>
+
+<h2>rsync! rsync!</h2>
+
+<p>ファイルキャッシュの作業をやっている間に、@mackee_wさんがnfsの設定をやってくれたので、
+アップロードされたファイルやキャッシュファイルの保存先をnfsに変更。</p>
+
+<p>あとは物量作戦でいくしかないだろうということで、rsyncで他のサーバにコピーして調整を繰り返してた。
+(並行してnginxのキャッシュ設定にも再チャレンジしてたけど、nginx力が足りなかった)</p>
+
+<h2>最終結果</h2>
+
+<p>テストFAILした!! No Score!!</p>
+
+<p>なんかこんなの前もあった！</p>
+
+<h2>反省点</h2>
+
+<ul>
+<li>画像変換をGETでやってたけど、POSTでやったほうがよかったかも</li>
+<li>nginxについて勉強しよう</li>
+<li>nfsについて勉強しよう</li>
+</ul>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Redis::NamespaceとRedis::Keyをリリースしました]]></title>
@@ -269,213 +377,6 @@ my $foo = $ns->get('foo'); # my $foo = $redis->get('fugu:foo');
 キー名の管理が少し楽になると思います。</p>
 
 <p>でも、flushdb とか flushall すると全部消えるので気をつけてね！</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Perl の Redis ライブラリを調べた]]></title>
-    <link href="http://shogo82148.github.io/blog/2013/08/24/perl-redis-libraries/"/>
-    <updated>2013-08-24T17:51:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2013/08/24/perl-redis-libraries</id>
-    <content type="html"><![CDATA[<p>最近<a href="http://redis.io/">Redis</a> を使ったコードを書くようになったのですが、
-キー名を毎回指定するのがだるいです。
-Ruby には <a href="https://github.com/nateware/redis-objects">redis-objects</a> というのがあって、
-Redisのキーをオブジェクトとして扱うことができるようです。
-きっと、Perl にも似たようなのあるだろ、って思って調べてみました。</p>
-
-<!-- More -->
-
-
-<h2>ほしいもの</h2>
-
-<p>低レベルなRedisのライブラリはたいていメソッドとRedisのコマンドが一対一対応していて、
-次のようなコードになると思います。</p>
-
-<p><code>perl hogehoge.pl
-$redis-&gt;set('key-name', 'piyopiyo');
-$redis-&gt;get('key_name');
-</code></p>
-
-<p>でも、Redisに何か操作をしたいわけじゃなくて、
-Redisのキーに対して操作をしたいので、
-次のように書けるべきだと思うんです。</p>
-
-<p><code>perl expected.pl
-my $key = key($redis, 'key-name');
-$key-&gt;set('piyopiyo');
-$key-&gt;get();
-</code></p>
-
-<h2>Redis::Hash, Redis::List</h2>
-
-<p><a href="http://search.cpan.org/~melo/Redis/lib/Redis/Hash.pm">Redis::Hash</a>と
-<a href="http://search.cpan.org/~melo/Redis/lib/Redis/List.pm">Redis::List</a>は
-Perlのハッシュや配列と同じ操作で Redis にアクセスできるようにするライブラリ。</p>
-
-<p>``` perl Redis::Hash
-use utf8;
-use warnings;
-use strict;
-use 5.014;</p>
-
-<p>use Redis::Hash;</p>
-
-<p>tie my %my_hash, 'Redis::Hash', 'hash_prefix', (server => 'localhost:6379');</p>
-
-<h1>set hash_prefix:hogehoge piyopiyo</h1>
-
-<h1>set hash_prefix:fugafuga fugufugu</h1>
-
-<p>$my_hash{hogehoge} = 'piyopiyo';
-$my_hash{fugafuga} = 'fugufugu';</p>
-
-<h1>get hash_prefix:hogehoge piyopiyo</h1>
-
-<p>say $my_hash{hogehoge}; # piyopiyo</p>
-
-<h1>keys hash_prefix:*</h1>
-
-<p>say join ',', keys %my_hash; #fugafuga,hogehoge</p>
-
-<h1>keys hash_prefix:*</h1>
-
-<h1>get hash_prefix:fugafuga</h1>
-
-<h1>get hash_prefix:hogehoge</h1>
-
-<p>say join ',', values %my_hash; #fugufugu,piyopiyo</p>
-
-<h1>del hash_prefix:hogehoge</h1>
-
-<p>delete $my_hash{hogehoge};
-```</p>
-
-<p>tie とかよくわかない。
-Perl の黒魔術を見た気がしました。</p>
-
-<p>普通のハッシュや配列に見えるのは面白いけど、
-Redisっぽい機能がまったく使えないのはつらい。
-<code>tied(%my_hash)-&gt;cmd</code> って書けばコマンド発行できるけど、
-それなら最初から直接 <a href="http://search.cpan.org/~melo/Redis/lib/Redis.pm">Redis.pm</a> を
-使えよって話になります。</p>
-
-<p>あと、tie するごとにコネクションを張り直しているようなので、
-たくさんのハッシュやリストを作ると大変なことになりそうです。</p>
-
-<h2>Redis::Client</h2>
-
-<p>これも tie すると、Redis上のデータをハッシュや配列として扱うことができます。
-tie できるのは <a href="http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/String.pm">String</a>,
-<a href="http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/List.pm">List</a>,
-<a href="http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/Hash.pm">Hash</a>,
-<a href="http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/Set.pm">Set</a>,
-<a href="http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/Zset.pm">Zset</a>。
-それぞれがRedisで使えるデータ型に対応している。</p>
-
-<p>``` perl Redis::Client::String
-use utf8;
-use warnings;
-use strict;
-use 5.014;</p>
-
-<p>use Redis::Client;</p>
-
-<p>my $client = Redis::Client->new;
-tie my $str, 'Redis::Client::String', key => 'my_string', client => $client;</p>
-
-<p>$str = 'foo';
-say $str;
-```</p>
-
-<p>ひとつのキーに対してひとつのオブジェクトを割り当てるのは良さげ。
-また、ハッシュ型、セット型、ソート済みセット型といった、Redis特有のデータ型に対応しているのもGood。
-でも、ただストアするだけならこれで十分だけど、もう少し高度な機能も使いたい・・・。</p>
-
-<h2>Tie::Redis</h2>
-
-<p><a href="http://search.cpan.org/~dgl/Tie-Redis/lib/Tie/Redis/Hash.pm">Tie::Redis</a> も
-tie を使ってPerlのデータ構造っぽく扱えるようにするライブラリ。</p>
-
-<p>Redis全体を一つのハッシュとして扱ったり、
-Redisの文字列型、ハッシュ型、リスト型を扱えるみたい。</p>
-
-<h2>Redis::Object</h2>
-
-<p><a href="http://search.cpan.org/~ukautz/Redis-Object/README.pod">Redis::Oject</a>は
-ORM風なRedis用ライブラリ。</p>
-
-<p>``` perl RedisDatabase.pm
-package MyRedisDatabase;</p>
-
-<p>use Moose;
-extends qw/ Redis::Object /;</p>
-
-<p>has tables => (</p>
-
-<pre><code>isa     =&gt; 'ArrayRef[Str]',
-is      =&gt; 'ro',
-default =&gt; sub { [ qw/SomeTable/ ] },
-</code></pre>
-
-<p>);</p>
-
-<p><strong>PACKAGE</strong>->meta->make_immutable;
-```</p>
-
-<p>``` perl RedisDatabase/SomeTable.pm
-package MyRedisDatabase::SomeTable;</p>
-
-<p>use Moose;
-with qw/ Redis::Object::Table /;</p>
-
-<p>has hoge => ( isa => 'Str', is => 'rw', default => 'Something' );</p>
-
-<p><strong>PACKAGE</strong>->meta->make_immutable;
-```</p>
-
-<p>``` perl redis-object.pl
-use utf8;
-use strict;
-use warnings;
-use 5.014;</p>
-
-<p>use MyRedisDatabase;</p>
-
-<h1>init database</h1>
-
-<p>my $db = MyRedisDatabase->new(</p>
-
-<pre><code>server =&gt; 'localhost:6379'
-</code></pre>
-
-<p>);</p>
-
-<h1>create item</h1>
-
-<p>my $item = $db->create( SomeTable => {</p>
-
-<pre><code>hoge =&gt; "Hello",
-</code></pre>
-
-<p>} );</p>
-
-<h1>fetch item by id</h1>
-
-<p>$item = $db->find( SomeTable => $item->id );</p>
-
-<h1>update item</h1>
-
-<p>$item->hoge( "piyo" );
-```</p>
-
-<p>ORMっぽいけど、あんまり複雑な検索はできないらしい。
-ここまでするなら普通にMySQLとORMつかったほうが良さそう。</p>
-
-<h2>まとめ</h2>
-
-<p>みんな tie が大好き。</p>
-
-<p>tie しないのがほしいな・・・。</p>
 ]]></content>
   </entry>
   
