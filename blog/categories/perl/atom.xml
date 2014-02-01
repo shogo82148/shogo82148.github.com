@@ -4,7 +4,7 @@
   <title><![CDATA[Category: perl | Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/blog/categories/perl/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2013-12-21T22:58:18+09:00</updated>
+  <updated>2014-02-01T22:58:55+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,78 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Redis::Fast 0.06 released]]></title>
+    <link href="http://shogo82148.github.io/blog/2014/02/01/redis-fast-0-dot-06-released/"/>
+    <updated>2014-02-01T21:36:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2014/02/01/redis-fast-0-dot-06-released</id>
+    <content type="html"><![CDATA[<p>こんにちは、もうすぐ17才と100ヶ月を迎えるいっちーです。
+今朝、<a href="https://metacpan.org/release/Redis-Fast">Redis::Fast 0.06</a>をリリースしました。
+主な変更点はメモリーリークの修正と、エラー発生時にSegmentation Faltで落ちる問題の修正です。</p>
+
+<!-- More -->
+
+
+<h2>メモリーリーク</h2>
+
+<p>Redis::Fastをサブスクライバーモードで動作させると、メモリを無限に食い続ける問題をついに！ついに！修正しました。
+原因は、一言で言ってしまえば、Perlのリファレンスカウントの扱いの勉強不足です・・・。</p>
+
+<p>XSの中でPerlのオブジェクトを作るとき、プログラマが手動でリファレンスカウントを制御する必要があります。
+とはいうものの、全てのオブジェクトのリファレンスカウントを制御するのは大変なので、
+XSには「揮発性」という考え方があります。
+<code>sv_2motral</code>を使って変数を揮発性に設定しておけば、よしななタイミングでオブジェクトを解放してくれます。
+<a href="http://d.hatena.ne.jp/gfx/20100519/1274247355">gfx先生のブログ</a>にもあるように、
+オブジェクト作成したら原則<code>sv_2motral</code>をつけるようにすれば、
+メモリーリークはほとんどなくなるはずです。</p>
+
+<p><code>c
+SV * s = newSVpv("Hello World",0);  // Perl の文字列オブジェクト
+sv_2motral(s) // 揮発性にすることで、使われなくなったら自動的に解放してくれる
+</code></p>
+
+<p>この「よしななタイミング」をよく理解していなかったのでリークしてました・・・。
+XSからオブジェクトへアクセスできなくなったときでないとオブジェクトを解放できないので、
+揮発性のオブジェクトが実際に解放されるのは「XSで書かれた関数が終了してPerlに戻るとき」です。
+メッセージを待ち続ける<code>wait_for_messages</code>関数は
+(タイムアウトをしない限り)ずっと終了しないので、
+揮発性のオブジェクトを解放するタイミングが一切なかったのです。</p>
+
+<p>不要になったら解放されるよう、揮発性オブジェクトの有効範囲を明示的に指定しました。
+<code>c
+sv_2motral(s);
+ENTER;
+SAVETMPS;
+sv_2motral(v);
+FREETMPS;
+LEAVE;
+// v はココで解放される
+// s は生き残ってる
+</code></p>
+
+<p><a href="http://perldoc.jp/docs/perl/5.18.1/perlcall.pod">perlcall</a>とかちゃんとドキュメントを読みましょう > 自分</p>
+
+<h2>Segmentation Falt</h2>
+
+<p>同期的にコマンドを実行してる最中にSIGNAL等で実行が中断されると、
+Segmentation Faltが起こる問題を修正しました。
+Redis::Fastは同期モードでコマンドを発行したときでも、
+hiredisの非同期モードの機能を使って通信しています。
+コマンド実行中にエラーが発生すると、
+コールバック関数の呼び出しタイミングが変わってしまい、
+メモリの確保・解放のタイミングが狂ってしまっていました。</p>
+
+<p>このバグ、試した環境の中ではUbuntu+Perl5.14でしか再現しませんでした。
+他の環境ではたまたま解放後もアクセスできてしまって、
+正常に動作してしまっていたようです。
+嫌なバグだ・・・。</p>
+
+<h2>まとめ</h2>
+
+<p>C言語でメモリ管理するコードは書くべきでない。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Ark-View-DataTable グラフや表やCSVを簡単に表示したい]]></title>
@@ -333,108 +405,6 @@ CPANデビューのモジュールがネットワーク関連でXSで少しハ�
 <p>pull requestを送ってくださったsyohexさん、実際にインストールを試みてテストが通らないことを教えてくださったみなさん、ありがとうございました。
 アップデートした0.02では、タイムアウト時の処理を少し書きなおして、pull requestも取り込みました。
 Mac上でも問題なくテストが通ってインストールできるはずです(きっとね)。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[ISUCON3の予選に参加してきた]]></title>
-    <link href="http://shogo82148.github.io/blog/2013/10/07/isucon3-qualify/"/>
-    <updated>2013-10-07T13:03:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2013/10/07/isucon3-qualify</id>
-    <content type="html"><![CDATA[<p>こんにちは、いつの間にかチームぽわわ2のメンバーになっていたいっちーです。</p>
-
-<p><a href="https://twitter.com/9re">@9re</a>さんと
-<a href="https://twitter.com/mackee_w">@mackee_w</a>さんとでISUCON3の予選に参加してきました。
-主にアプリの書き換えを担当していたので、やったことを残しておきます。
-チーム全体の方針とか役割分担とかはまこぴー先生の<a href="http://mackee.hatenablog.com/entry/2013/10/06/230412">#isucon 予選でとりあえず10位だった</a>を参照。</p>
-
-<!-- More -->
-
-
-<h2>お題</h2>
-
-<p>gistみたいなWebアプリ。
-<a href="http://shogo82148.github.io/blog/2013/04/13/isucon/">社内ISUCON</a>のときと似たようなお題ですね。
-違いは...</p>
-
-<ul>
-<li>スターは無い</li>
-<li>Recent Postsのサイドバーが無い代わりに、ページングしてたどっていけるページがある</li>
-<li>privateな投稿ができる</li>
-<li>Markdown形式で投稿できて、表示はHTMLでレンダリングされる</li>
-</ul>
-
-
-<p>詳しくは、れもんさんの<a href="http://isucon.net/archives/32853582.html">#isucon 2013年予選問題の解説など</a>を参照。</p>
-
-<h2>やったこと</h2>
-
-<p>一言で言えば、Redisにキャッシュするようにしました。</p>
-
-<h3>RecentをRedisのリストで管理</h3>
-
-<p>Recentの表示で日付順ソートしているのが重たそうだったので、
-公開メモのソート結果をあらかじめRedisのリストに入れておく作戦。</p>
-
-<p>Redisの<code>SORT</code>コマンドが高機能で面白いなーって思ってたので使ってみました。
-リストにはメモのIDだけ入れておいて、メモの実体は別のキーを参照する、なんてことができます。
-このコマンド、<code>SORT</code>って名前なのに「ソートしない」ってオプションあるところがいいですよね！</p>
-
-<p>MySQLがボトルネックになっているのはこれで解消できました。</p>
-
-<h3>bin/markdownを使わない＆レンダリング結果をキャッシュ</h3>
-
-<p>Markdownのレンダリングを外部コマンド叩いてやっていたので、
-<a href="https://metacpan.org/module/Text::Markdown::Discount">Text::Markdown::Discount</a>を使ってレンダリングするように変更。
-qx{hoge}って記法はじめて見ました。Perlってやつはいろんな書き方があってよくわからないです。</p>
-
-<p>Markdownの文法って亜種が結構あるので、レンダラをかえるのはちょっと怖かったんですが、全く問題なし。
-スコアも3000くらい上がってかなり効果がありました。</p>
-
-<p>さらにレンダリング結果をRedisに入れてキャッシュで+1000くらい。</p>
-
-<h3>Recentのレンダリング結果をキャッシュ</h3>
-
-<p>RecentをRedisでさばくようにしたけど、そもそも100要素もあるHTMLのレンダリングそうとう重いはず。
-と、いうわけでここもRedisにキャッシュするようにしました。
-公開メモが投稿されたらRecent/:pageのキャッシュを全部削除。
-Postのたびにキャッシュクリアされるのであんまり効果ないかなーと思っていたけど、わりと効果あったみたい？
-(正確なスコアよく見てなかった)</p>
-
-<h3>Redis::Fast!!</h3>
-
-<p>残り時間も少なくなり時間内にできることも限られれきたので、最後の最後で<a href="https://github.com/shogo82148/Redis-Fast">Redis::Fast</a>を投入。
-これで+1000くらい上がったらしい。(正確なスコアよく見てなかった)</p>
-
-<p>s/Redis/Redis::Fast/ するだけの簡単なお仕事の予定が、githubからのインストールに一番手間取った。
-cpanfileにgitのレポジトリを書くと(非公式だけど)インストールできるよ！ってどこかで見た気がするけどなかなかうまく行かず、
-自分で<code>git clone</code>してそのディレクトリを指定してインストール(したってまこぴー先生が言ってた)。
-(<code>hiredis.h</code>が無い！って叫んでいたから、cartonがsubmoduleをうまく処理できていなかったと予想。
-非公式の機能に頼るの良くないね。)</p>
-
-<h2>できなかったこと</h2>
-
-<ul>
-<li>my.cnf？なにそれ美味しいの？</li>
-<li>SQLクエリをいじる余裕がなかった
-
-<ul>
-<li>Newer/Olderのクエリが残念なのはわかってたけど、結局いじってない</li>
-</ul>
-</li>
-<li>Nginxでキャッシュしたい</li>
-<li>必要なモジュールは事前にCPANにあげておこう。</li>
-</ul>
-
-
-<h2>まとめ</h2>
-
-<p>結果は13192.1点で10位でした。
-特に問題がなければこのまま予選突破できるはず・・・！</p>
-
-<p>ところで、魔王軍が学生枠を制圧していて恐ろしいですね。
-てか、<a href="http://shiro-goma.hatenablog.com/entry/2013/10/07/202913">僕らのチームとの差、500点程度しか無いじゃないですか</a>。怖！！！
-これ以上の侵攻はなんとしてでも食い止めなければ。</p>
 ]]></content>
   </entry>
   

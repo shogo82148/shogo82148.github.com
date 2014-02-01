@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2013-12-21T22:58:18+09:00</updated>
+  <updated>2014-02-01T22:58:55+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,89 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Redis::Fast 0.06 released]]></title>
+    <link href="http://shogo82148.github.io/blog/2014/02/01/redis-fast-0-dot-06-released/"/>
+    <updated>2014-02-01T21:36:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2014/02/01/redis-fast-0-dot-06-released</id>
+    <content type="html"><![CDATA[<p>こんにちは、もうすぐ17才と100ヶ月を迎えるいっちーです。
+今朝、<a href="https://metacpan.org/release/Redis-Fast">Redis::Fast 0.06</a>をリリースしました。
+主な変更点はメモリーリークの修正と、エラー発生時にSegmentation Faltで落ちる問題の修正です。</p>
+
+<!-- More -->
+
+
+<h2>メモリーリーク</h2>
+
+<p>Redis::Fastをサブスクライバーモードで動作させると、メモリを無限に食い続ける問題をついに！ついに！修正しました。
+原因は、一言で言ってしまえば、Perlのリファレンスカウントの扱いの勉強不足です・・・。</p>
+
+<p>XSの中でPerlのオブジェクトを作るとき、プログラマが手動でリファレンスカウントを制御する必要があります。
+とはいうものの、全てのオブジェクトのリファレンスカウントを制御するのは大変なので、
+XSには「揮発性」という考え方があります。
+<code>sv_2motral</code>を使って変数を揮発性に設定しておけば、よしななタイミングでオブジェクトを解放してくれます。
+<a href="http://d.hatena.ne.jp/gfx/20100519/1274247355">gfx先生のブログ</a>にもあるように、
+オブジェクト作成したら原則<code>sv_2motral</code>をつけるようにすれば、
+メモリーリークはほとんどなくなるはずです。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="n">SV</span> <span class="o">*</span> <span class="n">s</span> <span class="o">=</span> <span class="n">newSVpv</span><span class="p">(</span><span class="s">&quot;Hello World&quot;</span><span class="p">,</span><span class="mi">0</span><span class="p">);</span>  <span class="c1">// Perl の文字列オブジェクト</span>
+</span><span class='line'><span class="n">sv_2motral</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="c1">// 揮発性にすることで、使われなくなったら自動的に解放してくれる</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>この「よしななタイミング」をよく理解していなかったのでリークしてました・・・。
+XSからオブジェクトへアクセスできなくなったときでないとオブジェクトを解放できないので、
+揮発性のオブジェクトが実際に解放されるのは「XSで書かれた関数が終了してPerlに戻るとき」です。
+メッセージを待ち続ける<code>wait_for_messages</code>関数は
+(タイムアウトをしない限り)ずっと終了しないので、
+揮発性のオブジェクトを解放するタイミングが一切なかったのです。</p>
+
+<p>不要になったら解放されるよう、揮発性オブジェクトの有効範囲を明示的に指定しました。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="n">sv_2motral</span><span class="p">(</span><span class="n">s</span><span class="p">);</span>
+</span><span class='line'><span class="n">ENTER</span><span class="p">;</span>
+</span><span class='line'><span class="n">SAVETMPS</span><span class="p">;</span>
+</span><span class='line'><span class="n">sv_2motral</span><span class="p">(</span><span class="n">v</span><span class="p">);</span>
+</span><span class='line'><span class="n">FREETMPS</span><span class="p">;</span>
+</span><span class='line'><span class="n">LEAVE</span><span class="p">;</span>
+</span><span class='line'><span class="c1">// v はココで解放される</span>
+</span><span class='line'><span class="c1">// s は生き残ってる</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><a href="http://perldoc.jp/docs/perl/5.18.1/perlcall.pod">perlcall</a>とかちゃんとドキュメントを読みましょう > 自分</p>
+
+<h2>Segmentation Falt</h2>
+
+<p>同期的にコマンドを実行してる最中にSIGNAL等で実行が中断されると、
+Segmentation Faltが起こる問題を修正しました。
+Redis::Fastは同期モードでコマンドを発行したときでも、
+hiredisの非同期モードの機能を使って通信しています。
+コマンド実行中にエラーが発生すると、
+コールバック関数の呼び出しタイミングが変わってしまい、
+メモリの確保・解放のタイミングが狂ってしまっていました。</p>
+
+<p>このバグ、試した環境の中ではUbuntu+Perl5.14でしか再現しませんでした。
+他の環境ではたまたま解放後もアクセスできてしまって、
+正常に動作してしまっていたようです。
+嫌なバグだ・・・。</p>
+
+<h2>まとめ</h2>
+
+<p>C言語でメモリ管理するコードは書くべきでない。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Unity Test Tools を使ってみる]]></title>
@@ -2944,154 +3027,6 @@ emacs デーモンさんが新しいバッファで開いてくれます．
 <li><a href="http://d.hatena.ne.jp/syohex/20101224/1293206906">emacsclientを使おう</a></li>
 <li><a href="http://k-ui.jp/blog/2010/07/28/emacsclient_%E3%81%AE%E4%BD%BF%E3%81%84%E6%96%B9%E3%81%AE%E7%A8%AE%E9%A1%9E%E3%81%A8%E3%80%81%E4%BE%BF%E5%88%A9%E3%81%AA%E4%BD%BF%E3%81%84%E6%96%B9/">emacsclient の使い方の種類と、便利な使い方</a></li>
 <li><a href="http://blog.naru.se/2012/11/emacsclient.html">emacsclientを終了する方法</a></li>
-</ul>
-
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[LaTeX2EPUBで電子書籍を作ってみる]]></title>
-    <link href="http://shogo82148.github.io/blog/2013/03/02/latex2epub/"/>
-    <updated>2013-03-02T16:20:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2013/03/02/latex2epub</id>
-    <content type="html"><![CDATA[<p>LaTeXで書いた文章を電子書籍にしたくなったので，
-<a href="http://kmuto.jp/d/index.cgi/computer/latex2epub.htm">LaTeX2EPUB</a>を使ってみました．</p>
-
-<!-- More -->
-
-
-<p><a href="http://kmuto.jp/d/index.cgi/computer/latex2epub.htm">LaTeX2EPUB</a>は<a href="http://dlmf.nist.gov/LaTeXML/">LaTeXML</a>と<a href="https://github.com/kmuto/review/">ReVIEW</a>に依存しているようなので，
-それぞれインストールしていきます．
-あと，数式の変換とかにLaTeXを使っているので別途用意する必要あり．
-いろんなディストリビューションがあるけど，
-ここでは TeX Live 2012 を使いました．</p>
-
-<h2>LaTeXML のインストール</h2>
-
-<p><a href="http://dlmf.nist.gov/LaTeXML/">LaTeXML</a>はLaTeXの文章をXML形式に変換するソフト．
-そこからさらにXSLTを使ってXHTMLへ変換できる．
-<a href="http://dlmf.nist.gov/LaTeXML/get.html">ドキュメント</a>に従って
-依存するライブラリをインストール．</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>perl -MCPAN -e shell
-</span><span class='line'>cpan&gt; install DB_File, Parse::RecDescent, File::Which
-</span><span class='line'>cpan&gt; install XML::LibXML, XML::LibXSLT
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>ドキュメントが少し古いらしく，これだけでは不十分だった．
-追加でParse::RecDescentとImage::Magickもインストールしておく．</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>cpan&gt; install Parse::RecDescent
-</span><span class='line'>cpan&gt; quit
-</span><span class='line'>yum install ImageMagick-perl
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>後はソースを取ってきてmakeするだけ．
-現時点での最新版0.7.0をインストールした．</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>wget http://dlmf.nist.gov/LaTeXML/releases/LaTeXML-0.7.0.tar.gz
-</span><span class='line'>tar zxvf LaTeXML-0.7.0.tar.gz
-</span><span class='line'><span class="nb">cd </span>LaTeXML-0.7.0
-</span><span class='line'>perl Makefile.PL
-</span><span class='line'>make
-</span><span class='line'>make <span class="nb">test</span>
-</span><span class='line'>make install
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>ReVIEW のインストール</h2>
-
-<p><a href="https://github.com/kmuto/review/">ReVIEW</a>は簡単なマークアップ言語で書かれたテキストから
-PDFやEPUBを作成するためのスクリプトです．
-このなかのEPUB作成機能に依存しているようなのでインストールしておきます．
-<a href="https://github.com/kmuto/review/">ReVIEW</a>はgemで簡単インストール．</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>gem install review
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>LaTeX2EPUB のインストール</h2>
-
-<p><a href="http://kmuto.jp/d/index.cgi/computer/latex2epub.htm">LaTeX2EPUB</a>本体をインストール．
-本家の日本語化対応が少し不十分だったので
-改造版を上げといた．
-これをダウンロードしてパスの通ったところに置けばインストール完了．</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>git clone https://github.com/shogo82148/latex2epub
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>日本語化対応</h2>
-
-<p>自分の環境だと
-数式中に日本語を上手く扱えませんでした．
-どうやらGhostscriptの設定が不十分だった模様．
-<a href="http://www.ice.is.kit.ac.jp/~umehara/misc/comp/20110817a.html">ここ</a>
-を参考に設定変更．
-自分の環境では/usr/share/ghostscript/8.70/Resource/Init/cidfmap
-に次の内容を追加することで変換できました．</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>/TakaoMincho &lt;&lt; /FileType /TrueType /Path (/usr/share/fonts/ipa-mincho/ipam.ttf) /SubfontID 0 /CSI [(Japan1) 2] &gt;&gt; ;
-</span><span class='line'>/TakaoGothic &lt;&lt; /FileType /TrueType /Path (less /usr/share/fonts/ipa-gothic/ipag.ttf) /SubfontID 0 /CSI [(Japan1) 2] &gt;&gt; ;
-</span><span class='line'>/Ryumin-Light /TakaoMincho ;
-</span><span class='line'>/GothicBBB-Medium /TakaoGothic ;</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>電子書籍を作ってみる</h2>
-
-<p>yaml形式の設定ファイルを適当に編集して</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>latex2epub.rb sample.tex sample.yaml
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>と打てば変換してくれる．</p>
-
-<p>デフォルトの設定ではスタイルファイルを読んでくれないので，
-自前スタイルファイル中でマクロを定義している場合はそのままでは変換できない．
-*.sty.ltxml というファイルを代わりに作っておくと，そっちを代わりに読んでくれる．
-中身はPerlスクリプト．
-書き方は<a href="http://dlmf.nist.gov/LaTeXML/manual/customization/customization.latexml.xhtml">LaTeXMLのドキュメント</a>を参照．</p>
-
-<p>Perlのソースを頑張って読んで，以下の問題は一応解決した．
-画像の変換もできた．</p>
-
-<ul>
-<li>数式内に日本語を含めるとエラーになる．</li>
-<li>画像はまだ実験していない</li>
-</ul>
-
-
-<p>次の問題はまだ解決してない．
-XSLよくわかんない．</p>
-
-<ul>
-<li>目次に「〜 in 〜」とどうしても入ってしまう．</li>
-<li>対応TeXクラスがまだ少ない．</li>
-<li>数式部分を(出来れば画像も)SVG化できるようにしたい．</li>
-<li>もうちょっといいCSSが必要．</li>
 </ul>
 
 ]]></content>

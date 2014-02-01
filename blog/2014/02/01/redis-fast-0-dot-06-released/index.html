@@ -5,13 +5,13 @@
 <!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
 <head>
   <meta charset="utf-8">
-  <title>聞こえますか…自動生成…してみた…よ… - Shogo's Blog</title>
+  <title>Redis::Fast 0.06 released - Shogo's Blog</title>
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="description" content="聞こえますか…あなたの心に直接…で始まるこのテンプレート．
-誰かが「文章入力したら…を自動で入れてくれるのないかな」って呟いてたのでつくってみた． サクッと作成 TinySegmenterで単語分割，
-ランダムに…を単語の間に挿入して出力してみた． 聞こえますか… &hellip;">
+  <meta name="description" content="こんにちは、もうすぐ17才と100ヶ月を迎えるいっちーです。
+今朝、Redis::Fast 0.06をリリースしました。
+主な変更点はメモリーリークの修正と、エラー発生時にSegmentation Faltで落ちる問題の修正です。 メモリーリーク Redis:: &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -20,7 +20,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   
-  <link rel="canonical" href="http://shogo82148.github.io/blog/2012/12/05/kikoemasuka/">
+  <link rel="canonical" href="http://shogo82148.github.io/blog/2014/02/01/redis-fast-0-dot-06-released/">
   <link href="/favicon.png" rel="icon">
   <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
   <script src="/javascripts/modernizr-2.0.js"></script>
@@ -82,7 +82,7 @@
   
   <header>
     
-      <h1 class="entry-title">聞こえますか…自動生成…してみた…よ…</h1>
+      <h1 class="entry-title">Redis::Fast 0.06 Released</h1>
     
     
       <p class="meta">
@@ -98,92 +98,88 @@
   
 
 
-<time datetime="2012-12-05T23:07:00+09:00" pubdate data-updated="true">Dec 5<span>th</span>, 2012</time>
+<time datetime="2014-02-01T21:36:00+09:00" pubdate data-updated="true">Feb 1<span>st</span>, 2014</time>
         
       </p>
     
   </header>
 
 
-<div class="entry-content"><p>聞こえますか…あなたの心に直接…で始まるこのテンプレート．
-誰かが「文章入力したら…を自動で入れてくれるのないかな」って呟いてたのでつくってみた．</p>
+<div class="entry-content"><p>こんにちは、もうすぐ17才と100ヶ月を迎えるいっちーです。
+今朝、<a href="https://metacpan.org/release/Redis-Fast">Redis::Fast 0.06</a>をリリースしました。
+主な変更点はメモリーリークの修正と、エラー発生時にSegmentation Faltで落ちる問題の修正です。</p>
 
 <!-- More -->
 
 
-<h2>サクッと作成</h2>
+<h2>メモリーリーク</h2>
 
-<p><a href="http://chasen.org/~taku/software/TinySegmenter/">TinySegmenter</a>で単語分割，
-ランダムに…を単語の間に挿入して出力してみた．</p>
+<p>Redis::Fastをサブスクライバーモードで動作させると、メモリを無限に食い続ける問題をついに！ついに！修正しました。
+原因は、一言で言ってしまえば、Perlのリファレンスカウントの扱いの勉強不足です・・・。</p>
 
-<ul>
-<li><a href="http://shogo82148.github.com/kikoemasuka/">聞こえますか…</a></li>
-</ul>
+<p>XSの中でPerlのオブジェクトを作るとき、プログラマが手動でリファレンスカウントを制御する必要があります。
+とはいうものの、全てのオブジェクトのリファレンスカウントを制御するのは大変なので、
+XSには「揮発性」という考え方があります。
+<code>sv_2motral</code>を使って変数を揮発性に設定しておけば、よしななタイミングでオブジェクトを解放してくれます。
+<a href="http://d.hatena.ne.jp/gfx/20100519/1274247355">gfx先生のブログ</a>にもあるように、
+オブジェクト作成したら原則<code>sv_2motral</code>をつけるようにすれば、
+メモリーリークはほとんどなくなるはずです。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="n">SV</span> <span class="o">*</span> <span class="n">s</span> <span class="o">=</span> <span class="n">newSVpv</span><span class="p">(</span><span class="s">&quot;Hello World&quot;</span><span class="p">,</span><span class="mi">0</span><span class="p">);</span>  <span class="c1">// Perl の文字列オブジェクト</span>
+</span><span class='line'><span class="n">sv_2motral</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="c1">// 揮発性にすることで、使われなくなったら自動的に解放してくれる</span>
+</span></code></pre></td></tr></table></div></figure>
 
 
-<p>この程度なら数十分あれば作れますね．</p>
+<p>この「よしななタイミング」をよく理解していなかったのでリークしてました・・・。
+XSからオブジェクトへアクセスできなくなったときでないとオブジェクトを解放できないので、
+揮発性のオブジェクトが実際に解放されるのは「XSで書かれた関数が終了してPerlに戻るとき」です。
+メッセージを待ち続ける<code>wait_for_messages</code>関数は
+(タイムアウトをしない限り)ずっと終了しないので、
+揮発性のオブジェクトを解放するタイミングが一切なかったのです。</p>
 
-<h2>挿入位置を学習してみる</h2>
-
-<p>さて，実際やってみるとちょっと挿入位置が不自然な気がします．
-世の中に出回っているツイートでは単語間ではなく文節の間に挿入しているのが多いように見えます．</p>
-
-<p>しかし，TinySegmenterは品詞情報をつけてはくれないので文節の判定は少し面倒ですね．</p>
-
-<p>・・・待てよ・・・このテンプレートを使ったツイートなんて大量に手に入る・・・これから学習すればいいんじゃね？</p>
-
-<p>はい，やってみましょう．</p>
-
-<h3>ツイートを集める</h3>
-
-<p>Twitter APIを使ってテンプレートを使っているようなツイートを拾ってきます．
-<strong> 「聞こえますか OR きこえますか -RT」</strong> で検索してみました．</p>
-
-<p>普段Twitter APIを叩くときは<a href="https://github.com/tweepy/tweepy">Tweepy</a>を使っているのですが，これで検索するとあまり古いツイートは取れません．
-API 1.1 を使うと古いツイートも取ってこれるらしいので，強引にTweepyを書き換えて1.1対応．
-<strong> 72,529ツイートの取得に成功しました． </strong>
-プログラムについてはTweepyの書き換えでゴチャゴチャしているのでまた今度．</p>
-
-<h3>TinySegmenterMakerに放り込む</h3>
-
-<p>カッコで囲まれている部分を抽出，点々を空白に置換，パクリツイッタラー消去などの処理をした後，
-<a href="https://github.com/shogo82148/TinySegmenterMaker">TinySegmentermaker</a>に放り込みます．
-実際に学習に使ったツイートは49,573ツイートです．
-10000回の繰り返しで，学習結果は以下のようになりました．</p>
+<p>不要になったら解放されるよう、揮発性オブジェクトの有効範囲を明示的に指定しました。</p>
 
 <figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
 <span class='line-number'>4</span>
 <span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Result:
-</span><span class='line'>Accuracy: 94.794% (3466578/3656961)
-</span><span class='line'>Precision: 90.9504% (526277/578642)
-</span><span class='line'>Recall: 79.2234% (526277/664295)
-</span><span class='line'>System/Answer p/p p/n n/p n/n: 526277 52365 138018 2940301</span></code></pre></td></tr></table></div></figure>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="n">sv_2motral</span><span class="p">(</span><span class="n">s</span><span class="p">);</span>
+</span><span class='line'><span class="n">ENTER</span><span class="p">;</span>
+</span><span class='line'><span class="n">SAVETMPS</span><span class="p">;</span>
+</span><span class='line'><span class="n">sv_2motral</span><span class="p">(</span><span class="n">v</span><span class="p">);</span>
+</span><span class='line'><span class="n">FREETMPS</span><span class="p">;</span>
+</span><span class='line'><span class="n">LEAVE</span><span class="p">;</span>
+</span><span class='line'><span class="c1">// v はココで解放される</span>
+</span><span class='line'><span class="c1">// s は生き残ってる</span>
+</span></code></pre></td></tr></table></div></figure>
 
 
-<p>約95%の精度という非常に高い性能を示してくれましたが，
-区切るところ(p)よりも区切らないところ(n)のほうが多いためですね．
-Recallが8割しかありませんが，人によるばらつきが大きそうなので，まあこんなもんでしょう．</p>
+<p><a href="http://perldoc.jp/docs/perl/5.18.1/perlcall.pod">perlcall</a>とかちゃんとドキュメントを読みましょう > 自分</p>
 
-<p>学習が終わったら最後にオリジナルのTinySegmenterを学習後のもので置き換えるだけ．
-チェックボックスで単語分割とツイートの学習結果，どちらを使うか選択できます．
-なんだかそれっぽくなりましたかね・・・？</p>
+<h2>Segmentation Falt</h2>
 
-<h2>元ネタについて</h2>
+<p>同期的にコマンドを実行してる最中にSIGNAL等で実行が中断されると、
+Segmentation Faltが起こる問題を修正しました。
+Redis::Fastは同期モードでコマンドを発行したときでも、
+hiredisの非同期モードの機能を使って通信しています。
+コマンド実行中にエラーが発生すると、
+コールバック関数の呼び出しタイミングが変わってしまい、
+メモリの確保・解放のタイミングが狂ってしまっていました。</p>
 
-<p>ところでこのテンプレートの元ネタについて調査している方がいらっしゃるようです．</p>
+<p>このバグ、試した環境の中ではUbuntu+Perl5.14でしか再現しませんでした。
+他の環境ではたまたま解放後もアクセスできてしまって、
+正常に動作してしまっていたようです。
+嫌なバグだ・・・。</p>
 
-<ul>
-<li><a href="http://notes.vanu.jp/post/36656640146/kikoemasuka">「聞こえますか…心に直接…」のオリジナル検証</a></li>
-</ul>
+<h2>まとめ</h2>
 
-
-<p>ゲームが元ネタだ，っていう人を時々見かけたけど，
-検証してみると微妙に内容が違うらしい．
-もちろん影響は受けているんだろうけどね．
-マンガとかゲームで始めて心に直接語りかけたのって何なんだろう？</p>
+<p>C言語でメモリ管理するコードは書くべきでない。</p>
 </div>
 
 
@@ -206,18 +202,24 @@ Recallが8割しかありませんが，人によるばらつきが大きそう�
   
 
 
-<time datetime="2012-12-05T23:07:00+09:00" pubdate data-updated="true">Dec 5<span>th</span>, 2012</time>
+<time datetime="2014-02-01T21:36:00+09:00" pubdate data-updated="true">Feb 1<span>st</span>, 2014</time>
       
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/perl/'>perl</a>, <a class='category' href='/blog/categories/redis/'>redis</a>
+  
+</span>
 
 
     </p>
     
       <div class="sharing">
   
-  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.io/blog/2012/12/05/kikoemasuka/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.io/blog/2014/02/01/redis-fast-0-dot-06-released/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
   
   
-  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.io/blog/2012/12/05/kikoemasuka/" data-via="shogo82148" data-counturl="http://shogo82148.github.io/blog/2012/12/05/kikoemasuka/" >Tweet</a>
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.io/blog/2014/02/01/redis-fast-0-dot-06-released/" data-via="shogo82148" data-counturl="http://shogo82148.github.io/blog/2014/02/01/redis-fast-0-dot-06-released/" >Tweet</a>
   
   
   <div class="g-plusone" data-size="medium"></div>
@@ -230,10 +232,8 @@ Recallが8割しかありませんが，人によるばらつきが大きそう�
     
     <p class="meta">
       
-        <a class="basic-alignment left" href="/blog/2012/11/24/no-more-webview/" title="Previous Post: OAuthの認証にWebViewを使うのはやめよう">&laquo; OAuthの認証にWebViewを使うのはやめよう</a>
+        <a class="basic-alignment left" href="/blog/2013/12/21/unity-test-tools/" title="Previous Post: Unity Test Tools を使ってみる">&laquo; Unity Test Tools を使ってみる</a>
       
-      
-        <a class="basic-alignment right" href="/blog/2012/12/15/mecab-python/" title="Next Post: MeCabをPythonから使う注意点とか">MeCabをPythonから使う注意点とか &raquo;</a>
       
     </p>
   </footer>
@@ -345,8 +345,8 @@ Recallが8割しかありませんが，人によるばらつきが大きそう�
       
         
         // var disqus_developer = 1;
-        var disqus_identifier = 'http://shogo82148.github.io/blog/2012/12/05/kikoemasuka/';
-        var disqus_url = 'http://shogo82148.github.io/blog/2012/12/05/kikoemasuka/';
+        var disqus_identifier = 'http://shogo82148.github.io/blog/2014/02/01/redis-fast-0-dot-06-released/';
+        var disqus_url = 'http://shogo82148.github.io/blog/2014/02/01/redis-fast-0-dot-06-released/';
         var disqus_script = 'embed.js';
       
     (function () {
