@@ -11,7 +11,7 @@ categories: [python, twitter, tweepy]
 リリースタイミングとかよくわかってないですが、次のリリースとかでApplication-only Authenticationを簡単に使えるようになります、たぶん。
 
 (2014-04-27追記)
-このprを取り込んだTweepy 2.3.0がリリースされました。早速遊んでみたのでこちらもどうぞ>[Tweepyの2.3.0が出ました](http://shogo82148.github.io/blog/2014/04/27/2014-04-27-tweepy-2-dot-3-0-released/)
+このprを取り込んだTweepy 2.3.0がリリースされました。早速遊んでみたのでこちらもどうぞ>[Tweepyの2.3.0が出ました](http://shogo82148.github.io/blog/2014/04/27/tweepy-2-dot-3-0-released/)
 
 <!-- More -->
 
