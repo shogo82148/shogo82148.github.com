@@ -44,10 +44,10 @@ CSS3が普及してきた影響で、Web界隈では Pure-CSS によるお絵か
 と言う訳で、お絵かきソフトのInkscapeを使って、Pure HTML + Pure CSS な絵を描くことができるプラグインを作ってみました。
 
 画像ファイルを一切使わず、Pure HTML + Pure CSS で絵を描くことができます。
-<iframe src="http://sora-blue.net/~shogo82148/soft/internet/svg2css/qb.html" width="600" height="400" scrolling="no" border="0" frameborder="0"> </iframe>
+<iframe src="http://shogo82148.github.io/homepage/soft/internet/svg2css/qb.html" width="600" height="400" scrolling="no" border="0" frameborder="0"> </iframe>
 
 [svg2css](http://shogo82148.github.com/svg2css/index.ja.html)を使えば、Pure HTML + Pure CSS (No JavaScript)でスライドを作ることも可能です。
-<iframe src="http://sora-blue.net/~shogo82148/soft/internet/svg2css/slide.html" width="540" height="400"> </iframe>
+<iframe src="http://shogo82148.github.io/homepage/soft/internet/svg2css/slide.html" width="540" height="400"> </iframe>
 
 絵を描くだけでなく、アニメーションの再生をすることもできます。
 
