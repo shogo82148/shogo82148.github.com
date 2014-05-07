@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2014-04-29T13:51:55+09:00</updated>
+  <updated>2014-05-07T20:38:50+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,249 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Androidのバイナリファイルを解析するgoのライブラリ]]></title>
+    <link href="http://shogo82148.github.io/blog/2014/05/07/androidbinary/"/>
+    <updated>2014-05-07T13:29:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2014/05/07/androidbinary</id>
+    <content type="html"><![CDATA[<p>Androidのアプリの実態はzipファイルなのでunzipすれば簡単に中身を見ることができるわけですが、
+開いてもバイナリファイルが入っているだけでよくわかりません。
+AndroidSDKに付属しているaaptというツールを使えば読めるんだけどインストールが大変で苦しんでいる人がいたので、
+お手軽に解析できるgolangのライブラリを書いてみました。</p>
+
+<!-- More -->
+
+
+<h2>使い方</h2>
+
+<h3>go getしてくる</h3>
+
+<p><a href="https://github.com/shogo82148/androidbinary">githubのレポジトリ</a> からダウンロードしてきます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>go get github.com/shogo82148/androidbinary
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>AndroidManifest.xmlを解析する</h3>
+
+<p><code>io.ReaderAt</code>インターフェースを満たすオブジェクトを<code>androidbinary.NewXMLFile</code>に渡すと解析してくれます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="nx">f</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Open</span><span class="p">(</span><span class="s">&quot;AndroidManifest.xml&quot;</span><span class="p">)</span>
+</span><span class='line'><span class="nx">xmlFile</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">androidbinary</span><span class="p">.</span><span class="nx">NewXMLFile</span><span class="p">(</span><span class="nx">f</span><span class="p">)</span>
+</span><span class='line'><span class="nx">reader</span> <span class="o">:=</span> <span class="nx">xmlFile</span><span class="p">.</span><span class="nx">Reader</span><span class="p">()</span>
+</span><span class='line'><span class="c1">// reader を読むと普通のXMLファイルとして読める</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>resources.arscを解析する</h3>
+
+<p>アプリ名などの設定はAndroidManifest.xmlには直接書かれておらず、
+リソースファイルに書いてあることがほとんどです(開発者がよほどものぐさでなければ)。
+リソースの情報はapk内のresources.arscに書かれているので、
+このファイルを読む機能もついてます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="nx">f</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Open</span><span class="p">(</span><span class="s">&quot;resources.arsc&quot;</span><span class="p">)</span>
+</span><span class='line'><span class="nx">tableFile</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">androidbinary</span><span class="p">.</span><span class="nx">NewTableFile</span><span class="p">(</span><span class="nx">f</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// ID 0x7F040000 に対応するリソースを読む</span>
+</span><span class='line'><span class="nx">config</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">androidbinary</span><span class="p">.</span><span class="nx">ResTableConfig</span><span class="p">{}</span>
+</span><span class='line'><span class="nx">val</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">tableFile</span><span class="p">.</span><span class="nx">GetResource</span><span class="p">(</span><span class="nx">androidbinary</span><span class="p">.</span><span class="nx">ResId</span><span class="p">(</span><span class="mh">0x7f040000</span><span class="p">),</span> <span class="nx">config</span><span class="p">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>アプリ名はロケールによって変わったりするので、
+<code>config</code>で設定できます。
+例えば日本語の名前を取得したい場合はこんな感じ。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="c1">// ID 0x7F040000 に対応するリソース(日本語)を読む</span>
+</span><span class='line'><span class="nx">config</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">androidbinary</span><span class="p">.</span><span class="nx">ResTableConfig</span><span class="p">{}</span>
+</span><span class='line'><span class="nx">config</span><span class="p">.</span><span class="nx">Language</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="p">=</span> <span class="sc">&#39;j&#39;</span>
+</span><span class='line'><span class="nx">config</span><span class="p">.</span><span class="nx">Language</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="p">=</span> <span class="sc">&#39;a&#39;</span>
+</span><span class='line'><span class="nx">val</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">tableFile</span><span class="p">.</span><span class="nx">GetResource</span><span class="p">(</span><span class="nx">androidbinary</span><span class="p">.</span><span class="nx">ResId</span><span class="p">(</span><span class="mh">0x7f040000</span><span class="p">),</span> <span class="nx">config</span><span class="p">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>サンプルコード</h3>
+
+<p>apkを解析してアプリの日本語名を取得する例。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;archive/zip&quot;</span>
+</span><span class='line'>  <span class="s">&quot;bytes&quot;</span>
+</span><span class='line'>  <span class="s">&quot;encoding/xml&quot;</span>
+</span><span class='line'>  <span class="s">&quot;fmt&quot;</span>
+</span><span class='line'>  <span class="s">&quot;github.com/shogo82148/androidbinary&quot;</span>
+</span><span class='line'>  <span class="s">&quot;io/ioutil&quot;</span>
+</span><span class='line'>  <span class="s">&quot;strconv&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">type</span> <span class="nx">XMLManifest</span> <span class="kd">struct</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">XMLName</span>      <span class="nx">xml</span><span class="p">.</span><span class="nx">Name</span>          <span class="s">`xml:&quot;manifest&quot;`</span>
+</span><span class='line'>  <span class="nx">Applications</span> <span class="p">[]</span><span class="o">*</span><span class="nx">XMLApplication</span> <span class="s">`xml:&quot;application&quot;`</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">type</span> <span class="nx">XMLApplication</span> <span class="kd">struct</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">XMLName</span> <span class="nx">xml</span><span class="p">.</span><span class="nx">Name</span> <span class="s">`xml:&quot;application&quot;`</span>
+</span><span class='line'>  <span class="nx">Label</span>   <span class="kt">string</span>   <span class="s">`xml:&quot;http://schemas.android.com/apk/res/android label,attr&quot;`</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">r</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">zip</span><span class="p">.</span><span class="nx">OpenReader</span><span class="p">(</span><span class="s">&quot;sample.apk&quot;</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">defer</span> <span class="nx">r</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// read manifest and resource</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">xmlFile</span> <span class="o">*</span><span class="nx">androidbinary</span><span class="p">.</span><span class="nx">XMLFile</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">tableFile</span> <span class="o">*</span><span class="nx">androidbinary</span><span class="p">.</span><span class="nx">TableFile</span>
+</span><span class='line'>  <span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">f</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">r</span><span class="p">.</span><span class="nx">File</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">switch</span> <span class="nx">f</span><span class="p">.</span><span class="nx">Name</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">case</span> <span class="s">&quot;AndroidManifest.xml&quot;</span><span class="p">:</span>
+</span><span class='line'>          <span class="nx">rc</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">f</span><span class="p">.</span><span class="nx">Open</span><span class="p">()</span>
+</span><span class='line'>          <span class="nx">buf</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">ioutil</span><span class="p">.</span><span class="nx">ReadAll</span><span class="p">(</span><span class="nx">rc</span><span class="p">)</span>
+</span><span class='line'>          <span class="nx">xmlFile</span><span class="p">,</span> <span class="nx">_</span> <span class="p">=</span> <span class="nx">androidbinary</span><span class="p">.</span><span class="nx">NewXMLFile</span><span class="p">(</span><span class="nx">bytes</span><span class="p">.</span><span class="nx">NewReader</span><span class="p">(</span><span class="nx">buf</span><span class="p">))</span>
+</span><span class='line'>          <span class="nx">rc</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+</span><span class='line'>      <span class="k">case</span> <span class="s">&quot;resources.arsc&quot;</span><span class="p">:</span>
+</span><span class='line'>          <span class="nx">rc</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">f</span><span class="p">.</span><span class="nx">Open</span><span class="p">()</span>
+</span><span class='line'>          <span class="nx">buf</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">ioutil</span><span class="p">.</span><span class="nx">ReadAll</span><span class="p">(</span><span class="nx">rc</span><span class="p">)</span>
+</span><span class='line'>          <span class="nx">tableFile</span><span class="p">,</span> <span class="nx">_</span> <span class="p">=</span> <span class="nx">androidbinary</span><span class="p">.</span><span class="nx">NewTableFile</span><span class="p">(</span><span class="nx">bytes</span><span class="p">.</span><span class="nx">NewReader</span><span class="p">(</span><span class="nx">buf</span><span class="p">))</span>
+</span><span class='line'>          <span class="nx">rc</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// parse xml</span>
+</span><span class='line'>  <span class="nx">decoder</span> <span class="o">:=</span> <span class="nx">xml</span><span class="p">.</span><span class="nx">NewDecoder</span><span class="p">(</span><span class="nx">xmlFile</span><span class="p">.</span><span class="nx">Reader</span><span class="p">())</span>
+</span><span class='line'>  <span class="nx">xmlManifest</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">XMLManifest</span><span class="p">{}</span>
+</span><span class='line'>  <span class="nx">decoder</span><span class="p">.</span><span class="nx">Decode</span><span class="p">(</span><span class="nx">xmlManifest</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// get application label</span>
+</span><span class='line'>  <span class="nx">labelId</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">strconv</span><span class="p">.</span><span class="nx">ParseInt</span><span class="p">(</span><span class="nx">xmlManifest</span><span class="p">.</span><span class="nx">Applications</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">Label</span><span class="p">[</span><span class="mi">3</span><span class="p">:],</span> <span class="mi">16</span><span class="p">,</span> <span class="mi">32</span><span class="p">)</span>
+</span><span class='line'>  <span class="nx">config</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">androidbinary</span><span class="p">.</span><span class="nx">ResTableConfig</span><span class="p">{}</span>
+</span><span class='line'>  <span class="nx">config</span><span class="p">.</span><span class="nx">Language</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="p">=</span> <span class="sc">&#39;j&#39;</span>
+</span><span class='line'>  <span class="nx">config</span><span class="p">.</span><span class="nx">Language</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="p">=</span> <span class="sc">&#39;a&#39;</span>
+</span><span class='line'>  <span class="nx">label</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">tableFile</span><span class="p">.</span><span class="nx">GetResource</span><span class="p">(</span><span class="nx">androidbinary</span><span class="p">.</span><span class="nx">ResId</span><span class="p">(</span><span class="nx">labelId</span><span class="p">),</span> <span class="nx">config</span><span class="p">)</span>
+</span><span class='line'>  <span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;Application Name:&quot;</span><span class="p">,</span> <span class="nx">label</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>エラー処理とか完全に省いているので上手く補ってください。</p>
+
+<h2>制限事項</h2>
+
+<p>GW中頑張ったけど途中で力尽きたので、今のところ以下のような制限があります。</p>
+
+<ul>
+<li>リソース名を扱えない
+
+<ul>
+<li>普通AndroidManifest.xmlにリソースを埋め込むときは<code>@string/app_name</code>みたいな名前を埋め込みますが、リソースファイルとの連携機能がないため<code>@0x7F04000000</code>のような数値を返します</li>
+<li>resources.arsc からリソース名を読み取ったり、リソース名からリソースを取得する機能はありません</li>
+</ul>
+</li>
+<li>configの設定が一部しか対応していない
+
+<ul>
+<li>ロケール、画面サイズ、SDKバージョン等にしか対応してません</li>
+<li>IMEの設定や画面の細かいオプションとかも指定はできるけど、<code>GetResource</code>が解釈してくれないので誤った結果を返すかも</li>
+</ul>
+</li>
+<li>リソースタイプ
+
+<ul>
+<li>文字列、整数、ブーリアン値にしか対応してません</li>
+<li>string-array とかいうのとかあったりするけど、そんなの知らない</li>
+</ul>
+</li>
+</ul>
+
+
+<p>いろいろ制限はありますが、アプリ名を読み取ったり、パーミッションを解析するくらいはできるんじゃないですかね。
+golang初心者なのでイケてないところがあったら教えて下さい。</p>
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="http://dsas.blog.klab.org/archives/52011424.html">エンコードされた AndroidManifest.xml を読む</a></li>
+<li><a href="https://gist.github.com/cielavenir/4365521">ruby_apk Android::Resource can relate string pool (partially)</a></li>
+</ul>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Tweepyの2.3.0が出ました]]></title>
@@ -2639,117 +2882,6 @@ Consoleが見れるのでそこから確認できます。</p>
 <ul>
 <li><a href="http://developer.chrome.com/apps/cloudMessaging.html">Google Cloud Messaging for Chrome</a></li>
 <li><a href="http://blog.maripo.org/2013/05/gcm-for-chrome/">Google Cloud Messaging for Chromeを体験してみた</a></li>
-</ul>
-
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[RaspberryPiからメールを送る]]></title>
-    <link href="http://shogo82148.github.io/blog/2013/05/12/mail-from-raspberrypi/"/>
-    <updated>2013-05-12T21:50:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2013/05/12/mail-from-raspberrypi</id>
-    <content type="html"><![CDATA[<p>RaspberryPi に cron を仕込んで定期実行をやってみようと考えました。
-cron の設定自体は <code>crontab -e</code> コマンドを実行すれば簡単にできます。
-ただ、これだけだとちゃんと動いているか少し心配なので、
-エラーが起きた時に何か通知して欲しい。
-普通なら設定ファイルに <code>MAILTO=hogehoge@example.com</code> と書いておくと
-メールが送られるはずなのですが、
-メールサーバが動いてないのでうまくいかない・・・。</p>
-
-<p>そういうわけで、RaspberryPiからメールを送るための設定をしたのでメモ。</p>
-
-<!-- More -->
-
-
-<h2>MTAをインストールする</h2>
-
-<p>Raspberry Pi には標準でMTA(Message Transfer Agent)が入ってないようなのでインストール。
-今回はPostfixを採用</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>sudo apt-get install postfix
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>最初、Sendmailも試してみたんだけど、送信者マスカレードがなぜかうまく行かなったので断念。
-後述するように、この設定がないとスパムフィルタに引っかかってしまうのです。</p>
-
-<h2>プロバイダのSMTPにリレーしてもらう</h2>
-
-<p>実際にメールを送りには以下の条件を満たす必要があるようです。</p>
-
-<ul>
-<li>送信元のドメインを引ける</li>
-<li>固定IPからのアクセス</li>
-</ul>
-
-
-<p>固定IPなんて自前で持ってないし、
-cron からのメールは送信元が pi@raspberrypi になってしまいドメインを引けません。
-そのためそのままではスパムメールとして扱われてしまい、メールが届きません。</p>
-
-<p>そこで、プロバイダが提供しているSMTPサーバにメールをリレーしてもらいます。
-<code>/etc/postfix/main.cf</code>に以下の行を追加します。</p>
-
-<figure class='code'><figcaption><span>/etc/postfix/main.cf</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>sender_canonical_maps = regexp:/etc/postfix/canonical
-</span><span class='line'>
-</span><span class='line'>relayhost = [smtp.example.com]:587
-</span><span class='line'>smtp_sasl_auth_enable = yes
-</span><span class='line'>smtp_sasl_password_maps = hash:/etc/postfix/relay_password
-</span><span class='line'>smtp_sasl_security_options = noanonymous</span></code></pre></td></tr></table></div></figure>
-
-
-<p>プロバイダにリレーしてもらうには SMTP-Auth で認証する必要があるので、
-ユーザ名とパスワードを設定しておきます。</p>
-
-<figure class='code'><figcaption><span>/etc/postfix/elay_password</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>smtp.example.com hogehoge:your-password</span></code></pre></td></tr></table></div></figure>
-
-
-<p>postmapコマンドを使って、Postfixから扱える形式に変換します。</p>
-
-<figure class='code'><figcaption><span>command</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>postmap <span class="nb">hash</span>:/etc/postfix/relay_password
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>さらに、エンベロープのFromがプロバイダから提供されたメールアドレスでないと
-メールをリレーしてくれないので、
-すべてのメールのFromをすべて書き換えるよう設定します。</p>
-
-<figure class='code'><figcaption><span>/etc/postfix/canonical</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>/.*/ hogehoge@example.com</span></code></pre></td></tr></table></div></figure>
-
-
-<p>最後にPostfixに設定を読み込ませて設定完了。
-cron からメールを送れるようになるはず。</p>
-
-<figure class='code'><figcaption><span>command</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>sudo /etc/init.d/postfix reload
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>・・・この設定にたどり着くのに非常に苦労した。
-メールなんてもう嫌だ・・・。</p>
-
-<h2>参考</h2>
-
-<ul>
-<li><a href="http://blog.cohtan.org/2009/03/postfixtofrom.html">PostfixでメールのToやFromを書き換える方法</a></li>
-<li><a href="http://www.maruko2.com/mw/Postfix_%E3%81%A7%E3%83%A1%E3%83%BC%E3%83%AB%E3%83%AA%E3%83%AC%E3%83%BC%E3%81%AE%E8%A8%AD%E5%AE%9A_(SMTP_%E3%82%AF%E3%83%A9%E3%82%A4%E3%82%A2%E3%83%B3%E3%83%88_%2B_SMTP_Auth">Postfix でメールリレーの設定 (SMTP クライアント + SMTP Auth)</a>)</li>
-<li><a href="http://www.limemo.net/blog/2013/02/raspberry-pi-not-working-cron-on-raspbian.html">【トラブル】raspberry pi(ラズベリーパイ)を使ってみる - raspbianでcronがうまく動かないような…?</a>
-
-<ul>
-<li>Sendmailでの設定。なぜかうまく行かなかった。</li>
-</ul>
-</li>
 </ul>
 
 ]]></content>

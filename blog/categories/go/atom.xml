@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: go | Shogo's Blog]]></title>
+  <link href="http://shogo82148.github.io/blog/categories/go/atom.xml" rel="self"/>
+  <link href="http://shogo82148.github.io/"/>
+  <updated>2014-05-07T20:38:50+09:00</updated>
+  <id>http://shogo82148.github.io/</id>
+  <author>
+    <name><![CDATA[Shogo Ichinose]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Androidのバイナリファイルを解析するgoのライブラリ]]></title>
+    <link href="http://shogo82148.github.io/blog/2014/05/07/androidbinary/"/>
+    <updated>2014-05-07T13:29:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2014/05/07/androidbinary</id>
+    <content type="html"><![CDATA[<p>Androidのアプリの実態はzipファイルなのでunzipすれば簡単に中身を見ることができるわけですが、
+開いてもバイナリファイルが入っているだけでよくわかりません。
+AndroidSDKに付属しているaaptというツールを使えば読めるんだけどインストールが大変で苦しんでいる人がいたので、
+お手軽に解析できるgolangのライブラリを書いてみました。</p>
+
+<!-- More -->
+
+
+<h2>使い方</h2>
+
+<h3>go getしてくる</h3>
+
+<p><a href="https://github.com/shogo82148/androidbinary">githubのレポジトリ</a> からダウンロードしてきます。</p>
+
+<p><code>bash
+go get github.com/shogo82148/androidbinary
+</code></p>
+
+<h3>AndroidManifest.xmlを解析する</h3>
+
+<p><code>io.ReaderAt</code>インターフェースを満たすオブジェクトを<code>androidbinary.NewXMLFile</code>に渡すと解析してくれます。</p>
+
+<p><code>go
+f, _ := os.Open("AndroidManifest.xml")
+xmlFile, _ := androidbinary.NewXMLFile(f)
+reader := xmlFile.Reader()
+// reader を読むと普通のXMLファイルとして読める
+</code></p>
+
+<h3>resources.arscを解析する</h3>
+
+<p>アプリ名などの設定はAndroidManifest.xmlには直接書かれておらず、
+リソースファイルに書いてあることがほとんどです(開発者がよほどものぐさでなければ)。
+リソースの情報はapk内のresources.arscに書かれているので、
+このファイルを読む機能もついてます。</p>
+
+<p>``` go
+f, _ := os.Open("resources.arsc")
+tableFile, _ := androidbinary.NewTableFile(f)</p>
+
+<p>// ID 0x7F040000 に対応するリソースを読む
+config := &amp;androidbinary.ResTableConfig{}
+val, _ := tableFile.GetResource(androidbinary.ResId(0x7f040000), config)
+```</p>
+
+<p>アプリ名はロケールによって変わったりするので、
+<code>config</code>で設定できます。
+例えば日本語の名前を取得したい場合はこんな感じ。</p>
+
+<p><code>go
+// ID 0x7F040000 に対応するリソース(日本語)を読む
+config := &amp;androidbinary.ResTableConfig{}
+config.Language[0] = 'j'
+config.Language[1] = 'a'
+val, _ := tableFile.GetResource(androidbinary.ResId(0x7f040000), config)
+</code></p>
+
+<h3>サンプルコード</h3>
+
+<p>apkを解析してアプリの日本語名を取得する例。</p>
+
+<p>``` go
+package main</p>
+
+<p>import (</p>
+
+<pre><code>"archive/zip"
+"bytes"
+"encoding/xml"
+"fmt"
+"github.com/shogo82148/androidbinary"
+"io/ioutil"
+"strconv"
+</code></pre>
+
+<p>)</p>
+
+<p>type XMLManifest struct {</p>
+
+<pre><code>XMLName      xml.Name          `xml:"manifest"`
+Applications []*XMLApplication `xml:"application"`
+</code></pre>
+
+<p>}</p>
+
+<p>type XMLApplication struct {</p>
+
+<pre><code>XMLName xml.Name `xml:"application"`
+Label   string   `xml:"http://schemas.android.com/apk/res/android label,attr"`
+</code></pre>
+
+<p>}</p>
+
+<p>func main() {</p>
+
+<pre><code>r, _ := zip.OpenReader("sample.apk")
+defer r.Close()
+
+// read manifest and resource
+var xmlFile *androidbinary.XMLFile
+var tableFile *androidbinary.TableFile
+for _, f := range r.File {
+    switch f.Name {
+    case "AndroidManifest.xml":
+        rc, _ := f.Open()
+        buf, _ := ioutil.ReadAll(rc)
+        xmlFile, _ = androidbinary.NewXMLFile(bytes.NewReader(buf))
+        rc.Close()
+    case "resources.arsc":
+        rc, _ := f.Open()
+        buf, _ := ioutil.ReadAll(rc)
+        tableFile, _ = androidbinary.NewTableFile(bytes.NewReader(buf))
+        rc.Close()
+    }
+}
+
+// parse xml
+decoder := xml.NewDecoder(xmlFile.Reader())
+xmlManifest := &amp;XMLManifest{}
+decoder.Decode(xmlManifest)
+
+// get application label
+labelId, _ := strconv.ParseInt(xmlManifest.Applications[0].Label[3:], 16, 32)
+config := &amp;androidbinary.ResTableConfig{}
+config.Language[0] = 'j'
+config.Language[1] = 'a'
+label, _ := tableFile.GetResource(androidbinary.ResId(labelId), config)
+fmt.Println("Application Name:", label)
+</code></pre>
+
+<p>}
+```</p>
+
+<p>エラー処理とか完全に省いているので上手く補ってください。</p>
+
+<h2>制限事項</h2>
+
+<p>GW中頑張ったけど途中で力尽きたので、今のところ以下のような制限があります。</p>
+
+<ul>
+<li>リソース名を扱えない
+
+<ul>
+<li>普通AndroidManifest.xmlにリソースを埋め込むときは<code>@string/app_name</code>みたいな名前を埋め込みますが、リソースファイルとの連携機能がないため<code>@0x7F04000000</code>のような数値を返します</li>
+<li>resources.arsc からリソース名を読み取ったり、リソース名からリソースを取得する機能はありません</li>
+</ul>
+</li>
+<li>configの設定が一部しか対応していない
+
+<ul>
+<li>ロケール、画面サイズ、SDKバージョン等にしか対応してません</li>
+<li>IMEの設定や画面の細かいオプションとかも指定はできるけど、<code>GetResource</code>が解釈してくれないので誤った結果を返すかも</li>
+</ul>
+</li>
+<li>リソースタイプ
+
+<ul>
+<li>文字列、整数、ブーリアン値にしか対応してません</li>
+<li>string-array とかいうのとかあったりするけど、そんなの知らない</li>
+</ul>
+</li>
+</ul>
+
+
+<p>いろいろ制限はありますが、アプリ名を読み取ったり、パーミッションを解析するくらいはできるんじゃないですかね。
+golang初心者なのでイケてないところがあったら教えて下さい。</p>
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="http://dsas.blog.klab.org/archives/52011424.html">エンコードされた AndroidManifest.xml を読む</a></li>
+<li><a href="https://gist.github.com/cielavenir/4365521">ruby_apk Android::Resource can relate string pool (partially)</a></li>
+</ul>
+
+]]></content>
+  </entry>
+  
+</feed>
