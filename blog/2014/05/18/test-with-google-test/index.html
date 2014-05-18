@@ -1,0 +1,437 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Google Test を使ってC++のテストしてみた - Shogo's Blog</title>
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="description" content="C++ なライブラリを書こうと思い、C++のテストってどうやるんだろうと調べたメモ。
+テストフレームワークとして Google C++ Testing Framework を使用、
+コンパイルにはautotoolを使ってtravis-ciでテストするところまでやってみました。 やってみた結果→ &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://shogo82148.github.io/blog/2014/05/18/test-with-google-test/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  <link href="/atom.xml" rel="alternate" title="Shogo's Blog" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-4526627-4']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Shogo's Blog</a></h1>
+  
+    <h2>たぶんプログラミングとかについて書いていくブログ</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:shogo82148.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/blog/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Google Test を使ってC++のテストしてみた</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2014-05-18T21:24:00+09:00" pubdate data-updated="true">May 18<span>th</span>, 2014</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>C++ なライブラリを書こうと思い、C++のテストってどうやるんだろうと調べたメモ。
+テストフレームワークとして <a href="https://code.google.com/p/googletest/">Google C++ Testing Framework</a> を使用、
+コンパイルにはautotoolを使ってtravis-ciでテストするところまでやってみました。</p>
+
+<p>やってみた結果→
+<a href="https://github.com/shogo82148/cpp-test">cpp-test</a></p>
+
+<!-- More -->
+
+
+<h2>Testを書く</h2>
+
+<p>Google Test の<a href="http://opencv.jp/googletestdocs/primer.html">入門ガイド</a>に書いてあったテストをコピペしてきました。</p>
+
+<figure class='code'><figcaption><span>test/factorial.cpp</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="cp">#include &quot;gtest/gtest.h&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="kt">int</span> <span class="n">Factorial</span><span class="p">(</span><span class="kt">int</span> <span class="n">n</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">TEST</span><span class="p">(</span><span class="n">FractionTest</span><span class="p">,</span> <span class="n">hoge</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">EXPECT_EQ</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">Factorial</span><span class="p">(</span><span class="mi">1</span><span class="p">));</span>
+</span><span class='line'>    <span class="n">EXPECT_EQ</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">Factorial</span><span class="p">(</span><span class="mi">2</span><span class="p">));</span>
+</span><span class='line'>    <span class="n">EXPECT_EQ</span><span class="p">(</span><span class="mi">6</span><span class="p">,</span> <span class="n">Factorial</span><span class="p">(</span><span class="mi">3</span><span class="p">));</span>
+</span><span class='line'>    <span class="n">EXPECT_EQ</span><span class="p">(</span><span class="mi">40320</span><span class="p">,</span> <span class="n">Factorial</span><span class="p">(</span><span class="mi">8</span><span class="p">));</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>テストの対象となる関数はこちら。</p>
+
+<figure class='code'><figcaption><span>src/factorial.cpp</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="c1">// calculate 1 * 2 * 3 * ... * n</span>
+</span><span class='line'><span class="kt">int</span> <span class="n">Factorial</span><span class="p">(</span><span class="kt">int</span> <span class="n">n</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">if</span><span class="p">(</span><span class="n">n</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="k">return</span> <span class="mi">1</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">return</span> <span class="n">n</span> <span class="o">*</span> <span class="n">Factorial</span><span class="p">(</span><span class="n">n</span> <span class="o">-</span> <span class="mi">1</span><span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>テスト用実行ファイルのビルドをする</h2>
+
+<p>せっかくならしっかりしたものをつくろうと、Autotoolsを使ってビルドしてみました。
+<a href="http://www.spa.is.uec.ac.jp/~kinuko/slidemaker/autotools/">新しめの Autotools (Autoconf&amp;Automake) を使ってみよう</a> を参考に
+Makefileのひな形を書いていきます。</p>
+
+<p><a href="http://kikuchy.hatenablog.com/entry/2014/01/12/Google_Test_%E3%81%A8_Travice_CI_%E3%81%A7%E3%80%81C%E8%A8%80%E8%AA%9E%E3%81%A7%E6%9B%B8%E3%81%84%E3%81%9F%E3%83%A9%E3%82%A4%E3%83%96%E3%83%A9%E3%83%AA%E3%81%AE%E7%B6%99%E7%B6%9A%E7%9A%84%E3%82%A4">Google Test と Travice CI で、C言語で書いたライブラリの継続的インテグレーションをしてみた結果</a>
+ではGoogle Testをシステムにインストールしていますが、
+システムへのインストールは推奨されていないのと、手元で動かすのが面倒だったので
+<a href="https://code.google.com/p/googletest/wiki/V1_6_AdvancedGuide#Fusing_Google_Test_Source_Files">Fused Source File</a>
+を作ってGoogle Testを自分のプロジェクトに同梱しちゃいました。</p>
+
+<p>Google Testのプロジェクトで<code>python fuse_gtest_files.py OUTPUT_DIR</code> を実行すると
+<code>gtest/gtest.h</code> と <code>gtest/gtest-all.cc</code> が作られるので、
+この２つのファイルを自分のプロジェクトにコピーしてきます。
+あとは Makefile.am でこれらのファイルをコンパイル＆リンクするように設定します。
+自分のプロジェクトでは使っていなくても、Google Test のコンパイルには pthread が必要なので忘れずに。
+(clangでは無くても動くらしく、clangで試していたらgccで動かなくてちょっとはまった)</p>
+
+<figure class='code'><figcaption><span>test/Makefile.am</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='makefile'><span class='line'><span class="nv">TESTS</span> <span class="o">=</span> factorial_test
+</span><span class='line'><span class="nv">check_PROGRAMS</span> <span class="o">=</span> factorial_test
+</span><span class='line'><span class="nv">factorial_test_SOURCES</span> <span class="o">=</span> factorial.cpp gtest_main.cc gtest-all.cc
+</span><span class='line'><span class="nv">factorial_test_LDADD</span> <span class="o">=</span> ../src/libfactorial.a
+</span><span class='line'><span class="nv">factorial_test_LDFLAGS</span> <span class="o">=</span> -pthread
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>make check</code> でテストが走るようになります。
+Google Test のソースがプロジェクトに含まれているので、
+新しくプログラムをインストールしたり、特別な設定をしたりといったことは必要ありません。</p>
+
+<h2>travis-ci でテストする</h2>
+
+<p>travisのC++のテストは、標準で<code>./configure &amp;&amp; make &amp;&amp; make test</code>を実行してくれますが、
+autotoolsで作ったMakefileだと上手く動かないので以下のように.travis.ymlを設定します。</p>
+
+<figure class='code'><figcaption><span>.travis.yml</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='yaml'><span class='line'><span class="l-Scalar-Plain">language</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">cpp</span>
+</span><span class='line'><span class="l-Scalar-Plain">script</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">autoreconf -fi &amp;&amp; ./configure &amp;&amp; make &amp;&amp; make check</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>gnuなプロジェクトのお作法にしたがって、以下のように書き換えてあります。</p>
+
+<ul>
+<li>configureスクリプトはautotoolsで自動生成されるファイルなのでレポジトリには入れず、テスト前に生成する</li>
+<li>make check でテストが走るのが普通らしい</li>
+</ul>
+
+
+<p>configureスクリプトを自動生成するのでautoconfのバージョンに注意してください。
+autoconfは2014/05/18現在2.69が最新版ですが、travis-ciは2.68がインストールされているようです。
+最新版のautoconfでconfigure.acのひな形を作ると<code>AC_PREREQ([2.69])</code>のように必要バージョンが設定されてしまい、
+テストのときにconfigureファイルを作れなくて死にます。
+バージョン指定を削除するか、古いバージョンに書き換えましょう。</p>
+
+<p>C++のお作法がよくわかっていないですが、ちょっとずつ頑張っていきます。</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2014-05-18T21:24:00+09:00" pubdate data-updated="true">May 18<span>th</span>, 2014</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/c/'>c</a>, <a class='category' href='/blog/categories/c-/'>c++</a>, <a class='category' href='/blog/categories/google-test/'>google test</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.io/blog/2014/05/18/test-with-google-test/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.io/blog/2014/05/18/test-with-google-test/" data-via="shogo82148" data-counturl="http://shogo82148.github.io/blog/2014/05/18/test-with-google-test/" >Tweet</a>
+  
+  
+  <div class="g-plusone" data-size="medium"></div>
+  
+  
+    <div class="fb-like" data-send="true" data-width="450" data-show-faces="false"></div>
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2014/05/17/redis-fast-0-dot-07-released/" title="Previous Post: Redis::Fast 0.07 をリリースしました！">&laquo; Redis::Fast 0.07 をリリースしました！</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2014/05/18/test-with-google-test/">Google Test を使ってC++のテストしてみた</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/05/17/redis-fast-0-dot-07-released/">Redis::Fast 0.07 をリリースしました！</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/05/07/androidbinary/">Androidのバイナリファイルを解析するgoのライブラリ</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/04/27/tweepy-2-dot-3-0-released/">Tweepyの2.3.0が出ました</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/04/18/tweepy-will-application-only-auth/">Tweepy が Application-only authentication に対応します</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>GitHub Repos</h1>
+  <ul id="gh_repos">
+    <li class="loading">Status updating...</li>
+  </ul>
+  
+  <a href="https://github.com/shogo82148">@shogo82148</a> on GitHub
+  
+  <script type="text/javascript">
+    $.domReady(function(){
+        if (!window.jXHR){
+            var jxhr = document.createElement('script');
+            jxhr.type = 'text/javascript';
+            jxhr.src = '/javascripts/libs/jXHR.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(jxhr, s);
+        }
+
+        github.showRepos({
+            user: 'shogo82148',
+            count: 0,
+            skip_forks: true,
+            target: '#gh_repos'
+        });
+    });
+  </script>
+  <script src="/javascripts/github.js" type="text/javascript"> </script>
+</section>
+
+
+<section>
+  <h1>Latest Tweets</h1>
+  <ul id="tweets">
+    <li class="loading">Status updating...</li>
+  </ul>
+  <script type="text/javascript">
+    $.domReady(function(){
+      getTwitterFeed("shogo82148", 4, false);
+    });
+  </script>
+  <script src="/javascripts/twitter.js" type="text/javascript"> </script>
+  
+    <a href="http://twitter.com/shogo82148" class="twitter-follow-button" data-show-count="false">Follow @shogo82148</a>
+  
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2014 - Shogo Ichinose -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'shogosblog';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://shogo82148.github.io/blog/2014/05/18/test-with-google-test/';
+        var disqus_url = 'http://shogo82148.github.io/blog/2014/05/18/test-with-google-test/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) {return;}
+  js = d.createElement(s); js.id = id;
+  js.src = "//connect.facebook.net/en_US/all.js#appId=212934732101925&xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var script = document.createElement('script'); script.type = 'text/javascript'; script.async = true;
+      script.src = 'https://apis.google.com/js/plusone.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(script, s);
+    })();
+  </script>
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>
