@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2014-05-18T22:53:05+09:00</updated>
+  <updated>2014-05-23T00:00:09+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,100 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[travis-ciでC++11のテストをする]]></title>
+    <link href="http://shogo82148.github.io/blog/2014/05/22/use-cpp11-in-travis/"/>
+    <updated>2014-05-22T23:34:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2014/05/22/use-cpp11-in-travis</id>
+    <content type="html"><![CDATA[<p>今 C++ を書くなら C++11 だよね！と言うわけでC++11の新機能を使ってコードを書いたので、
+<a href="https://travis-ci.org/">travis-cli</a>でテストしたらFAIL。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ g++ -std=gnu++0x hogehoge.cpp
+</span><span class='line'>sorry, unimplemented: non-static data member initializers</span></code></pre></td></tr></table></div></figure>
+
+
+<p>unimplemented・・・だと・・・。</p>
+
+<p>頑張って動かしてみたのでメモ。</p>
+
+<!-- More -->
+
+
+<h2>autoconf の設定をする</h2>
+
+<p>autotoolsを使っていたので、
+C++11 に対応しているかのチェックを追加しておきます。</p>
+
+<p><a href="https://www.gnu.org/software/autoconf-archive/ax_cxx_compile_stdcxx_11.html">ax_cxx_compile_stdcxx_11.m4</a>をダウンロードし、
+configure.ac でm4ファイルをダウンロードするようにしておきます。</p>
+
+<figure class='code'><figcaption><span>configure.ac</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>m4_include([m4/ax_cxx_compile_stdcxx_11.m4])
+</span><span class='line'>AX_CXX_COMPILE_STDCXX_11
+</span><span class='line'>AC_LANG([C++])</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>travis.yaml を設定する</h2>
+
+<p>ぐぐったら<a href="http://stackoverflow.com/questions/22111549/travis-ci-with-clang-3-4-and-c11">stackoverflowでやり方を見つけました</a>。
+標準でテストに使われるコンパイラは古いようなので、新しいバージョンのものをインストールするように設定します。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>language: cpp
+</span><span class='line'>
+</span><span class='line'>compiler:
+</span><span class='line'>  - clang
+</span><span class='line'>  - gcc
+</span><span class='line'>
+</span><span class='line'>before_install:
+</span><span class='line'>  # g++4.8.1
+</span><span class='line'>  - if [ "$CXX" == "g++" ]; then sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test; fi
+</span><span class='line'>
+</span><span class='line'>  # clang 3.4
+</span><span class='line'>  - if [ "$CXX" == "clang++" ]; then sudo add-apt-repository -y ppa:h-rayflood/llvm; fi
+</span><span class='line'>
+</span><span class='line'>  - sudo apt-get update -qq
+</span><span class='line'>
+</span><span class='line'>install:
+</span><span class='line'>  # g++4.8.1
+</span><span class='line'>  - if [ "$CXX" = "g++" ]; then sudo apt-get install -qq g++-4.8; fi
+</span><span class='line'>  - if [ "$CXX" = "g++" ]; then export CXX="g++-4.8"; fi
+</span><span class='line'>
+</span><span class='line'>  # clang 3.4
+</span><span class='line'>  - if [ "$CXX" == "clang++" ]; then sudo apt-get install --allow-unauthenticated -qq clang-3.4; fi
+</span><span class='line'>  - if [ "$CXX" == "clang++" ]; then export CXX="clang++-3.4"; fi</span></code></pre></td></tr></table></div></figure>
+
+
+<p>これで、clangとgccでテストが走るようになります。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Google Test を使ってC++のテストしてみた]]></title>
@@ -2026,282 +2120,6 @@ Test::More の is_deeply はちょっと不便だと思っていたので、今�
 キー名の管理が少し楽になると思います。</p>
 
 <p>でも、flushdb とか flushall すると全部消えるので気をつけてね！</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Perl の Redis ライブラリを調べた]]></title>
-    <link href="http://shogo82148.github.io/blog/2013/08/24/perl-redis-libraries/"/>
-    <updated>2013-08-24T17:51:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2013/08/24/perl-redis-libraries</id>
-    <content type="html"><![CDATA[<p>最近<a href="http://redis.io/">Redis</a> を使ったコードを書くようになったのですが、
-キー名を毎回指定するのがだるいです。
-Ruby には <a href="https://github.com/nateware/redis-objects">redis-objects</a> というのがあって、
-Redisのキーをオブジェクトとして扱うことができるようです。
-きっと、Perl にも似たようなのあるだろ、って思って調べてみました。</p>
-
-<!-- More -->
-
-
-<h2>ほしいもの</h2>
-
-<p>低レベルなRedisのライブラリはたいていメソッドとRedisのコマンドが一対一対応していて、
-次のようなコードになると思います。</p>
-
-<figure class='code'><figcaption><span>hogehoge.pl</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;key-name&#39;</span><span class="p">,</span> <span class="s">&#39;piyopiyo&#39;</span><span class="p">);</span>
-</span><span class='line'><span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;key_name&#39;</span><span class="p">);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>でも、Redisに何か操作をしたいわけじゃなくて、
-Redisのキーに対して操作をしたいので、
-次のように書けるべきだと思うんです。</p>
-
-<figure class='code'><figcaption><span>expected.pl</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">my</span> <span class="nv">$key</span> <span class="o">=</span> <span class="n">key</span><span class="p">(</span><span class="nv">$redis</span><span class="p">,</span> <span class="s">&#39;key-name&#39;</span><span class="p">);</span>
-</span><span class='line'><span class="nv">$key</span><span class="o">-&gt;</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;piyopiyo&#39;</span><span class="p">);</span>
-</span><span class='line'><span class="nv">$key</span><span class="o">-&gt;</span><span class="n">get</span><span class="p">();</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>Redis::Hash, Redis::List</h2>
-
-<p><a href="http://search.cpan.org/~melo/Redis/lib/Redis/Hash.pm">Redis::Hash</a>と
-<a href="http://search.cpan.org/~melo/Redis/lib/Redis/List.pm">Redis::List</a>は
-Perlのハッシュや配列と同じ操作で Redis にアクセスできるようにするライブラリ。</p>
-
-<figure class='code'><figcaption><span>Redis::Hash</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">utf8</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="n">warnings</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="n">strict</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="mf">5.014</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">use</span> <span class="nn">Redis::</span><span class="n">Hash</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="nb">tie</span> <span class="k">my</span> <span class="nv">%my_hash</span><span class="p">,</span> <span class="s">&#39;Redis::Hash&#39;</span><span class="p">,</span> <span class="s">&#39;hash_prefix&#39;</span><span class="p">,</span> <span class="p">(</span><span class="n">server</span> <span class="o">=&gt;</span> <span class="s">&#39;localhost:6379&#39;</span><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1"># set hash_prefix:hogehoge piyopiyo</span>
-</span><span class='line'><span class="c1"># set hash_prefix:fugafuga fugufugu</span>
-</span><span class='line'><span class="nv">$my_hash</span><span class="p">{</span><span class="n">hogehoge</span><span class="p">}</span> <span class="o">=</span> <span class="s">&#39;piyopiyo&#39;</span><span class="p">;</span>
-</span><span class='line'><span class="nv">$my_hash</span><span class="p">{</span><span class="n">fugafuga</span><span class="p">}</span> <span class="o">=</span> <span class="s">&#39;fugufugu&#39;</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1"># get hash_prefix:hogehoge piyopiyo</span>
-</span><span class='line'><span class="n">say</span> <span class="nv">$my_hash</span><span class="p">{</span><span class="n">hogehoge</span><span class="p">};</span> <span class="c1"># piyopiyo</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1"># keys hash_prefix:*</span>
-</span><span class='line'><span class="n">say</span> <span class="nb">join</span> <span class="s">&#39;,&#39;</span><span class="p">,</span> <span class="nb">keys</span> <span class="nv">%my_hash</span><span class="p">;</span> <span class="c1">#fugafuga,hogehoge</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1"># keys hash_prefix:*</span>
-</span><span class='line'><span class="c1"># get hash_prefix:fugafuga</span>
-</span><span class='line'><span class="c1"># get hash_prefix:hogehoge</span>
-</span><span class='line'><span class="n">say</span> <span class="nb">join</span> <span class="s">&#39;,&#39;</span><span class="p">,</span> <span class="nb">values</span> <span class="nv">%my_hash</span><span class="p">;</span> <span class="c1">#fugufugu,piyopiyo</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1"># del hash_prefix:hogehoge</span>
-</span><span class='line'><span class="nb">delete</span> <span class="nv">$my_hash</span><span class="p">{</span><span class="n">hogehoge</span><span class="p">};</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>tie とかよくわかない。
-Perl の黒魔術を見た気がしました。</p>
-
-<p>普通のハッシュや配列に見えるのは面白いけど、
-Redisっぽい機能がまったく使えないのはつらい。
-<code>tied(%my_hash)-&gt;cmd</code> って書けばコマンド発行できるけど、
-それなら最初から直接 <a href="http://search.cpan.org/~melo/Redis/lib/Redis.pm">Redis.pm</a> を
-使えよって話になります。</p>
-
-<p>あと、tie するごとにコネクションを張り直しているようなので、
-たくさんのハッシュやリストを作ると大変なことになりそうです。</p>
-
-<h2>Redis::Client</h2>
-
-<p>これも tie すると、Redis上のデータをハッシュや配列として扱うことができます。
-tie できるのは <a href="http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/String.pm">String</a>,
-<a href="http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/List.pm">List</a>,
-<a href="http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/Hash.pm">Hash</a>,
-<a href="http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/Set.pm">Set</a>,
-<a href="http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/Zset.pm">Zset</a>。
-それぞれがRedisで使えるデータ型に対応している。</p>
-
-<figure class='code'><figcaption><span>Redis::Client::String</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">utf8</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="n">warnings</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="n">strict</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="mf">5.014</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">use</span> <span class="nn">Redis::</span><span class="n">Client</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">my</span> <span class="nv">$client</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">Client</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">;</span>
-</span><span class='line'><span class="nb">tie</span> <span class="k">my</span> <span class="nv">$str</span><span class="p">,</span> <span class="s">&#39;Redis::Client::String&#39;</span><span class="p">,</span> <span class="n">key</span> <span class="o">=&gt;</span> <span class="s">&#39;my_string&#39;</span><span class="p">,</span> <span class="n">client</span> <span class="o">=&gt;</span> <span class="nv">$client</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="nv">$str</span> <span class="o">=</span> <span class="s">&#39;foo&#39;</span><span class="p">;</span>
-</span><span class='line'><span class="n">say</span> <span class="nv">$str</span><span class="p">;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>ひとつのキーに対してひとつのオブジェクトを割り当てるのは良さげ。
-また、ハッシュ型、セット型、ソート済みセット型といった、Redis特有のデータ型に対応しているのもGood。
-でも、ただストアするだけならこれで十分だけど、もう少し高度な機能も使いたい・・・。</p>
-
-<h2>Tie::Redis</h2>
-
-<p><a href="http://search.cpan.org/~dgl/Tie-Redis/lib/Tie/Redis/Hash.pm">Tie::Redis</a> も
-tie を使ってPerlのデータ構造っぽく扱えるようにするライブラリ。</p>
-
-<p>Redis全体を一つのハッシュとして扱ったり、
-Redisの文字列型、ハッシュ型、リスト型を扱えるみたい。</p>
-
-<h2>Redis::Object</h2>
-
-<p><a href="http://search.cpan.org/~ukautz/Redis-Object/README.pod">Redis::Oject</a>は
-ORM風なRedis用ライブラリ。</p>
-
-<figure class='code'><figcaption><span>RedisDatabase.pm</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="nb">package</span> <span class="n">MyRedisDatabase</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">use</span> <span class="n">Moose</span><span class="p">;</span>
-</span><span class='line'><span class="n">extends</span> <span class="sx">qw/ Redis::Object /</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="n">has</span> <span class="n">tables</span> <span class="o">=&gt;</span> <span class="p">(</span>
-</span><span class='line'>    <span class="n">isa</span>     <span class="o">=&gt;</span> <span class="s">&#39;ArrayRef[Str]&#39;</span><span class="p">,</span>
-</span><span class='line'>    <span class="n">is</span>      <span class="o">=&gt;</span> <span class="s">&#39;ro&#39;</span><span class="p">,</span>
-</span><span class='line'>    <span class="n">default</span> <span class="o">=&gt;</span> <span class="k">sub </span><span class="p">{</span> <span class="p">[</span> <span class="sx">qw/SomeTable/</span> <span class="p">]</span> <span class="p">},</span>
-</span><span class='line'><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'><span class="n">__PACKAGE__</span><span class="o">-&gt;</span><span class="n">meta</span><span class="o">-&gt;</span><span class="n">make_immutable</span><span class="p">;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-
-
-<figure class='code'><figcaption><span>RedisDatabase/SomeTable.pm</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="nb">package</span> <span class="nn">MyRedisDatabase::</span><span class="n">SomeTable</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">use</span> <span class="n">Moose</span><span class="p">;</span>
-</span><span class='line'><span class="n">with</span> <span class="sx">qw/ Redis::Object::Table /</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="n">has</span> <span class="n">hoge</span> <span class="o">=&gt;</span> <span class="p">(</span> <span class="n">isa</span> <span class="o">=&gt;</span> <span class="s">&#39;Str&#39;</span><span class="p">,</span> <span class="n">is</span> <span class="o">=&gt;</span> <span class="s">&#39;rw&#39;</span><span class="p">,</span> <span class="n">default</span> <span class="o">=&gt;</span> <span class="s">&#39;Something&#39;</span> <span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'><span class="n">__PACKAGE__</span><span class="o">-&gt;</span><span class="n">meta</span><span class="o">-&gt;</span><span class="n">make_immutable</span><span class="p">;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-
-
-<figure class='code'><figcaption><span>redis-object.pl</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">utf8</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="n">strict</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="n">warnings</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="mf">5.014</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">use</span> <span class="n">MyRedisDatabase</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1"># init database</span>
-</span><span class='line'><span class="k">my</span> <span class="nv">$db</span> <span class="o">=</span> <span class="n">MyRedisDatabase</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span>
-</span><span class='line'>    <span class="n">server</span> <span class="o">=&gt;</span> <span class="s">&#39;localhost:6379&#39;</span>
-</span><span class='line'><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1"># create item</span>
-</span><span class='line'><span class="k">my</span> <span class="nv">$item</span> <span class="o">=</span> <span class="nv">$db</span><span class="o">-&gt;</span><span class="n">create</span><span class="p">(</span> <span class="n">SomeTable</span> <span class="o">=&gt;</span> <span class="p">{</span>
-</span><span class='line'>    <span class="n">hoge</span> <span class="o">=&gt;</span> <span class="s">&quot;Hello&quot;</span><span class="p">,</span>
-</span><span class='line'><span class="p">}</span> <span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1"># fetch item by id</span>
-</span><span class='line'><span class="nv">$item</span> <span class="o">=</span> <span class="nv">$db</span><span class="o">-&gt;</span><span class="n">find</span><span class="p">(</span> <span class="n">SomeTable</span> <span class="o">=&gt;</span> <span class="nv">$item</span><span class="o">-&gt;</span><span class="n">id</span> <span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1"># update item</span>
-</span><span class='line'><span class="nv">$item</span><span class="o">-&gt;</span><span class="n">hoge</span><span class="p">(</span> <span class="s">&quot;piyo&quot;</span> <span class="p">);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>ORMっぽいけど、あんまり複雑な検索はできないらしい。
-ここまでするなら普通にMySQLとORMつかったほうが良さそう。</p>
-
-<h2>まとめ</h2>
-
-<p>みんな tie が大好き。</p>
-
-<p>tie しないのがほしいな・・・。</p>
 ]]></content>
   </entry>
   
