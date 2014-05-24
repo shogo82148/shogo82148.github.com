@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2014-05-23T00:00:09+09:00</updated>
+  <updated>2014-05-25T08:04:03+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,136 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[C# でお手軽にMessagePack解析！]]></title>
+    <link href="http://shogo82148.github.io/blog/2014/05/25/mini-message-pack/"/>
+    <updated>2014-05-25T01:38:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2014/05/25/mini-message-pack</id>
+    <content type="html"><![CDATA[<p><a href="https://github.com/shogo82148/MiniMessagePack">MiniMessagePack.cs</a>ってのを作った。
+C#のプロジェクトにファイルひとつ導入するだけで、お手軽にMessagePackの解析ができます。</p>
+
+<!-- More -->
+
+
+<h2>なんで作ったの？</h2>
+
+<p><a href="https://gist.github.com/darktable/1411710">MiniJSON</a> の置き換えが目的です。
+とあるUnityプロジェクトでMB単位のJSONをパースする箇所があってですね・・・
+パースにはMiniJSONを使っているのですが、さすがに対象がでかすぎて重たい。
+そこでMessagePackへの置き換えを検討してみたわけです。</p>
+
+<p>もちろん C# で動く MessagePack のパーサはすでにあって、
+<a href="https://github.com/msgpack/msgpack-cli">messagepack-cli</a>とか<a href="https://github.com/southwudang/msgpack-unity">messagepack-unity</a>とか見つけました。
+しかし、Unityのちょっと古いMonoで動かすためにちょっとゴニョゴニョしないといけなかったり、
+MiniJSON との互換性を取るためにもゴニョゴニョしないといけなかったり(実際やってみたらキャストが大量に失敗して辛かった・・・)、
+今回の用途にはちょっと高機能かなーと思ったので作っちゃいました！</p>
+
+<h2>つかいかた</h2>
+
+<h3>デコードする</h3>
+
+<p><code>byte</code>の配列を渡すとパースして返してくれます。
+配列は<code>List&lt;object&gt;</code>で、マップは<code>Dictionary&lt;string, object&gt;</code>になります。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class='csharp'><span class='line'><span class="k">using</span> <span class="nn">MiniMessagePack</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// it means {&quot;compact&quot;:true,&quot;schema&quot;:0} in JSON</span>
+</span><span class='line'><span class="kt">var</span> <span class="n">msgpack</span> <span class="p">=</span> <span class="k">new</span> <span class="kt">byte</span><span class="p">[]</span> <span class="p">{</span>
+</span><span class='line'>    <span class="m">0</span><span class="n">x82</span><span class="p">,</span> <span class="m">0</span><span class="n">xa7</span><span class="p">,</span> <span class="m">0</span><span class="n">x63</span><span class="p">,</span> <span class="m">0</span><span class="n">x6f</span><span class="p">,</span> <span class="m">0</span><span class="n">x6d</span><span class="p">,</span> <span class="m">0</span><span class="n">x70</span><span class="p">,</span> <span class="m">0</span><span class="n">x61</span><span class="p">,</span> <span class="m">0</span><span class="n">x63</span><span class="p">,</span> <span class="m">0</span><span class="n">x74</span><span class="p">,</span> <span class="m">0</span><span class="n">xc3</span><span class="p">,</span>
+</span><span class='line'>  <span class="m">0</span><span class="n">xa6</span><span class="p">,</span> <span class="m">0</span><span class="n">x73</span><span class="p">,</span> <span class="m">0</span><span class="n">x63</span><span class="p">,</span> <span class="m">0</span><span class="n">x68</span><span class="p">,</span> <span class="m">0</span><span class="n">x65</span><span class="p">,</span> <span class="m">0</span><span class="n">x6d</span><span class="p">,</span> <span class="m">0</span><span class="n">x61</span><span class="p">,</span> <span class="m">0</span><span class="n">x00</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'>
+</span><span class='line'><span class="kt">var</span> <span class="n">packer</span> <span class="p">=</span> <span class="k">new</span> <span class="n">MiniMessagePacker</span> <span class="p">();</span>
+</span><span class='line'><span class="kt">object</span> <span class="n">unpacked_data</span> <span class="p">=</span> <span class="n">packer</span><span class="p">.</span><span class="n">Unpack</span> <span class="p">(</span><span class="n">msgpack</span><span class="p">);</span>
+</span><span class='line'><span class="cm">/*</span>
+</span><span class='line'><span class="cm">unpacked_data = new Dictionary&lt;string, object&gt; {</span>
+</span><span class='line'><span class="cm">    { &quot;compact&quot;, true },</span>
+</span><span class='line'><span class="cm">    { &quot;schema&quot;, 0},</span>
+</span><span class='line'><span class="cm">};</span>
+</span><span class='line'><span class="cm">*/</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>エンコードする</h3>
+
+<p>オブジェクトを渡すと MessagePack にエンコードして返してくれます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='csharp'><span class='line'><span class="k">using</span> <span class="nn">MiniMessagePack</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="kt">var</span> <span class="n">unpacked_data</span> <span class="p">=</span> <span class="k">new</span> <span class="n">Dictionary</span><span class="p">&lt;</span><span class="kt">string</span><span class="p">,</span> <span class="kt">object</span><span class="p">&gt;</span> <span class="p">{</span>
+</span><span class='line'>    <span class="p">{</span> <span class="s">&quot;compact&quot;</span><span class="p">,</span> <span class="k">true</span> <span class="p">},</span>
+</span><span class='line'>    <span class="p">{</span> <span class="s">&quot;schema&quot;</span><span class="p">,</span> <span class="m">0</span><span class="p">},</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'>
+</span><span class='line'><span class="kt">var</span> <span class="n">packer</span> <span class="p">=</span> <span class="k">new</span> <span class="n">MiniMessagePacker</span> <span class="p">();</span>
+</span><span class='line'><span class="n">bytep</span><span class="p">[]</span> <span class="n">msgpack</span> <span class="p">=</span> <span class="n">packer</span><span class="p">.</span><span class="n">Pack</span> <span class="p">(</span><span class="n">unpacked_data</span><span class="p">);</span>
+</span><span class='line'><span class="c1">// msgpack = new byte[] { 0x82, 0xa7, ...};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>制限事項</h2>
+
+<p>MiniJSON との互換性を取るために、色々と制限事項があります。</p>
+
+<ul>
+<li>デコード時、整数型は全て<code>long</code>型
+
+<ul>
+<li>整数の大きさに関係なく全て<code>long</code>型になります</li>
+<li>符号なし64bit整数型も<code>long</code>として扱われるので、表現できる範囲が狭くなっていることに注意してください</li>
+</ul>
+</li>
+<li>デコード時、浮動小数点型は全て<code>double</code>型
+
+<ul>
+<li><code>float</code>も<code>double</code>として扱われます(拡張される方向への変換だから問題ないとは思うけど)</li>
+</ul>
+</li>
+<li>デコード時、マップ型のキーは文字列にキャストされます
+
+<ul>
+<li>MessagePackの仕様にはキーの型に制限が無いっぽい(？)けど、扱えるのは文字列の場合のみです</li>
+</ul>
+</li>
+<li>Extended は今のところ扱えません</li>
+</ul>
+
+
+<h2>ちょっとだけ使ってみた結果</h2>
+
+<p>正確なベンチマークとかはとってないのですが、
+実際のプロジェクトに組み込んでみた結果、MiniJSONとくらべて約2倍の速さでパースできました！</p>
+
+<p>MiniJSON を使っているプロジェクトであれば簡単に導入できるはずなので、ぜひ試してみてみてください。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[travis-ciでC++11のテストをする]]></title>
@@ -2074,52 +2204,6 @@ Redis::Namespace でつらい思いをしたので、
 
 <p>Test::Deep は Redis::Namespace のテストでも一部使っていますが、これ便利ですね。
 Test::More の is_deeply はちょっと不便だと思っていたので、今後も使っていこうと思います。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Redis::NamespaceのPerl版書いた]]></title>
-    <link href="http://shogo82148.github.io/blog/2013/09/14/redis-namespace-perl/"/>
-    <updated>2013-09-14T18:36:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2013/09/14/redis-namespace-perl</id>
-    <content type="html"><![CDATA[<p><a href="http://redis.io/">Redis</a> のキーにプリフィックスつけるの面倒だなー自動的につけてくれないかなーと思い、
-調べてみると Ruby に <a href="https://github.com/resque/redis-namespace">Redis-Namespace</a> というものがあるらしい。
-だけども、Perl では探しても見つからなかったので書いてみた。</p>
-
-<p>レポジトリはこちら→<a href="https://github.com/shogo82148/Redis-Namepace">Redis::Namespace</a></p>
-
-<!-- More -->
-
-
-<h2>使い方</h2>
-
-<p>インターフェースは <a href="http://search.cpan.org/~melo/Redis/">Perl Redis</a> と一緒。
-コマンドのキー名に当たる部分に、自動的にプレフィックスをつけてくれる。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">Redis</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="nn">Redis::</span><span class="n">Namespace</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">my</span> <span class="nv">$redis</span> <span class="o">=</span> <span class="n">Redis</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">;</span>
-</span><span class='line'><span class="k">my</span> <span class="nv">$ns</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">Namespace</span><span class="p">(</span><span class="n">redis</span> <span class="o">=&gt;</span> <span class="nv">$redis</span><span class="p">,</span> <span class="n">namespace</span> <span class="o">=&gt;</span> <span class="s">&#39;fugu&#39;</span><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'><span class="nv">$ns</span><span class="o">-&gt;</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;foo&#39;</span><span class="p">,</span> <span class="s">&#39;bar&#39;</span><span class="p">);</span>    <span class="c1"># $redis-&gt;set(&#39;fugu:foo&#39;, &#39;bar&#39;);</span>
-</span><span class='line'><span class="k">my</span> <span class="nv">$foo</span> <span class="o">=</span> <span class="nv">$ns</span><span class="o">-&gt;</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;foo&#39;</span><span class="p">);</span> <span class="c1"># my $foo = $redis-&gt;get(&#39;fugu:foo&#39;);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>大体のコマンドには対応したつもり。
-別のプレフィックスがついたキーには基本的にアクセスできなくなるので、
-キー名の管理が少し楽になると思います。</p>
-
-<p>でも、flushdb とか flushall すると全部消えるので気をつけてね！</p>
 ]]></content>
   </entry>
   

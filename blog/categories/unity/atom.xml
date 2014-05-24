@@ -4,7 +4,7 @@
   <title><![CDATA[Category: unity | Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/blog/categories/unity/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2014-05-23T00:00:09+09:00</updated>
+  <updated>2014-05-25T08:04:03+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,119 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[C# でお手軽にMessagePack解析！]]></title>
+    <link href="http://shogo82148.github.io/blog/2014/05/25/mini-message-pack/"/>
+    <updated>2014-05-25T01:38:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2014/05/25/mini-message-pack</id>
+    <content type="html"><![CDATA[<p><a href="https://github.com/shogo82148/MiniMessagePack">MiniMessagePack.cs</a>ってのを作った。
+C#のプロジェクトにファイルひとつ導入するだけで、お手軽にMessagePackの解析ができます。</p>
+
+<!-- More -->
+
+
+<h2>なんで作ったの？</h2>
+
+<p><a href="https://gist.github.com/darktable/1411710">MiniJSON</a> の置き換えが目的です。
+とあるUnityプロジェクトでMB単位のJSONをパースする箇所があってですね・・・
+パースにはMiniJSONを使っているのですが、さすがに対象がでかすぎて重たい。
+そこでMessagePackへの置き換えを検討してみたわけです。</p>
+
+<p>もちろん C# で動く MessagePack のパーサはすでにあって、
+<a href="https://github.com/msgpack/msgpack-cli">messagepack-cli</a>とか<a href="https://github.com/southwudang/msgpack-unity">messagepack-unity</a>とか見つけました。
+しかし、Unityのちょっと古いMonoで動かすためにちょっとゴニョゴニョしないといけなかったり、
+MiniJSON との互換性を取るためにもゴニョゴニョしないといけなかったり(実際やってみたらキャストが大量に失敗して辛かった・・・)、
+今回の用途にはちょっと高機能かなーと思ったので作っちゃいました！</p>
+
+<h2>つかいかた</h2>
+
+<h3>デコードする</h3>
+
+<p><code>byte</code>の配列を渡すとパースして返してくれます。
+配列は<code>List&lt;object&gt;</code>で、マップは<code>Dictionary&lt;string, object&gt;</code>になります。</p>
+
+<p>``` csharp
+using MiniMessagePack;</p>
+
+<p>// it means {"compact":true,"schema":0} in JSON
+var msgpack = new byte[] {</p>
+
+<pre><code>0x82, 0xa7, 0x63, 0x6f, 0x6d, 0x70, 0x61, 0x63, 0x74, 0xc3,
+0xa6, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x00
+</code></pre>
+
+<p>};</p>
+
+<p>var packer = new MiniMessagePacker ();
+object unpacked_data = packer.Unpack (msgpack);
+/*
+unpacked_data = new Dictionary&lt;string, object> {</p>
+
+<pre><code>{ "compact", true },
+{ "schema", 0},
+</code></pre>
+
+<p>};
+*/
+```</p>
+
+<h3>エンコードする</h3>
+
+<p>オブジェクトを渡すと MessagePack にエンコードして返してくれます。</p>
+
+<p>``` csharp
+using MiniMessagePack;</p>
+
+<p>var unpacked_data = new Dictionary&lt;string, object> {</p>
+
+<pre><code>{ "compact", true },
+{ "schema", 0},
+</code></pre>
+
+<p>};</p>
+
+<p>var packer = new MiniMessagePacker ();
+bytep[] msgpack = packer.Pack (unpacked_data);
+// msgpack = new byte[] { 0x82, 0xa7, ...};
+```</p>
+
+<h2>制限事項</h2>
+
+<p>MiniJSON との互換性を取るために、色々と制限事項があります。</p>
+
+<ul>
+<li>デコード時、整数型は全て<code>long</code>型
+
+<ul>
+<li>整数の大きさに関係なく全て<code>long</code>型になります</li>
+<li>符号なし64bit整数型も<code>long</code>として扱われるので、表現できる範囲が狭くなっていることに注意してください</li>
+</ul>
+</li>
+<li>デコード時、浮動小数点型は全て<code>double</code>型
+
+<ul>
+<li><code>float</code>も<code>double</code>として扱われます(拡張される方向への変換だから問題ないとは思うけど)</li>
+</ul>
+</li>
+<li>デコード時、マップ型のキーは文字列にキャストされます
+
+<ul>
+<li>MessagePackの仕様にはキーの型に制限が無いっぽい(？)けど、扱えるのは文字列の場合のみです</li>
+</ul>
+</li>
+<li>Extended は今のところ扱えません</li>
+</ul>
+
+
+<h2>ちょっとだけ使ってみた結果</h2>
+
+<p>正確なベンチマークとかはとってないのですが、
+実際のプロジェクトに組み込んでみた結果、MiniJSONとくらべて約2倍の速さでパースできました！</p>
+
+<p>MiniJSON を使っているプロジェクトであれば簡単に導入できるはずなので、ぜひ試してみてみてください。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Unity Test Tools を使ってみる]]></title>

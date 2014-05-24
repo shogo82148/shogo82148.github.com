@@ -1,0 +1,444 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>C# でお手軽にMessagePack解析！ - Shogo's Blog</title>
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="description" content="MiniMessagePack.csってのを作った。
+C#のプロジェクトにファイルひとつ導入するだけで、お手軽にMessagePackの解析ができます。 なんで作ったの？ MiniJSON の置き換えが目的です。
+とあるUnityプロジェクトでMB単位のJSONをパースする箇所があってですね &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://shogo82148.github.io/blog/2014/05/25/mini-message-pack/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  <link href="/atom.xml" rel="alternate" title="Shogo's Blog" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-4526627-4']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Shogo's Blog</a></h1>
+  
+    <h2>たぶんプログラミングとかについて書いていくブログ</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:shogo82148.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/blog/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">C# でお手軽にMessagePack解析！</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2014-05-25T01:38:00+09:00" pubdate data-updated="true">May 25<span>th</span>, 2014</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p><a href="https://github.com/shogo82148/MiniMessagePack">MiniMessagePack.cs</a>ってのを作った。
+C#のプロジェクトにファイルひとつ導入するだけで、お手軽にMessagePackの解析ができます。</p>
+
+<!-- More -->
+
+
+<h2>なんで作ったの？</h2>
+
+<p><a href="https://gist.github.com/darktable/1411710">MiniJSON</a> の置き換えが目的です。
+とあるUnityプロジェクトでMB単位のJSONをパースする箇所があってですね・・・
+パースにはMiniJSONを使っているのですが、さすがに対象がでかすぎて重たい。
+そこでMessagePackへの置き換えを検討してみたわけです。</p>
+
+<p>もちろん C# で動く MessagePack のパーサはすでにあって、
+<a href="https://github.com/msgpack/msgpack-cli">messagepack-cli</a>とか<a href="https://github.com/southwudang/msgpack-unity">messagepack-unity</a>とか見つけました。
+しかし、Unityのちょっと古いMonoで動かすためにちょっとゴニョゴニョしないといけなかったり、
+MiniJSON との互換性を取るためにもゴニョゴニョしないといけなかったり(実際やってみたらキャストが大量に失敗して辛かった・・・)、
+今回の用途にはちょっと高機能かなーと思ったので作っちゃいました！</p>
+
+<h2>つかいかた</h2>
+
+<h3>デコードする</h3>
+
+<p><code>byte</code>の配列を渡すとパースして返してくれます。
+配列は<code>List&lt;object&gt;</code>で、マップは<code>Dictionary&lt;string, object&gt;</code>になります。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class='csharp'><span class='line'><span class="k">using</span> <span class="nn">MiniMessagePack</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// it means {&quot;compact&quot;:true,&quot;schema&quot;:0} in JSON</span>
+</span><span class='line'><span class="kt">var</span> <span class="n">msgpack</span> <span class="p">=</span> <span class="k">new</span> <span class="kt">byte</span><span class="p">[]</span> <span class="p">{</span>
+</span><span class='line'>    <span class="m">0</span><span class="n">x82</span><span class="p">,</span> <span class="m">0</span><span class="n">xa7</span><span class="p">,</span> <span class="m">0</span><span class="n">x63</span><span class="p">,</span> <span class="m">0</span><span class="n">x6f</span><span class="p">,</span> <span class="m">0</span><span class="n">x6d</span><span class="p">,</span> <span class="m">0</span><span class="n">x70</span><span class="p">,</span> <span class="m">0</span><span class="n">x61</span><span class="p">,</span> <span class="m">0</span><span class="n">x63</span><span class="p">,</span> <span class="m">0</span><span class="n">x74</span><span class="p">,</span> <span class="m">0</span><span class="n">xc3</span><span class="p">,</span>
+</span><span class='line'>  <span class="m">0</span><span class="n">xa6</span><span class="p">,</span> <span class="m">0</span><span class="n">x73</span><span class="p">,</span> <span class="m">0</span><span class="n">x63</span><span class="p">,</span> <span class="m">0</span><span class="n">x68</span><span class="p">,</span> <span class="m">0</span><span class="n">x65</span><span class="p">,</span> <span class="m">0</span><span class="n">x6d</span><span class="p">,</span> <span class="m">0</span><span class="n">x61</span><span class="p">,</span> <span class="m">0</span><span class="n">x00</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'>
+</span><span class='line'><span class="kt">var</span> <span class="n">packer</span> <span class="p">=</span> <span class="k">new</span> <span class="n">MiniMessagePacker</span> <span class="p">();</span>
+</span><span class='line'><span class="kt">object</span> <span class="n">unpacked_data</span> <span class="p">=</span> <span class="n">packer</span><span class="p">.</span><span class="n">Unpack</span> <span class="p">(</span><span class="n">msgpack</span><span class="p">);</span>
+</span><span class='line'><span class="cm">/*</span>
+</span><span class='line'><span class="cm">unpacked_data = new Dictionary&lt;string, object&gt; {</span>
+</span><span class='line'><span class="cm">    { &quot;compact&quot;, true },</span>
+</span><span class='line'><span class="cm">    { &quot;schema&quot;, 0},</span>
+</span><span class='line'><span class="cm">};</span>
+</span><span class='line'><span class="cm">*/</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>エンコードする</h3>
+
+<p>オブジェクトを渡すと MessagePack にエンコードして返してくれます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='csharp'><span class='line'><span class="k">using</span> <span class="nn">MiniMessagePack</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="kt">var</span> <span class="n">unpacked_data</span> <span class="p">=</span> <span class="k">new</span> <span class="n">Dictionary</span><span class="p">&lt;</span><span class="kt">string</span><span class="p">,</span> <span class="kt">object</span><span class="p">&gt;</span> <span class="p">{</span>
+</span><span class='line'>    <span class="p">{</span> <span class="s">&quot;compact&quot;</span><span class="p">,</span> <span class="k">true</span> <span class="p">},</span>
+</span><span class='line'>    <span class="p">{</span> <span class="s">&quot;schema&quot;</span><span class="p">,</span> <span class="m">0</span><span class="p">},</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'>
+</span><span class='line'><span class="kt">var</span> <span class="n">packer</span> <span class="p">=</span> <span class="k">new</span> <span class="n">MiniMessagePacker</span> <span class="p">();</span>
+</span><span class='line'><span class="n">bytep</span><span class="p">[]</span> <span class="n">msgpack</span> <span class="p">=</span> <span class="n">packer</span><span class="p">.</span><span class="n">Pack</span> <span class="p">(</span><span class="n">unpacked_data</span><span class="p">);</span>
+</span><span class='line'><span class="c1">// msgpack = new byte[] { 0x82, 0xa7, ...};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>制限事項</h2>
+
+<p>MiniJSON との互換性を取るために、色々と制限事項があります。</p>
+
+<ul>
+<li>デコード時、整数型は全て<code>long</code>型
+
+<ul>
+<li>整数の大きさに関係なく全て<code>long</code>型になります</li>
+<li>符号なし64bit整数型も<code>long</code>として扱われるので、表現できる範囲が狭くなっていることに注意してください</li>
+</ul>
+</li>
+<li>デコード時、浮動小数点型は全て<code>double</code>型
+
+<ul>
+<li><code>float</code>も<code>double</code>として扱われます(拡張される方向への変換だから問題ないとは思うけど)</li>
+</ul>
+</li>
+<li>デコード時、マップ型のキーは文字列にキャストされます
+
+<ul>
+<li>MessagePackの仕様にはキーの型に制限が無いっぽい(？)けど、扱えるのは文字列の場合のみです</li>
+</ul>
+</li>
+<li>Extended は今のところ扱えません</li>
+</ul>
+
+
+<h2>ちょっとだけ使ってみた結果</h2>
+
+<p>正確なベンチマークとかはとってないのですが、
+実際のプロジェクトに組み込んでみた結果、MiniJSONとくらべて約2倍の速さでパースできました！</p>
+
+<p>MiniJSON を使っているプロジェクトであれば簡単に導入できるはずなので、ぜひ試してみてみてください。</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2014-05-25T01:38:00+09:00" pubdate data-updated="true">May 25<span>th</span>, 2014</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/c-/'>c#</a>, <a class='category' href='/blog/categories/messagepack/'>messagepack</a>, <a class='category' href='/blog/categories/unity/'>unity</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.io/blog/2014/05/25/mini-message-pack/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.io/blog/2014/05/25/mini-message-pack/" data-via="shogo82148" data-counturl="http://shogo82148.github.io/blog/2014/05/25/mini-message-pack/" >Tweet</a>
+  
+  
+  <div class="g-plusone" data-size="medium"></div>
+  
+  
+    <div class="fb-like" data-send="true" data-width="450" data-show-faces="false"></div>
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2014/05/22/use-cpp11-in-travis/" title="Previous Post: travis-ciでC++11のテストをする">&laquo; travis-ciでC++11のテストをする</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2014/05/25/mini-message-pack/">C# でお手軽にMessagePack解析！</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/05/22/use-cpp11-in-travis/">travis-ciでC++11のテストをする</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/05/18/test-with-google-test/">Google Test を使ってC++のテストしてみた</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/05/17/redis-fast-0-dot-07-released/">Redis::Fast 0.07 をリリースしました！</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/05/07/androidbinary/">Androidのバイナリファイルを解析するgoのライブラリ</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>GitHub Repos</h1>
+  <ul id="gh_repos">
+    <li class="loading">Status updating...</li>
+  </ul>
+  
+  <a href="https://github.com/shogo82148">@shogo82148</a> on GitHub
+  
+  <script type="text/javascript">
+    $.domReady(function(){
+        if (!window.jXHR){
+            var jxhr = document.createElement('script');
+            jxhr.type = 'text/javascript';
+            jxhr.src = '/javascripts/libs/jXHR.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(jxhr, s);
+        }
+
+        github.showRepos({
+            user: 'shogo82148',
+            count: 0,
+            skip_forks: true,
+            target: '#gh_repos'
+        });
+    });
+  </script>
+  <script src="/javascripts/github.js" type="text/javascript"> </script>
+</section>
+
+
+<section>
+  <h1>Latest Tweets</h1>
+  <ul id="tweets">
+    <li class="loading">Status updating...</li>
+  </ul>
+  <script type="text/javascript">
+    $.domReady(function(){
+      getTwitterFeed("shogo82148", 4, false);
+    });
+  </script>
+  <script src="/javascripts/twitter.js" type="text/javascript"> </script>
+  
+    <a href="http://twitter.com/shogo82148" class="twitter-follow-button" data-show-count="false">Follow @shogo82148</a>
+  
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2014 - Shogo Ichinose -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'shogosblog';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://shogo82148.github.io/blog/2014/05/25/mini-message-pack/';
+        var disqus_url = 'http://shogo82148.github.io/blog/2014/05/25/mini-message-pack/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) {return;}
+  js = d.createElement(s); js.id = id;
+  js.src = "//connect.facebook.net/en_US/all.js#appId=212934732101925&xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var script = document.createElement('script'); script.type = 'text/javascript'; script.async = true;
+      script.src = 'https://apis.google.com/js/plusone.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(script, s);
+    })();
+  </script>
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>
