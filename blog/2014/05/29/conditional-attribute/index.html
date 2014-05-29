@@ -1,0 +1,508 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>C#のconditional attributeのコンパイル結果を見てみる - Shogo's Blog</title>
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="description" content="C#で「ある環境では関数の定義ごと消したい」みたいな要件があって、
+そういう用途にconditinal attributeが使えるのかなーと話題のあがったので、実際に確認してみました。 結論から言えばできないのですが、せっかく調べたのでメモとして残しておきます。 conditional &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://shogo82148.github.io/blog/2014/05/29/conditional-attribute/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  <link href="/atom.xml" rel="alternate" title="Shogo's Blog" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-4526627-4']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Shogo's Blog</a></h1>
+  
+    <h2>たぶんプログラミングとかについて書いていくブログ</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:shogo82148.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/blog/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">C#のconditional Attributeのコンパイル結果を見てみる</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2014-05-29T19:20:00+09:00" pubdate data-updated="true">May 29<span>th</span>, 2014</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>C#で「ある環境では関数の定義ごと消したい」みたいな要件があって、
+そういう用途にconditinal attributeが使えるのかなーと話題のあがったので、実際に確認してみました。</p>
+
+<p>結論から言えばできないのですが、せっかく調べたのでメモとして残しておきます。</p>
+
+<!-- More -->
+
+
+<h2>conditional attribute</h2>
+
+<p>「デバッグ時のみにしか実行して欲しくない関数」みたいなものを定義するための機能です。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+</pre></td><td class='code'><pre><code class='csharp'><span class='line'><span class="k">using</span> <span class="nn">System</span><span class="p">;</span>
+</span><span class='line'><span class="k">using</span> <span class="nn">System.IO</span><span class="p">;</span>
+</span><span class='line'><span class="k">using</span> <span class="nn">System.Diagnostics</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">namespace</span> <span class="nn">ConditionalAttributeTest</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="k">class</span> <span class="nc">MainClass</span>
+</span><span class='line'>    <span class="p">{</span>
+</span><span class='line'>        <span class="k">public</span> <span class="k">static</span> <span class="k">void</span> <span class="nf">Main</span> <span class="p">(</span><span class="kt">string</span><span class="p">[]</span> <span class="n">args</span><span class="p">)</span>
+</span><span class='line'>        <span class="p">{</span>
+</span><span class='line'>            <span class="n">Log</span><span class="p">(</span><span class="s">&quot;fugu&quot;</span><span class="p">);</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="na">        [ConditionalAttribute(&quot;DEBUG&quot;)]</span>
+</span><span class='line'>        <span class="k">public</span> <span class="k">static</span> <span class="k">void</span> <span class="nf">Log</span><span class="p">(</span><span class="kt">string</span> <span class="n">message</span><span class="p">)</span>
+</span><span class='line'>        <span class="p">{</span>
+</span><span class='line'>            <span class="n">Console</span><span class="p">.</span><span class="n">WriteLine</span><span class="p">(</span><span class="n">message</span><span class="p">);</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>こんなふうに書いておくと <code>DEBUG</code> シンボルが定義されている時にだけ<code>Log</code>の呼び出しが行われます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>&gt; mcs -d:DEBUG ConditionalAttributeTest.cs
+</span><span class='line'>&gt; mono ConditionalAttributeTest
+</span><span class='line'>fugu
+</span><span class='line'>&gt; mcs ConditionalAttributeTest.cs
+</span><span class='line'>&gt; mono ConditionalAttributeTest
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>逆アセンブルしてみる</h2>
+
+<p>DEBUG付きでコンパイルした結果を逆アセンブルしてみます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>// ...前略
+</span><span class='line'>// method line 2
+</span><span class='line'>.method public static hidebysig
+</span><span class='line'>    default void Main (string[] args)  cil managed
+</span><span class='line'>{
+</span><span class='line'>    // Method begins at RVA 0x2058
+</span><span class='line'>    .entrypoint
+</span><span class='line'>    // Code size 11 (0xb)
+</span><span class='line'>    .maxstack 8
+</span><span class='line'>    IL_0000:  ldstr "fugu"
+</span><span class='line'>    IL_0005:  call void class ConditionalAttributeTest.MainClass::Log(string)
+</span><span class='line'>    IL_000a:  ret
+</span><span class='line'>} // end of method MainClass::Main
+</span><span class='line'>
+</span><span class='line'>// method line 3
+</span><span class='line'>.method public static hidebysig
+</span><span class='line'>    default void Log (string message)  cil managed
+</span><span class='line'>{
+</span><span class='line'>    .custom instance void class [mscorlib]System.Diagnostics.ConditionalAttribute::'.ctor'(string) =  (01 00 05 44 45 42 55 47 00 00 ) // ...DEBUG..
+</span><span class='line'>
+</span><span class='line'>    // Method begins at RVA 0x2064
+</span><span class='line'>    // Code size 7 (0x7)
+</span><span class='line'>    .maxstack 8
+</span><span class='line'>    IL_0000:  ldarg.0
+</span><span class='line'>    IL_0001:  call void class [mscorlib]System.Console::WriteLine(string)
+</span><span class='line'>    IL_0006:  ret
+</span><span class='line'>}</span></code></pre></td></tr></table></div></figure>
+
+
+<p>DEBUGを付けなかったときとのDIFFをとってみます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+</pre></td><td class='code'><pre><code class='diff'><span class='line'>15c15
+</span><span class='line'>&lt; .module ConditionalAttributeTest.exe // GUID = {A54F3644-5083-4EC7-B846-8A354DD113AA}
+</span><span class='line'><span class="gd">---</span>
+</span><span class='line'>&gt; .module ConditionalAttributeTest.exe // GUID = {436FE462-17D6-4FDB-9AA7-15DA92658168}
+</span><span class='line'>42c42
+</span><span class='line'>&lt;  // Code size 11 (0xb)
+</span><span class='line'><span class="gd">---</span>
+</span><span class='line'>&gt;  // Code size 1 (0x1)
+</span><span class='line'>44,46c44
+</span><span class='line'>&lt;  IL_0000:  ldstr &quot;fugu&quot;
+</span><span class='line'>&lt;  IL_0005:  call void class ConditionalAttributeTest.MainClass::Log(string)
+</span><span class='line'>&lt;  IL_000a:  ret
+</span><span class='line'><span class="gd">---</span>
+</span><span class='line'>&gt;  IL_0000:  ret
+</span><span class='line'>55c53
+</span><span class='line'>&lt;         // Method begins at RVA 0x2064
+</span><span class='line'><span class="gd">---</span>
+</span><span class='line'>&gt;         // Method begins at RVA 0x205a
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>変わったのは呼び出し側であるmain関数だけで、
+ConditionalAttributeがついたメソッド自体はDEBUGの有無に関係なく同じコードが吐かれます。</p>
+
+<h2>SEE ALSO</h2>
+
+<p>例によってこのことはドキュメントにバッチリ載っております。</p>
+
+<ul>
+<li><a href="http://msdn.microsoft.com/ja-jp/library/system.diagnostics.conditionalattribute.aspx">ConditionalAttribute クラス</a></li>
+</ul>
+
+
+<blockquote><p>指定した条件付きコンパイルのシンボルが定義されていない限り、メソッド呼び出しまたは属性を無視するようにコンパイラに指示します。</p></blockquote>
+
+<p>ドキュメントには「呼び出しを無視する」としか書かれてないので、定義がなくなるわけではないですね。
+そもそも関数定義がなくなったら、リンク時に Conditional Attribute があるかないか確認する方法がないじゃないですか・・・。</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2014-05-29T19:20:00+09:00" pubdate data-updated="true">May 29<span>th</span>, 2014</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/c-/'>c#</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.io/blog/2014/05/29/conditional-attribute/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.io/blog/2014/05/29/conditional-attribute/" data-via="shogo82148" data-counturl="http://shogo82148.github.io/blog/2014/05/29/conditional-attribute/" >Tweet</a>
+  
+  
+  <div class="g-plusone" data-size="medium"></div>
+  
+  
+    <div class="fb-like" data-send="true" data-width="450" data-show-faces="false"></div>
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2014/05/27/using-statement-without-instantiating/" title="Previous Post: 初期化なしのusing文ってOK？">&laquo; 初期化なしのusing文ってOK？</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2014/05/29/conditional-attribute/">C#のconditional attributeのコンパイル結果を見てみる</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/05/27/using-statement-without-instantiating/">初期化なしのusing文ってOK？</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/05/25/mini-message-pack/">C# でお手軽にMessagePack解析！</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/05/22/use-cpp11-in-travis/">travis-ciでC++11のテストをする</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/05/18/test-with-google-test/">Google Test を使ってC++のテストしてみた</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>GitHub Repos</h1>
+  <ul id="gh_repos">
+    <li class="loading">Status updating...</li>
+  </ul>
+  
+  <a href="https://github.com/shogo82148">@shogo82148</a> on GitHub
+  
+  <script type="text/javascript">
+    $.domReady(function(){
+        if (!window.jXHR){
+            var jxhr = document.createElement('script');
+            jxhr.type = 'text/javascript';
+            jxhr.src = '/javascripts/libs/jXHR.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(jxhr, s);
+        }
+
+        github.showRepos({
+            user: 'shogo82148',
+            count: 0,
+            skip_forks: true,
+            target: '#gh_repos'
+        });
+    });
+  </script>
+  <script src="/javascripts/github.js" type="text/javascript"> </script>
+</section>
+
+
+<section>
+  <h1>Latest Tweets</h1>
+  <ul id="tweets">
+    <li class="loading">Status updating...</li>
+  </ul>
+  <script type="text/javascript">
+    $.domReady(function(){
+      getTwitterFeed("shogo82148", 4, false);
+    });
+  </script>
+  <script src="/javascripts/twitter.js" type="text/javascript"> </script>
+  
+    <a href="http://twitter.com/shogo82148" class="twitter-follow-button" data-show-count="false">Follow @shogo82148</a>
+  
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2014 - Shogo Ichinose -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'shogosblog';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://shogo82148.github.io/blog/2014/05/29/conditional-attribute/';
+        var disqus_url = 'http://shogo82148.github.io/blog/2014/05/29/conditional-attribute/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) {return;}
+  js = d.createElement(s); js.id = id;
+  js.src = "//connect.facebook.net/en_US/all.js#appId=212934732101925&xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var script = document.createElement('script'); script.type = 'text/javascript'; script.async = true;
+      script.src = 'https://apis.google.com/js/plusone.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(script, s);
+    })();
+  </script>
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>
