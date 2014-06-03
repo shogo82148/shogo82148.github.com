@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2014-06-01T00:26:14+09:00</updated>
+  <updated>2014-06-04T08:12:17+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,188 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[IRCに癒やしボットを入れてみた]]></title>
+    <link href="http://shogo82148.github.io/blog/2014/06/04/irc-healing-bot/"/>
+    <updated>2014-06-04T07:37:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2014/06/04/irc-healing-bot</id>
+    <content type="html"><![CDATA[<p>別チームがIRCに癒やしボットを入れてたので、自分のチームのチャンネルにも入れてみた。</p>
+
+<!-- More -->
+
+
+<h2>Instagramに登録する</h2>
+
+<p><a href="http://instagram.com/developer/">InstagramのDeveloperサイト</a>に開発者として登録します。
+<a href="http://instagram.com/developer/authentication/">Authentication</a>
+のページを見ながら、Server-side (Explicit) Flow を参考にアクセストークンを取得します。</p>
+
+<h2>Instagram APIを叩く</h2>
+
+<p><code>https://api.instagram.com/v1/tags/$TAGNAME/media/recent?access_token=YOUR_ACCESS_TOKEN</code>を叩くと
+TAGNAMEに関連する画像の情報がJSONで帰ってくるので、
+Perlからこのエンドポイントを叩きます。
+IRCとのやりとりには<a href="http://www.songmu.jp/riji/entry/2013-09-09-unazusan.html">UnazuSan</a>を使いました。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="o">!</span><span class="sr">/usr/</span><span class="n">bin</span><span class="o">/</span><span class="n">env</span> <span class="n">perl</span>
+</span><span class='line'><span class="k">use</span> <span class="mf">5.014</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">warnings</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">strict</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">utf8</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">Encode</span> <span class="sx">qw/encode_utf8/</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">Furl</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">JSON</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">use</span> <span class="n">UnazuSan</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">sub </span><span class="nf">neko</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">state</span> <span class="nv">$data</span> <span class="o">=</span> <span class="nb">undef</span><span class="p">;</span>
+</span><span class='line'>    <span class="n">state</span> <span class="nv">$time</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">if</span><span class="p">(</span> <span class="o">!</span><span class="nv">$data</span> <span class="o">||</span> <span class="nb">time</span> <span class="o">-</span> <span class="nv">$time</span> <span class="o">&gt;</span> <span class="mi">60</span> <span class="o">*</span> <span class="mi">60</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="nv">$time</span> <span class="o">=</span> <span class="nb">time</span><span class="p">;</span>
+</span><span class='line'>        <span class="k">my</span> <span class="nv">$furl</span> <span class="o">=</span> <span class="n">Furl</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">;</span>
+</span><span class='line'>        <span class="k">my</span> <span class="nv">$res</span> <span class="o">=</span> <span class="nv">$furl</span><span class="o">-&gt;</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;https://api.instagram.com/v1/tags/%E7%8C%AB/media/recent?access_token=YOUR_ACCESS_TOKEN&#39;</span><span class="p">);</span>
+</span><span class='line'>        <span class="k">my</span> <span class="nv">$hash</span> <span class="o">=</span> <span class="nn">JSON::</span><span class="n">decode_json</span><span class="p">(</span><span class="nv">$res</span><span class="o">-&gt;</span><span class="n">content</span><span class="p">);</span>
+</span><span class='line'>        <span class="nv">$data</span> <span class="o">=</span> <span class="nv">$hash</span><span class="o">-&gt;</span><span class="p">{</span><span class="n">data</span><span class="p">};</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$media</span> <span class="o">=</span> <span class="nv">$data</span><span class="o">-&gt;</span><span class="p">[</span><span class="nb">rand</span><span class="p">(</span><span class="nb">scalar</span> <span class="nv">@$data</span><span class="p">)];</span>
+</span><span class='line'>    <span class="k">return</span> <span class="nv">$media</span><span class="o">-&gt;</span><span class="p">{</span><span class="n">images</span><span class="p">}{</span><span class="n">standard_resolution</span><span class="p">}{</span><span class="n">url</span><span class="p">};</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$unazu_san</span><span class="p">;</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$NICKNAME</span> <span class="o">=</span> <span class="s">&#39;iyashi&#39;</span><span class="p">;</span>
+</span><span class='line'><span class="nv">$unazu_san</span> <span class="o">=</span> <span class="n">UnazuSan</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span>
+</span><span class='line'>    <span class="n">host</span>       <span class="o">=&gt;</span> <span class="s">&#39;127.0.0.1&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="n">enable_ssl</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span>
+</span><span class='line'>    <span class="n">join_channels</span> <span class="o">=&gt;</span> <span class="p">[</span><span class="s">&#39;#test&#39;</span><span class="p">],</span>
+</span><span class='line'>    <span class="n">respond_all</span>   <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span>
+</span><span class='line'>    <span class="n">nickname</span>      <span class="o">=&gt;</span> <span class="nv">$NICKNAME</span><span class="p">,</span>
+</span><span class='line'><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="nv">$unazu_san</span><span class="o">-&gt;</span><span class="n">on_message</span><span class="p">(</span>
+</span><span class='line'>    <span class="sx">qr/^\s+$NICKNAME:/</span> <span class="o">=&gt;</span> <span class="k">sub </span><span class="p">{</span>
+</span><span class='line'>        <span class="k">my</span> <span class="nv">$receive</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
+</span><span class='line'>        <span class="nv">$receive</span><span class="o">-&gt;</span><span class="n">reply</span><span class="p">(</span><span class="s">&#39;うんうん&#39;</span><span class="p">);</span>
+</span><span class='line'>    <span class="p">},</span>
+</span><span class='line'>    <span class="sx">qr/(.*)/</span> <span class="o">=&gt;</span> <span class="k">sub </span><span class="p">{</span>
+</span><span class='line'>        <span class="k">my</span> <span class="p">(</span><span class="nv">$receive</span><span class="p">,</span> <span class="nv">$match</span><span class="p">)</span> <span class="o">=</span> <span class="nv">@_</span><span class="p">;</span>
+</span><span class='line'>        <span class="n">say</span> <span class="nv">$match</span><span class="p">;</span>
+</span><span class='line'>        <span class="n">say</span> <span class="nv">$receive</span><span class="o">-&gt;</span><span class="n">message</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">},</span>
+</span><span class='line'><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="nv">$unazu_san</span><span class="o">-&gt;</span><span class="n">on_command</span><span class="p">(</span>
+</span><span class='line'>   <span class="s">&#39; 癒やし&#39;</span> <span class="o">=&gt;</span> <span class="k">sub </span><span class="p">{</span>
+</span><span class='line'>        <span class="k">my</span> <span class="p">(</span><span class="nv">$receive</span><span class="p">,</span> <span class="nv">@args</span><span class="p">)</span> <span class="o">=</span> <span class="nv">@_</span><span class="p">;</span>
+</span><span class='line'>        <span class="nv">$receive</span><span class="o">-&gt;</span><span class="n">reply</span><span class="p">(</span><span class="n">neko</span><span class="p">());</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="nv">$unazu_san</span><span class="o">-&gt;</span><span class="n">run</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>「癒して」と話しかけると猫画像を検索して返してくれます。</p>
+
+<h2>引数をMeCabで解析する</h2>
+
+<p>実際に入れてみたら、</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>acidlemon unazu_san: 癒やしをうさぎで頼む
+</span><span class='line'>acidlemon ネコやん! ('-'#)</span></code></pre></td></tr></table></div></figure>
+
+
+<p>みたいなことがあったので、「癒して」のあとも見ることにしました。
+MeCabを使って名詞っぽいものを抽出して、タグ名に使います。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="n">state</span> <span class="nv">$mecab</span> <span class="o">=</span> <span class="nn">Text::</span><span class="n">MeCab</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">();</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$n</span> <span class="o">=</span> <span class="nv">$mecab</span><span class="o">-&gt;</span><span class="n">parse</span><span class="p">(</span><span class="nb">join</span> <span class="s">&#39; &#39;</span><span class="p">,</span> <span class="nv">@_</span><span class="p">);</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$keyword</span> <span class="o">=</span> <span class="nb">undef</span><span class="p">;</span>
+</span><span class='line'><span class="k">while</span> <span class="p">(</span><span class="nv">$n</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$f</span> <span class="o">=</span> <span class="n">decode_utf8</span> <span class="nv">$n</span><span class="o">-&gt;</span><span class="n">feature</span><span class="p">;</span>
+</span><span class='line'>    <span class="nv">$keyword</span> <span class="sr">//</span><span class="o">=</span> <span class="n">decode_utf8</span><span class="p">(</span><span class="nv">$n</span><span class="o">-&gt;</span><span class="n">surface</span><span class="p">)</span> <span class="k">if</span> <span class="p">(</span><span class="nv">$f</span> <span class="o">=~</span><span class="sr"> /^名詞,/</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="p">(</span><span class="nv">$f</span> <span class="o">!~</span> <span class="sr">/^名詞,代名詞,/</span><span class="p">);</span>
+</span><span class='line'>    <span class="nv">$n</span> <span class="o">=</span> <span class="nv">$n</span><span class="o">-&gt;</span><span class="k">next</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="nv">$keyword</span> <span class="sr">//</span><span class="o">=</span> <span class="s">&#39;猫&#39;</span><span class="p">;</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$word</span> <span class="o">=</span> <span class="n">uri_escape_utf8</span><span class="p">(</span><span class="nv">$keyword</span><span class="p">);</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$res</span> <span class="o">=</span> <span class="nv">$furl</span><span class="o">-&gt;</span><span class="n">get</span><span class="p">(</span><span class="s">&quot;https://api.instagram.com/v1/tags/$word/media/recent?access_token=ACCESS_TOKEN&quot;</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>これで癒やしをうさぎで頼まれてもウサギ画像を返せるようになりました。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[キレイになったコトバとハートを元に戻すツール作った]]></title>
@@ -2267,108 +2449,6 @@ CPANデビューのモジュールがネットワーク関連でXSで少しハ�
 <p>pull requestを送ってくださったsyohexさん、実際にインストールを試みてテストが通らないことを教えてくださったみなさん、ありがとうございました。
 アップデートした0.02では、タイムアウト時の処理を少し書きなおして、pull requestも取り込みました。
 Mac上でも問題なくテストが通ってインストールできるはずです(きっとね)。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[ISUCON3の予選に参加してきた]]></title>
-    <link href="http://shogo82148.github.io/blog/2013/10/07/isucon3-qualify/"/>
-    <updated>2013-10-07T13:03:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2013/10/07/isucon3-qualify</id>
-    <content type="html"><![CDATA[<p>こんにちは、いつの間にかチームぽわわ2のメンバーになっていたいっちーです。</p>
-
-<p><a href="https://twitter.com/9re">@9re</a>さんと
-<a href="https://twitter.com/mackee_w">@mackee_w</a>さんとでISUCON3の予選に参加してきました。
-主にアプリの書き換えを担当していたので、やったことを残しておきます。
-チーム全体の方針とか役割分担とかはまこぴー先生の<a href="http://mackee.hatenablog.com/entry/2013/10/06/230412">#isucon 予選でとりあえず10位だった</a>を参照。</p>
-
-<!-- More -->
-
-
-<h2>お題</h2>
-
-<p>gistみたいなWebアプリ。
-<a href="http://shogo82148.github.io/blog/2013/04/13/isucon/">社内ISUCON</a>のときと似たようなお題ですね。
-違いは&#8230;</p>
-
-<ul>
-<li>スターは無い</li>
-<li>Recent Postsのサイドバーが無い代わりに、ページングしてたどっていけるページがある</li>
-<li>privateな投稿ができる</li>
-<li>Markdown形式で投稿できて、表示はHTMLでレンダリングされる</li>
-</ul>
-
-
-<p>詳しくは、れもんさんの<a href="http://isucon.net/archives/32853582.html">#isucon 2013年予選問題の解説など</a>を参照。</p>
-
-<h2>やったこと</h2>
-
-<p>一言で言えば、Redisにキャッシュするようにしました。</p>
-
-<h3>RecentをRedisのリストで管理</h3>
-
-<p>Recentの表示で日付順ソートしているのが重たそうだったので、
-公開メモのソート結果をあらかじめRedisのリストに入れておく作戦。</p>
-
-<p>Redisの<code>SORT</code>コマンドが高機能で面白いなーって思ってたので使ってみました。
-リストにはメモのIDだけ入れておいて、メモの実体は別のキーを参照する、なんてことができます。
-このコマンド、<code>SORT</code>って名前なのに「ソートしない」ってオプションあるところがいいですよね！</p>
-
-<p>MySQLがボトルネックになっているのはこれで解消できました。</p>
-
-<h3>bin/markdownを使わない＆レンダリング結果をキャッシュ</h3>
-
-<p>Markdownのレンダリングを外部コマンド叩いてやっていたので、
-<a href="https://metacpan.org/module/Text::Markdown::Discount">Text::Markdown::Discount</a>を使ってレンダリングするように変更。
-qx{hoge}って記法はじめて見ました。Perlってやつはいろんな書き方があってよくわからないです。</p>
-
-<p>Markdownの文法って亜種が結構あるので、レンダラをかえるのはちょっと怖かったんですが、全く問題なし。
-スコアも3000くらい上がってかなり効果がありました。</p>
-
-<p>さらにレンダリング結果をRedisに入れてキャッシュで+1000くらい。</p>
-
-<h3>Recentのレンダリング結果をキャッシュ</h3>
-
-<p>RecentをRedisでさばくようにしたけど、そもそも100要素もあるHTMLのレンダリングそうとう重いはず。
-と、いうわけでここもRedisにキャッシュするようにしました。
-公開メモが投稿されたらRecent/:pageのキャッシュを全部削除。
-Postのたびにキャッシュクリアされるのであんまり効果ないかなーと思っていたけど、わりと効果あったみたい？
-(正確なスコアよく見てなかった)</p>
-
-<h3>Redis::Fast!!</h3>
-
-<p>残り時間も少なくなり時間内にできることも限られれきたので、最後の最後で<a href="https://github.com/shogo82148/Redis-Fast">Redis::Fast</a>を投入。
-これで+1000くらい上がったらしい。(正確なスコアよく見てなかった)</p>
-
-<p>s/Redis/Redis::Fast/ するだけの簡単なお仕事の予定が、githubからのインストールに一番手間取った。
-cpanfileにgitのレポジトリを書くと(非公式だけど)インストールできるよ！ってどこかで見た気がするけどなかなかうまく行かず、
-自分で<code>git clone</code>してそのディレクトリを指定してインストール(したってまこぴー先生が言ってた)。
-(<code>hiredis.h</code>が無い！って叫んでいたから、cartonがsubmoduleをうまく処理できていなかったと予想。
-非公式の機能に頼るの良くないね。)</p>
-
-<h2>できなかったこと</h2>
-
-<ul>
-<li>my.cnf？なにそれ美味しいの？</li>
-<li>SQLクエリをいじる余裕がなかった
-
-<ul>
-<li>Newer/Olderのクエリが残念なのはわかってたけど、結局いじってない</li>
-</ul>
-</li>
-<li>Nginxでキャッシュしたい</li>
-<li>必要なモジュールは事前にCPANにあげておこう。</li>
-</ul>
-
-
-<h2>まとめ</h2>
-
-<p>結果は13192.1点で10位でした。
-特に問題がなければこのまま予選突破できるはず・・・！</p>
-
-<p>ところで、魔王軍が学生枠を制圧していて恐ろしいですね。
-てか、<a href="http://shiro-goma.hatenablog.com/entry/2013/10/07/202913">僕らのチームとの差、500点程度しか無いじゃないですか</a>。怖！！！
-これ以上の侵攻はなんとしてでも食い止めなければ。</p>
 ]]></content>
   </entry>
   

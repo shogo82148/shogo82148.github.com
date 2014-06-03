@@ -4,7 +4,7 @@
   <title><![CDATA[Category: perl | Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/blog/categories/perl/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2014-06-01T00:26:14+09:00</updated>
+  <updated>2014-06-04T08:12:17+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,135 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[IRCに癒やしボットを入れてみた]]></title>
+    <link href="http://shogo82148.github.io/blog/2014/06/04/irc-healing-bot/"/>
+    <updated>2014-06-04T07:37:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2014/06/04/irc-healing-bot</id>
+    <content type="html"><![CDATA[<p>別チームがIRCに癒やしボットを入れてたので、自分のチームのチャンネルにも入れてみた。</p>
+
+<!-- More -->
+
+
+<h2>Instagramに登録する</h2>
+
+<p><a href="http://instagram.com/developer/">InstagramのDeveloperサイト</a>に開発者として登録します。
+<a href="http://instagram.com/developer/authentication/">Authentication</a>
+のページを見ながら、Server-side (Explicit) Flow を参考にアクセストークンを取得します。</p>
+
+<h2>Instagram APIを叩く</h2>
+
+<p><code>https://api.instagram.com/v1/tags/$TAGNAME/media/recent?access_token=YOUR_ACCESS_TOKEN</code>を叩くと
+TAGNAMEに関連する画像の情報がJSONで帰ってくるので、
+Perlからこのエンドポイントを叩きます。
+IRCとのやりとりには<a href="http://www.songmu.jp/riji/entry/2013-09-09-unazusan.html">UnazuSan</a>を使いました。</p>
+
+<p>```perl
+!/usr/bin/env perl
+use 5.014;
+use warnings;
+use strict;
+use utf8;
+use Encode qw/encode_utf8/;
+use Furl;
+use JSON;</p>
+
+<p>use UnazuSan;</p>
+
+<p>sub neko {</p>
+
+<pre><code>state $data = undef;
+state $time = 0;
+if( !$data || time - $time &gt; 60 * 60) {
+    $time = time;
+    my $furl = Furl-&gt;new;
+    my $res = $furl-&gt;get('https://api.instagram.com/v1/tags/%E7%8C%AB/media/recent?access_token=YOUR_ACCESS_TOKEN');
+    my $hash = JSON::decode_json($res-&gt;content);
+    $data = $hash-&gt;{data};
+}
+my $media = $data-&gt;[rand(scalar @$data)];
+return $media-&gt;{images}{standard_resolution}{url};
+</code></pre>
+
+<p>}</p>
+
+<p>my $unazu_san;
+my $NICKNAME = 'iyashi';
+$unazu_san = UnazuSan->new(</p>
+
+<pre><code>host       =&gt; '127.0.0.1',
+enable_ssl =&gt; 1,
+join_channels =&gt; ['#test'],
+respond_all   =&gt; 1,
+nickname      =&gt; $NICKNAME,
+</code></pre>
+
+<p>);</p>
+
+<p>$unazu_san->on_message(</p>
+
+<pre><code>qr/^\s+$NICKNAME:/ =&gt; sub {
+    my $receive = shift;
+    $receive-&gt;reply('うんうん');
+},
+qr/(.*)/ =&gt; sub {
+    my ($receive, $match) = @_;
+    say $match;
+    say $receive-&gt;message;
+},
+</code></pre>
+
+<p>);</p>
+
+<p>$unazu_san->on_command(
+   ' 癒やし' => sub {</p>
+
+<pre><code>    my ($receive, @args) = @_;
+    $receive-&gt;reply(neko());
+}
+</code></pre>
+
+<p>);</p>
+
+<p>$unazu_san->run;
+```</p>
+
+<p>「癒して」と話しかけると猫画像を検索して返してくれます。</p>
+
+<h2>引数をMeCabで解析する</h2>
+
+<p>実際に入れてみたら、</p>
+
+<p><code>plain
+acidlemon unazu_san: 癒やしをうさぎで頼む
+acidlemon ネコやん! ('-'#)
+</code></p>
+
+<p>みたいなことがあったので、「癒して」のあとも見ることにしました。
+MeCabを使って名詞っぽいものを抽出して、タグ名に使います。</p>
+
+<p>``` perl
+state $mecab = Text::MeCab->new();</p>
+
+<p>my $n = $mecab->parse(join ' ', @_);
+my $keyword = undef;
+while ($n) {</p>
+
+<pre><code>my $f = decode_utf8 $n-&gt;feature;
+$keyword //= decode_utf8($n-&gt;surface) if ($f =~ /^名詞,/) &amp;&amp; ($f !~ /^名詞,代名詞,/);
+$n = $n-&gt;next;
+</code></pre>
+
+<p>}
+$keyword //= '猫';
+my $word = uri_escape_utf8($keyword);
+my $res = $furl->get("https://api.instagram.com/v1/tags/$word/media/recent?access_token=ACCESS_TOKEN");
+```</p>
+
+<p>これで癒やしをうさぎで頼まれてもウサギ画像を返せるようになりました。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Redis::Fast 0.07 をリリースしました！]]></title>
@@ -360,94 +489,6 @@ convertの結果にmvで適当な場所にコピーして保存。
 <li>nfsについて勉強しよう</li>
 </ul>
 
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Redis::NamespaceとRedis::Keyをリリースしました]]></title>
-    <link href="http://shogo82148.github.io/blog/2013/10/18/redis-namespace-and-redis-key/"/>
-    <updated>2013-10-18T23:21:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2013/10/18/redis-namespace-and-redis-key</id>
-    <content type="html"><![CDATA[<p>こんばんは、最近シングルトン恐怖症になっているいっちーです。
-<a href="https://metacpan.org/release/Redis-Namespace">Redis::Namespace</a>と
-<a href="https://metacpan.org/release/Redis-Key">Redis::Key</a>をリリースしました。</p>
-
-<!-- More -->
-
-
-<h2>Redis::Namespace</h2>
-
-<p>「<a href="http://shogo82148.github.io/blog/2013/09/14/redis-namespace-perl/">Redis::NamespaceのPerl版書いた</a>」
-で紹介したモジュールをCPANizeしました。
-コマンドのキー名に当たる部分に、自動にプレフィックスをつけてくれる賢い奴です。</p>
-
-<p>```perl
-use Redis;
-use Redis::Namespace;</p>
-
-<p>my $redis = Redis->new;
-my $ns = Redis::Namespace->new(redis => $redis, namespace => 'fugu');</p>
-
-<p>$ns->set('foo', 'bar');    # $redis->set('fugu:foo', 'bar');
-my $foo = $ns->get('foo'); # my $foo = $redis->get('fugu:foo');
-```</p>
-
-<p>RedisにはKey-Value Storeなんてかっこいい名前が付いているけど、
-結局はシステム全体で使えるグローバル変数なわけです。
-グローバル変数は駆逐するべきです。
-いちいちプレフィックスつけて名前の衝突を回避するなんて人間のやることとは思えません。</p>
-
-<p>せめてモジュールローカルとか、クラスローカルとかある程度スコープを制限したいですよね。
-Redis::Namespaceを使えば簡単に実現できます。</p>
-
-<h2>Redis::Key</h2>
-
-<p>Redis::Key は Redisのキーの簡単なラッパークラスです。
-毎回毎回「接続先のRedisサーバ」と「キーの名前」を指定するのは面倒です。
-この2つをセットにして、一つのオブジェクトとして扱うことができます。</p>
-
-<p>```perl
-use Redis;
-use Redis::Key;</p>
-
-<p>my $redis = Redis->new;
-my $key = Redis::Key->new(redis => $redis, key => 'hoge');
-$key->set('fugu'); # $redis->set('hoge', 'fuga');
-$key->get;         # $redis->get('hoge');
-```</p>
-
-<p>普通に使っている限りは他のキーにアクセスすることができなくなるので、
-Redis::Keyのオブジェクトを他のクラスに渡す、とかしても安心です。</p>
-
-<p>あと、キーの名前の一部をプレースホルダーにして、あとから値を埋め込むこともできます。
-キー名の一部に日付やIDを埋め込むっていうことが多いのでつけてみました。</p>
-
-<p><code>perl
-my $user_keys = Redis::Key-&gt;new(redis =&gt; $redis, key =&gt; 'user:{id}', need_bind =&gt; 1);
-my $user = $user_keys-&gt;bind(id =&gt; 1001);
-$user-&gt;get;  # $redis-&gt;get('user:1001');
-</code></p>
-
-<p>Key-Value Store はお手軽ではありますが、キーの名前に一定のルールを設けてあげないと
-さすがに管理できなくなります。
-Redis::Key を使ってルールを書くのが楽になるといいですね。</p>
-
-<h2>Redis::Fast と Redis::Namespace と Redis::Key を組み合わせる</h2>
-
-<p>Redis::Fast と Redis::Namespace は Redis.pm 互換なので組み合わせて使えます。</p>
-
-<p><code>perl
-my $redis = Redis::Fast-&gt;new;
-my $ns1 = Redis::Namespace-&gt;new(redis =&gt; $redis, namespace =&gt; 'hoge');
-my $ns2 = Redis::Namespace-&gt;new(redis =&gt; $ns1, namespace =&gt; 'fuga'); # Redis::Namespaceのネストもできる
-my $key = Redis::Key-&gt;new(redis =&gt; $ns2, key =&gt; 'key'); # hoge:fuga:key という名前になる
-</code></p>
-
-<p>なんだか最近Redis関連のモジュールばかり書いてますが、
-なんでもRedisに突っ込めばいいと思っているわけではありません。
-Redisを使ったコードを読んでいたら目眩がしたからです。
-ISUCON3の予選で使ったのはRedisを使いたかったらというより、
-Redis::Fastを使いたかったからです。</p>
 ]]></content>
   </entry>
   
