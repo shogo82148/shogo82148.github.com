@@ -5,14 +5,13 @@
 <!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
 <head>
   <meta charset="utf-8">
-  <title>Redis::Fast 0.07 をリリースしました！ - Shogo's Blog</title>
+  <title>PerlのXS中に起きたシグナルの扱い - Shogo's Blog</title>
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="description" content="Redis::Fast 0.07 をリリースしました。
-現時点での最新バージョンである Redis.pm 1.974 とコンパチブルになります。 主な修正点は以下の通りです Redis Sentinel 対応
-トランザクション内での再接続禁止
-再接続にDB選択し直し Redis Sentinel &hellip;">
+  <meta name="description" content="Redis::Fast にIssueが来ていたので、
+それに関して調査したお話です。 接続タイムアウトすると double free check に引っかかる
+brpop みたいな長時間ブロックするコマンド中にシグナルが入ると、最初の1回が無視される 前者はC言語つらいって話で頑張って &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -21,7 +20,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   
-  <link rel="canonical" href="http://shogo82148.github.io/blog/2014/05/17/redis-fast-0-dot-07-released/">
+  <link rel="canonical" href="http://shogo82148.github.io/blog/2014/07/05/signal-in-xs/">
   <link href="/favicon.png" rel="icon">
   <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
   <script src="/javascripts/modernizr-2.0.js"></script>
@@ -83,7 +82,7 @@
   
   <header>
     
-      <h1 class="entry-title">Redis::Fast 0.07 をリリースしました！</h1>
+      <h1 class="entry-title">PerlのXS中に起きたシグナルの扱い</h1>
     
     
       <p class="meta">
@@ -99,82 +98,101 @@
   
 
 
-<time datetime="2014-05-17T16:27:00+09:00" pubdate data-updated="true">May 17<span>th</span>, 2014</time>
+<time datetime="2014-07-05T11:56:00+09:00" pubdate data-updated="true">Jul 5<span>th</span>, 2014</time>
         
       </p>
     
   </header>
 
 
-<div class="entry-content"><p><a href="https://metacpan.org/release/Redis-Fast">Redis::Fast 0.07</a> をリリースしました。
-現時点での最新バージョンである Redis.pm 1.974 とコンパチブルになります。</p>
+<div class="entry-content"><p><a href="https://metacpan.org/pod/Redis::Fast">Redis::Fast</a> にIssueが来ていたので、
+それに関して調査したお話です。</p>
+
+<ul>
+<li>接続タイムアウトすると double free check に引っかかる</li>
+<li><code>brpop</code> みたいな長時間ブロックするコマンド中にシグナルが入ると、最初の1回が無視される</li>
+</ul>
+
+
+<p>前者はC言語つらいって話で頑張って double free になる条件を探せばいいんですが、
+後者はシグナル時のPerlやPOSIX APIの挙動を知らなくと解決できなそう。
+そういうわけで、主に後者について調べた結果をまとめておきます。</p>
 
 <!-- More -->
 
 
-<p>主な修正点は以下の通りです</p>
+<h2>PERL_ASYNC_CHECKってXS中から呼んでもいいの？</h2>
 
-<ul>
-<li>Redis Sentinel 対応</li>
-<li>トランザクション内での再接続禁止</li>
-<li>再接続にDB選択し直し</li>
-</ul>
+<p>言いたいことは最初に書いとけって偉い人に言われたので、最初にこの記事の結論を。
+「よしななタイミングでPERL_ASYNC_CHECKを呼べばいいっぽい」みたいです。
+でも、 <strong> 「PERL_ASYNC_CHECKってXS中から呼んでもいいの？」 </strong> という点に確証が持ててないので、
+識者のご意見を募集してます！</p>
 
+<h2>selectの挙動を調べる</h2>
 
-<h2>Redis Sentinel 対応</h2>
+<p>Redis::FastはRedisからのレスポンスを待つのにLinuxのselect apiを叩いてます。
+ファイルとかが読み書き可能になるまで処理をブロックしてくれるいいやつです。
+しかし、select が処理をブロックしている間にシグナルを受信すると、うまく処理ができてないらしい。
+そこで割り込み発生時の挙動を確認してみます。</p>
 
-<p>Redis Sentinel というのは自動フェールオーバーの仕組みらしいです。
-(ソースはコピペしたきただけで仕組みはあまり理解していない)
-どんなものかは本家ドキュメントや実際に検証してみた人の記事をご参照ください。</p>
+<p>困った時の<a href="http://linuxjm.sourceforge.jp/html/LDP_man-pages/man2/select.2.html">manページ(select)</a>
+をちゃんと読めば書いてありますね。</p>
 
-<ul>
-<li><a href="http://redis.io/topics/sentinel">Redis Sentinel Documentation</a></li>
-<li><a href="http://chrone.hatenablog.com/entry/2014/02/28/212616">Redis 2.8 の Sentinel の動きを検証してみた</a></li>
-<li><a href="http://blog.kenjiskywalker.org/blog/2013/01/24/redis-sentiel-howto/">Redis Sentinelを動かしてみた</a></li>
-</ul>
+<blockquote><p>エラーならば -1 を返し、 errno にエラーを示す値が設定される;</p>
 
+<p>EINTR
+シグナルを受信した。</p></blockquote>
 
-<p>前から移植作業は進めてたのですが、本家 Redis.pm でもテストがコケたりしてちょっと不安だったのでリリースを見送ってました。
-今日 Redis.pm の安定版がリリースされたのでこっちも追従しますよ！！</p>
+<p>Redis::Fastは<code>errno</code>を特に確認せず、とにかくエラーが発生したらリトライになってたのでダメだったみたいです。
+通信にエラーが起きたわけではないので、再接続処理とかみたいな複雑なリトライ処理は必要なく、
+単にもう一度selectしなおせば良さそうです。</p>
 
-<p>コネクションを作るときに <code>sentinels</code> を渡すと Redis Sentinel から接続情報を取ってきてくれます。
-一緒に <code>reconnect</code> を設定しておいてあげると、Masterに何かあった時に接続情報を再取得→
-自動的に Slave へフェールオーバーしてくれます。</p>
+<h2>Perlさんのシグナル処理のタイミング</h2>
 
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<p>「割り込みかかったら再度select」っていうふうに修正してみたんですが、
+今度はPerlのシグナルハンドラがなかなか呼び出されない！！</p>
+
+<figure class='code'><figcaption><span>signal.pl</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
 <span class='line-number'>4</span>
 <span class='line-number'>5</span>
 <span class='line-number'>6</span>
 </pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="nn">Redis::</span><span class="n">Fast</span><span class="p">;</span>
-</span><span class='line'><span class="k">my</span> <span class="nv">$redis</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">Fast</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span>
-</span><span class='line'>    <span class="n">sentinels</span> <span class="o">=&gt;</span> <span class="p">[</span> <span class="s">&#39;127.0.0.1:26379&#39;</span> <span class="p">],</span>
-</span><span class='line'>  <span class="n">service</span> <span class="o">=&gt;</span> <span class="s">&#39;mymaster&#39;</span><span class="p">,</span>
-</span><span class='line'>  <span class="n">reconnect</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span>
-</span><span class='line'><span class="p">);</span>
+</span><span class='line'><span class="nv">$SIG</span><span class="p">{</span><span class="n">TERM</span><span class="p">}</span><span class="o">=</span> <span class="k">sub </span><span class="p">{</span>
+</span><span class='line'>    <span class="nb">warn</span> <span class="s">&quot;TERM handler called&quot;</span><span class="p">;</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$c</span> <span class="o">=-&gt;</span><span class="k">new</span><span class="p">(</span><span class="n">reconnect</span><span class="o">=&gt;</span><span class="mi">2</span><span class="p">,</span> <span class="n">every</span> <span class="o">=&gt;</span> <span class="mi">100</span><span class="p">,</span> <span class="n">server</span> <span class="o">=&gt;</span> <span class="s">&quot;localhost:6379&quot;</span><span class="p">);</span>
+</span><span class='line'><span class="nv">$c</span><span class="o">-&gt;</span><span class="n">brpop</span><span class="p">(</span><span class="s">&quot;a&quot;</span><span class="p">,</span> <span class="mi">100</span><span class="p">);</span> <span class="c1"># 100秒経ったら諦めて戻ってくる</span>
 </span></code></pre></td></tr></table></div></figure>
 
 
-<h2>トランザクション内での再接続禁止</h2>
+<p>このコードを実行中にSIGTERMを送ると、送った瞬間に&#8221;TERM handler called&#8221;と表示されて欲しいのですが、
+<code>brpop</code>コマンドが終わるまで実行されない……。</p>
 
-<p>Redisにも簡単な<a href="http://redis.io/topics/transactions">トランザクション機能</a>があって、
-複数の命令を同時に実行することができます。
-トランザクション中に再接続が発生するとトランザクションがリセットされてしまうので、
-接続前の命令を再投入する必要があるのですが、Redis.pm/Redis::Fastの再接続処理はそこまで面倒を見てくれません。
-以前のバージョンではそこの面倒を見てくれないのに適当に処理してしまい、
-トランザクションが中途半端なまま実行されてしました。</p>
+<p>ググってみるとPerlはシグナルハンドラを即座に処理しているのではなく、
+シグナルハンドラを安全に実行できるタイミングを見計らって実行しているみたいです。</p>
 
-<p>0.07 からはトランザクション内では再接続を行わずに例外を吐きます。
-トランザクションを最初からやり直すなど、よしなに対応してください。</p>
+<ul>
+<li><a href="http://perl-users.jp/articles/advent-calendar/2009/data-model/03.html">Q4M を使ってる時のシグナル処理に注意</a></li>
+</ul>
 
-<h2>再接続時にDB選択し直し</h2>
 
-<p>一つのRedis-Serverが複数のデータベースを持てるようになっていて、
-<a href="http://redis.io/commands/select">SELECT</a>コマンドを使って切り替え可能です。
-今までのバージョンでは、SELECTコマンドでデータベースを切り替えていても、
-再接続時にリセットされてしまう問題がありました。
-0.07では再接続の中でSELECTを実行し直すので、再接続を気にする必要はありません。</p>
+<p>この記事では「Low Levelなシグナルハンドラを使おう」っていうことになってますが、できることならライブラリ側で対応したい。
+安全にシグナルハンドラを実行できるタイミングで<code>PERL_ASYNC_CHECK</code>を呼び出しているので、
+XS中でもこいつを呼べばできるのでは！ってことでやってみたら動いてるっぽい……？</p>
+
+<p>ただDBIでもシグナルの扱いに同様の問題があるらしく、
+これで解決するならDBIが解決してるよな・・・何か罠があるんだろうか。不安だ・・・。</p>
+
+<h2>まとめ</h2>
+
+<ul>
+<li>selectはシグナルを受信するとエラーを返すので、<code>errno</code> をみて適切に扱うこと</li>
+<li>Perlはシグナルハンドラを安全に実行できるタイミングでしか実行しない</li>
+<li><code>PERL_ASYNC_CHECK</code>を使えば解決しそうだけど、どこからか椅子が飛んでくるんじゃないだろうか怖い</li>
+</ul>
+
 </div>
 
 
@@ -197,12 +215,12 @@
   
 
 
-<time datetime="2014-05-17T16:27:00+09:00" pubdate data-updated="true">May 17<span>th</span>, 2014</time>
+<time datetime="2014-07-05T11:56:00+09:00" pubdate data-updated="true">Jul 5<span>th</span>, 2014</time>
       
 
 <span class="categories">
   
-    <a class='category' href='/blog/categories/perl/'>perl</a>, <a class='category' href='/blog/categories/redis/'>redis</a>
+    <a class='category' href='/blog/categories/perl/'>perl</a>
   
 </span>
 
@@ -211,10 +229,10 @@
     
       <div class="sharing">
   
-  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.io/blog/2014/05/17/redis-fast-0-dot-07-released/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.io/blog/2014/07/05/signal-in-xs/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
   
   
-  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.io/blog/2014/05/17/redis-fast-0-dot-07-released/" data-via="shogo82148" data-counturl="http://shogo82148.github.io/blog/2014/05/17/redis-fast-0-dot-07-released/" >Tweet</a>
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.io/blog/2014/07/05/signal-in-xs/" data-via="shogo82148" data-counturl="http://shogo82148.github.io/blog/2014/07/05/signal-in-xs/" >Tweet</a>
   
   
   <div class="g-plusone" data-size="medium"></div>
@@ -227,10 +245,8 @@
     
     <p class="meta">
       
-        <a class="basic-alignment left" href="/blog/2014/05/07/androidbinary/" title="Previous Post: Androidのバイナリファイルを解析するgoのライブラリ">&laquo; Androidのバイナリファイルを解析するgoのライブラリ</a>
+        <a class="basic-alignment left" href="/blog/2014/06/04/irc-healing-bot/" title="Previous Post: IRCに癒やしボットを入れてみた">&laquo; IRCに癒やしボットを入れてみた</a>
       
-      
-        <a class="basic-alignment right" href="/blog/2014/05/18/test-with-google-test/" title="Next Post: Google Test を使ってC++のテストしてみた">Google Test を使ってC++のテストしてみた &raquo;</a>
       
     </p>
   </footer>
@@ -342,8 +358,8 @@
       
         
         // var disqus_developer = 1;
-        var disqus_identifier = 'http://shogo82148.github.io/blog/2014/05/17/redis-fast-0-dot-07-released/';
-        var disqus_url = 'http://shogo82148.github.io/blog/2014/05/17/redis-fast-0-dot-07-released/';
+        var disqus_identifier = 'http://shogo82148.github.io/blog/2014/07/05/signal-in-xs/';
+        var disqus_url = 'http://shogo82148.github.io/blog/2014/07/05/signal-in-xs/';
         var disqus_script = 'embed.js';
       
     (function () {
