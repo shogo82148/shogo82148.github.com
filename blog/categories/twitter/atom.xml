@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
 
-  <title><![CDATA[Category: twitter | Shogo's Blog]]></title>
+  <title><![CDATA[Category: Twitter | Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/blog/categories/twitter/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2014-07-05T18:37:26+09:00</updated>
+  <updated>2014-08-31T15:58:58+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -14,22 +14,68 @@
 
   
   <entry>
-    <title type="html"><![CDATA[Tweepyの2.3.0が出ました]]></title>
-    <link href="http://shogo82148.github.io/blog/2014/04/27/tweepy-2-dot-3-0-released/"/>
-    <updated>2014-04-27T21:51:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2014/04/27/tweepy-2-dot-3-0-released</id>
-    <content type="html"><![CDATA[<p>Tweepyの2.3.0が出ました。
-「<a href="http://shogo82148.github.io/blog/2014/04/18/tweepy-will-application-only-auth/">Tweepy が Application-only Authentication に対応します</a>」僕のprも取り込まれていて、
-Application-only Authentication が標準で使えるようになりました。
-というわけで、早速遊んでみます。</p>
+    <title type="html"><![CDATA[tweepyでApplication-only authenticationしてみた]]></title>
+    <link href="http://shogo82148.github.io/blog/2013/05/09/application-only-authentication-with-tweepy/"/>
+    <updated>2013-05-09T23:29:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2013/05/09/application-only-authentication-with-tweepy</id>
+    <content type="html"><![CDATA[<p>Twitter の API リファレンスを久しぶりに見たら、
+<a href="https://dev.twitter.com/docs/auth/application-only-auth">Application-only authentication</a>とかいうのを発見。
+特定のユーザと関連付けられない代わりに、普通に認証するより制限が緩いみたい。
+3月に追加されてたらしい。</p>
 
-<h2>Application-only Authenticationで遊ぶ</h2>
+<p>知らなかった・・・。
+最近API叩いてなかったからな・・・。</p>
 
-<p>使い方は「<a href="http://shogo82148.github.io/blog/2013/05/09/application-only-authentication-with-tweepy/">tweepyでApplication-only Authenticationしてみた</a>」のときとほぼ同じ。
-Tweepy本体に取り込んでもらったので、名前空間がちょこっと変わったくらいです。
-Consumer Key と Consumer Secretだけ設定すればいいので、簡単に使えます。</p>
+<p>便利そうなので、Python用のTwitterライブラリである<a href="https://github.com/tweepy/tweepy">Tweepy</a>から使ってみた。</p>
 
-<p>``` python</p>
+<!-- More -->
+
+
+<h2>AuthHandler</h2>
+
+<p>Tweepy用のAuthHandler。
+認証部分は
+<a href="http://ktkrhr.hatenablog.com/entry/2013/03/27/002447">TwitterのApplication-only authenticationを試してみた</a>
+のページからほぼコピペ。</p>
+
+<p>``` python AppAuthHandler.py
+import tweepy
+import urllib
+import urllib2
+import base64
+import json</p>
+
+<p>class AppAuthHandler(tweepy.auth.AuthHandler):</p>
+
+<pre><code>TOKEN_URL = 'https://api.twitter.com/oauth2/token'
+
+def __init__(self, consumer_key, consumer_secret):
+    token_credential = urllib.quote(consumer_key) + ':' + urllib.quote(consumer_secret)
+    credential = base64.b64encode(token_credential)
+
+    value = {'grant_type': 'client_credentials'}
+    data = urllib.urlencode(value)
+    req = urllib2.Request(self.TOKEN_URL)
+    req.add_header('Authorization', 'Basic ' + credential)
+    req.add_header('Content-Type', 'application/x-www-form-urlencoded;charset=UTF-8')
+
+    response = urllib2.urlopen(req, data)
+    json_response = json.loads(response.read())
+    self._access_token = json_response['access_token']
+
+def apply_auth(self, url, method, headers, parameters):
+    headers['Authorization'] = 'Bearer ' + self._access_token
+</code></pre>
+
+<p>```</p>
+
+<h2>使ってみる</h2>
+
+<p>今まではOAuthHandlerを使っていたのを、上のAppAuthHandlerに置き換えるだけ。
+あとは今までどおりAPIを叩ける。
+以下は特定のユーザのツイートを取れるだけ取ってくる例。</p>
+
+<p>``` python crawl.py</p>
 
 <h1>!/usr/bin/env python</h1>
 
@@ -37,18 +83,20 @@ Consumer Key と Consumer Secretだけ設定すればいいので、簡単に使
 
 <p>import tweepy
 import codecs
-import sys</p>
+import sys
+import AppAuthHandler</p>
 
 <p>sys.stdin = codecs.getreader('utf-8')(sys.stdin)
 sys.stdout = codecs.getwriter('utf-8')(sys.stdout)</p>
 
-<p>CONSUMER_KEY = 'YOUR CONSUMER KEY'
-CONSUMER_SECRET = 'YOUR CONSUMER SECRET'</p>
+<p>CONSUMER_KEY = 'hogehoge'
+CONSUMER_SECRET = 'hogehoge'</p>
 
 <p>def main():</p>
 
 <pre><code>user_id = "JO_RI"
-auth = tweepy.AppAuthHandler(CONSUMER_KEY, CONSUMER_SECRET)
+
+auth = AppAuthHandler.AppAuthHandler(CONSUMER_KEY, CONSUMER_SECRET)
 api = tweepy.API(auth)
 
 arg = {'id': user_id, 'include_rts': 1}
@@ -57,47 +105,498 @@ for user_status in user_statuses:
     print user_status.text
 </code></pre>
 
-<p>if <strong>name</strong> == "<strong>main</strong>":</p>
+<p>if <strong>name</strong> == "<strong>main</strong>":
+  main()
+```</p>
 
-<pre><code>main()
-</code></pre>
+<h2>参考</h2>
 
-<p>```</p>
+<ul>
+<li><a href="https://dev.twitter.com/docs/auth/application-only-auth">Application-only authentication</a></li>
+<li><a href="http://blog.k52.org/0162">TwitterAPIがApplication-only authenticationを公開。これを使うと検索API等の一部回数制限が大幅に緩和される。</a></li>
+<li><a href="http://www.macminiosx.com/2013/03/twitterapplication-only_authen.html">TwitterのApplication-only authenticationをperlで試す。</a></li>
+<li><a href="http://ktkrhr.hatenablog.com/entry/2013/03/27/002447">TwitterのApplication-only authenticationを試してみた</a></li>
+</ul>
+
 ]]></content>
   </entry>
   
   <entry>
-    <title type="html"><![CDATA[Tweepy が Application-only authentication に対応します]]></title>
-    <link href="http://shogo82148.github.io/blog/2014/04/18/tweepy-will-application-only-auth/"/>
-    <updated>2014-04-18T06:37:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2014/04/18/tweepy-will-application-only-auth</id>
-    <content type="html"><![CDATA[<p>以前 「<a href="http://shogo82148.github.io/blog/2013/05/09/application-only-authentication-with-tweepy/">tweepyでApplication-only Authenticationしてみた</a>」で
-書いたTweepyのAuthHandlerを本体に取り込んでもらいました。
-リリースタイミングとかよくわかってないですが、次のリリースとかでApplication-only Authenticationを簡単に使えるようになります、たぶん。</p>
+    <title type="html"><![CDATA[OAuthの認証にWebViewを使うのはやめよう]]></title>
+    <link href="http://shogo82148.github.io/blog/2012/11/24/no-more-webview/"/>
+    <updated>2012-11-24T23:06:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2012/11/24/no-more-webview</id>
+    <content type="html"><![CDATA[<p>AndroidからTwitterへアクセスするためのライブラリとして，<a href="http://twitter4j.org/ja/index.html">Twitter4J</a>が有名です．
+これを使ってみようと，「Android Twitter4J」と検索すると
+認証にWebViewを使った例がたくさん出てきます．</p>
 
-<p>(2014-04-27追記)
-このprを取り込んだTweepy 2.3.0がリリースされました。早速遊んでみたのでこちらもどうぞ><a href="http://shogo82148.github.io/blog/2014/04/27/tweepy-2-dot-3-0-released/">Tweepyの2.3.0が出ました</a></p>
+<p>・・・いや，ちょっとまて．
+それはちょっとまずいだろう．</p>
+
+<p>そういうわけでもうちょっと賢い方法を探してみました．</p>
 
 <!-- More -->
 
 
-<h2>取り込まれるまでの経緯</h2>
+<h2>何がまずいのさ</h2>
+
+<p>「Android Twitter4J」と検索すると，上位にこんなページが出てきます．</p>
 
 <ul>
-<li>「Application-only Authentication 対応しないの？」って質問は去年からあった(<a href="https://github.com/tweepy/tweepy/issues/318">tweepy#318</a>)</li>
-<li>先日「ここに動くコード載ってるよ」と<a href="https://github.com/tweepy/tweepy/issues/318#issuecomment-40291735">僕の記事が紹介される</a></li>
-<li>昨日の夕方「コントリビュートしてみない？」とブログやgithub経由で頼まれる</li>
-<li>やるしか無い！と思って昨日のうちにpr作成</li>
-<li>朝起きたら取り込まれてた</li>
+<li><a href="http://andante.in/i/android%E3%82%A2%E3%83%97%E3%83%AAtips/twitter4j%E3%82%92%E4%BD%BF%E3%81%A3%E3%81%A6oauth%E8%AA%8D%E8%A8%BC%E3%82%92%E3%82%A2%E3%83%97%E3%83%AA%E5%86%85%E3%81%A7%E8%A1%8C%E3%81%86%E6%96%B9%E6%B3%95/">Twitter4jを使ってOAuth認証をアプリ内で行う方法</a></li>
+<li><a href="http://blog.kyosuke25.com/2011/12/twitter4j-22xoauth.html">Twitter4j-2.2.xを使ったOAuth認証のコーディング例</a></li>
+<li><a href="http://init0.net/wp/archives/171">twitter4jでツイートする</a></li>
+<li><a href="http://wada811.blog.fc2.com/blog-entry-103.html">Android+Twitter4JでOAuthするためのソースコード</a></li>
 </ul>
 
 
-<p>日本語なんてマイナーな言語で記事が書いてあっても、読んでくれる人は読んでくれるんですね。
-Tweepy は僕も何度か使ったことがあるので Issue とかみて開発状況をチェックしていたんですが、
-見覚えのある名前が見えたときはびっくりしました。</p>
+<p>上のサイトでは次の様は方法をとっています．</p>
 
-<p>ちょっとしたコードでも公開しておくといいことがあるよ、というお話でした。
-最近ここも全然更新してないので、もっとアウトプットしていかないと・・・。</p>
+<ul>
+<li>アプリ内にWebViewを貼り付け</li>
+<li>WebViewでTwitterの認証画面を表示</li>
+<li>onPageStarted や onPageFinished をオーバーライドして callback URL へのアクセスを検出</li>
+<li>URL に入っている認証コードで認証</li>
+</ul>
+
+
+<p>アプリ内でWebViewを使うとURLが表示されません．
+つまり <strong> 本当にツイッターにアクセスしているかわからない </strong> のです．
+もし，表示されるのが偽の認証画面だったら，アプリから簡単にパスワードがわかってしまいます．</p>
+
+<p>じゃあ，URL を表示させればいいかというとそういうわけでもありません．
+画面上のURL表示なんて簡単に偽装できてしまいます．
+どんな工夫をしても <strong> アプリがパスワードの要求をしていることには変わりありません </strong> ．
+アプリはパスワードを簡単に取得できます．</p>
+
+<p>アプリのユーザはTwitterに限らずSNSへのログイン時にブラウザを開かないアプリは信用しないようにしましょう．
+どこかでパスワードの抜かれている可能性があります．
+(ただし，公式アプリは除く．公式アプリが信用できないならそもそもサービスを利用できないもんね．)</p>
+
+<h2>じゃあどうするのさ</h2>
+
+<p>じゃあ，開発者はどうするのかって話ですが，もう少し詳しく検索してみましょう．
+他の方法を使っているページもでてきます．</p>
+
+<ul>
+<li>PINコードを利用
+
+<ul>
+<li><a href="http://techbooster.org/android/mashup/14064/">TwitterでPIN番号認証を行う</a></li>
+</ul>
+</li>
+<li>Intent Fileterを利用しコールバック
+
+<ul>
+<li><a href="http://d.hatena.ne.jp/yujimny/20110204/1296805905">twitter4jを使用したAndroid Twitterアプリケーション作成</a></li>
+<li><a href="http://d.hatena.ne.jp/itog/20120214/1329193954">Twitter4Jを使ってAndroidアプリでStreamingAPIのUserTimelineを取得する</a></li>
+<li>TwitterでOAuth認証を行う
+
+<ol>
+<li><a href="http://techbooster.org/android/mashup/4525/">Twitterへのアプリケーション登録</a></li>
+<li><a href="http://techbooster.org/android/5040/">Twitterの認証ページをブラウザで開く</a></li>
+<li><a href="http://techbooster.org/android/mashup/5301/">Access Tokenを取得する</a></li>
+</ol>
+</li>
+</ul>
+</li>
+</ul>
+
+
+<h3>PIN コードを利用</h3>
+
+<p>一つ目の方法はPC版クライアントでよく使われる方法．
+認証後にPINコードと呼ばれる数字が表示されるので，それをアプリに入力します．
+twiccaなんかでも使われてますね．
+Twitter へのアプリケーション登録のときにコールバックURLを入力しないとこの認証方式になります．</p>
+
+<p>認証画面に，ブラウザを開くボタン，PINコードの入力ボックス，ログインボタンを用意しておきます．</p>
+
+<p>``` xml activity_oauth.xml
+&lt;?xml version="1.0" encoding="utf-8"?>
+&lt;LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"</p>
+
+<pre><code>android:layout_width="match_parent"
+android:layout_height="match_parent"
+android:orientation="vertical" &gt;
+
+&lt;Button
+    android:id="@+id/button_start_login"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:text="Twitterへアクセス" /&gt;
+</code></pre>
+
+<p>   &lt;EditText</p>
+
+<pre><code>  android:id="@+id/edit_pin_code"
+  android:layout_width="wrap_content"
+  android:layout_height="wrap_content"
+  android:ems="10"
+  android:inputType="number" /&gt;
+</code></pre>
+
+<p>   &lt;Button</p>
+
+<pre><code>  android:id="@+id/button_login"
+  android:layout_width="wrap_content"
+  android:layout_height="wrap_content"
+  android:layout_below="@+id/edit_pin_code"
+  android:text="ログイン" /&gt;
+</code></pre>
+
+<p></LinearLayout>
+```</p>
+
+<p>あとはボタンが押されたときにブラウザを呼ぶだけです．
+認証したらPINコードを入力してもらいます．</p>
+
+<p>``` java OAuthActivity.java
+package net.sorablue.shogo82148.yuire;</p>
+
+<p>import twitter4j.AsyncTwitter;
+import twitter4j.AsyncTwitterFactory;
+import twitter4j.TwitterAdapter;
+import twitter4j.TwitterException;
+import twitter4j.TwitterListener;
+import twitter4j.TwitterMethod;
+import twitter4j.auth.AccessToken;
+import twitter4j.auth.RequestToken;
+import android.net.Uri;
+import android.os.Bundle;
+import android.app.Activity;
+import android.content.Intent;
+import android.view.View.OnClickListener;
+import android.widget.EditText;</p>
+
+<p>public class OAuthActivity extends Activity implements OnClickListener {</p>
+
+<pre><code>public final static String EXTRA_CONSUMER_KEY = "consumer_key";
+public final static String EXTRA_CONSUMER_SECRET = "consumer_secret";
+public final static String EXTRA_ACCESS_TOKEN = "access_token";
+public final static String EXTRA_ACCESS_TOKEN_SECRET = "access_token_secret";
+
+private RequestToken mRequestToken;
+final AsyncTwitterFactory factory = new AsyncTwitterFactory();
+final AsyncTwitter twitter = factory.getInstance();
+
+// 非同期版 Twitter4J のリスナ
+private final TwitterListener listener = new TwitterAdapter() {
+        @Override
+        public void gotOAuthRequestToken(RequestToken token) {
+            mRequestToken = token;
+        }
+
+        @Override
+        public void gotOAuthAccessToken(AccessToken token) {
+            // Access Token 取得成功
+            // 呼び出し元に Access Token を返す
+            final Intent intent = new Intent();
+            intent.putExtra(EXTRA_ACCESS_TOKEN, token.getToken());
+            intent.putExtra(EXTRA_ACCESS_TOKEN_SECRET, token.getTokenSecret());
+            setResult(Activity.RESULT_OK, intent);
+            finish();
+        }
+    };
+
+@Override
+public void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    setContentView(R.layout.activity_oauth);
+
+    // Request Token をリクエスト
+    final Intent intent = getIntent();
+    final String consumer_key = intent.getStringExtra(EXTRA_CONSUMER_KEY);
+    final String consumer_secret = intent.getStringExtra(EXTRA_CONSUMER_SECRET);
+    twitter.addListener(listener);
+    twitter.setOAuthConsumer(consumer_key, consumer_secret);
+    twitter.getOAuthRequestTokenAsync();
+
+    // EventListener をセット
+    final View start_login = findViewById(R.id.button_start_login);
+    start_login.setOnClickListener(this);
+    final View login = findViewById(R.id.button_login);
+    login.setOnClickListener(this);
+}
+
+@Override
+public void onClick(View v) {
+    switch(v.getId()) {
+    case R.id.button_start_login:
+        {
+            // 認証画面をブラウザで開く
+            final Intent intent = new Intent(Intent.ACTION_VIEW,
+                                             Uri.parse(mRequestToken.getAuthorizationURL()));
+            startActivity(intent);
+        }
+        break;
+    case R.id.button_login:
+        {
+            // PINコードを取得
+            final String pin = editPin.getText().toString();
+
+            // Access Token をリクエスト
+            twitter.getOAuthAccessTokenAsync(mRequestToken, pin);
+        }
+        break;
+    }
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>Token の取得にはインターネットアクセスが必要なので，
+Twitter4J に含まれている非同期版のライブラリを使っています．</p>
+
+<p>Consumer Key と Consumer Secret はアクティビティの呼び出し時にインテントに設定します．</p>
+
+<p><code>java MainActivity.java
+final int REQUEST_ACCESS_TOKEN = 0;
+final Intent intent = new Intent(this, OAuthActivity.class);
+intent.setExtraString(OAuthActivity.EXTRA_CONSUMER_KEY, "Your Cosumer Key");
+intent.setExtraString(OAuthActivity.EXTRA_CONSUMER_SECRET, "Your Consumer Secret");
+startActivityForResult(intent, REQUEST_ACCESS_TOKEN);
+</code></p>
+
+<p>認証が完了すると <code>onAcivityResult</code> が呼び出されるので，
+Access Token を保存するなり，つぶやくのに使うだけです．</p>
+
+<p>``` java MainActivity.java
+@Override
+public void onActivityResult(int requestCode, int resultCode, Intent data) {</p>
+
+<pre><code>if(requestCode == REQUEST_ACCESS_TOKEN &amp;&amp; resultCode == Activity.RESULT_OK) {
+    final String token = data.getStringExtra(OAuthActivity.EXTRA_ACCESS_TOKEN);
+    final String token_secret = data.getStringExtra(OAuthActivity.EXTRA_ACCESS_TOKEN_SECRET);
+    twitter.setOAuthAccessToken(new AccessToken(token, token_secret));
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<h3>Intent Filterを利用</h3>
+
+<p>二つ目の方法は Intent Fileter を使って
+callback URL へアクセスしたときに，ブラウザにインテントを発行してもらう方法です．
+ユーザがPINコードを覚える必要がないので楽ちんです．</p>
+
+<p><strong> (2013-03-09追記) </strong>
+この記事を公開したらギルティ言われてしまいました．
+(<a href="https://gist.github.com/mala/5062931">TwitterのOAuthの問題まとめ</a>・<a href="https://gist.github.com/mala/5107120">TwitterのOAuthの問題の補足とか</a>)
+「Consumer Key が漏れる可能性を否定できないクライアントアプリでは，Callback URL をつかべきではない」とのご指摘です．
+ごもっとなご意見です．
+この方法は<strong> 非推奨 </strong>です．
+PINコードを使った認証を使いましょう．</p>
+
+<p>その分開発は面倒ですが．
+ポイントは以下の点です．</p>
+
+<ul>
+<li>Twitter へのアプリケーション登録時に Callback URL にテキトーなURLを入れておく</li>
+<li>独自スキーマを定義して，受け取れるようにしておく</li>
+<li><code>getOAuthRequestToken</code> 呼び出し時に，Callback URL を明示的に渡す</li>
+<li>アクティビティの多重起動を防止しておく</li>
+</ul>
+
+
+<p>Intent Filter に http:// で始まるURLでも設定してしまうと，
+アプリケーションの選択画面が開いてしまったり，
+ブラウザによってはリダイレクト時にインテントを飛ばしてくれなかったりします．
+そのため， myapplication:// のような独自スキーマを使う必要があるのですが，
+Twitterへアプリケーション登録時に設定する Callback URL は http:// で始まっていないと受け付けてくれません．
+かと言って空にしておくとうまく動かないので callback URL にはテキトーな URL を入れておいて，
+<code>getOAuthRequestToken</code> 呼び出し時に Callback URL を指定します(なぜかこっちは独自スキーマが使える)．</p>
+
+<p>具体的なプログラムは以下のような感じ．</p>
+
+<p>``` java MainActivity.java
+package net.sorablue.shogo82148.yuire;</p>
+
+<p>import twitter4j.AsyncTwitter;
+import twitter4j.AsyncTwitterFactory;
+import twitter4j.TwitterAdapter;
+import twitter4j.TwitterException;
+import twitter4j.TwitterListener;
+import twitter4j.TwitterMethod;
+import twitter4j.auth.AccessToken;
+import twitter4j.auth.RequestToken;
+import android.net.Uri;
+import android.os.Bundle;
+import android.os.Handler;
+import android.app.Activity;
+import android.content.Intent;</p>
+
+<p>public class MainActivity extends Activity {</p>
+
+<pre><code>public final static String CALLBACK = "myappsheme://callback/";
+public final static String CONSUMER_KEY = "Your consumer_key";
+public final static String CONSUMER_SECRET = "Your consumer secret";
+
+private RequestToken mRequestToken;
+final AsyncTwitterFactory factory = new AsyncTwitterFactory();
+final AsyncTwitter twitter = factory.getInstance();
+
+private final TwitterListener listener = new TwitterAdapter() {
+        @Override
+        public void gotOAuthRequestToken(RequestToken token) {
+            // ブラウザを開く
+            mRequestToken = token;
+            final Intent intent = new Intent(Intent.ACTION_VIEW,
+                                             Uri.parse(mRequestToken.getAuthorizationURL()));
+            startActivity(intent);
+        }
+
+        @Override
+        public void gotOAuthAccessToken(AccessToken token) {
+            // 永続化とかする
+        }
+    };
+
+@Override
+public void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    setContentView(R.layout.activity_oauth);
+
+    twitter.addListener(listener);
+    twitter.setOAuthConsumer(CONSUMER_KEY, CONSUMER_SECRET);
+
+    // 認証開始
+    // Request Token を取得する
+    twitter.getOAuthRequestTokenAsync(CALLBACK); // ここで CALLBACK URL を渡す！
+}
+
+@Override
+public void onNewIntent(Intent intent) {
+    // callback してきた
+    final Uri uri = intent.getData();
+    if(uri == null) return ;
+    final String verifier = uri.getQueryParameter("oauth_verifier");
+    twitter.getOAuthAccessTokenAsync(mRequestToken, verifier);
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>多重起動防止と独自スキーマの定義はマニフェストに記述します．</p>
+
+<p>``` xml Manifest.xml
+&lt;activity</p>
+
+<pre><code>android:name=".MainActivity"
+android:label="@string/title_activity_main"
+android:launchMode="singleTask" &gt; &lt;!-- 多重起動防止 --&gt;
+
+&lt;intent-filter&gt;
+    &lt;action android:name="android.intent.action.MAIN" /&gt;
+    &lt;category android:name="android.intent.category.LAUNCHER" /&gt;
+&lt;/intent-filter&gt;
+
+&lt;!-- 独自スキーマの定義 --&gt;
+&lt;intent-filter&gt;
+    &lt;action android:name="android.intent.action.VIEW" /&gt;
+    &lt;category android:name="android.intent.category.DEFAULT" /&gt;
+    &lt;category android:name="android.intent.category.BROWSABLE"/&gt;
+    &lt;data android:scheme="myappsheme" /&gt;
+&lt;/intent-filter&gt;
+</code></pre>
+
+<p></activity>
+```</p>
+
+<p><code>launchMode</code> に <code>singleTask</code> を指定すると，
+多重起動のときに新しいアクティビティを起動する代わりに，すでに起動していたアクティビティの <code>onNewIntent</code> が実行されます．</p>
+
+<p>PINコードを同じインターフェース(<code>startActivityForResult</code> で認証用アクティビティを呼び出すと，戻り値に Access Token が入っている)にしたかったけど，
+認証用アクティビティが <code>singleTask</code> だと，ブラウザを開いた時に呼び出し元の<code>onActivityResult</code>が呼び出されてしまう．
+誰かいい案ありません？</p>
+
+<h2>まとめ</h2>
+
+<p>WebViewはアプリからブラウザの機能を扱うのに非常に便利ですが，
+あくまでもアプリの管理下にあるもので，ブラウザとは少し性質が違うものということに注意．
+<a href="http://ierae.co.jp/uploads/webview.pdf">WebViewの脆弱性</a>に関する資料を見つけてビクビクしています．
+認証画面にかぎらず WebView を使うときはセキュリティに注意しましょう．</p>
+
+<p>今回調べたことを使って，
+じょりぼっとにお湯入れたとつぶやくだけのアプリ<a href="https://github.com/shogo82148/yuire">「お湯入れた」</a>を
+作りました．
+3分間計りたいときにどうぞ．</p>
+
+<p><a href="https://twitter.com/JO_RI_bot" class="twitter-follow-button" data-show-count="false" data-lang="ja">@JO_RI_botさんをフォロー</a></p>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0];if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src="//platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);}}(document,"script","twitter-wjs");</script>
+
+
+<h2>おへんじ</h2>
+
+<p>たくさんシェアしてもらったのでお返事書いておきます．</p>
+
+<blockquote class="twitter-tweet" lang="ja"><p>たしかにそうなんだけど、PIN形式は実装が手間だし、PINコピペするのも手間だし、IntentFilter形式は空のブラウザー窓が残るのがものすごく気になるんだよなぁ… / “OAuthの認証にWebViewを使うのはやめよう - S…” <a href="http://t.co/NS0kyGg2" title="http://htn.to/hZZLhx">htn.to/hZZLhx</a></p>&mdash; たくじさん (@takuji31) <a href="https://twitter.com/takuji31/status/272987171202424833" data-datetime="2012-11-26T08:56:28+00:00">11月 26, 2012</a></blockquote>
+
+
+<script src="http://shogo82148.github.io//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+
+<p>WebViewでURLフックを入れるよりは，PINコードのほうがコードもわかりやすく簡単かと．
+ただPINコードのコピペが面倒なのはそのとおりなので，Android アプリの場合採用は難しいかもしれません．</p>
+
+<p>Intent Filterはマニフェストに手を入れる必要がある分面倒．ブラウザにタブが残るのも厄介です．
+ここは利便性とセキュリティとのトレードオフと割り切るしか無いでしょう．
+Web上での本人確認の方法がパスワードくらいしかない以上，パスワード流出の危険性はかなり重大な欠陥だと言えます．
+手間なのは最初の一回だけですし，Intent Filter を使うのが賢い方法だと思います．</p>
+
+<blockquote class="twitter-tweet" lang="ja"><p>追記。あと標準ブラウザも絶対ダメ。。→そもそもWebViewを使っちゃダメなのよ。。Android版のChromeだけ使いましょう。。 / “OAuthの認証にWebViewを使うのはやめよう - Shogo's Blog” <a href="http://t.co/jjo1o4Gb" title="http://htn.to/ybxt7Y">htn.to/ybxt7Y</a></p>&mdash; Kietaさん (@typex20) <a href="https://twitter.com/typex20/status/273001101798813696" data-datetime="2012-11-26T09:51:49+00:00">11月 26, 2012</a></blockquote>
+
+
+<script src="http://shogo82148.github.io//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+
+<p>はい．おっしゃるとおりです．
+わざわざ反論してまで WebView を使う理由が思い浮かびません．
+代替手法を考えるべきだと思います．</p>
+
+<blockquote class="twitter-tweet" lang="ja"><p>安全に実装できるんならこしたことはないけど、悪意のある実装を前提にするのならWebViewでも他のコンポーネントでもかわらないかな。どっちかというと外部サイトビューワーの役割を持つWebViewでフィッシング開くじょとの方がリスク高そう<a href="http://t.co/QB2HoJSc" title="http://shogo82148.github.com/blog/2012/11/24/no-more-webview/">shogo82148.github.com/blog/2012/11/2…</a></p>&mdash; laiso(レイソー)さん (@laiso) <a href="https://twitter.com/laiso/status/273027828126187520" data-datetime="2012-11-26T11:38:01+00:00">11月 26, 2012</a></blockquote>
+
+
+<script src="http://shogo82148.github.io//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+
+
+
+<blockquote class="twitter-tweet" data-in-reply-to="273027828126187520" lang="ja"><p>@<a href="https://twitter.com/laiso">laiso</a> 普段使ってるブラウザでログイン済みの場合なら、少なくともパスワード取られないことが保証できるので、WebViewだろうとブラウザっぽいものだろうとパスワード聞かれたタイミングで警戒すべき、という方が分かりやすいんじゃないかと思う。</p>&mdash; malaさん (@bulkneets) <a href="https://twitter.com/bulkneets/status/273029308254154753" data-datetime="2012-11-26T11:43:54+00:00">11月 26, 2012</a></blockquote>
+
+
+<script src="http://shogo82148.github.io//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+
+<p>このポストで取り上げているのは「認証画面を偽装してパスワードを盗む」ことが可能という，まさしくフィッシングの話題です．
+開発者は，自前で「<strong> ブラウザっぽいもの </strong> 」を実装するのではなく，「 <strong> 本物のブラウザ </strong> 」を使いましょう，という紹介でした．</p>
+
+<p>問題なのは「パスワードを聞かれる or 聞かれない」ではなく，「どのアプリがパスワードを聞いているか」です．
+ログインしていなければ当然Webブラウザでもパスワードは聞かれます．
+認証を求めているアプリとは別の，<strong> 信用のできるアプリ </strong> がパスワードを聞いてくるということが重要なのです．
+Webブラウザを信用出来ないというのであれば，そもそもWebサービスを使うべきではありません．</p>
+
+<blockquote class="twitter-tweet" lang="ja"><p>OAuthの認証にWebViewを使うのはやめよう - Shogo's Blog<a href="http://t.co/EQElowcq" title="http://bit.ly/S75tRa">bit.ly/S75tRa</a> WebView使って怪し気な事してたらどうせパケットキャプチャでばれない？ まぁ、PINの方が確実に安全だと思うのでそこは賛成だけど</p>&mdash; nakamura001さん (@nakamura001) <a href="https://twitter.com/nakamura001/status/273012182357266432" data-datetime="2012-11-26T10:35:51+00:00">11月 26, 2012</a></blockquote>
+
+
+<script src="http://shogo82148.github.io//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+
+<p>パケットキャプチャだけでは見抜けないと思います．
+認証画面のDOM要素を直接見れば，通信にまったく介入しなくてもパスワードなんて簡単に抜けます．
+実際には WebView からDOM要素を見ることはできないようですが，
+DOM 操作が可能な WebView を自前実装することだって技術的には可能です．
+そのため，パスワードを盗みとっているかどうかを外からみた動作だけで判断することは非常に難しく，
+内部構造を解析する必要があると思います．</p>
+
+<p>パケットキャプチャやらリバースエンジニアリングを駆使すれば理論的はすべての不正は防げるとは思いますが，
+それをすべてのアプリでやるのは非常に面倒ですし，一般ユーザが実践するのは困難です．
+こういうことをやらなくてもある程度安全にサービスを使えるようにするのが OAuth の役割．
+積極的に利用していくべきでしょう．</p>
 ]]></content>
   </entry>
   

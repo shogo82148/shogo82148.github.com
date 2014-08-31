@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: csharp | Shogo's Blog]]></title>
+  <link href="http://shogo82148.github.io/blog/categories/csharp/atom.xml" rel="self"/>
+  <link href="http://shogo82148.github.io/"/>
+  <updated>2014-08-31T15:58:58+09:00</updated>
+  <id>http://shogo82148.github.io/</id>
+  <author>
+    <name><![CDATA[Shogo Ichinose]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[C#のconditional Attributeのコンパイル結果を見てみる]]></title>
+    <link href="http://shogo82148.github.io/blog/2014/05/29/conditional-attribute/"/>
+    <updated>2014-05-29T19:20:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2014/05/29/conditional-attribute</id>
+    <content type="html"><![CDATA[<p>C#で「ある環境では関数の定義ごと消したい」みたいな要件があって、
+そういう用途にconditinal attributeが使えるのかなーと話題のあがったので、実際に確認してみました。</p>
+
+<p>結論から言えばできないのですが、せっかく調べたのでメモとして残しておきます。</p>
+
+<!-- More -->
+
+
+<h2>conditional attribute</h2>
+
+<p>「デバッグ時のみにしか実行して欲しくない関数」みたいなものを定義するための機能です。</p>
+
+<p>``` csharp
+using System;
+using System.IO;
+using System.Diagnostics;</p>
+
+<p>namespace ConditionalAttributeTest
+{</p>
+
+<pre><code>class MainClass
+{
+    public static void Main (string[] args)
+    {
+        Log("fugu");
+    }
+
+    [ConditionalAttribute("DEBUG")]
+    public static void Log(string message)
+    {
+        Console.WriteLine(message);
+    }
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>こんなふうに書いておくと <code>DEBUG</code> シンボルが定義されている時にだけ<code>Log</code>の呼び出しが行われます。</p>
+
+<p>``` bash</p>
+
+<blockquote><p>mcs -d:DEBUG ConditionalAttributeTest.cs
+mono ConditionalAttributeTest
+fugu
+mcs ConditionalAttributeTest.cs
+mono ConditionalAttributeTest
+```</p></blockquote>
+
+<h2>逆アセンブルしてみる</h2>
+
+<p>DEBUG付きでコンパイルした結果を逆アセンブルしてみます。</p>
+
+<p>``` plain
+// ...前略
+// method line 2
+.method public static hidebysig</p>
+
+<pre><code>default void Main (string[] args)  cil managed
+</code></pre>
+
+<p>{</p>
+
+<pre><code>// Method begins at RVA 0x2058
+.entrypoint
+// Code size 11 (0xb)
+.maxstack 8
+IL_0000:  ldstr "fugu"
+IL_0005:  call void class ConditionalAttributeTest.MainClass::Log(string)
+IL_000a:  ret
+</code></pre>
+
+<p>} // end of method MainClass::Main</p>
+
+<p>// method line 3
+.method public static hidebysig</p>
+
+<pre><code>default void Log (string message)  cil managed
+</code></pre>
+
+<p>{</p>
+
+<pre><code>.custom instance void class [mscorlib]System.Diagnostics.ConditionalAttribute::'.ctor'(string) =  (01 00 05 44 45 42 55 47 00 00 ) // ...DEBUG..
+
+// Method begins at RVA 0x2064
+// Code size 7 (0x7)
+.maxstack 8
+IL_0000:  ldarg.0
+IL_0001:  call void class [mscorlib]System.Console::WriteLine(string)
+IL_0006:  ret
+</code></pre>
+
+<p>}
+```</p>
+
+<p>DEBUGを付けなかったときとのDIFFをとってみます。</p>
+
+<p>``` diff
+15c15</p>
+
+<h2>&lt; .module ConditionalAttributeTest.exe // GUID = {A54F3644-5083-4EC7-B846-8A354DD113AA}</h2>
+
+<blockquote><p>.module ConditionalAttributeTest.exe // GUID = {436FE462-17D6-4FDB-9AA7-15DA92658168}
+42c42</p>
+
+<h2>&lt;  // Code size 11 (0xb)</h2>
+
+<p> // Code size 1 (0x1)
+44,46c44
+&lt;  IL_0000:  ldstr "fugu"
+&lt;  IL_0005:  call void class ConditionalAttributeTest.MainClass::Log(string)</p>
+
+<h2>&lt;  IL_000a:  ret</h2>
+
+<p> IL_0000:  ret
+55c53</p>
+
+<h2>&lt;         // Method begins at RVA 0x2064</h2>
+
+<pre><code>    // Method begins at RVA 0x205a
+</code></pre>
+
+<p>```</p></blockquote>
+
+<p>変わったのは呼び出し側であるmain関数だけで、ConditionalAttributeがついたメソッド自体はDEBUGの有無に関係なく同じコードが吐かれます。</p>
+
+<h2>SEE ALSO</h2>
+
+<p>例によってこのことはドキュメントにバッチリ載っております。</p>
+
+<ul>
+<li><a href="http://msdn.microsoft.com/ja-jp/library/system.diagnostics.conditionalattribute.aspx">ConditionalAttribute クラス</a></li>
+</ul>
+
+
+<blockquote><p>指定した条件付きコンパイルのシンボルが定義されていない限り、メソッド呼び出しまたは属性を無視するようにコンパイラに指示します。</p></blockquote>
+
+<p>ドキュメントには「呼び出しを無視する」としか書かれてないので、定義がなくなるわけではないですね。
+そもそも関数定義がなくなったら、リンク時に Conditional Attribute があるかないか確認する方法がないじゃないですか・・・。</p>
+]]></content>
+  </entry>
+  
+</feed>
