@@ -63,6 +63,23 @@ String::Compare::ConstantTimeはXSで書かれたモジュールなんですが�
 - でも、可能であればIP制限もしましょうね
 - XS怖い
 
+## 追記
+
+### IP制限について
+
+Songmu先生よりコメントをいただきました。
+
+{% oembed https://twitter.com/songmu/status/514426458190528513 %}
+
+確かにPlack::Middlewareとか使えばお手軽に弾けるので、
+X-Hub-SignatureだけでなくIP制限もやっておくと良いですね。
+
+### String::Compare::ConstantTime
+
+String::Compare::ConstantTime ですが、僕のprが取り込まれた 0.310 がリリースされました。
+`undef` を渡すとsegmentation fault で落ちるというバグが修正されています。
+XS怖い。
+
 ## SEE ALSO
 
 - [Github::Hooks::Receiver](https://metacpan.org/pod/Github::Hooks::Receiver)
