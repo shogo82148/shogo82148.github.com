@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
 
-  <title><![CDATA[Category: Git | Shogo's Blog]]></title>
+  <title><![CDATA[Category: git | Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/blog/categories/git/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2014-07-05T18:37:26+09:00</updated>
+  <updated>2014-10-04T15:55:36+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -14,45 +14,167 @@
 
   
   <entry>
-    <title type="html"><![CDATA[Gitでプロキシを使う]]></title>
-    <link href="http://shogo82148.github.io/blog/2012/07/30/git-proxy/"/>
-    <updated>2012-07-30T21:10:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2012/07/30/git-proxy</id>
-    <content type="html"><![CDATA[<h1>背景・目的</h1>
+    <title type="html"><![CDATA[gitで作業ディレクトリの変更を破棄したのに差分が出続けて困った話]]></title>
+    <link href="http://shogo82148.github.io/blog/2014/10/04/gitattribute-eol-equals-crlf/"/>
+    <updated>2014-10-04T15:05:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2014/10/04/gitattribute-eol-equals-crlf</id>
+    <content type="html"><![CDATA[<p>gitで変更した覚えの無いファイルに差分が出ていたので、
+作業ディレクトリの変更を破棄したのに、
+<code>git status</code>で差分が出続けて困ったのでメモ。</p>
 
-<p>なぜだか研究室のWiFi経由でSSHが通らないので、
-GithubがBitbucketに繋がらない＞＜。
-有線LAN経由なら通るので、ネットワークの問題だと思うのですが、
-よくわからないのでとりあえずHTTPS経由で頑張ることにしました。</p>
-
-<p>うちの学校ではHTTPSで外部に出るにはプロキシの設定が必要です。
-そういうわけで、Gitでプロキシを使う方法を調べて見ました。</p>
-
-<!-- more -->
+<!-- More -->
 
 
-<h1>方法</h1>
+<h2>症状</h2>
 
-<p>.ssh/config に以下の設定をしました。</p>
+<p>gitでは<code>git checkout -- &lt;file&gt;</code> ってコマンドを叩くと、
+作業ディレクトリの変更を破棄できます。</p>
 
-<pre><code>Host github.com
-    User git
-    Port 22 # or 443
-    Hostname github.com # or ssh.github.com
-    IdentityFile /path/to/ssh.key
-    TCPKeepAlive yes
-    IdentitiesOnly yes
-    ProxyCommand nc -X connect -x proxy.example.com:8080 %h %p
+<p>``` plain
+$ git checkout -- hoge.txt
+$ git status
+On branch master
+Changes not staged for commit:
+ (use "git add <file>..." to update what will be committed)
+ (use "git checkout -- <file>..." to discard changes in working directory)</p>
+
+<p>   modified:   hoge.txt
+```</p>
+
+<p>しかし、差分が出続ける...
+<code>git checkout -- &lt;file&gt;</code> ならさっきやったよ！</p>
+
+<p><code>git reset --hard HEAD</code> して全変更を破棄してもダメでした。</p>
+
+<h2>原因</h2>
+
+<p>.gitattributesに改行コードの指定があったからでした。</p>
+
+<p><code>plain .gitattributes
+*.txt text=auto eol=crlf
+</code></p>
+
+<p>これが指定されていると、CRLFなファイルをコミットしようとしても、
+レポジトリには改行コードがLFで保存されるようになる。</p>
+
+<p><code>plain
+$ cat .gitattributes # .gitattributes には eol=crlf が指定されている
+*.txt text=auto eol=crlf
+$ hexdump hoge.txt   # hoge.txt は改行コードCRLFで保存されている
+0000000 48 65 6c 6c 6f 20 57 6f 72 6c 64 21 21 0d 0a
+000000f
+$ git add hoge.txt
+$ git commit -m 'add hoge.txt'  # 改行コードがCRLFなhoge.txtをコミット
+$ git cat-file -p master^{tree} # レポジトリにコミットされているオブジェクトを確認
+100644 blob 523f058ebd4f1a280b5a33a79af8f22b74415f37   .gitattributes
+100644 blob 936977184a9fa89d82f86957a90b92d4924b6573   hoge.txt
+$ git cat-file -p 936977184a9fa89d82f86957a90b92d4924b6573 | hexdump # 改行コードがLF(末尾が0a)になっている！！
+0000000 48 65 6c 6c 6f 20 57 6f 72 6c 64 21 21 0a
+000000e
+</code></p>
+
+<p>ところがレポジトリ上にCRLFなファイルがコミットされていると、
+コミットすべき内容と一致しないので差分がでてしまう。</p>
+
+<p>``` plain
+$ git cat-file -p master<sup>{tree}</sup>
+100644 blob 523f058ebd4f1a280b5a33a79af8f22b74415f37   .gitattributes
+100644 blob 23c3aefeda706ec02f4a724edc2faf1913a547ef   hoge.txt
+$ git cat-file -p 23c3aefeda706ec02f4a724edc2faf1913a547ef | hexdump # 改行コードはCRLF(末尾が0d 0a)
+0000000 48 65 6c 6c 6f 20 57 6f 72 6c 64 21 21 0d 0a
+000000f
+$ git status # 差分がでてしまう
+On branch master
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git checkout -- <file>..." to discard changes in working directory)</p>
+
+<pre><code>modified:   hoge.txt
 </code></pre>
 
-<h1>参考文献</h1>
+<p>  no changes added to commit (use "git add" and/or "git commit -a")
+```</p>
+
+<p>作業ディレクトリが壊れているわけでなく、レポジトリの内容がおかしい(<code>eol=crlf</code>が設定されているときは全てのファイルはLFでコミットされているべき)ので、
+今回はコミットして正しい状態にすることで解決。
+差分計算の効率化のためにタイムスタンプを最初に見ているみたいなので、
+touchしただけで差分が！ってなってびっくりした。</p>
+
+<h2>まとめ</h2>
+
+<p>CRLF滅びろ</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Githubさんにpack exceeds maximum allowed sizeって言われた]]></title>
+    <link href="http://shogo82148.github.io/blog/2014/09/13/github-remote-push-pack-size-exceeded/"/>
+    <updated>2014-09-13T10:51:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2014/09/13/github-remote-push-pack-size-exceeded</id>
+    <content type="html"><![CDATA[<p>Githubに手元のレポジトリをpushしようとしたら、
+「Pushできないよ！！」って言われたときのメモ。</p>
+
+<!-- More -->
+
+
+<p>コミット数が17kほどあって、画像とかサイズが比較的大きいファイルがたくさんあるレポジトリを、
+一度に全部pushしようとしたら「制限を超えてます」って言われてダメだった。</p>
+
+<p><code>plain
+$ git push origin master
+Counting objects: 280874, done.
+Delta compression using up to 4 threads.
+Compressing objects: 100% (60497/60497), done.
+remote: fatal: pack exceeds maximum allowed size
+error: pack-objects died of signal 13
+error: failed to push some refs to 'git@github.com:***/****.git'
+</code></p>
+
+<p>ググってみると、おんなじような症状が見つかった。</p>
 
 <ul>
-<li><a href="http://d.hatena.ne.jp/InoHiro/20120713/1342159543">git pull/push to github.com in proxy environment</a></li>
-<li><a href="http://d.hatena.ne.jp/metalglue/20061124/1164367513">http proxy 越えの ssh</a></li>
-<li><a href="http://yuudev.blogspot.jp/2010/02/linux-ssh.html">SSHでプロキシ経由でアクセス</a></li>
+<li><a href="http://stackoverflow.com/questions/15125862/github-remote-push-pack-size-exceeded">Github remote push pack size exceeded</a></li>
 </ul>
 
+
+<p>リモートへのPushはオブジェクトを全部一つにPackしてしまうので、
+一度に大量のコミットをPushしようとすると制限に引っかかるらしい。
+(そして、サイズを制限する方法はないみたい)</p>
+
+<p>解決策は「2回以上に分けてPushしてね」とのこと</p>
+
+<p><code>plain
+git push remoteB &lt;some previous commit on master&gt;:master
+...
+git push remoteB &lt;some previous commit after the last one&gt;:master
+git push remoteB master
+</code></p>
+
+<p>頑張ってコミットログを遡ってコミットハッシュを調べるのはつらかったので、
+打ってあったタグからコミットハッシュを調べてPushした。</p>
+
+<p><code>plain
+git push origin `git show v0.1.0 | grep commit | cut -d' ' -f2`:master
+</code></p>
+
+<p>タグは単なるコミットハッシュの別名ではなくひとつのオブジェクトなので、
+コミットだけをPushしたいときはタグと関連づいたコミットを調べる必要がある。
+今回はタグの情報からgrepとcutで必要なとこだけ切り抜くってことをしたけど、
+もっとスマートな方法があるなら知りたい。
+この方法で古いコミットから順番に何度かに分けてPushしたらうまくいった。</p>
+
+<p>今回は見つけた情報に通りに&lt;コミットハッシュ>:&lt;ブランチ名>でPushしたけど、
+コミットオブジェクトがリモートに転送されてればいいわけだから、
+単にタグをプッシュしてあとから消すでも良かったかもしれない。</p>
+
+<p><code>plain
+git push origin v0.1.0
+git push origin :v0.1.0
+</code></p>
+
+<p>こちらは未確認。</p>
+
+<p>歴史を守るって大変なことなんだなあ(ヽ´ω`)</p>
 ]]></content>
   </entry>
   

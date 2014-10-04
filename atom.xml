@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2014-07-05T18:37:26+09:00</updated>
+  <updated>2014-10-04T15:55:36+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,587 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[gitで作業ディレクトリの変更を破棄したのに差分が出続けて困った話]]></title>
+    <link href="http://shogo82148.github.io/blog/2014/10/04/gitattribute-eol-equals-crlf/"/>
+    <updated>2014-10-04T15:05:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2014/10/04/gitattribute-eol-equals-crlf</id>
+    <content type="html"><![CDATA[<p>gitで変更した覚えの無いファイルに差分が出ていたので、
+作業ディレクトリの変更を破棄したのに、
+<code>git status</code>で差分が出続けて困ったのでメモ。</p>
+
+<!-- More -->
+
+
+<h2>症状</h2>
+
+<p>gitでは<code>git checkout -- &lt;file&gt;</code> ってコマンドを叩くと、
+作業ディレクトリの変更を破棄できます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ git checkout -- hoge.txt
+</span><span class='line'>$ git status
+</span><span class='line'>On branch master
+</span><span class='line'>Changes not staged for commit:
+</span><span class='line'> (use "git add &lt;file&gt;..." to update what will be committed)
+</span><span class='line'> (use "git checkout -- &lt;file&gt;..." to discard changes in working directory)
+</span><span class='line'>
+</span><span class='line'>   modified:   hoge.txt</span></code></pre></td></tr></table></div></figure>
+
+
+<p>しかし、差分が出続ける&#8230;
+<code>git checkout -- &lt;file&gt;</code> ならさっきやったよ！</p>
+
+<p><code>git reset --hard HEAD</code> して全変更を破棄してもダメでした。</p>
+
+<h2>原因</h2>
+
+<p>.gitattributesに改行コードの指定があったからでした。</p>
+
+<figure class='code'><figcaption><span>.gitattributes</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>*.txt text=auto eol=crlf</span></code></pre></td></tr></table></div></figure>
+
+
+<p>これが指定されていると、CRLFなファイルをコミットしようとしても、
+レポジトリには改行コードがLFで保存されるようになる。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ cat .gitattributes # .gitattributes には eol=crlf が指定されている
+</span><span class='line'>*.txt text=auto eol=crlf
+</span><span class='line'>$ hexdump hoge.txt   # hoge.txt は改行コードCRLFで保存されている
+</span><span class='line'>0000000 48 65 6c 6c 6f 20 57 6f 72 6c 64 21 21 0d 0a
+</span><span class='line'>000000f
+</span><span class='line'>$ git add hoge.txt
+</span><span class='line'>$ git commit -m 'add hoge.txt'  # 改行コードがCRLFなhoge.txtをコミット
+</span><span class='line'>$ git cat-file -p master^{tree} # レポジトリにコミットされているオブジェクトを確認
+</span><span class='line'>100644 blob 523f058ebd4f1a280b5a33a79af8f22b74415f37   .gitattributes
+</span><span class='line'>100644 blob 936977184a9fa89d82f86957a90b92d4924b6573   hoge.txt
+</span><span class='line'>$ git cat-file -p 936977184a9fa89d82f86957a90b92d4924b6573 | hexdump # 改行コードがLF(末尾が0a)になっている！！
+</span><span class='line'>0000000 48 65 6c 6c 6f 20 57 6f 72 6c 64 21 21 0a
+</span><span class='line'>000000e</span></code></pre></td></tr></table></div></figure>
+
+
+<p>ところがレポジトリ上にCRLFなファイルがコミットされていると、
+コミットすべき内容と一致しないので差分がでてしまう。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ git cat-file -p master^{tree}
+</span><span class='line'>100644 blob 523f058ebd4f1a280b5a33a79af8f22b74415f37   .gitattributes
+</span><span class='line'>100644 blob 23c3aefeda706ec02f4a724edc2faf1913a547ef   hoge.txt
+</span><span class='line'>$ git cat-file -p 23c3aefeda706ec02f4a724edc2faf1913a547ef | hexdump # 改行コードはCRLF(末尾が0d 0a)
+</span><span class='line'>0000000 48 65 6c 6c 6f 20 57 6f 72 6c 64 21 21 0d 0a
+</span><span class='line'>000000f
+</span><span class='line'>$ git status # 差分がでてしまう
+</span><span class='line'>On branch master
+</span><span class='line'>Changes not staged for commit:
+</span><span class='line'>  (use "git add &lt;file&gt;..." to update what will be committed)
+</span><span class='line'>  (use "git checkout -- &lt;file&gt;..." to discard changes in working directory)
+</span><span class='line'>
+</span><span class='line'>  modified:   hoge.txt
+</span><span class='line'>
+</span><span class='line'>  no changes added to commit (use "git add" and/or "git commit -a")</span></code></pre></td></tr></table></div></figure>
+
+
+<p>作業ディレクトリが壊れているわけでなく、レポジトリの内容がおかしい(<code>eol=crlf</code>が設定されているときは全てのファイルはLFでコミットされているべき)ので、
+今回はコミットして正しい状態にすることで解決。
+差分計算の効率化のためにタイムスタンプを最初に見ているみたいなので、
+touchしただけで差分が！ってなってびっくりした。</p>
+
+<h2>まとめ</h2>
+
+<p>CRLF滅びろ</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[ISUCON4にチームぽわわで参加しました]]></title>
+    <link href="http://shogo82148.github.io/blog/2014/10/03/isucon-powawa-4/"/>
+    <updated>2014-10-03T19:55:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2014/10/03/isucon-powawa-4</id>
+    <content type="html"><![CDATA[<p>遅くなりましたが、ISUCON4のレポートです。
+まこぴーとchroneさんとともにチームぽわわで参加し、惨敗してきました。</p>
+
+<!-- More -->
+
+
+<h2>事前準備</h2>
+
+<ul>
+<li>メンバー三人で集まって、去年のnopasteアプリで練習
+
+<ul>
+<li>chroneさんは初参戦なので雰囲気を掴んでもらう</li>
+</ul>
+</li>
+<li>Ansibleを使っていこうっていう話になったので、プレイブックを書いて遊んでみる</li>
+<li>githubにprivate repositoryを予め建てる
+
+<ul>
+<li>PayPalに対応してるっぽいので、ログインを試みるも何故か失敗</li>
+<li>諦めてクレカ情報を直接入力</li>
+<li>どうなってるんですかgithubさん！！！</li>
+</ul>
+</li>
+</ul>
+
+
+<h2>競技</h2>
+
+<h3>10時くらいまで</h3>
+
+<ul>
+<li>お題確認</li>
+<li>サーバのセットアップはchroneさんにお願いしスムーズにできた</li>
+<li>サーバは人数分準備
+
+<ul>
+<li>僕がコミット＆実行確認をこまめに繰り返すタイプなので、書いたコードはすぐにデプロイしてテストに回したい！！</li>
+<li>サーバ一台だとインフラの調整とアプリの確認がかぶって面倒</li>
+<li>かといってローカルで同じ環境用意するのも面倒</li>
+<li>AMIがあるならそれを使っちゃえ！(って記事を去年見た気がしたので)</li>
+</ul>
+</li>
+<li>密かにUkigumoで自動デプロイする仕組みを作っておいた
+
+<ul>
+<li>書いたコードはすぐにデプロイしてテストに回したい！！</li>
+<li>あらかじめukigumo-agentを起動</li>
+<li>github-hookを設定してコミットしたら実行</li>
+<li><a href="http://shogo82148.github.io/blog/2014/09/23/github-hooks-receiver-supports-x-hub-signature/">Github::Hooks::Receiverいじってた</a>のはこれやるためだったんだけど、Ukigumoさんで十分でした。便利ですね！！</li>
+<li>去年はサーバに入って作業する人(まこぴー)がかなり忙しそうだったので、なんとか解消したかった</li>
+</ul>
+</li>
+</ul>
+
+
+<h3>お昼くらいまで</h3>
+
+<ul>
+<li>nginxで静的ファイル配信とかMySQLのクエリ分析とか</li>
+<li>いっちーさんは早速Redis::Fastに手を付ける
+
+<ul>
+<li>みんなもRedis::Fast使ってね！！</li>
+</ul>
+</li>
+<li>あとUkigumoさんのおもり
+
+<ul>
+<li>UkigumoとAnsibleのお陰で僕が何もしなくても、まこぴー氏が「nginxで静的ファイル配信したよ！」って言って数分後には確認できる状態になっていて便利</li>
+<li>これのおかげでページが真っ白になっているのに気がつく</li>
+<li>普通に設定を書き換えるとMIMEの設定がなくなるらしい</li>
+<li>Ukigumo++</li>
+</ul>
+</li>
+</ul>
+
+
+<h3>14時くらいまで</h3>
+
+<ul>
+<li>chroneさんにMySQLのクエリ改善
+
+<ul>
+<li><code>COUNT()</code> している部分を一行SELECTだけにする修正とか</li>
+</ul>
+</li>
+<li>一部Redis::Fastに書き換えた版も一応スコアでる</li>
+<li>アプリが単純すぎてMySQLでもRedisでも大差ないスコア</li>
+<li>自分の環境でmy.cnfの調整をしたら、MySQL gone awayしてしまってつらいことに
+
+<ul>
+<li>Redisに書き換えたものの、reportのロジックには手をつけてなかったので、効果あるのではと</li>
+<li>MySQLだけ再起動したらそうなるらしいけど、ansibleのplaybookにアプリの再起動手順も含まれていたので全部再起動かかってたと思うんだけど・・・</li>
+<li>結局サーバごと再起動しました(・ω&lt;)</li>
+</ul>
+</li>
+</ul>
+
+
+<h3>17時くらいまで</h3>
+
+<ul>
+<li>workloadを上げるとfailが大量にでて/reportのチェックでコケる問題</li>
+<li>トランザクションとかFOR UPDATEの問題かと思ってSQLをいじくりまわす</li>
+<li>初期データの考慮を忘れてたことに気が付き、初期化スクリプトを組む</li>
+</ul>
+
+
+<h3>18時まで</h3>
+
+<ul>
+<li>workload変えてベンチ走らせたり最後のあがき</li>
+</ul>
+
+
+<h2>まとめ</h2>
+
+<ul>
+<li>初期化大事！！
+
+<ul>
+<li>社内ISUCONに参加したときも初期化で散々な目にあった</li>
+</ul>
+</li>
+<li>Ansibleがあまり効果的に使えてなかった
+
+<ul>
+<li>configいじるのが速いので、どうしても直接いじっちゃう</li>
+<li>各個人にサーバ用意したけど、微妙に環境が違ってつらい</li>
+</ul>
+</li>
+</ul>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Github::Hooks::ReceiverがX-Hub-Signatureをサポートしました]]></title>
+    <link href="http://shogo82148.github.io/blog/2014/09/23/github-hooks-receiver-supports-x-hub-signature/"/>
+    <updated>2014-09-23T00:25:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2014/09/23/github-hooks-receiver-supports-x-hub-signature</id>
+    <content type="html"><![CDATA[<p><a href="https://metacpan.org/pod/Github::Hooks::Receiver">Github::Hooks::Receiver</a>にX-Hub-SignatureをサポートするPull Requestを送ったら、
+速攻取り込まれ、さらにGithubのコミット権とPAUSEのco-maintパーミッションをもらったというお話。</p>
+
+<!-- More -->
+
+
+<h2>X-Hub-Signature</h2>
+
+<p>GithubのWebhookは大変便利なんですが、特に対策をしないままだと
+他の人にcurlとかで叩かれてしまう可能性があります。
+本来であればIPアドレスで制限をかけるべきなんですが、
+iptablesの設定とかよくわからないし・・・と思ってGithubのドキュメントを読んでいたら、
+もっとお手軽な方法発見。</p>
+
+<ul>
+<li><a href="https://developer.github.com/webhooks/securing/">Securing your webhooks</a></li>
+</ul>
+
+
+<p>GithubからのリクエストにはX-Hub-Signatureというのがついていて、
+これを使うとPayloadの検証ができるらしい。
+<a href="https://metacpan.org/pod/Github::Hooks::Receiver">Github::Hooks::Receiver</a>は
+このヘッダを全くみていないようだったので<a href="https://github.com/Songmu/Github-Hooks-Receiver/pull/1">Pull Requestを送ってみた</a>。</p>
+
+<p>Github::Hooks::Receiver 0.02以降で、以下のようにsecretの指定ができるようになります。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="nn">Github::Hooks::Receiver::</span><span class="n">Declare</span><span class="p">;</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$receiver</span> <span class="o">=</span> <span class="n">receiver</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">secret</span> <span class="s">&#39;secret1234&#39;</span><span class="p">;</span> <span class="c1"># Webhookの設定画面のsecretの項目と同じものを入力</span>
+</span><span class='line'>    <span class="n">on</span> <span class="nb">push</span> <span class="o">=&gt;</span> <span class="k">sub </span><span class="p">{</span>
+</span><span class='line'>        <span class="c1"># レポジトリにPushされた時の処理とかをゴニョゴニョ書く</span>
+</span><span class='line'>    <span class="p">};</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$psgi</span> <span class="o">=</span> <span class="nv">$receiver</span><span class="o">-&gt;</span><span class="n">to_app</span><span class="p">;</span>
+</span><span class='line'><span class="nv">$receiver</span><span class="o">-&gt;</span><span class="n">run</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>これでsecretを知らない人がリクエストを偽装できなくなるので安心です。
+secretはエントロピーが高いほうがいいので
+<code>ruby -rsecurerandom -e 'puts SecureRandom.hex(20)'</code>
+みたいなコマンド使うといいらしいですよ。</p>
+
+<h2>String::Compare::ConstantTime</h2>
+
+<p>Signatureの比較にはRubyの<a href="http://rubydoc.info/github/rack/rack/master/Rack/Utils.secure_compare">secure_compare</a>のような関数を
+使ったほうがいいらしい。
+Github::Hooks::Receiverでは、そのPerl版の<a href="https://metacpan.org/pod/String::Compare::ConstantTime">String::Compare::ConstantTime</a>を使ってみた。
+ちょっと引数のチェックに甘いところがあって、segmentation fault場合があったので、こちらにもPull Requestを送っておきました。
+Github::Hooks::Receiverは使う前にチェックを入れてあるので、現行バージョンでも問題なく動くはず。</p>
+
+<p>String::Compare::ConstantTimeはXSで書かれたモジュールなんですが、
+この手のバグが入り込みやすいのでXS難しいですね。</p>
+
+<h2>まとめ</h2>
+
+<ul>
+<li>XS怖い</li>
+<li>Github::Hooks::Receiverにsecretを指定できるようになったので、IP制限がかけられない場合でも安心</li>
+<li>でも、可能であればIP制限もしましょうね</li>
+<li>XS怖い</li>
+</ul>
+
+
+<h2>追記</h2>
+
+<h3>IP制限について</h3>
+
+<p>Songmu先生よりコメントをいただきました。</p>
+
+<blockquote class="twitter-tweet"><p>これはいい機能。ちなみにIP制限は、Nginxとかでやるのがお手軽で、plackで完結させたいのであれば、Plack::Middlewareで弾いてやればいいと思います。 / “Github::Hooks::ReceiverがX-…” <a href="http://t.co/NM0uQzW1s8">http://t.co/NM0uQzW1s8</a></p>&mdash; songmu (@songmu) <a href="https://twitter.com/songmu/status/514426458190528513">September 23, 2014</a></blockquote>
+
+
+<script async src="http://shogo82148.github.io//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+
+<p>確かにPlack::Middlewareとか使えばお手軽に弾けるので、
+X-Hub-SignatureだけでなくIP制限もやっておくと良いですね。</p>
+
+<h3>String::Compare::ConstantTime</h3>
+
+<p>String::Compare::ConstantTime ですが、僕のprが取り込まれた 0.310 がリリースされました。
+<code>undef</code> を渡すとsegmentation fault で落ちるというバグが修正されています。
+XS怖い。</p>
+
+<h2>SEE ALSO</h2>
+
+<ul>
+<li><a href="https://metacpan.org/pod/Github::Hooks::Receiver">Github::Hooks::Receiver</a></li>
+<li><a href="https://metacpan.org/pod/String::Compare::ConstantTime">String::Compare::ConstantTime</a></li>
+<li><a href="http://www.songmu.jp/riji/entry/2013-12-05-github-hooks.html">GithubのHookについてのまとめとソリューション</a></li>
+<li><a href="http://www.songmu.jp/riji/entry/2014-04-18-github-hooks.html">Jenkinsでパラメータ付ビルドでブランチ指定出来るようにしつつ、GithubのHookも受け付けられるようにする</a></li>
+</ul>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Githubさんにpack exceeds maximum allowed sizeって言われた]]></title>
+    <link href="http://shogo82148.github.io/blog/2014/09/13/github-remote-push-pack-size-exceeded/"/>
+    <updated>2014-09-13T10:51:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2014/09/13/github-remote-push-pack-size-exceeded</id>
+    <content type="html"><![CDATA[<p>Githubに手元のレポジトリをpushしようとしたら、
+「Pushできないよ！！」って言われたときのメモ。</p>
+
+<!-- More -->
+
+
+<p>コミット数が17kほどあって、画像とかサイズが比較的大きいファイルがたくさんあるレポジトリを、
+一度に全部pushしようとしたら「制限を超えてます」って言われてダメだった。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ git push origin master
+</span><span class='line'>Counting objects: 280874, done.
+</span><span class='line'>Delta compression using up to 4 threads.
+</span><span class='line'>Compressing objects: 100% (60497/60497), done.
+</span><span class='line'>remote: fatal: pack exceeds maximum allowed size
+</span><span class='line'>error: pack-objects died of signal 13
+</span><span class='line'>error: failed to push some refs to 'git@github.com:***/****.git'</span></code></pre></td></tr></table></div></figure>
+
+
+<p>ググってみると、おんなじような症状が見つかった。</p>
+
+<ul>
+<li><a href="http://stackoverflow.com/questions/15125862/github-remote-push-pack-size-exceeded">Github remote push pack size exceeded</a></li>
+</ul>
+
+
+<p>リモートへのPushはオブジェクトを全部一つにPackしてしまうので、
+一度に大量のコミットをPushしようとすると制限に引っかかるらしい。
+(そして、サイズを制限する方法はないみたい)</p>
+
+<p>解決策は「2回以上に分けてPushしてね」とのこと</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>git push remoteB &lt;some previous commit on master&gt;:master
+</span><span class='line'>...
+</span><span class='line'>git push remoteB &lt;some previous commit after the last one&gt;:master
+</span><span class='line'>git push remoteB master</span></code></pre></td></tr></table></div></figure>
+
+
+<p>頑張ってコミットログを遡ってコミットハッシュを調べるのはつらかったので、
+打ってあったタグからコミットハッシュを調べてPushした。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>git push origin `git show v0.1.0 | grep commit | cut -d' ' -f2`:master</span></code></pre></td></tr></table></div></figure>
+
+
+<p>タグは単なるコミットハッシュの別名ではなくひとつのオブジェクトなので、
+コミットだけをPushしたいときはタグと関連づいたコミットを調べる必要がある。
+今回はタグの情報からgrepとcutで必要なとこだけ切り抜くってことをしたけど、
+もっとスマートな方法があるなら知りたい。
+この方法で古いコミットから順番に何度かに分けてPushしたらうまくいった。</p>
+
+<p>今回は見つけた情報に通りに&lt;コミットハッシュ>:&lt;ブランチ名>でPushしたけど、
+コミットオブジェクトがリモートに転送されてればいいわけだから、
+単にタグをプッシュしてあとから消すでも良かったかもしれない。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>git push origin v0.1.0
+</span><span class='line'>git push origin :v0.1.0</span></code></pre></td></tr></table></div></figure>
+
+
+<p>こちらは未確認。</p>
+
+<p>歴史を守るって大変なことなんだなあ(ヽ´ω`)</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[秘密鍵から公開鍵をつくる]]></title>
+    <link href="http://shogo82148.github.io/blog/2014/09/03/get-public-key/"/>
+    <updated>2014-09-03T13:40:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2014/09/03/get-public-key</id>
+    <content type="html"><![CDATA[<p>githubに公開鍵を登録しようと思ったけど、
+手元に秘密鍵しかなくて困った時のメモ。</p>
+
+<!-- More -->
+
+
+<p>ssh-keygenを使うとできます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="c"># 秘密鍵を読み込んで公開鍵を出力する</span>
+</span><span class='line'>ssh-keygen -y -f ~/.ssh/id_rsa
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>この公開鍵って登録したっけ？
+ってときには以下のコマンドでフィンガープリントを確認できます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="c"># 公開鍵のフィンガープリントを取得する</span>
+</span><span class='line'>ssh-keygen -l -f ~/.ssh/id_rsa.pub
+</span></code></pre></td></tr></table></div></figure>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[YAPC::Asia 2014 に行ってきた #yapcasia]]></title>
+    <link href="http://shogo82148.github.io/blog/2014/08/31/yapcasia/"/>
+    <updated>2014-08-31T16:02:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2014/08/31/yapcasia</id>
+    <content type="html"><![CDATA[<p><a href="http://yapcasia.org/2014/">YAPC::Asia 2014</a> に参加してきました。
+「ブログに書くまでがYAPC」らしいので、メモ書き。</p>
+
+<!-- More -->
+
+
+<h2>見たトーク</h2>
+
+<ul>
+<li><a href="http://yapcasia.org/2014/talk/show/103a434e-ec02-11e3-bd6d-c7a06aeab6a4">Perl meets Real World 〜ハードウェアと恋に落ちるPerlの使い方〜</a>
+
+<ul>
+<li>デモ中のURLが「localhost」になってたんであれ？って思ったんですが、WebサーバはPC上にあったんですね。RaspberryPi上でPerl動くんじゃなかったんですか！</li>
+<li>ネギ振りミククラウド化するって言ってたんで期待してます</li>
+</ul>
+</li>
+<li><a href="http://yapcasia.org/2014/talk/show/2276d7b2-eba7-11e3-bd6d-c7a06aeab6a4">Go For Perl Mongers</a></li>
+<li><a href="http://yapcasia.org/2014/talk/show/66c55626-eba9-11e3-bd6d-c7a06aeab6a4">お待たせしました。Perl で BDD を簡単に実践する最高にクールなフレームワークができました</a></li>
+<li><a href="http://yapcasia.org/2014/talk/show/3c896370-01de-11e4-9357-07b16aeab6a4">DBIx::Class - what is it and what is it good for?</a>
+
+<ul>
+<li><a href="http://search.cpan.org/~ribasushi/DBIx-Class-0.08270/lib/DBIx/Class/ResultClass/HashRefInflator.pm">HashRefInflator</a>の存在を初めて知りました</li>
+<li>今関わってるプロジェクトでDBICのRowObject生成コストが問題になってるんで、後で試してみたいです</li>
+</ul>
+</li>
+<li><a href="http://yapcasia.org/2014/talk/show/d557ddbe-fde4-11e3-b7e8-e4a96aeab6a4">Scala In Perl Company : Hatena</a></li>
+<li><a href="http://yapcasia.org/2014/talk/show/e495bc1a-f30d-11e3-b7e8-e4a96aeab6a4">WHERE狙いのキー、ORDER BY狙いのキー</a></li>
+<li><a href="http://yapcasia.org/2014/talk/show/e35ec49a-ebba-11e3-bd6d-c7a06aeab6a4">Get a kick out of CPAN</a></li>
+<li><p><a href="http://yapcasia.org/2014/talk/show/61b78258-026f-11e4-9357-07b16aeab6a4">初心者が Web エンジニアのコミュニティに触れてみて感じたこと - ゆとりエンジニアの成長戦略</a></p></li>
+<li><p><a href="http://yapcasia.org/2014/talk/show/d1eb4942-fdb5-11e3-b7e8-e4a96aeab6a4">突然ITインフラを任された人のための…監視設計入門</a></p></li>
+<li><a href="http://yapcasia.org/2014/talk/show/a02d05e6-fead-11e3-b7e8-e4a96aeab6a4">半端なPHPDisでPHPerに陰で笑われないためのPerl Monger向け最新PHP事情(5.6対応)</a>
+
+<ul>
+<li>MacにはPHPが最初から入ってるらしいですよ</li>
+</ul>
+</li>
+<li><a href="http://yapcasia.org/2014/talk/show/77109da0-00b8-11e4-b7e8-e4a96aeab6a4">モバイルアプリとAPIのありかたを考える2014</a></li>
+<li><a href="http://yapcasia.org/2014/talk/show/3a5f2a0e-ec3e-11e3-bd6d-c7a06aeab6a4">Mobile Application Development for Perl Mongers [ninjinkun x gfx]</a>
+
+<ul>
+<li>シングルトンは嫌だシングルトンは嫌だ</li>
+</ul>
+</li>
+<li><a href="http://yapcasia.org/2014/talk/show/d5049940-ebb2-11e3-bd6d-c7a06aeab6a4">そんなにビッグでもないデータ処理手法の話</a>
+
+<ul>
+<li>一日分の解析ならなんとか一台で、でも一ヶ月分となると・・・ってことが多いんでもうちょっと調査して、どれかに手を出してみようかな・・・</li>
+</ul>
+</li>
+<li>typester先生のキーノート
+
+<ul>
+<li>28才で結婚・・・あと2年・・・20代・・・あと4年・・・(´；ω；｀)ｳｯ…</li>
+</ul>
+</li>
+</ul>
+
+
+<h2>全体を通して</h2>
+
+<p>僕が見たトークは全体からしたらほんの一部ですが、それでも一覧にすると結構見てるな。
+貧乏症なんで、こういうイベント参加するとトークたくさん見ないといけない気持ちになっちゃうんです。
+のんびり人と話すのもいいってことは分かるんですけどね。</p>
+
+<p>去年も感じましたが、参加人数に対して会場が狭く、立ち見が多くて大変でした。
+特に今年は去年より参加者多かったみたいですし、余計にそう感じたかも。
+あと移動時間がほとんどないのもつらい。</p>
+
+<p>NSD(Nagaoka Developers Study)のメンバーや、元同僚も多く参加していて、なんだか同窓会みたいな感じでしたね。
+ただ、やっぱり、全く知らない人には話しかけづらい(´・ω・｀)
+来年やるようだったら何かトークしたいなと思った２日間でした。</p>
+
+<h2>最後に一番言いたいこと</h2>
+
+<p>Twitterのほうでは騒いでましたが、先日Mac Book Airにアクエリアスを飲ませてダメにするという悲しい事故が・・・。
+このブログOctopressで書いてるんで、
+ローカルの環境がなくなって再構築面倒だったり、
+pushし忘れてて一部記事がなかったり、
+非常に面倒でした。</p>
+
+<p>みなさんもアクエリアスの扱いには注意しましょう・・・(ヽ´ω`)</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[PerlのXS中に起きたシグナルの扱い]]></title>
@@ -65,7 +646,7 @@
 <p>「割り込みかかったら再度select」っていうふうに修正してみたんですが、
 今度はPerlのシグナルハンドラがなかなか呼び出されない！！</p>
 
-<figure class='code'><figcaption><span>signal.pl</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
 <span class='line-number'>4</span>
@@ -81,7 +662,7 @@
 
 
 <p>このコードを実行中にSIGTERMを送ると、送った瞬間に&#8221;TERM handler called&#8221;と表示されて欲しいのですが、
-<code>brpop</code>コマンドが終わるまで実行されない……。</p>
+<code>brpop</code>コマンドが終わるまで実行されない……</p>
 
 <p>ググってみるとPerlはシグナルハンドラを即座に処理しているのではなく、
 シグナルハンドラを安全に実行できるタイミングを見計らって実行しているみたいです。</p>
@@ -249,8 +830,6 @@ IRCとのやりとりには<a href="http://www.songmu.jp/riji/entry/2013-09-09-u
 
 <h2>引数をMeCabで解析する</h2>
 
-<p>実際に入れてみたら、</p>
-
 <figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 </pre></td><td class='code'><pre><code class=''><span class='line'>acidlemon unazu_san: 癒やしをうさぎで頼む
@@ -337,7 +916,7 @@ igo-javascriptのバグを発見できたりしたので、いいのです。</p
   </entry>
   
   <entry>
-    <title type="html"><![CDATA[C#のconditional attributeのコンパイル結果を見てみる]]></title>
+    <title type="html"><![CDATA[C#のconditional Attributeのコンパイル結果を見てみる]]></title>
     <link href="http://shogo82148.github.io/blog/2014/05/29/conditional-attribute/"/>
     <updated>2014-05-29T19:20:00+09:00</updated>
     <id>http://shogo82148.github.io/blog/2014/05/29/conditional-attribute</id>
@@ -512,8 +1091,7 @@ igo-javascriptのバグを発見できたりしたので、いいのです。</p
 </span></code></pre></td></tr></table></div></figure>
 
 
-<p>変わったのは呼び出し側であるmain関数だけで、
-ConditionalAttributeがついたメソッド自体はDEBUGの有無に関係なく同じコードが吐かれます。</p>
+<p>変わったのは呼び出し側であるmain関数だけで、ConditionalAttributeがついたメソッド自体はDEBUGの有無に関係なく同じコードが吐かれます。</p>
 
 <h2>SEE ALSO</h2>
 
@@ -1780,740 +2358,6 @@ githubのプレビューの一斉設定だけでなく、
 
 
 <p>(これ作ってるときに、githubのHTMLソースの中にtab-size-8というクラスを見つけたのですが、実はどこかに隠し機能としてあるんですかね？)</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Redis::Fast 0.06 released]]></title>
-    <link href="http://shogo82148.github.io/blog/2014/02/01/redis-fast-0-dot-06-released/"/>
-    <updated>2014-02-01T21:36:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2014/02/01/redis-fast-0-dot-06-released</id>
-    <content type="html"><![CDATA[<p>こんにちは、もうすぐ17才と100ヶ月を迎えるいっちーです。
-今朝、<a href="https://metacpan.org/release/Redis-Fast">Redis::Fast 0.06</a>をリリースしました。
-主な変更点はメモリーリークの修正と、エラー発生時にSegmentation Faltで落ちる問題の修正です。</p>
-
-<!-- More -->
-
-
-<h2>メモリーリーク</h2>
-
-<p>Redis::Fastをサブスクライバーモードで動作させると、メモリを無限に食い続ける問題をついに！ついに！修正しました。
-原因は、一言で言ってしまえば、Perlのリファレンスカウントの扱いの勉強不足です・・・。</p>
-
-<p>XSの中でPerlのオブジェクトを作るとき、プログラマが手動でリファレンスカウントを制御する必要があります。
-とはいうものの、全てのオブジェクトのリファレンスカウントを制御するのは大変なので、
-XSには「揮発性」という考え方があります。
-<code>sv_2motral</code>を使って変数を揮発性に設定しておけば、よしななタイミングでオブジェクトを解放してくれます。
-<a href="http://d.hatena.ne.jp/gfx/20100519/1274247355">gfx先生のブログ</a>にもあるように、
-オブジェクト作成したら原則<code>sv_2motral</code>をつけるようにすれば、
-メモリーリークはほとんどなくなるはずです。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="n">SV</span> <span class="o">*</span> <span class="n">s</span> <span class="o">=</span> <span class="n">newSVpv</span><span class="p">(</span><span class="s">&quot;Hello World&quot;</span><span class="p">,</span><span class="mi">0</span><span class="p">);</span>  <span class="c1">// Perl の文字列オブジェクト</span>
-</span><span class='line'><span class="n">sv_2motral</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="c1">// 揮発性にすることで、使われなくなったら自動的に解放してくれる</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>この「よしななタイミング」をよく理解していなかったのでリークしてました・・・。
-XSからオブジェクトへアクセスできなくなったときでないとオブジェクトを解放できないので、
-揮発性のオブジェクトが実際に解放されるのは「XSで書かれた関数が終了してPerlに戻るとき」です。
-メッセージを待ち続ける<code>wait_for_messages</code>関数は
-(タイムアウトをしない限り)ずっと終了しないので、
-揮発性のオブジェクトを解放するタイミングが一切なかったのです。</p>
-
-<p>不要になったら解放されるよう、揮発性オブジェクトの有効範囲を明示的に指定しました。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="n">sv_2motral</span><span class="p">(</span><span class="n">s</span><span class="p">);</span>
-</span><span class='line'><span class="n">ENTER</span><span class="p">;</span>
-</span><span class='line'><span class="n">SAVETMPS</span><span class="p">;</span>
-</span><span class='line'><span class="n">sv_2motral</span><span class="p">(</span><span class="n">v</span><span class="p">);</span>
-</span><span class='line'><span class="n">FREETMPS</span><span class="p">;</span>
-</span><span class='line'><span class="n">LEAVE</span><span class="p">;</span>
-</span><span class='line'><span class="c1">// v はココで解放される</span>
-</span><span class='line'><span class="c1">// s は生き残ってる</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p><a href="http://perldoc.jp/docs/perl/5.18.1/perlcall.pod">perlcall</a>とかちゃんとドキュメントを読みましょう > 自分</p>
-
-<h2>Segmentation Falt</h2>
-
-<p>同期的にコマンドを実行してる最中にSIGNAL等で実行が中断されると、
-Segmentation Faltが起こる問題を修正しました。
-Redis::Fastは同期モードでコマンドを発行したときでも、
-hiredisの非同期モードの機能を使って通信しています。
-コマンド実行中にエラーが発生すると、
-コールバック関数の呼び出しタイミングが変わってしまい、
-メモリの確保・解放のタイミングが狂ってしまっていました。</p>
-
-<p>このバグ、試した環境の中ではUbuntu+Perl5.14でしか再現しませんでした。
-他の環境ではたまたま解放後もアクセスできてしまって、
-正常に動作してしまっていたようです。
-嫌なバグだ・・・。</p>
-
-<h2>まとめ</h2>
-
-<p>C言語でメモリ管理するコードは書くべきでない。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Unity Test Tools を使ってみる]]></title>
-    <link href="http://shogo82148.github.io/blog/2013/12/21/unity-test-tools/"/>
-    <updated>2013-12-21T21:02:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2013/12/21/unity-test-tools</id>
-    <content type="html"><![CDATA[<p>みなさんこんにちは、
-最近つらいことばかりで元気のないいっちーです。
-少しでもつらいことを解消できないかと Unity Test Tools ってので遊んでみました。</p>
-
-<!-- More -->
-
-
-<h2>背景</h2>
-
-<p>最近あったつらいことのひとつに「Unityで作ってるプロジェクトで、機能拡張したときに間違えて一行消しちゃった！！！」
-ってのがあります。</p>
-
-<p>もちろん僕が消したわけじゃないですよ！！！
-僕サーバサイドエンジニアですから、Unityはいじりません。
-でも、一応修正コミットは見ていたはずなので、気がつけなかったのは残念です・・・。</p>
-
-<p>どんなにコード書く人が頑張っても、レビューする人が頑張っても、
-人間誰だってミスします。
-じゃあ、機械にやらせよう！テストコードだ！って話なんですが、
-コードカバレッジが低く、今回のつらい事例でもテストがありませんでした。
-一部書いてあるテストも、担当者が代わってからなんか怪しい・・・。</p>
-
-<p>あと、自分も手元でテスト動かしてみたのですが、今のテスト面倒・・・。</p>
-
-<ul>
-<li>Unityのコンソールにドバッと流れる
-
-<ul>
-<li>テストが全部通ったのか、失敗したのかよくわからない</li>
-</ul>
-</li>
-<li>ユニットテストを1項目だけやりたいとかどうやるんだろう
-
-<ul>
-<li>「テストの実行」が「シーンの再生」なので1項目とかどうすんの？</li>
-</ul>
-</li>
-</ul>
-
-
-<h2>Unity Test Tools</h2>
-
-<p>つらいので解決方法を探るべくインターネットの海をさまよっていたら Unity Test Tools なるものを発見。</p>
-
-<ul>
-<li><a href="http://blogs.unity3d.com/2013/12/18/unity-test-tools-released/">Unity Test Tools Released</a></li>
-</ul>
-
-
-<p>これを書いてる時点で、3日前のリリースです！
-タイムリーだ！！</p>
-
-<p>英語でよくわかんないけど、スクリーンショットはわかりやすくてかっこいいぞ！
-遊んでみよう！</p>
-
-<h2>事前準備</h2>
-
-<p>まず、Unity Testing Tools をダウンロードしてこよう！
-Aseet Store に並んでるので、ダウンロードボタンを押してしばらく待ってれば Unity が勝手に使える状態にしてくれます。</p>
-
-<h2>簡単なユニットテストを書いてみる</h2>
-
-<p>以前れもんさんが書いた「<a href="http://tech.kayac.com/archive/merry_christmas_2012.html">#24 「Unityでコルーチンも単体テストしよう」 tech.kayac.com Advent Calendar 2012</a>」を
-Unity Testing Tools でやってみました。</p>
-
-<p>テストの対象はこんな感じのクラスです(短く書けそうな部分があったのでちょっと変えた)。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-</pre></td><td class='code'><pre><code class='csharp'><span class='line'><span class="k">namespace</span> <span class="nn">MyProject</span> <span class="p">{</span>
-</span><span class='line'>    <span class="k">public</span> <span class="k">class</span> <span class="nc">Plan</span> <span class="p">{</span>
-</span><span class='line'>        <span class="k">public</span> <span class="kt">string</span> <span class="n">Title</span> <span class="p">{</span> <span class="k">get</span><span class="p">;</span> <span class="k">private</span> <span class="k">set</span><span class="p">;</span> <span class="p">}</span>
-</span><span class='line'>        <span class="k">public</span> <span class="kt">string</span> <span class="n">Text</span> <span class="p">{</span> <span class="k">get</span><span class="p">;</span> <span class="k">private</span> <span class="k">set</span><span class="p">;</span> <span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'>        <span class="k">public</span> <span class="nf">Plan</span><span class="p">(</span><span class="kt">string</span> <span class="n">title</span><span class="p">,</span> <span class="kt">string</span> <span class="n">text</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>            <span class="n">Title</span> <span class="p">=</span> <span class="n">title</span><span class="p">;</span>
-</span><span class='line'>            <span class="n">Text</span> <span class="p">=</span> <span class="n">text</span><span class="p">;</span>
-</span><span class='line'>        <span class="p">}</span>
-</span><span class='line'>    <span class="p">}</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>れもんさんの記事ではSharpUnitを使っていましたが、
-Unity Test Tools は NUnit というテストフレームワークを使うようです。
-Plan のテストをNUnitを使って書きなおしてみます。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-</pre></td><td class='code'><pre><code class='csharp'><span class='line'><span class="k">using</span> <span class="nn">System</span><span class="p">;</span>
-</span><span class='line'><span class="k">using</span> <span class="nn">System.Threading</span><span class="p">;</span>
-</span><span class='line'><span class="k">using</span> <span class="nn">NUnit.Framework</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">namespace</span> <span class="nn">MyProject.Tests</span>
-</span><span class='line'><span class="p">{</span>
-</span><span class='line'>    <span class="k">class</span> <span class="nc">PlanTest</span>
-</span><span class='line'>    <span class="p">{</span>
-</span><span class='line'><span class="na">        [TestCase(&quot;Christmas&quot;, &quot;Let&#39;s play tennis!&quot;)]</span>
-</span><span class='line'><span class="na">        [TestCase(&quot;Christmas&quot;, null)]</span>
-</span><span class='line'>        <span class="k">public</span> <span class="k">void</span> <span class="nf">Constractor</span> <span class="p">(</span><span class="kt">string</span> <span class="n">title</span><span class="p">,</span> <span class="kt">string</span> <span class="n">text</span><span class="p">)</span>
-</span><span class='line'>        <span class="p">{</span>
-</span><span class='line'>            <span class="n">Plan</span> <span class="n">plan</span> <span class="p">=</span> <span class="k">new</span> <span class="n">Plan</span><span class="p">(</span><span class="n">title</span><span class="p">,</span> <span class="n">text</span><span class="p">);</span>
-</span><span class='line'>            <span class="n">Assert</span><span class="p">.</span><span class="n">AreEqual</span><span class="p">(</span><span class="n">plan</span><span class="p">.</span><span class="n">Title</span><span class="p">,</span> <span class="n">title</span><span class="p">);</span>
-</span><span class='line'>            <span class="n">Assert</span><span class="p">.</span><span class="n">AreEqual</span><span class="p">(</span><span class="n">plan</span><span class="p">.</span><span class="n">Text</span><span class="p">,</span> <span class="n">text</span><span class="p">);</span>
-</span><span class='line'>        <span class="p">}</span>
-</span><span class='line'>    <span class="p">}</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>TestCaseのお陰でずいぶんシンプルになりました。
-(にわかC#erの僕はアトリビュートが出てきてドキドキです)</p>
-
-<p>気をつけないといけないのは、このテストをEditorというフォルダの中に入れないといけないことです。
-Editorってフォルダの中に入っていると、普段のプロジェクトとは別のプロジェクトに所属するようになります。
-Unity Editor の動作を変更するようなスクリプトをかけるらしいので、その一つとして実装するってことですかね・・・？
-(そのへんよくわかってない)</p>
-
-<p>テストスクリプトを保存したら、あとはメニューから「Unity Test Tools」「Run all unit tests」をクリックするだけ！
-テスト用シーンを追加する必要もありません。簡単！</p>
-
-<p>「Unit Test Runner」を使えば、テストを1項目だけテストすることもできるし、
-ファイルを右クリックしたときのメニューから「Load tests from this file」を選べばファイルごとにテストもできます。</p>
-
-<h2>結合テストをやってみる</h2>
-
-<p>次にネットワーク周りのテストをやってみます。
-テストするのはこのクラスです。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-</pre></td><td class='code'><pre><code class='csharp'><span class='line'><span class="k">using</span> <span class="nn">UnityEngine</span><span class="p">;</span>
-</span><span class='line'><span class="k">using</span> <span class="nn">System.Collections</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">namespace</span> <span class="nn">MyProject</span> <span class="p">{</span>
-</span><span class='line'>    <span class="k">public</span> <span class="k">class</span> <span class="nc">InternetPlanFactory</span> <span class="p">{</span>
-</span><span class='line'>        <span class="k">public</span> <span class="n">Plan</span> <span class="n">Plan</span> <span class="p">{</span> <span class="k">get</span><span class="p">;</span> <span class="k">private</span> <span class="k">set</span><span class="p">;</span> <span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'>        <span class="c1">// 特定のURLにアクセスし、1行目をタイトル、2行目をテキストとしてオブジェクトを生成</span>
-</span><span class='line'>        <span class="k">public</span> <span class="n">IEnumerator</span> <span class="nf">PlanFromUrl</span><span class="p">(</span><span class="kt">string</span> <span class="n">url</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>            <span class="n">WWW</span> <span class="n">www</span> <span class="p">=</span> <span class="k">new</span> <span class="n">WWW</span><span class="p">(</span><span class="n">url</span><span class="p">);</span>
-</span><span class='line'>            <span class="k">yield</span> <span class="k">return</span> <span class="n">www</span><span class="p">;</span>
-</span><span class='line'>            <span class="k">if</span> <span class="p">(</span><span class="n">www</span><span class="p">.</span><span class="n">error</span> <span class="p">!=</span> <span class="k">null</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>                <span class="c1">// ノープランだ</span>
-</span><span class='line'>                <span class="k">this</span><span class="p">.</span><span class="n">Plan</span> <span class="p">=</span> <span class="k">null</span><span class="p">;</span>
-</span><span class='line'>            <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-</span><span class='line'>                <span class="c1">// 適当にPlanつくる</span>
-</span><span class='line'>                <span class="kt">string</span><span class="p">[]</span> <span class="n">lines</span> <span class="p">=</span> <span class="n">www</span><span class="p">.</span><span class="n">text</span><span class="p">.</span><span class="n">Split</span><span class="p">(</span><span class="sc">&#39;\n&#39;</span><span class="p">);</span>
-</span><span class='line'>                <span class="kt">string</span> <span class="n">title</span> <span class="p">=</span> <span class="n">lines</span><span class="p">[</span><span class="m">0</span><span class="p">];</span>
-</span><span class='line'>                <span class="kt">string</span> <span class="n">text</span> <span class="p">=</span> <span class="n">lines</span><span class="p">.</span><span class="n">Length</span> <span class="p">&gt;</span> <span class="m">1</span> <span class="p">?</span> <span class="n">lines</span><span class="p">[</span><span class="m">1</span><span class="p">]</span> <span class="p">:</span> <span class="s">&quot;&quot;</span><span class="p">;</span>
-</span><span class='line'>                <span class="k">this</span><span class="p">.</span><span class="n">Plan</span> <span class="p">=</span> <span class="k">new</span> <span class="n">Plan</span><span class="p">(</span><span class="n">title</span><span class="p">,</span> <span class="n">text</span><span class="p">);</span>
-</span><span class='line'>            <span class="p">}</span>
-</span><span class='line'>        <span class="p">}</span>
-</span><span class='line'>    <span class="p">}</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>このクラスのテストには <code>GameObject</code> が必要みたいです。
-<code>GameObject</code> って何者？とUnity情弱の僕は思うのですが、なにやらシーンから取ってこないといけないものらしいです。
-ユニットテストでも頑張ればとってこれるのかもしれないけど、
-結合テストとしてシーンの中で実行してみます。</p>
-
-<p>結合テストを作るには、新しいシーンを追加し、
-そのシーンを開いた状態で「Integration Test Runner」を開きます。
-ここで緑の「＋」ボタンを押すとシーンに「TestRunner」と新しいテストが現れます。
-さらにテストの子として新しい<code>GameObject</code>を追加しておきましょう。</p>
-
-<p>次に以下の様なスクリプトを書きます。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-</pre></td><td class='code'><pre><code class='csharp'><span class='line'><span class="k">using</span> <span class="nn">UnityEngine</span><span class="p">;</span>
-</span><span class='line'><span class="k">using</span> <span class="nn">System</span><span class="p">;</span>
-</span><span class='line'><span class="k">using</span> <span class="nn">System.Collections</span><span class="p">;</span>
-</span><span class='line'><span class="k">using</span> <span class="nn">MyProject</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">public</span> <span class="k">class</span> <span class="nc">Hoge</span> <span class="p">:</span> <span class="n">MonoBehaviour</span> <span class="p">{</span>
-</span><span class='line'>    <span class="k">void</span> <span class="nf">Start</span> <span class="p">()</span> <span class="p">{</span>
-</span><span class='line'>        <span class="n">StartCoroutine</span><span class="p">(</span><span class="n">TestPlanFromUrlOk</span><span class="p">());</span>
-</span><span class='line'>    <span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="k">private</span> <span class="n">IEnumerator</span> <span class="nf">TestPlanFromUrlOk</span><span class="p">()</span> <span class="p">{</span>
-</span><span class='line'>        <span class="n">InternetPlanFactory</span> <span class="n">factory</span> <span class="p">=</span> <span class="k">new</span> <span class="n">InternetPlanFactory</span><span class="p">();</span>
-</span><span class='line'>        <span class="k">yield</span> <span class="k">return</span> <span class="nf">StartCoroutine</span><span class="p">(</span><span class="n">factory</span><span class="p">.</span><span class="n">PlanFromUrl</span><span class="p">(</span><span class="s">&quot;http://example.com&quot;</span><span class="p">));</span>
-</span><span class='line'>
-</span><span class='line'>        <span class="k">if</span><span class="p">(</span><span class="n">factory</span><span class="p">.</span><span class="n">Plan</span> <span class="p">==</span> <span class="k">null</span><span class="p">)</span>
-</span><span class='line'>            <span class="k">throw</span> <span class="k">new</span> <span class="nf">Exception</span><span class="p">(</span><span class="s">&quot;Plan is null&quot;</span><span class="p">);</span>
-</span><span class='line'>        <span class="k">if</span><span class="p">(</span><span class="n">factory</span><span class="p">.</span><span class="n">Plan</span><span class="p">.</span><span class="n">Title</span> <span class="p">==</span> <span class="k">null</span><span class="p">)</span>
-</span><span class='line'>            <span class="k">throw</span> <span class="k">new</span> <span class="nf">Exception</span><span class="p">(</span><span class="s">&quot;Plan.Title is null&quot;</span><span class="p">);</span>
-</span><span class='line'>        <span class="k">if</span><span class="p">(</span><span class="n">factory</span><span class="p">.</span><span class="n">Plan</span><span class="p">.</span><span class="n">Text</span> <span class="p">==</span> <span class="k">null</span><span class="p">)</span>
-</span><span class='line'>            <span class="k">throw</span> <span class="k">new</span> <span class="nf">Exception</span><span class="p">(</span><span class="s">&quot;Plan.Text is null&quot;</span><span class="p">);</span>
-</span><span class='line'>        <span class="n">IntegrationTest</span><span class="p">.</span><span class="n">Pass</span><span class="p">(</span><span class="n">gameObject</span><span class="p">);</span>
-</span><span class='line'>        <span class="c1">// IntegrationTest.Fail(gameObject); // と書くとテスト失敗できる</span>
-</span><span class='line'>    <span class="p">}</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>(アサーションの仕方が残念すぎるけど力尽きた)</p>
-
-<p>このスクリプトをさっき作った<code>GameObject</code>にアタッチすれば準備完了です。
-「Integration Test Runner」からテスト可能になります。</p>
-
-<h2>おわり</h2>
-
-<p>今日はここまで。
-今までも一応テストあったけど、Unity Testing Tools使うともっと便利に書けそう。
-きっとぴーちんとかがもっと便利な機能を見つけてくれる。</p>
-
-<p>ちなみに <code>Plan("Christmas", null)</code> なので、
-<code>Text != null</code> なURLを募集してます。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Ark-View-DataTable グラフや表やCSVを簡単に表示したい]]></title>
-    <link href="http://shogo82148.github.io/blog/2013/12/07/ark-view-datatable/"/>
-    <updated>2013-12-07T20:11:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2013/12/07/ark-view-datatable</id>
-    <content type="html"><![CDATA[<p>こんにちは、最近ログの解析をして遊んでいるいっちーです。
-解析の結果は最終的にグラフに出すわけなのですが、
-先輩方がよく使っているのもあって <a href="https://developers.google.com/chart/">Google Charts</a> を使ってます。</p>
-
-<p>で、このグラフを他の人に見せると「その元データCSVでちょうだい！」と言われるんです&#8230;。</p>
-
-<!-- More- -->
-
-
-<p>もちろんcsvを作るなんてこと簡単にできるんですが、
-今のプログラムにはグラフ用のテンプレートとHTMLで表出力するためのテンプレートとCSV用のテンプレートがあって、
-グラフが追加されるたびにコピペして微妙に書き直し、
-という不毛な作業が発生してしまうのです。つらい。</p>
-
-<h2>Ark::View::DataTable</h2>
-
-<p>使い回しの効かないテンプレートとかなんのためのテンプレートなのか。
-データだけ用意してあとはそれぞれのテンプレートに入れるだけとなるのが理想的だよねー、と思い続けて早数ヶ月。
-ようやく重い腰を上げて <a href="https://github.com/shogo82148/Ark-View-DataTable">Ark::View::DataTable</a>ってのを書きました。</p>
-
-<h2>使い方</h2>
-
-<p><a href="https://metacpan.org/pod/Data::Google::Visualization::DataTable">Data::Google::Visualization::DataTable</a> をレンダリングするための
-ArkのViewです。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="nn">Ark::View::</span><span class="n">DataTable</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="nn">Data::Google::Visualization::</span><span class="n">DataTable</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">sub </span><span class="nf">gvis</span> <span class="p">:Local {</span>
-</span><span class='line'>    <span class="k">my</span> <span class="p">(</span><span class="nv">$self</span><span class="p">,</span> <span class="nv">$c</span><span class="p">)</span> <span class="o">=</span> <span class="nv">@_</span><span class="p">;</span>
-</span><span class='line'>    <span class="k">my</span> <span class="nv">$datatable</span> <span class="o">=</span> <span class="nn">Data::Google::Visualization::</span><span class="n">DataTable</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">();</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="nv">$datatable</span><span class="o">-&gt;</span><span class="n">add_columns</span><span class="p">(</span>
-</span><span class='line'>        <span class="p">{</span> <span class="n">id</span> <span class="o">=&gt;</span> <span class="s">&#39;x&#39;</span><span class="p">,</span>   <span class="n">label</span> <span class="o">=&gt;</span> <span class="s">&quot;X&quot;</span><span class="p">,</span> <span class="n">type</span> <span class="o">=&gt;</span> <span class="s">&#39;number&#39;</span> <span class="p">},</span>
-</span><span class='line'>        <span class="p">{</span> <span class="n">id</span> <span class="o">=&gt;</span> <span class="s">&#39;y&#39;</span><span class="p">,</span>   <span class="n">label</span> <span class="o">=&gt;</span> <span class="s">&quot;Y&quot;</span><span class="p">,</span> <span class="n">type</span> <span class="o">=&gt;</span> <span class="s">&#39;number&#39;</span> <span class="p">},</span>
-</span><span class='line'>    <span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="c1"># 〜〜〜〜正弦波を描きましょう〜〜〜〜</span>
-</span><span class='line'>    <span class="nv">$datatable</span><span class="o">-&gt;</span><span class="n">add_rows</span><span class="p">(</span>
-</span><span class='line'>        <span class="nb">map</span> <span class="p">{</span> <span class="p">[</span><span class="nv">$_</span><span class="p">,</span> <span class="nb">sin</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="mf">3.1415926535</span><span class="o">*</span><span class="nv">$_</span><span class="o">/</span><span class="mi">500</span><span class="p">)]</span> <span class="p">}</span> <span class="mi">1</span><span class="o">..</span><span class="mi">1000</span><span class="p">,</span>
-</span><span class='line'>    <span class="p">);</span>
-</span><span class='line'>    <span class="nv">$c</span><span class="o">-&gt;</span><span class="n">stash</span><span class="o">-&gt;</span><span class="p">{</span><span class="n">table</span><span class="p">}</span> <span class="o">=</span> <span class="nv">$datatable</span><span class="p">;</span>
-</span><span class='line'>    <span class="nv">$c</span><span class="o">-&gt;</span><span class="n">forward</span><span class="p">(</span> <span class="nv">$c</span><span class="o">-&gt;</span><span class="n">view</span><span class="p">(</span> <span class="s">&#39;DataTable&#39;</span> <span class="p">)</span> <span class="p">);</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Controllerに感じでかくと使えます。
-「/gvis?tqx=out:html」にアクセスするとHTMLの表が、
-「/gvis?tqx=out:csv」にアクセスするとCSV形式のファイルが、
-「/gvis?tqx=out:tsv-excel」にアクセスするとExcelで開けるファイルがそれぞれダウンロードできます。</p>
-
-<h2>グラフを書く</h2>
-
-<p>このViewは<a href="https://developers.google.com/chart/interactive/docs/dev/implementing_data_source">Chart Tools Datasource Protocol</a>に対応したレスポンスを返すので、
-Google Charts からも簡単に扱えます。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-</pre></td><td class='code'><pre><code class='html'><span class='line'><span class="nt">&lt;html&gt;</span>
-</span><span class='line'><span class="nt">&lt;body&gt;</span>
-</span><span class='line'><span class="nt">&lt;span</span> <span class="na">id=</span><span class="s">&quot;linechart&quot;</span><span class="nt">&gt;&lt;/span&gt;</span>
-</span><span class='line'><span class="nt">&lt;script </span><span class="na">src=</span><span class="s">&quot;https://www.google.com/jsapi&quot;</span><span class="nt">&gt;&lt;/script&gt;</span>
-</span><span class='line'><span class="nt">&lt;script&gt;</span>
-</span><span class='line'><span class="nx">google</span><span class="p">.</span><span class="nx">load</span><span class="p">(</span><span class="s2">&quot;visualization&quot;</span><span class="p">,</span> <span class="s1">&#39;1&#39;</span><span class="p">,</span> <span class="p">{</span><span class="nx">packages</span><span class="o">:</span><span class="p">[</span><span class="s1">&#39;corechart&#39;</span><span class="p">]});</span>
-</span><span class='line'><span class="nx">google</span><span class="p">.</span><span class="nx">setOnLoadCallback</span><span class="p">(</span><span class="nx">drawChart</span><span class="p">);</span>
-</span><span class='line'><span class="kd">function</span> <span class="nx">drawChart</span><span class="p">()</span> <span class="p">{</span>
-</span><span class='line'>  <span class="kd">var</span> <span class="nx">query</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">google</span><span class="p">.</span><span class="nx">visualization</span><span class="p">.</span><span class="nx">Query</span><span class="p">(</span><span class="s1">&#39;/gvis&#39;</span><span class="p">);</span>
-</span><span class='line'>  <span class="nx">query</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="nx">handleQueryResponse</span><span class="p">);</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">function</span> <span class="nx">handleQueryResponse</span><span class="p">(</span><span class="nx">response</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="kd">var</span> <span class="nx">data</span> <span class="o">=</span> <span class="nx">response</span><span class="p">.</span><span class="nx">getDataTable</span><span class="p">();</span>
-</span><span class='line'>  <span class="kd">var</span> <span class="nx">chart</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">google</span><span class="p">.</span><span class="nx">visualization</span><span class="p">.</span><span class="nx">LineChart</span><span class="p">(</span><span class="nb">document</span><span class="p">.</span><span class="nx">getElementById</span><span class="p">(</span><span class="s1">&#39;linechart&#39;</span><span class="p">));</span>
-</span><span class='line'>  <span class="nx">chart</span><span class="p">.</span><span class="nx">draw</span><span class="p">(</span><span class="nx">data</span><span class="p">,</span> <span class="kc">null</span><span class="p">);</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'><span class="nt">&lt;/script&gt;</span>
-</span><span class='line'><span class="nt">&lt;/body&gt;</span>
-</span><span class='line'><span class="nt">&lt;/html&gt;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[ISUCON3の本戦に参加してきた]]></title>
-    <link href="http://shogo82148.github.io/blog/2013/11/09/isucon3/"/>
-    <updated>2013-11-09T23:58:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2013/11/09/isucon3</id>
-    <content type="html"><![CDATA[<p><a href="http://shogo82148.github.io/blog/2013/10/07/isucon3-qualify/">ISUCON3の予選</a>を何とか通過し、
-本戦へと参戦してきました。</p>
-
-<p>大会中の方針とか考えたこととかメモ。</p>
-
-<h2>お題</h2>
-
-<ul>
-<li>Tw○tter&#8211;likeな画像投稿サービス
-
-<ul>
-<li>ユーザをフォローできる</li>
-<li>フォローしたユーザが画像を投稿すると、タイムラインに画像が流れる</li>
-<li>公開範囲を全員に公開・フォロワーのみに公開・自分だけに公開から選べる</li>
-</ul>
-</li>
-<li>タイムラインはロングポーリングを使ってリアルタイム反映
-
-<ul>
-<li>JSON-APIが用意されていて、Javascriptから叩く</li>
-</ul>
-</li>
-<li>使用できるサーバは5台</li>
-</ul>
-
-
-<p>画像を扱うお題と聞いて、会場がざわめきました。</p>
-
-<h2>MySQLのクエリを見てみる</h2>
-
-<p>開始直後、鍵を用意したり、gitのレポジトリを立てたりなんだりした後、
-一回目の計測。</p>
-
-<p>topコマンドで走っているプロセスを見ていると、大量のconvertが！！
-プロセス名とお題から考えるに、こいつら確実にImage Magickだ・・・。
-CPUのほとんどが画像の変換にくわれていたので、
-まずは「どこかでキャッシュする」作戦をとることに。
-キャッシュするならフロントに近いほうがいいだろうということで、
-フロントのnginxでキャッシュする作戦をとることにしました
-(アクセス制限があるimageは難しいかもしれないけど、全部publicなiconならすぐできるだろうとこのときは思ってました)。</p>
-
-<p>僕はnginxがconvertを駆逐してくれると信じて、MySQLに投げているクエリを中心にPerlのコードを見てました。
-役割分担はこんな感じ。</p>
-
-<ul>
-<li>サーバの設定とか(@mackee_wさん)</li>
-<li>nginxでキャッシュする設定(@9reさん)</li>
-<li>コード読む、主にMySQLに投げてるクエリとか(@shogo82148)</li>
-</ul>
-
-
-<p>毎回、ひどいクエリが仕込まれているようなイメージがあったけど、
-今回はそこまでひどくない。
-クエリチューニング全然効果なさそうと判断して、次の作戦を考えることにしました。</p>
-
-<h2>No Image Magick, use Imager!</h2>
-
-<p>やっぱり一番のボトルネックは画像変換。
-nginxでキャッシュするとはいえ軽いほうがいいよね、ということで、
-外部プロセスで実行している画像変換をImagerを使ってPerlと同じプロセスでやる作戦。</p>
-
-<p>Imagerに置き換え後ベンチにかけたら、若干スコアが・・・上がった・・・ような・・・？
-しかし、画像が変化していると怒られて、スコアは無効。
-画像エラーを修正するコストと、スコアの上がり具合を見て、Image Magickのままにすることにしました。</p>
-
-<p>予選でも同じように外部プロセス起動している部分をPerlのライブラリにしたけど、
-その時はあっさり動いた。
-あれは外部プロセス起動をやめたらスコア上がると思い込ませるための布石だったんだ・・・。
-(今回の場合、プロセスの起動より画像の変換のほうが重いので、スコアが上がらないのは当たり前)</p>
-
-<h2>いろいろ諦めてPerl側でファイルキャッシュ</h2>
-
-<p>Imagerはテストを通らず、nginxの設定キャッシュ設定も上手く動作しなかったので、
-Perlでファイルキャッシュする方針に変更。
-convertの結果にmvで適当な場所にコピーして保存。
-これだけでスコアが5倍くらいに跳ね上がり、一気に上位に浮上！
-最初からやっておくべきだった・・・。
-もうちょっと早ければ特別賞もらえたかもしれないのに。</p>
-
-<h2>rsync! rsync!</h2>
-
-<p>ファイルキャッシュの作業をやっている間に、@mackee_wさんがnfsの設定をやってくれたので、
-アップロードされたファイルやキャッシュファイルの保存先をnfsに変更。</p>
-
-<p>あとは物量作戦でいくしかないだろうということで、rsyncで他のサーバにコピーして調整を繰り返してた。
-(並行してnginxのキャッシュ設定にも再チャレンジしてたけど、nginx力が足りなかった)</p>
-
-<h2>最終結果</h2>
-
-<p>テストFAILした!! No Score!!</p>
-
-<p>なんかこんなの前もあった！</p>
-
-<h2>反省点</h2>
-
-<ul>
-<li>画像変換をGETでやってたけど、POSTでやったほうがよかったかも</li>
-<li>nginxについて勉強しよう</li>
-<li>nfsについて勉強しよう</li>
-</ul>
-
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[第10回６さいカンファレンス「C言語のポインタ復習」]]></title>
-    <link href="http://shogo82148.github.io/blog/2013/10/30/6saiconf-10/"/>
-    <updated>2013-10-30T23:42:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2013/10/30/6saiconf-10</id>
-    <content type="html"><![CDATA[<p>気づかぬ間に第10回６さいカンファレンスが開催されていました。</p>
-
-<ul>
-<li><a href="https://tes.so/snslog/index/3">第10回６さいカンファレンス「C言語のポインタ復習」</a></li>
-</ul>
-
-
-<p>くいなちゃんSNS上で行われ、ログも残っているのでそちらを参照。
-「６さいカンファレンス」のカテゴリから辿れるように記事にしておきます。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Redis::NamespaceとRedis::Keyをリリースしました]]></title>
-    <link href="http://shogo82148.github.io/blog/2013/10/18/redis-namespace-and-redis-key/"/>
-    <updated>2013-10-18T23:21:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2013/10/18/redis-namespace-and-redis-key</id>
-    <content type="html"><![CDATA[<p>こんばんは、最近シングルトン恐怖症になっているいっちーです。
-<a href="https://metacpan.org/release/Redis-Namespace">Redis::Namespace</a>と
-<a href="https://metacpan.org/release/Redis-Key">Redis::Key</a>をリリースしました。</p>
-
-<!-- More -->
-
-
-<h2>Redis::Namespace</h2>
-
-<p>「<a href="http://shogo82148.github.io/blog/2013/09/14/redis-namespace-perl/">Redis::NamespaceのPerl版書いた</a>」
-で紹介したモジュールをCPANizeしました。
-コマンドのキー名に当たる部分に、自動にプレフィックスをつけてくれる賢い奴です。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">Redis</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="nn">Redis::</span><span class="n">Namespace</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">my</span> <span class="nv">$redis</span> <span class="o">=</span> <span class="n">Redis</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">;</span>
-</span><span class='line'><span class="k">my</span> <span class="nv">$ns</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">Namespace</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span><span class="n">redis</span> <span class="o">=&gt;</span> <span class="nv">$redis</span><span class="p">,</span> <span class="n">namespace</span> <span class="o">=&gt;</span> <span class="s">&#39;fugu&#39;</span><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'><span class="nv">$ns</span><span class="o">-&gt;</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;foo&#39;</span><span class="p">,</span> <span class="s">&#39;bar&#39;</span><span class="p">);</span>    <span class="c1"># $redis-&gt;set(&#39;fugu:foo&#39;, &#39;bar&#39;);</span>
-</span><span class='line'><span class="k">my</span> <span class="nv">$foo</span> <span class="o">=</span> <span class="nv">$ns</span><span class="o">-&gt;</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;foo&#39;</span><span class="p">);</span> <span class="c1"># my $foo = $redis-&gt;get(&#39;fugu:foo&#39;);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>RedisにはKey-Value Storeなんてかっこいい名前が付いているけど、
-結局はシステム全体で使えるグローバル変数なわけです。
-グローバル変数は駆逐するべきです。
-いちいちプレフィックスつけて名前の衝突を回避するなんて人間のやることとは思えません。</p>
-
-<p>せめてモジュールローカルとか、クラスローカルとかある程度スコープを制限したいですよね。
-Redis::Namespaceを使えば簡単に実現できます。</p>
-
-<h2>Redis::Key</h2>
-
-<p>Redis::Key は Redisのキーの簡単なラッパークラスです。
-毎回毎回「接続先のRedisサーバ」と「キーの名前」を指定するのは面倒です。
-この2つをセットにして、一つのオブジェクトとして扱うことができます。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">Redis</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="nn">Redis::</span><span class="n">Key</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">my</span> <span class="nv">$redis</span> <span class="o">=</span> <span class="n">Redis</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">;</span>
-</span><span class='line'><span class="k">my</span> <span class="nv">$key</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">Key</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span><span class="n">redis</span> <span class="o">=&gt;</span> <span class="nv">$redis</span><span class="p">,</span> <span class="n">key</span> <span class="o">=&gt;</span> <span class="s">&#39;hoge&#39;</span><span class="p">);</span>
-</span><span class='line'><span class="nv">$key</span><span class="o">-&gt;</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;fugu&#39;</span><span class="p">);</span> <span class="c1"># $redis-&gt;set(&#39;hoge&#39;, &#39;fuga&#39;);</span>
-</span><span class='line'><span class="nv">$key</span><span class="o">-&gt;</span><span class="n">get</span><span class="p">;</span>         <span class="c1"># $redis-&gt;get(&#39;hoge&#39;);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>普通に使っている限りは他のキーにアクセスすることができなくなるので、
-Redis::Keyのオブジェクトを他のクラスに渡す、とかしても安心です。</p>
-
-<p>あと、キーの名前の一部をプレースホルダーにして、あとから値を埋め込むこともできます。
-キー名の一部に日付やIDを埋め込むっていうことが多いのでつけてみました。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">my</span> <span class="nv">$user_keys</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">Key</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span><span class="n">redis</span> <span class="o">=&gt;</span> <span class="nv">$redis</span><span class="p">,</span> <span class="n">key</span> <span class="o">=&gt;</span> <span class="s">&#39;user:{id}&#39;</span><span class="p">,</span> <span class="n">need_bind</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">);</span>
-</span><span class='line'><span class="k">my</span> <span class="nv">$user</span> <span class="o">=</span> <span class="nv">$user_keys</span><span class="o">-&gt;</span><span class="nb">bind</span><span class="p">(</span><span class="n">id</span> <span class="o">=&gt;</span> <span class="mi">1001</span><span class="p">);</span>
-</span><span class='line'><span class="nv">$user</span><span class="o">-&gt;</span><span class="n">get</span><span class="p">;</span>  <span class="c1"># $redis-&gt;get(&#39;user:1001&#39;);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Key-Value Store はお手軽ではありますが、キーの名前に一定のルールを設けてあげないと
-さすがに管理できなくなります。
-Redis::Key を使ってルールを書くのが楽になるといいですね。</p>
-
-<h2>Redis::Fast と Redis::Namespace と Redis::Key を組み合わせる</h2>
-
-<p>Redis::Fast と Redis::Namespace は Redis.pm 互換なので組み合わせて使えます。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">my</span> <span class="nv">$redis</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">Fast</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">;</span>
-</span><span class='line'><span class="k">my</span> <span class="nv">$ns1</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">Namespace</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span><span class="n">redis</span> <span class="o">=&gt;</span> <span class="nv">$redis</span><span class="p">,</span> <span class="n">namespace</span> <span class="o">=&gt;</span> <span class="s">&#39;hoge&#39;</span><span class="p">);</span>
-</span><span class='line'><span class="k">my</span> <span class="nv">$ns2</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">Namespace</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span><span class="n">redis</span> <span class="o">=&gt;</span> <span class="nv">$ns1</span><span class="p">,</span> <span class="n">namespace</span> <span class="o">=&gt;</span> <span class="s">&#39;fuga&#39;</span><span class="p">);</span> <span class="c1"># Redis::Namespaceのネストもできる</span>
-</span><span class='line'><span class="k">my</span> <span class="nv">$key</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">Key</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span><span class="n">redis</span> <span class="o">=&gt;</span> <span class="nv">$ns2</span><span class="p">,</span> <span class="n">key</span> <span class="o">=&gt;</span> <span class="s">&#39;key&#39;</span><span class="p">);</span> <span class="c1"># hoge:fuga:key という名前になる</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>なんだか最近Redis関連のモジュールばかり書いてますが、
-なんでもRedisに突っ込めばいいと思っているわけではありません。
-Redisを使ったコードを読んでいたら目眩がしたからです。
-ISUCON3の予選で使ったのはRedisを使いたかったらというより、
-Redis::Fastを使いたかったからです。</p>
 ]]></content>
   </entry>
   

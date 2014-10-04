@@ -4,7 +4,7 @@
   <title><![CDATA[Category: perl | Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/blog/categories/perl/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2014-07-05T18:37:26+09:00</updated>
+  <updated>2014-10-04T15:55:36+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,197 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Github::Hooks::ReceiverがX-Hub-Signatureをサポートしました]]></title>
+    <link href="http://shogo82148.github.io/blog/2014/09/23/github-hooks-receiver-supports-x-hub-signature/"/>
+    <updated>2014-09-23T00:25:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2014/09/23/github-hooks-receiver-supports-x-hub-signature</id>
+    <content type="html"><![CDATA[<p><a href="https://metacpan.org/pod/Github::Hooks::Receiver">Github::Hooks::Receiver</a>にX-Hub-SignatureをサポートするPull Requestを送ったら、
+速攻取り込まれ、さらにGithubのコミット権とPAUSEのco-maintパーミッションをもらったというお話。</p>
+
+<!-- More -->
+
+
+<h2>X-Hub-Signature</h2>
+
+<p>GithubのWebhookは大変便利なんですが、特に対策をしないままだと
+他の人にcurlとかで叩かれてしまう可能性があります。
+本来であればIPアドレスで制限をかけるべきなんですが、
+iptablesの設定とかよくわからないし・・・と思ってGithubのドキュメントを読んでいたら、
+もっとお手軽な方法発見。</p>
+
+<ul>
+<li><a href="https://developer.github.com/webhooks/securing/">Securing your webhooks</a></li>
+</ul>
+
+
+<p>GithubからのリクエストにはX-Hub-Signatureというのがついていて、
+これを使うとPayloadの検証ができるらしい。
+<a href="https://metacpan.org/pod/Github::Hooks::Receiver">Github::Hooks::Receiver</a>は
+このヘッダを全くみていないようだったので<a href="https://github.com/Songmu/Github-Hooks-Receiver/pull/1">Pull Requestを送ってみた</a>。</p>
+
+<p>Github::Hooks::Receiver 0.02以降で、以下のようにsecretの指定ができるようになります。</p>
+
+<p>``` perl
+use Github::Hooks::Receiver::Declare;
+my $receiver = receiver {</p>
+
+<pre><code>secret 'secret1234'; # Webhookの設定画面のsecretの項目と同じものを入力
+on push =&gt; sub {
+    # レポジトリにPushされた時の処理とかをゴニョゴニョ書く
+};
+</code></pre>
+
+<p>};
+my $psgi = $receiver->to_app;
+$receiver->run;
+```</p>
+
+<p>これでsecretを知らない人がリクエストを偽装できなくなるので安心です。
+secretはエントロピーが高いほうがいいので
+<code>ruby -rsecurerandom -e 'puts SecureRandom.hex(20)'</code>
+みたいなコマンド使うといいらしいですよ。</p>
+
+<h2>String::Compare::ConstantTime</h2>
+
+<p>Signatureの比較にはRubyの<a href="http://rubydoc.info/github/rack/rack/master/Rack/Utils.secure_compare">secure_compare</a>のような関数を
+使ったほうがいいらしい。
+Github::Hooks::Receiverでは、そのPerl版の<a href="https://metacpan.org/pod/String::Compare::ConstantTime">String::Compare::ConstantTime</a>を使ってみた。
+ちょっと引数のチェックに甘いところがあって、segmentation fault場合があったので、こちらにもPull Requestを送っておきました。
+Github::Hooks::Receiverは使う前にチェックを入れてあるので、現行バージョンでも問題なく動くはず。</p>
+
+<p>String::Compare::ConstantTimeはXSで書かれたモジュールなんですが、
+この手のバグが入り込みやすいのでXS難しいですね。</p>
+
+<h2>まとめ</h2>
+
+<ul>
+<li>XS怖い</li>
+<li>Github::Hooks::Receiverにsecretを指定できるようになったので、IP制限がかけられない場合でも安心</li>
+<li>でも、可能であればIP制限もしましょうね</li>
+<li>XS怖い</li>
+</ul>
+
+
+<h2>追記</h2>
+
+<h3>IP制限について</h3>
+
+<p>Songmu先生よりコメントをいただきました。</p>
+
+<p><blockquote class="twitter-tweet"><p>これはいい機能。ちなみにIP制限は、Nginxとかでやるのがお手軽で、plackで完結させたいのであれば、Plack::Middlewareで弾いてやればいいと思います。 / “Github::Hooks::ReceiverがX-…” <a href="http://t.co/NM0uQzW1s8">http://t.co/NM0uQzW1s8</a></p>&mdash; songmu (@songmu) <a href="https://twitter.com/songmu/status/514426458190528513">September 23, 2014</a></blockquote>
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script></p>
+
+<p>確かにPlack::Middlewareとか使えばお手軽に弾けるので、
+X-Hub-SignatureだけでなくIP制限もやっておくと良いですね。</p>
+
+<h3>String::Compare::ConstantTime</h3>
+
+<p>String::Compare::ConstantTime ですが、僕のprが取り込まれた 0.310 がリリースされました。
+<code>undef</code> を渡すとsegmentation fault で落ちるというバグが修正されています。
+XS怖い。</p>
+
+<h2>SEE ALSO</h2>
+
+<ul>
+<li><a href="https://metacpan.org/pod/Github::Hooks::Receiver">Github::Hooks::Receiver</a></li>
+<li><a href="https://metacpan.org/pod/String::Compare::ConstantTime">String::Compare::ConstantTime</a></li>
+<li><a href="http://www.songmu.jp/riji/entry/2013-12-05-github-hooks.html">GithubのHookについてのまとめとソリューション</a></li>
+<li><a href="http://www.songmu.jp/riji/entry/2014-04-18-github-hooks.html">Jenkinsでパラメータ付ビルドでブランチ指定出来るようにしつつ、GithubのHookも受け付けられるようにする</a></li>
+</ul>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[YAPC::Asia 2014 に行ってきた #yapcasia]]></title>
+    <link href="http://shogo82148.github.io/blog/2014/08/31/yapcasia/"/>
+    <updated>2014-08-31T16:02:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2014/08/31/yapcasia</id>
+    <content type="html"><![CDATA[<p><a href="http://yapcasia.org/2014/">YAPC::Asia 2014</a> に参加してきました。
+「ブログに書くまでがYAPC」らしいので、メモ書き。</p>
+
+<!-- More -->
+
+
+<h2>見たトーク</h2>
+
+<ul>
+<li><a href="http://yapcasia.org/2014/talk/show/103a434e-ec02-11e3-bd6d-c7a06aeab6a4">Perl meets Real World 〜ハードウェアと恋に落ちるPerlの使い方〜</a>
+
+<ul>
+<li>デモ中のURLが「localhost」になってたんであれ？って思ったんですが、WebサーバはPC上にあったんですね。RaspberryPi上でPerl動くんじゃなかったんですか！</li>
+<li>ネギ振りミククラウド化するって言ってたんで期待してます</li>
+</ul>
+</li>
+<li><a href="http://yapcasia.org/2014/talk/show/2276d7b2-eba7-11e3-bd6d-c7a06aeab6a4">Go For Perl Mongers</a></li>
+<li><a href="http://yapcasia.org/2014/talk/show/66c55626-eba9-11e3-bd6d-c7a06aeab6a4">お待たせしました。Perl で BDD を簡単に実践する最高にクールなフレームワークができました</a></li>
+<li><a href="http://yapcasia.org/2014/talk/show/3c896370-01de-11e4-9357-07b16aeab6a4">DBIx::Class - what is it and what is it good for?</a>
+
+<ul>
+<li><a href="http://search.cpan.org/~ribasushi/DBIx-Class-0.08270/lib/DBIx/Class/ResultClass/HashRefInflator.pm">HashRefInflator</a>の存在を初めて知りました</li>
+<li>今関わってるプロジェクトでDBICのRowObject生成コストが問題になってるんで、後で試してみたいです</li>
+</ul>
+</li>
+<li><a href="http://yapcasia.org/2014/talk/show/d557ddbe-fde4-11e3-b7e8-e4a96aeab6a4">Scala In Perl Company : Hatena</a></li>
+<li><a href="http://yapcasia.org/2014/talk/show/e495bc1a-f30d-11e3-b7e8-e4a96aeab6a4">WHERE狙いのキー、ORDER BY狙いのキー</a></li>
+<li><a href="http://yapcasia.org/2014/talk/show/e35ec49a-ebba-11e3-bd6d-c7a06aeab6a4">Get a kick out of CPAN</a></li>
+<li><p><a href="http://yapcasia.org/2014/talk/show/61b78258-026f-11e4-9357-07b16aeab6a4">初心者が Web エンジニアのコミュニティに触れてみて感じたこと - ゆとりエンジニアの成長戦略</a></p></li>
+<li><p><a href="http://yapcasia.org/2014/talk/show/d1eb4942-fdb5-11e3-b7e8-e4a96aeab6a4">突然ITインフラを任された人のための…監視設計入門</a></p></li>
+<li><a href="http://yapcasia.org/2014/talk/show/a02d05e6-fead-11e3-b7e8-e4a96aeab6a4">半端なPHPDisでPHPerに陰で笑われないためのPerl Monger向け最新PHP事情(5.6対応)</a>
+
+<ul>
+<li>MacにはPHPが最初から入ってるらしいですよ</li>
+</ul>
+</li>
+<li><a href="http://yapcasia.org/2014/talk/show/77109da0-00b8-11e4-b7e8-e4a96aeab6a4">モバイルアプリとAPIのありかたを考える2014</a></li>
+<li><a href="http://yapcasia.org/2014/talk/show/3a5f2a0e-ec3e-11e3-bd6d-c7a06aeab6a4">Mobile Application Development for Perl Mongers [ninjinkun x gfx]</a>
+
+<ul>
+<li>シングルトンは嫌だシングルトンは嫌だ</li>
+</ul>
+</li>
+<li><a href="http://yapcasia.org/2014/talk/show/d5049940-ebb2-11e3-bd6d-c7a06aeab6a4">そんなにビッグでもないデータ処理手法の話</a>
+
+<ul>
+<li>一日分の解析ならなんとか一台で、でも一ヶ月分となると・・・ってことが多いんでもうちょっと調査して、どれかに手を出してみようかな・・・</li>
+</ul>
+</li>
+<li>typester先生のキーノート
+
+<ul>
+<li>28才で結婚・・・あと2年・・・20代・・・あと4年・・・(´；ω；｀)ｳｯ…</li>
+</ul>
+</li>
+</ul>
+
+
+<h2>全体を通して</h2>
+
+<p>僕が見たトークは全体からしたらほんの一部ですが、それでも一覧にすると結構見てるな。
+貧乏症なんで、こういうイベント参加するとトークたくさん見ないといけない気持ちになっちゃうんです。
+のんびり人と話すのもいいってことは分かるんですけどね。</p>
+
+<p>去年も感じましたが、参加人数に対して会場が狭く、立ち見が多くて大変でした。
+特に今年は去年より参加者多かったみたいですし、余計にそう感じたかも。
+あと移動時間がほとんどないのもつらい。</p>
+
+<p>NSD(Nagaoka Developers Study)のメンバーや、元同僚も多く参加していて、なんだか同窓会みたいな感じでしたね。
+ただ、やっぱり、全く知らない人には話しかけづらい(´・ω・｀)
+来年やるようだったら何かトークしたいなと思った２日間でした。</p>
+
+<h2>最後に一番言いたいこと</h2>
+
+<p>Twitterのほうでは騒いでましたが、先日Mac Book Airにアクエリアスを飲ませてダメにするという悲しい事故が・・・。
+このブログOctopressで書いてるんで、
+ローカルの環境がなくなって再構築面倒だったり、
+pushし忘れてて一部記事がなかったり、
+非常に面倒でした。</p>
+
+<p>みなさんもアクエリアスの扱いには注意しましょう・・・(ヽ´ω`)</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[PerlのXS中に起きたシグナルの扱い]]></title>
@@ -65,7 +256,7 @@
 <p>「割り込みかかったら再度select」っていうふうに修正してみたんですが、
 今度はPerlのシグナルハンドラがなかなか呼び出されない！！</p>
 
-<p>```perl signal.pl
+<p>```perl
 use Redis::Fast;
 $SIG{TERM}= sub {</p>
 
@@ -78,7 +269,7 @@ $c->brpop("a", 100); # 100秒経ったら諦めて戻ってくる
 ```</p>
 
 <p>このコードを実行中にSIGTERMを送ると、送った瞬間に"TERM handler called"と表示されて欲しいのですが、
-<code>brpop</code>コマンドが終わるまで実行されない……。</p>
+<code>brpop</code>コマンドが終わるまで実行されない……</p>
 
 <p>ググってみるとPerlはシグナルハンドラを即座に処理しているのではなく、
 シグナルハンドラを安全に実行できるタイミングを見計らって実行しているみたいです。</p>
@@ -129,7 +320,7 @@ TAGNAMEに関連する画像の情報がJSONで帰ってくるので、
 Perlからこのエンドポイントを叩きます。
 IRCとのやりとりには<a href="http://www.songmu.jp/riji/entry/2013-09-09-unazusan.html">UnazuSan</a>を使いました。</p>
 
-<p>```perl
+<p>``` perl
 !/usr/bin/env perl
 use 5.014;
 use warnings;
@@ -202,8 +393,6 @@ qr/(.*)/ =&gt; sub {
 <p>「癒して」と話しかけると猫画像を検索して返してくれます。</p>
 
 <h2>引数をMeCabで解析する</h2>
-
-<p>実際に入れてみたら、</p>
 
 <p><code>plain
 acidlemon unazu_san: 癒やしをうさぎで頼む
@@ -306,173 +495,6 @@ reconnect =&gt; 1,
 今までのバージョンでは、SELECTコマンドでデータベースを切り替えていても、
 再接続時にリセットされてしまう問題がありました。
 0.07では再接続の中でSELECTを実行し直すので、再接続を気にする必要はありません。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Redis::Fast 0.06 released]]></title>
-    <link href="http://shogo82148.github.io/blog/2014/02/01/redis-fast-0-dot-06-released/"/>
-    <updated>2014-02-01T21:36:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2014/02/01/redis-fast-0-dot-06-released</id>
-    <content type="html"><![CDATA[<p>こんにちは、もうすぐ17才と100ヶ月を迎えるいっちーです。
-今朝、<a href="https://metacpan.org/release/Redis-Fast">Redis::Fast 0.06</a>をリリースしました。
-主な変更点はメモリーリークの修正と、エラー発生時にSegmentation Faltで落ちる問題の修正です。</p>
-
-<!-- More -->
-
-
-<h2>メモリーリーク</h2>
-
-<p>Redis::Fastをサブスクライバーモードで動作させると、メモリを無限に食い続ける問題をついに！ついに！修正しました。
-原因は、一言で言ってしまえば、Perlのリファレンスカウントの扱いの勉強不足です・・・。</p>
-
-<p>XSの中でPerlのオブジェクトを作るとき、プログラマが手動でリファレンスカウントを制御する必要があります。
-とはいうものの、全てのオブジェクトのリファレンスカウントを制御するのは大変なので、
-XSには「揮発性」という考え方があります。
-<code>sv_2motral</code>を使って変数を揮発性に設定しておけば、よしななタイミングでオブジェクトを解放してくれます。
-<a href="http://d.hatena.ne.jp/gfx/20100519/1274247355">gfx先生のブログ</a>にもあるように、
-オブジェクト作成したら原則<code>sv_2motral</code>をつけるようにすれば、
-メモリーリークはほとんどなくなるはずです。</p>
-
-<p><code>c
-SV * s = newSVpv("Hello World",0);  // Perl の文字列オブジェクト
-sv_2motral(s) // 揮発性にすることで、使われなくなったら自動的に解放してくれる
-</code></p>
-
-<p>この「よしななタイミング」をよく理解していなかったのでリークしてました・・・。
-XSからオブジェクトへアクセスできなくなったときでないとオブジェクトを解放できないので、
-揮発性のオブジェクトが実際に解放されるのは「XSで書かれた関数が終了してPerlに戻るとき」です。
-メッセージを待ち続ける<code>wait_for_messages</code>関数は
-(タイムアウトをしない限り)ずっと終了しないので、
-揮発性のオブジェクトを解放するタイミングが一切なかったのです。</p>
-
-<p>不要になったら解放されるよう、揮発性オブジェクトの有効範囲を明示的に指定しました。
-<code>c
-sv_2motral(s);
-ENTER;
-SAVETMPS;
-sv_2motral(v);
-FREETMPS;
-LEAVE;
-// v はココで解放される
-// s は生き残ってる
-</code></p>
-
-<p><a href="http://perldoc.jp/docs/perl/5.18.1/perlcall.pod">perlcall</a>とかちゃんとドキュメントを読みましょう > 自分</p>
-
-<h2>Segmentation Falt</h2>
-
-<p>同期的にコマンドを実行してる最中にSIGNAL等で実行が中断されると、
-Segmentation Faltが起こる問題を修正しました。
-Redis::Fastは同期モードでコマンドを発行したときでも、
-hiredisの非同期モードの機能を使って通信しています。
-コマンド実行中にエラーが発生すると、
-コールバック関数の呼び出しタイミングが変わってしまい、
-メモリの確保・解放のタイミングが狂ってしまっていました。</p>
-
-<p>このバグ、試した環境の中ではUbuntu+Perl5.14でしか再現しませんでした。
-他の環境ではたまたま解放後もアクセスできてしまって、
-正常に動作してしまっていたようです。
-嫌なバグだ・・・。</p>
-
-<h2>まとめ</h2>
-
-<p>C言語でメモリ管理するコードは書くべきでない。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Ark-View-DataTable グラフや表やCSVを簡単に表示したい]]></title>
-    <link href="http://shogo82148.github.io/blog/2013/12/07/ark-view-datatable/"/>
-    <updated>2013-12-07T20:11:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2013/12/07/ark-view-datatable</id>
-    <content type="html"><![CDATA[<p>こんにちは、最近ログの解析をして遊んでいるいっちーです。
-解析の結果は最終的にグラフに出すわけなのですが、
-先輩方がよく使っているのもあって <a href="https://developers.google.com/chart/">Google Charts</a> を使ってます。</p>
-
-<p>で、このグラフを他の人に見せると「その元データCSVでちょうだい！」と言われるんです...。</p>
-
-<!-- More- -->
-
-
-<p>もちろんcsvを作るなんてこと簡単にできるんですが、
-今のプログラムにはグラフ用のテンプレートとHTMLで表出力するためのテンプレートとCSV用のテンプレートがあって、
-グラフが追加されるたびにコピペして微妙に書き直し、
-という不毛な作業が発生してしまうのです。つらい。</p>
-
-<h2>Ark::View::DataTable</h2>
-
-<p>使い回しの効かないテンプレートとかなんのためのテンプレートなのか。
-データだけ用意してあとはそれぞれのテンプレートに入れるだけとなるのが理想的だよねー、と思い続けて早数ヶ月。
-ようやく重い腰を上げて <a href="https://github.com/shogo82148/Ark-View-DataTable">Ark::View::DataTable</a>ってのを書きました。</p>
-
-<h2>使い方</h2>
-
-<p><a href="https://metacpan.org/pod/Data::Google::Visualization::DataTable">Data::Google::Visualization::DataTable</a> をレンダリングするための
-ArkのViewです。</p>
-
-<p>``` perl
-use Ark::View::DataTable;
-use Data::Google::Visualization::DataTable;</p>
-
-<p>sub gvis :Local {</p>
-
-<pre><code>my ($self, $c) = @_;
-my $datatable = Data::Google::Visualization::DataTable-&gt;new();
-
-$datatable-&gt;add_columns(
-    { id =&gt; 'x',   label =&gt; "X", type =&gt; 'number' },
-    { id =&gt; 'y',   label =&gt; "Y", type =&gt; 'number' },
-);
-
-# 〜〜〜〜正弦波を描きましょう〜〜〜〜
-$datatable-&gt;add_rows(
-    map { [$_, sin(2*3.1415926535*$_/500)] } 1..1000,
-);
-$c-&gt;stash-&gt;{table} = $datatable;
-$c-&gt;forward( $c-&gt;view( 'DataTable' ) );
-</code></pre>
-
-<p>}
-```</p>
-
-<p>Controllerに感じでかくと使えます。
-「/gvis?tqx=out:html」にアクセスするとHTMLの表が、
-「/gvis?tqx=out:csv」にアクセスするとCSV形式のファイルが、
-「/gvis?tqx=out:tsv-excel」にアクセスするとExcelで開けるファイルがそれぞれダウンロードできます。</p>
-
-<h2>グラフを書く</h2>
-
-<p>このViewは<a href="https://developers.google.com/chart/interactive/docs/dev/implementing_data_source">Chart Tools Datasource Protocol</a>に対応したレスポンスを返すので、
-Google Charts からも簡単に扱えます。</p>
-
-<p>``` html
-<html>
-<body>
-<span id="linechart"></span></p>
-
-<script src="https://www.google.com/jsapi"></script>
-
-
-<script>
-google.load("visualization", '1', {packages:['corechart']});
-google.setOnLoadCallback(drawChart);
-function drawChart() {
-  var query = new google.visualization.Query('/gvis');
-  query.send(handleQueryResponse);
-}
-
-function handleQueryResponse(response) {
-  var data = response.getDataTable();
-  var chart = new google.visualization.LineChart(document.getElementById('linechart'));
-  chart.draw(data, null);
-}
-</script>
-
-
-<p></body>
-</html>
-```</p>
 ]]></content>
   </entry>
   
