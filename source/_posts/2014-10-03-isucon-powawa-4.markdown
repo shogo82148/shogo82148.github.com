@@ -3,7 +3,7 @@ layout: post
 title: "ISUCON4にチームぽわわで参加しました"
 date: 2014-10-03 19:55
 comments: true
-categories: [iscuon]
+categories: [isucon]
 ---
 
 遅くなりましたが、ISUCON4のレポートです。
