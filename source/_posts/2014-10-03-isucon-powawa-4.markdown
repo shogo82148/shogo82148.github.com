@@ -9,6 +9,8 @@ categories: [isucon]
 遅くなりましたが、ISUCON4のレポートです。
 まこぴーとchroneさんとともにチームぽわわで参加し、惨敗してきました。
 
+2014-10-06 追記: [競技中に使ったレポジトリ](https://github.com/shogo82148/isucon4_powawa)を公開しました。
+
 <!-- More -->
 
 ## 事前準備
