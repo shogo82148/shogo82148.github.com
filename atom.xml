@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2014-10-04T15:55:36+09:00</updated>
+  <updated>2014-10-17T00:39:06+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,78 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Redis::Fast 0.13をリリースしました]]></title>
+    <link href="http://shogo82148.github.io/blog/2014/10/16/redis-fast-0-dot-13-released/"/>
+    <updated>2014-10-16T23:51:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2014/10/16/redis-fast-0-dot-13-released</id>
+    <content type="html"><![CDATA[<p>Redis::Fast 0.13をリリースしました。
+主な変更点は以下のとおりです。</p>
+
+<ul>
+<li>passwordオプションの対応</li>
+<li>maxclientsに達した場合に、deep recursion することがある問題の修正</li>
+<li>トランザクション内で再接続処理が行われる問題の修正</li>
+</ul>
+
+
+<!-- More -->
+
+
+<h2>passwordオプションの対応</h2>
+
+<p>今更感のある機能ですね。昔は対応してたんです。
+対応してたんですが、Sentinel対応のときに接続開始周りをごそっと入れ替えたときにパスワード認証機能を削除しちゃってたっぽいです(・ω&lt;)
+なんというかごめんなさい。</p>
+
+<p>実際実装してテストしてみると、認証失敗したときにdouble freeで落ちてちょっとハマりました。
+hiredisを使う場合は<code>redisAsyncSetConnectCallback</code>に指定する関数内で、コネクションを切断するような処理(password認証とか)はしないようにしましょう。</p>
+
+<h2>maxclientsに達した場合に、deep recursion することがある問題の修正</h2>
+
+<p>Redis::Fastでは、接続処理の中で、コネクションに名前をつけたり、パスワード認証したり、その他独自の処理を実行しています。
+この処理の途中でも再接続処理が走ってしまい、
+再接続処理の中で再接続処理が実行されて、その再接続処理の中で再接続が&#8230; というような無限ループに突入する場合があります。
+maxclientsに達した場合、一度コネクションの確立に成功したあとに接続が切られるので、この無限ループに入ってしまうようです。</p>
+
+<p>接続処理中は再接続処理を行わないようにすることで対応しました。</p>
+
+<h2>トランザクション内で再接続処理が行われる問題の修正</h2>
+
+<p>Redis::Fast 0.07以降、<code>MULTI</code>-<code>EXEC</code>コマンドを遣ったトランザクションの中にいるときは再接続処理が行わないようになっています。
+その仕組みを作るにあたって、トランザクションの中にいるか外にいるかを表すフラグをコマンド送信前に更新していました。</p>
+
+<ol>
+<li>再接続を禁止する</li>
+<li><code>MULTI</code> コマンドを送る</li>
+<li>結果を受け取る</li>
+<li>必要なコマンド発行を行う</li>
+<li>再接続を許可する</li>
+<li><code>EXEC</code>コマンドを実行する</li>
+<li>結果を受け取る</li>
+</ol>
+
+
+<p>しかしこれだと 5 と 6 の間で再接続が起こってしまいます。
+<code>EXEC</code>コマンドがまだ実行されていないので、ここはまだトランザクションの中ですね。</p>
+
+<p>Redis::Fast 0.13ではフラグの更新はコマンドが成功したときに変更してあります。</p>
+
+<ol>
+<li><code>MULTI</code>コマンドを送る</li>
+<li>結果を受け取る</li>
+<li>再接続を禁止する</li>
+<li>必要なコマンド発行を行う</li>
+<li><code>EXEC</code>コマンドを実行する</li>
+<li>結果を受け取る</li>
+<li>再接続を許可する</li>
+</ol>
+
+
+<p>これでトランザクション中に再接続処理が走ることは無いはずです。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[gitで作業ディレクトリの変更を破棄したのに差分が出続けて困った話]]></title>
@@ -145,6 +217,8 @@ touchしただけで差分が！ってなってびっくりした。</p>
     <id>http://shogo82148.github.io/blog/2014/10/03/isucon-powawa-4</id>
     <content type="html"><![CDATA[<p>遅くなりましたが、ISUCON4のレポートです。
 まこぴーとchroneさんとともにチームぽわわで参加し、惨敗してきました。</p>
+
+<p>2014-10-06 追記: <a href="https://github.com/shogo82148/isucon4_powawa">競技中に使ったレポジトリ</a>を公開しました。</p>
 
 <!-- More -->
 
@@ -2312,52 +2386,6 @@ Tweepy は僕も何度か使ったことがあるので Issue とかみて開発
 
 <p>コンパイルの手間が無いのでお手軽に試せます。
 もっと速いマシンでやればすぐに結果がでてくると思うので、みなさんのレポートお待ちしています。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[githubのタブサイズを変えるChrome拡張を作った]]></title>
-    <link href="http://shogo82148.github.io/blog/2014/02/10/github-tab-change/"/>
-    <updated>2014-02-10T08:01:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2014/02/10/github-tab-change</id>
-    <content type="html"><![CDATA[<p>にゃんぱすー。
-最近 C# のコードを見ることが多くなってきました。
-開発はVSやMonoDevelop等のIDEを使っているのですが、
-diffの確認程度ならgithub上で行っています。
-しかし、github上の表示は崩れて非常に読みづらい・・・。</p>
-
-<!-- More -->
-
-
-<p>githubのコードプレビューはタブストップが8文字幅で表示されます。
-しかし、有名ドコロのIDEはデフォルトがタブインデント、4文字幅で設定されているので、
-どうしても表示が狂ってしまいます。
-タブインデントではなくスペースインデントを使えば解決☆
-なのですが、スペースインデントの中にタブインデントを混入する場合が多々あるので、僕は疲れました・・・。
-混在したときのコードなんて、読めたものじゃないですよ。</p>
-
-<p>そこで、githubのタブサイズを変更する Chrome拡張を作ってみました。
-ユーザスタイルシートでもできるんですが、まあ、勉強を兼ねて。</p>
-
-<ul>
-<li><a href="https://chrome.google.com/webstore/detail/github-tab-change/ljioaacdegnnenakodladamafjodehnd">GithubTabChange</a></li>
-</ul>
-
-
-<p>インストール後、github上のレポジトリを開くと≡みたいなマークがURLの横に表示されます。
-それをクリックでタブサイズの設定変更が可能です。
-githubのプレビューの一斉設定だけでなく、
-レポジトリ単位でタブサイズを切り替えることができます。</p>
-
-<p>アイコンとか設定画面のデザインとかちゃんとしたものを作る気力はなかったので、
-皆さんのprをお待ちしております。</p>
-
-<ul>
-<li><a href="https://github.com/shogo82148/GithubTabChange">GithubTabChange on github</a></li>
-</ul>
-
-
-<p>(これ作ってるときに、githubのHTMLソースの中にtab-size-8というクラスを見つけたのですが、実はどこかに隠し機能としてあるんですかね？)</p>
 ]]></content>
   </entry>
   

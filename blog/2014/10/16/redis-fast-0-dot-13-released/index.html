@@ -5,14 +5,14 @@
 <!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
 <head>
   <meta charset="utf-8">
-  <title>ISUCON3の本戦に参加してきた - Shogo's Blog</title>
+  <title>Redis::Fast 0.13をリリースしました - Shogo's Blog</title>
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="description" content="ISUCON3の予選を何とか通過し、
-本戦へと参戦してきました。 大会中の方針とか考えたこととかメモ。 お題 Tw○tter&#8211;likeな画像投稿サービス ユーザをフォローできる
-フォローしたユーザが画像を投稿すると、タイムラインに画像が流れる
-公開範囲を全員に公開・フォロワーのみに公開 &hellip;">
+  <meta name="description" content="Redis::Fast 0.13をリリースしました。
+主な変更点は以下のとおりです。 passwordオプションの対応
+maxclientsに達した場合に、deep recursion することがある問題の修正
+トランザクション内で再接続処理が行われる問題の修正 passwordオプションの対応 &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -21,7 +21,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   
-  <link rel="canonical" href="http://shogo82148.github.io/blog/2013/11/09/isucon3/">
+  <link rel="canonical" href="http://shogo82148.github.io/blog/2014/10/16/redis-fast-0-dot-13-released/">
   <link href="/favicon.png" rel="icon">
   <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
   <script src="/javascripts/modernizr-2.0.js"></script>
@@ -83,7 +83,7 @@
   
   <header>
     
-      <h1 class="entry-title">ISUCON3の本戦に参加してきた</h1>
+      <h1 class="entry-title">Redis::Fast 0.13をリリースしました</h1>
     
     
       <p class="meta">
@@ -99,114 +99,77 @@
   
 
 
-<time datetime="2013-11-09T23:58:00+09:00" pubdate data-updated="true">Nov 9<span>th</span>, 2013</time>
+<time datetime="2014-10-16T23:51:00+09:00" pubdate data-updated="true">Oct 16<span>th</span>, 2014</time>
         
       </p>
     
   </header>
 
 
-<div class="entry-content"><p><a href="http://shogo82148.github.io/blog/2013/10/07/isucon3-qualify/">ISUCON3の予選</a>を何とか通過し、
-本戦へと参戦してきました。</p>
-
-<p>大会中の方針とか考えたこととかメモ。</p>
-
-<h2>お題</h2>
+<div class="entry-content"><p>Redis::Fast 0.13をリリースしました。
+主な変更点は以下のとおりです。</p>
 
 <ul>
-<li>Tw○tter&#8211;likeな画像投稿サービス
-
-<ul>
-<li>ユーザをフォローできる</li>
-<li>フォローしたユーザが画像を投稿すると、タイムラインに画像が流れる</li>
-<li>公開範囲を全員に公開・フォロワーのみに公開・自分だけに公開から選べる</li>
-</ul>
-</li>
-<li>タイムラインはロングポーリングを使ってリアルタイム反映
-
-<ul>
-<li>JSON-APIが用意されていて、Javascriptから叩く</li>
-</ul>
-</li>
-<li>使用できるサーバは5台</li>
+<li>passwordオプションの対応</li>
+<li>maxclientsに達した場合に、deep recursion することがある問題の修正</li>
+<li>トランザクション内で再接続処理が行われる問題の修正</li>
 </ul>
 
 
-<p>画像を扱うお題と聞いて、会場がざわめきました。</p>
-
-<h2>MySQLのクエリを見てみる</h2>
-
-<p>開始直後、鍵を用意したり、gitのレポジトリを立てたりなんだりした後、
-一回目の計測。</p>
-
-<p>topコマンドで走っているプロセスを見ていると、大量のconvertが！！
-プロセス名とお題から考えるに、こいつら確実にImage Magickだ・・・。
-CPUのほとんどが画像の変換にくわれていたので、
-まずは「どこかでキャッシュする」作戦をとることに。
-キャッシュするならフロントに近いほうがいいだろうということで、
-フロントのnginxでキャッシュする作戦をとることにしました
-(アクセス制限があるimageは難しいかもしれないけど、全部publicなiconならすぐできるだろうとこのときは思ってました)。</p>
-
-<p>僕はnginxがconvertを駆逐してくれると信じて、MySQLに投げているクエリを中心にPerlのコードを見てました。
-役割分担はこんな感じ。</p>
-
-<ul>
-<li>サーバの設定とか(@mackee_wさん)</li>
-<li>nginxでキャッシュする設定(@9reさん)</li>
-<li>コード読む、主にMySQLに投げてるクエリとか(@shogo82148)</li>
-</ul>
+<!-- More -->
 
 
-<p>毎回、ひどいクエリが仕込まれているようなイメージがあったけど、
-今回はそこまでひどくない。
-クエリチューニング全然効果なさそうと判断して、次の作戦を考えることにしました。</p>
+<h2>passwordオプションの対応</h2>
 
-<h2>No Image Magick, use Imager!</h2>
+<p>今更感のある機能ですね。昔は対応してたんです。
+対応してたんですが、Sentinel対応のときに接続開始周りをごそっと入れ替えたときにパスワード認証機能を削除しちゃってたっぽいです(・ω&lt;)
+なんというかごめんなさい。</p>
 
-<p>やっぱり一番のボトルネックは画像変換。
-nginxでキャッシュするとはいえ軽いほうがいいよね、ということで、
-外部プロセスで実行している画像変換をImagerを使ってPerlと同じプロセスでやる作戦。</p>
+<p>実際実装してテストしてみると、認証失敗したときにdouble freeで落ちてちょっとハマりました。
+hiredisを使う場合は<code>redisAsyncSetConnectCallback</code>に指定する関数内で、コネクションを切断するような処理(password認証とか)はしないようにしましょう。</p>
 
-<p>Imagerに置き換え後ベンチにかけたら、若干スコアが・・・上がった・・・ような・・・？
-しかし、画像が変化していると怒られて、スコアは無効。
-画像エラーを修正するコストと、スコアの上がり具合を見て、Image Magickのままにすることにしました。</p>
+<h2>maxclientsに達した場合に、deep recursion することがある問題の修正</h2>
 
-<p>予選でも同じように外部プロセス起動している部分をPerlのライブラリにしたけど、
-その時はあっさり動いた。
-あれは外部プロセス起動をやめたらスコア上がると思い込ませるための布石だったんだ・・・。
-(今回の場合、プロセスの起動より画像の変換のほうが重いので、スコアが上がらないのは当たり前)</p>
+<p>Redis::Fastでは、接続処理の中で、コネクションに名前をつけたり、パスワード認証したり、その他独自の処理を実行しています。
+この処理の途中でも再接続処理が走ってしまい、
+再接続処理の中で再接続処理が実行されて、その再接続処理の中で再接続が&#8230; というような無限ループに突入する場合があります。
+maxclientsに達した場合、一度コネクションの確立に成功したあとに接続が切られるので、この無限ループに入ってしまうようです。</p>
 
-<h2>いろいろ諦めてPerl側でファイルキャッシュ</h2>
+<p>接続処理中は再接続処理を行わないようにすることで対応しました。</p>
 
-<p>Imagerはテストを通らず、nginxの設定キャッシュ設定も上手く動作しなかったので、
-Perlでファイルキャッシュする方針に変更。
-convertの結果にmvで適当な場所にコピーして保存。
-これだけでスコアが5倍くらいに跳ね上がり、一気に上位に浮上！
-最初からやっておくべきだった・・・。
-もうちょっと早ければ特別賞もらえたかもしれないのに。</p>
+<h2>トランザクション内で再接続処理が行われる問題の修正</h2>
 
-<h2>rsync! rsync!</h2>
+<p>Redis::Fast 0.07以降、<code>MULTI</code>-<code>EXEC</code>コマンドを遣ったトランザクションの中にいるときは再接続処理が行わないようになっています。
+その仕組みを作るにあたって、トランザクションの中にいるか外にいるかを表すフラグをコマンド送信前に更新していました。</p>
 
-<p>ファイルキャッシュの作業をやっている間に、@mackee_wさんがnfsの設定をやってくれたので、
-アップロードされたファイルやキャッシュファイルの保存先をnfsに変更。</p>
+<ol>
+<li>再接続を禁止する</li>
+<li><code>MULTI</code> コマンドを送る</li>
+<li>結果を受け取る</li>
+<li>必要なコマンド発行を行う</li>
+<li>再接続を許可する</li>
+<li><code>EXEC</code>コマンドを実行する</li>
+<li>結果を受け取る</li>
+</ol>
 
-<p>あとは物量作戦でいくしかないだろうということで、rsyncで他のサーバにコピーして調整を繰り返してた。
-(並行してnginxのキャッシュ設定にも再チャレンジしてたけど、nginx力が足りなかった)</p>
 
-<h2>最終結果</h2>
+<p>しかしこれだと 5 と 6 の間で再接続が起こってしまいます。
+<code>EXEC</code>コマンドがまだ実行されていないので、ここはまだトランザクションの中ですね。</p>
 
-<p>テストFAILした!! No Score!!</p>
+<p>Redis::Fast 0.13ではフラグの更新はコマンドが成功したときに変更してあります。</p>
 
-<p>なんかこんなの前もあった！</p>
+<ol>
+<li><code>MULTI</code>コマンドを送る</li>
+<li>結果を受け取る</li>
+<li>再接続を禁止する</li>
+<li>必要なコマンド発行を行う</li>
+<li><code>EXEC</code>コマンドを実行する</li>
+<li>結果を受け取る</li>
+<li>再接続を許可する</li>
+</ol>
 
-<h2>反省点</h2>
 
-<ul>
-<li>画像変換をGETでやってたけど、POSTでやったほうがよかったかも</li>
-<li>nginxについて勉強しよう</li>
-<li>nfsについて勉強しよう</li>
-</ul>
-
+<p>これでトランザクション中に再接続処理が走ることは無いはずです。</p>
 </div>
 
 
@@ -229,12 +192,12 @@ convertの結果にmvで適当な場所にコピーして保存。
   
 
 
-<time datetime="2013-11-09T23:58:00+09:00" pubdate data-updated="true">Nov 9<span>th</span>, 2013</time>
+<time datetime="2014-10-16T23:51:00+09:00" pubdate data-updated="true">Oct 16<span>th</span>, 2014</time>
       
 
 <span class="categories">
   
-    <a class='category' href='/blog/categories/isucon/'>isucon</a>, <a class='category' href='/blog/categories/perl/'>perl</a>
+    <a class='category' href='/blog/categories/perl/'>perl</a>, <a class='category' href='/blog/categories/redis/'>redis</a>
   
 </span>
 
@@ -243,10 +206,10 @@ convertの結果にmvで適当な場所にコピーして保存。
     
       <div class="sharing">
   
-  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.io/blog/2013/11/09/isucon3/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.io/blog/2014/10/16/redis-fast-0-dot-13-released/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
   
   
-  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.io/blog/2013/11/09/isucon3/" data-via="shogo82148" data-counturl="http://shogo82148.github.io/blog/2013/11/09/isucon3/" >Tweet</a>
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.io/blog/2014/10/16/redis-fast-0-dot-13-released/" data-via="shogo82148" data-counturl="http://shogo82148.github.io/blog/2014/10/16/redis-fast-0-dot-13-released/" >Tweet</a>
   
   
   <div class="g-plusone" data-size="medium"></div>
@@ -259,10 +222,8 @@ convertの結果にmvで適当な場所にコピーして保存。
     
     <p class="meta">
       
-        <a class="basic-alignment left" href="/blog/2013/10/30/6saiconf-10/" title="Previous Post: 第10回６さいカンファレンス「C言語のポインタ復習」">&laquo; 第10回６さいカンファレンス「C言語のポインタ復習」</a>
+        <a class="basic-alignment left" href="/blog/2014/10/04/gitattribute-eol-equals-crlf/" title="Previous Post: gitで作業ディレクトリの変更を破棄したのに差分が出続けて困った話">&laquo; gitで作業ディレクトリの変更を破棄したのに差分が出続けて困った話</a>
       
-      
-        <a class="basic-alignment right" href="/blog/2013/12/07/ark-view-datatable/" title="Next Post: Ark-View-DataTable グラフや表やCSVを簡単に表示したい">Ark-View-DataTable グラフや表やCSVを簡単に表示したい &raquo;</a>
       
     </p>
   </footer>
@@ -374,8 +335,8 @@ convertの結果にmvで適当な場所にコピーして保存。
       
         
         // var disqus_developer = 1;
-        var disqus_identifier = 'http://shogo82148.github.io/blog/2013/11/09/isucon3/';
-        var disqus_url = 'http://shogo82148.github.io/blog/2013/11/09/isucon3/';
+        var disqus_identifier = 'http://shogo82148.github.io/blog/2014/10/16/redis-fast-0-dot-13-released/';
+        var disqus_url = 'http://shogo82148.github.io/blog/2014/10/16/redis-fast-0-dot-13-released/';
         var disqus_script = 'embed.js';
       
     (function () {

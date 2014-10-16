@@ -4,7 +4,7 @@
   <title><![CDATA[Category: perl | Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/blog/categories/perl/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2014-10-04T15:55:36+09:00</updated>
+  <updated>2014-10-17T00:39:06+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,78 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Redis::Fast 0.13をリリースしました]]></title>
+    <link href="http://shogo82148.github.io/blog/2014/10/16/redis-fast-0-dot-13-released/"/>
+    <updated>2014-10-16T23:51:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2014/10/16/redis-fast-0-dot-13-released</id>
+    <content type="html"><![CDATA[<p>Redis::Fast 0.13をリリースしました。
+主な変更点は以下のとおりです。</p>
+
+<ul>
+<li>passwordオプションの対応</li>
+<li>maxclientsに達した場合に、deep recursion することがある問題の修正</li>
+<li>トランザクション内で再接続処理が行われる問題の修正</li>
+</ul>
+
+
+<!-- More -->
+
+
+<h2>passwordオプションの対応</h2>
+
+<p>今更感のある機能ですね。昔は対応してたんです。
+対応してたんですが、Sentinel対応のときに接続開始周りをごそっと入れ替えたときにパスワード認証機能を削除しちゃってたっぽいです(・ω&lt;)
+なんというかごめんなさい。</p>
+
+<p>実際実装してテストしてみると、認証失敗したときにdouble freeで落ちてちょっとハマりました。
+hiredisを使う場合は<code>redisAsyncSetConnectCallback</code>に指定する関数内で、コネクションを切断するような処理(password認証とか)はしないようにしましょう。</p>
+
+<h2>maxclientsに達した場合に、deep recursion することがある問題の修正</h2>
+
+<p>Redis::Fastでは、接続処理の中で、コネクションに名前をつけたり、パスワード認証したり、その他独自の処理を実行しています。
+この処理の途中でも再接続処理が走ってしまい、
+再接続処理の中で再接続処理が実行されて、その再接続処理の中で再接続が... というような無限ループに突入する場合があります。
+maxclientsに達した場合、一度コネクションの確立に成功したあとに接続が切られるので、この無限ループに入ってしまうようです。</p>
+
+<p>接続処理中は再接続処理を行わないようにすることで対応しました。</p>
+
+<h2>トランザクション内で再接続処理が行われる問題の修正</h2>
+
+<p>Redis::Fast 0.07以降、<code>MULTI</code>-<code>EXEC</code>コマンドを遣ったトランザクションの中にいるときは再接続処理が行わないようになっています。
+その仕組みを作るにあたって、トランザクションの中にいるか外にいるかを表すフラグをコマンド送信前に更新していました。</p>
+
+<ol>
+<li>再接続を禁止する</li>
+<li><code>MULTI</code> コマンドを送る</li>
+<li>結果を受け取る</li>
+<li>必要なコマンド発行を行う</li>
+<li>再接続を許可する</li>
+<li><code>EXEC</code>コマンドを実行する</li>
+<li>結果を受け取る</li>
+</ol>
+
+
+<p>しかしこれだと 5 と 6 の間で再接続が起こってしまいます。
+<code>EXEC</code>コマンドがまだ実行されていないので、ここはまだトランザクションの中ですね。</p>
+
+<p>Redis::Fast 0.13ではフラグの更新はコマンドが成功したときに変更してあります。</p>
+
+<ol>
+<li><code>MULTI</code>コマンドを送る</li>
+<li>結果を受け取る</li>
+<li>再接続を禁止する</li>
+<li>必要なコマンド発行を行う</li>
+<li><code>EXEC</code>コマンドを実行する</li>
+<li>結果を受け取る</li>
+<li>再接続を許可する</li>
+</ol>
+
+
+<p>これでトランザクション中に再接続処理が走ることは無いはずです。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Github::Hooks::ReceiverがX-Hub-Signatureをサポートしました]]></title>
@@ -421,80 +493,6 @@ my $res = $furl->get("https://api.instagram.com/v1/tags/$word/media/recent?acces
 ```</p>
 
 <p>これで癒やしをうさぎで頼まれてもウサギ画像を返せるようになりました。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Redis::Fast 0.07 をリリースしました！]]></title>
-    <link href="http://shogo82148.github.io/blog/2014/05/17/redis-fast-0-dot-07-released/"/>
-    <updated>2014-05-17T16:27:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2014/05/17/redis-fast-0-dot-07-released</id>
-    <content type="html"><![CDATA[<p><a href="https://metacpan.org/release/Redis-Fast">Redis::Fast 0.07</a> をリリースしました。
-現時点での最新バージョンである Redis.pm 1.974 とコンパチブルになります。</p>
-
-<!-- More -->
-
-
-<p>主な修正点は以下の通りです</p>
-
-<ul>
-<li>Redis Sentinel 対応</li>
-<li>トランザクション内での再接続禁止</li>
-<li>再接続にDB選択し直し</li>
-</ul>
-
-
-<h2>Redis Sentinel 対応</h2>
-
-<p>Redis Sentinel というのは自動フェールオーバーの仕組みらしいです。
-(ソースはコピペしたきただけで仕組みはあまり理解していない)
-どんなものかは本家ドキュメントや実際に検証してみた人の記事をご参照ください。</p>
-
-<ul>
-<li><a href="http://redis.io/topics/sentinel">Redis Sentinel Documentation</a></li>
-<li><a href="http://chrone.hatenablog.com/entry/2014/02/28/212616">Redis 2.8 の Sentinel の動きを検証してみた</a></li>
-<li><a href="http://blog.kenjiskywalker.org/blog/2013/01/24/redis-sentiel-howto/">Redis Sentinelを動かしてみた</a></li>
-</ul>
-
-
-<p>前から移植作業は進めてたのですが、本家 Redis.pm でもテストがコケたりしてちょっと不安だったのでリリースを見送ってました。
-今日 Redis.pm の安定版がリリースされたのでこっちも追従しますよ！！</p>
-
-<p>コネクションを作るときに <code>sentinels</code> を渡すと Redis Sentinel から接続情報を取ってきてくれます。
-一緒に <code>reconnect</code> を設定しておいてあげると、Masterに何かあった時に接続情報を再取得→
-自動的に Slave へフェールオーバーしてくれます。</p>
-
-<p>``` perl
-use Redis::Fast;
-my $redis = Redis::Fast->new(</p>
-
-<pre><code>sentinels =&gt; [ '127.0.0.1:26379' ],
-service =&gt; 'mymaster',
-reconnect =&gt; 1,
-</code></pre>
-
-<p>);
-```</p>
-
-<h2>トランザクション内での再接続禁止</h2>
-
-<p>Redisにも簡単な<a href="http://redis.io/topics/transactions">トランザクション機能</a>があって、
-複数の命令を同時に実行することができます。
-トランザクション中に再接続が発生するとトランザクションがリセットされてしまうので、
-接続前の命令を再投入する必要があるのですが、Redis.pm/Redis::Fastの再接続処理はそこまで面倒を見てくれません。
-以前のバージョンではそこの面倒を見てくれないのに適当に処理してしまい、
-トランザクションが中途半端なまま実行されてしました。</p>
-
-<p>0.07 からはトランザクション内では再接続を行わずに例外を吐きます。
-トランザクションを最初からやり直すなど、よしなに対応してください。</p>
-
-<h2>再接続時にDB選択し直し</h2>
-
-<p>一つのRedis-Serverが複数のデータベースを持てるようになっていて、
-<a href="http://redis.io/commands/select">SELECT</a>コマンドを使って切り替え可能です。
-今までのバージョンでは、SELECTコマンドでデータベースを切り替えていても、
-再接続時にリセットされてしまう問題がありました。
-0.07では再接続の中でSELECTを実行し直すので、再接続を気にする必要はありません。</p>
 ]]></content>
   </entry>
   
