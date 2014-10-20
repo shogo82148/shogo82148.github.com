@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2014-10-17T00:40:45+09:00</updated>
+  <updated>2014-10-21T02:06:10+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,156 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Gitで作業ディレクトリの変更を破棄したのに差分が出続けて困った話その2]]></title>
+    <link href="http://shogo82148.github.io/blog/2014/10/21/git-case-sensitivity/"/>
+    <updated>2014-10-21T00:56:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2014/10/21/git-case-sensitivity</id>
+    <content type="html"><![CDATA[<p>先日「<a href="http://shogo82148.github.io/blog/2014/10/04/gitattribute-eol-equals-crlf/">Gitで作業ディレクトリの変更を破棄したのに差分が出続けて困った話</a>」と
+いうのを書きましたが、より強力な敵が現われました。
+このときは文字コードが原因で <code>git checkout -- &lt;file&gt;</code> しても差分が残り続けるというもので、<code>git add</code> してコミットし直すことで回避出来ました。
+しかし、今度の敵は <code>git checkout -- &lt;file&gt;</code> しても <code>git add &lt;file&gt;</code>しても差分が残り続けます。</p>
+
+<p>なんだ・・・このボスを倒したら新たなラスボスが現れた感・・・</p>
+
+<p>acidlemon先生の手助けにより事無きを得たのですが、メモを残しておきます。</p>
+
+<!-- More -->
+
+
+<h2>症状</h2>
+
+<p><code>git checkout -- &lt;file&gt;</code> しても、<code>git add &lt;file&gt;</code> しても、<code>git reset --hard HEAD</code> しても、
+何をしても差分が出続ける・・・なんだこいつ・・・</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ git checkout -- AwesomeFeature
+</span><span class='line'>$ git add .
+</span><span class='line'>$ git status
+</span><span class='line'>On branch master
+</span><span class='line'>Changes not staged for commit:
+</span><span class='line'>  (use "git add &lt;file&gt;..." to update what will be committed)
+</span><span class='line'>    (use "git checkout -- &lt;file&gt;..." to discard changes in working directory)
+</span><span class='line'>  
+</span><span class='line'>  modified:   AwesomeFeature/HogeHoge.txt
+</span><span class='line'>  
+</span><span class='line'>  no changes added to commit (use "git add" and/or "git commit -a")</span></code></pre></td></tr></table></div></figure>
+
+
+<p>操作は全てMac上で行いました。</p>
+
+<h2>原因</h2>
+
+<p>原因はファイル名の大文字小文字でした。
+<code>git ls-files</code> でgitに管理されているファイルの一覧を表示します。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ git ls-files
+</span><span class='line'>AwesomeFeature/HogeHoge.txt
+</span><span class='line'>AwesomeFeature/hogehoge.txt
+</span><span class='line'>README.txt</span></code></pre></td></tr></table></div></figure>
+
+
+<p>大文字小文字だけが違う「HogeHoge.txt」と「hogehoge.txt」が管理されています。</p>
+
+<p>しかしワーキングディレクトリにあるのは「HogeHoge.txt」のみです。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ ls AwesomeFeature/
+</span><span class='line'>HogeHoge.txt</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Macのファイルシステムは大文字小文字を区別しないので、
+ワーキングディレクトリ上で「HogeHoge.txt」と「hogehoge.txt」を同時に扱えません。
+しかしgitは両者を区別するので、よくわからない差分が生まれてしまったわけです。</p>
+
+<p>両方同時に扱えないので、どちらか片方を消して解決します。
+<code>git diff</code>で「HogeHoge.txt」と「hogehoge.txt」の差分が見れるのでどっちを残すが選択、
+<code>git checkout -- &lt;file&gt;</code>で必要なほうをワーキングディレクトリに反映後、
+<code>git rm --cached &lt;file&gt;</code>で不要なファイルをレポジトリから削除です。
+「hogehoge.txt」を残す場合は以下のような感じです。全てファイル名を明示してるのがポイントです(症状のところではディレクトリ名指定だった)。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ # 差分確認
+</span><span class='line'>$ # 今はHogeHoge.txtの方がワーキングディレクトリに反映されているので、hogehoge.txtに変更があるように見える
+</span><span class='line'>$ git diff
+</span><span class='line'>diff --git a/AwesomeFeature/hogehoge.txt b/AwesomeFeature/hogehoge.txt
+</span><span class='line'>index 3488202..1150100 100644
+</span><span class='line'>--- a/AwesomeFeature/hogehoge.txt
+</span><span class='line'>+++ b/AwesomeFeature/hogehoge.txt
+</span><span class='line'>@@ -1 +1 @@
+</span><span class='line'>-this is hogehoge.txt
+</span><span class='line'>+this is HogeHoge.txt
+</span><span class='line'>$
+</span><span class='line'>$ # hogehoge.txt の内容をワーキングディレクトリに反映
+</span><span class='line'>$ git checkout -- AwesomeFeature/hogehoge.txt
+</span><span class='line'>$
+</span><span class='line'>$ # 今度はHogeHoge.txtに変更があるように見える
+</span><span class='line'>$ git diff
+</span><span class='line'>diff --git a/AwesomeFeature/HogeHoge.txt b/AwesomeFeature/HogeHoge.txt
+</span><span class='line'>index 1150100..3488202 100644
+</span><span class='line'>--- a/AwesomeFeature/HogeHoge.txt
+</span><span class='line'>+++ b/AwesomeFeature/HogeHoge.txt
+</span><span class='line'>@@ -1 +1 @@
+</span><span class='line'>-this is HogeHoge.txt
+</span><span class='line'>+this is hogehoge.txt
+</span><span class='line'>$
+</span><span class='line'>$ # HogeHoge.txtの方はgitから削除
+</span><span class='line'>$ git rm AwesomeFeature/HogeHoge.txt
+</span><span class='line'>rm 'AwesomeFeature/HogeHoge.txt'
+</span><span class='line'>$ git commit -m 'rm AwesomeFeature/HogeHoge.txt'</span></code></pre></td></tr></table></div></figure>
+
+
+<p>「HogeHoge.txt」があるブランチと「hogehoge.txt」があるブランチをマージするとこうなるようです。
+gitの扱いに慣れてない人が触っているレポジトリなのでトラブルが絶えない・・・それにしたってなんでこう見事に地雷を踏抜いて行くんだ・・・(ヽ´ω`)</p>
+
+<h2>まとめ</h2>
+
+<p>大文字小文字を区別しないファイルシステムなんか滅んでしまえ。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Redis::Fast 0.13をリリースしました]]></title>
@@ -2329,63 +2479,6 @@ Tweepy は僕も何度か使ったことがあるので Issue とかみて開発
 
 <p>ちょっとしたコードでも公開しておくといいことがあるよ、というお話でした。
 最近ここも全然更新してないので、もっとアウトプットしていかないと・・・。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[スパコンで約2時間36分かかったという、5×5の魔方陣の全解列挙を、おねえさんのコンピュータで試す]]></title>
-    <link href="http://shogo82148.github.io/blog/2014/03/19/letscount-magic-square/"/>
-    <updated>2014-03-19T18:26:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2014/03/19/letscount-magic-square</id>
-    <content type="html"><![CDATA[<p>高校生がスパコンを使って5x5の魔方陣の全解を求めたというニュースをきっかけに、
-魔方陣の全解列挙が流行っているようです。</p>
-
-<ul>
-<li><a href="http://www.ccs.tsukuba.ac.jp/pr/media/140228_press">高校生がスーパーコンピュータを使って5×5魔方陣の全解を求めることに成功(筑波大プレスリリース)</a></li>
-<li><a href="http://blog.unfindable.net/archives/7179">スパコンで約2時間36分かかったという、5×5の魔方陣の全解列挙を、パソコンで試す（C++）</a></li>
-</ul>
-
-
-<p>「全解列挙」「数え上げ」「組み合わせ爆発」・・・そして整然とならんだこのマス目・・・
-<a href="http://www.youtube.com/watch?v=Q4gTV4r0zRs">あのおねえさん</a>を思い出しますね。</p>
-
-<!-- More -->
-
-
-<p>と、いうわけで、「<a href="http://shogo82148.github.io/letscount">おねえさんのコンピュータ</a>」の魔方陣版を作ってみました。</p>
-
-<ul>
-<li><a href="http://shogo82148.github.io/letscount-magic-square">おねえさんのコンピュータ(魔方陣編)</a></li>
-</ul>
-
-
-<p>「全解列挙をパソコンで試す」の記事と同じような感じで、頭の悪いコードをずらずらと書いてあります。
-以下の様な特徴があります。</p>
-
-<ul>
-<li>マスを埋める順番はスパコンで求めたものをベース
-
-<ul>
-<li>ただし、対称な位置にあるマスを優先(反転・回転の検索を早い段階で打ち切るため)</li>
-</ul>
-</li>
-<li>asm.js による最適化！
-
-<ul>
-<li>firefoxで特に高速に動作します</li>
-<li>わかってはいたけど、asm.jsは人間の書くものではない</li>
-</ul>
-</li>
-<li>WebWorkerを使った並列計算</li>
-</ul>
-
-
-<p>実はまだ5x5の計算結果を見てないのですが、
-途中までの計算スピードから推測すると十数時間程度で計算が終わるかと・・・。
-(Mac Book Air Mid 2012, 4並列)</p>
-
-<p>コンパイルの手間が無いのでお手軽に試せます。
-もっと速いマシンでやればすぐに結果がでてくると思うので、みなさんのレポートお待ちしています。</p>
 ]]></content>
   </entry>
   
