@@ -90,3 +90,7 @@ touchしただけで差分が！ってなってびっくりした。
 ## まとめ
 
 CRLF滅びろ
+
+## 追記
+
+[続編](http://shogo82148.github.io/blog/2014/10/21/git-case-sensitivity/)がでました
