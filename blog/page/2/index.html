@@ -9,7 +9,9 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="description" content="別チームがIRCに癒やしボットを入れてたので、自分のチームのチャンネルにも入れてみた。 ">
+  <meta name="description" content="Redis::Fast にIssueが来ていたので、
+それに関して調査したお話です。 接続タイムアウトすると double free check に引っかかる
+brpop みたいな長時間ブロックするコマンド中にシグナルが入ると、最初の1回が無視される 前者はC言語つらいって話で頑張って &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -96,6 +98,58 @@ Hatena.Star.SiteConfig = {
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2014/07/05/signal-in-xs/">PerlのXS中に起きたシグナルの扱い</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2014-07-05T11:56:00+09:00" pubdate data-updated="true">Jul 5<span>th</span>, 2014</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p><a href="https://metacpan.org/pod/Redis::Fast">Redis::Fast</a> にIssueが来ていたので、
+それに関して調査したお話です。</p>
+
+<ul>
+<li>接続タイムアウトすると double free check に引っかかる</li>
+<li><code>brpop</code> みたいな長時間ブロックするコマンド中にシグナルが入ると、最初の1回が無視される</li>
+</ul>
+
+
+<p>前者はC言語つらいって話で頑張って double free になる条件を探せばいいんですが、
+後者はシグナル時のPerlやPOSIX APIの挙動を知らなくと解決できなそう。
+そういうわけで、主に後者について調べた結果をまとめておきます。</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2014/07/05/signal-in-xs/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -513,104 +567,6 @@ AndroidSDKに付属しているaaptというツールを使えば読めるんだ
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2014/04/27/tweepy-2-dot-3-0-released/">Tweepyの2.3.0が出ました</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2014-04-27T21:51:00+09:00" pubdate data-updated="true">Apr 27<span>th</span>, 2014</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>Tweepyの2.3.0が出ました。
-「<a href="http://shogo82148.github.io/blog/2014/04/18/tweepy-will-application-only-auth/">Tweepy が Application-only Authentication に対応します</a>」僕のprも取り込まれていて、
-Application-only Authentication が標準で使えるようになりました。
-というわけで、早速遊んでみます。</p>
-
-<h2>Application-only Authenticationで遊ぶ</h2>
-
-<p>使い方は「<a href="http://shogo82148.github.io/blog/2013/05/09/application-only-authentication-with-tweepy/">tweepyでApplication-only Authenticationしてみた</a>」のときとほぼ同じ。
-Tweepy本体に取り込んでもらったので、名前空間がちょこっと変わったくらいです。
-Consumer Key と Consumer Secretだけ設定すればいいので、簡単に使えます。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="c">#!/usr/bin/env python</span>
-</span><span class='line'><span class="c"># -*- coding: utf-8 -*-</span>
-</span><span class='line'>
-</span><span class='line'><span class="kn">import</span> <span class="nn">tweepy</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">codecs</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">sys</span>
-</span><span class='line'>
-</span><span class='line'><span class="n">sys</span><span class="o">.</span><span class="n">stdin</span> <span class="o">=</span> <span class="n">codecs</span><span class="o">.</span><span class="n">getreader</span><span class="p">(</span><span class="s">&#39;utf-8&#39;</span><span class="p">)(</span><span class="n">sys</span><span class="o">.</span><span class="n">stdin</span><span class="p">)</span>
-</span><span class='line'><span class="n">sys</span><span class="o">.</span><span class="n">stdout</span> <span class="o">=</span> <span class="n">codecs</span><span class="o">.</span><span class="n">getwriter</span><span class="p">(</span><span class="s">&#39;utf-8&#39;</span><span class="p">)(</span><span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="n">CONSUMER_KEY</span> <span class="o">=</span> <span class="s">&#39;YOUR CONSUMER KEY&#39;</span>
-</span><span class='line'><span class="n">CONSUMER_SECRET</span> <span class="o">=</span> <span class="s">&#39;YOUR CONSUMER SECRET&#39;</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
-</span><span class='line'>    <span class="n">user_id</span> <span class="o">=</span> <span class="s">&quot;JO_RI&quot;</span>
-</span><span class='line'>    <span class="n">auth</span> <span class="o">=</span> <span class="n">tweepy</span><span class="o">.</span><span class="n">AppAuthHandler</span><span class="p">(</span><span class="n">CONSUMER_KEY</span><span class="p">,</span> <span class="n">CONSUMER_SECRET</span><span class="p">)</span>
-</span><span class='line'>    <span class="n">api</span> <span class="o">=</span> <span class="n">tweepy</span><span class="o">.</span><span class="n">API</span><span class="p">(</span><span class="n">auth</span><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="n">arg</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;id&#39;</span><span class="p">:</span> <span class="n">user_id</span><span class="p">,</span> <span class="s">&#39;include_rts&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">}</span>
-</span><span class='line'>    <span class="n">user_statuses</span> <span class="o">=</span> <span class="n">tweepy</span><span class="o">.</span><span class="n">Cursor</span><span class="p">(</span><span class="n">api</span><span class="o">.</span><span class="n">user_timeline</span><span class="p">,</span> <span class="o">**</span><span class="n">arg</span><span class="p">)</span><span class="o">.</span><span class="n">items</span><span class="p">(</span><span class="mi">3200</span><span class="p">)</span>
-</span><span class='line'>    <span class="k">for</span> <span class="n">user_status</span> <span class="ow">in</span> <span class="n">user_statuses</span><span class="p">:</span>
-</span><span class='line'>        <span class="k">print</span> <span class="n">user_status</span><span class="o">.</span><span class="n">text</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
-</span><span class='line'>    <span class="n">main</span><span class="p">()</span>
-</span></code></pre></td></tr></table></div></figure>
-
-</div>
-  
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/3/">&larr; Older</a>
@@ -628,6 +584,10 @@ Consumer Key と Consumer Secretだけ設定すればいいので、簡単に使
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2015/02/22/should-i-use-a-pointer-in-go/">map[string]Hoge or map[string]*Hoge ?</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2014/11/15/github-irc-hook-supports-gollum/">GithubのIRCフックがgollumをサポートしました</a>
       </li>
     
@@ -641,10 +601,6 @@ Consumer Key と Consumer Secretだけ設定すればいいので、簡単に使
     
       <li class="post">
         <a href="/blog/2014/10/04/gitattribute-eol-equals-crlf/">gitで作業ディレクトリの変更を破棄したのに差分が出続けて困った話</a>
-      </li>
-    
-      <li class="post">
-        <a href="/blog/2014/10/03/isucon-powawa-4/">ISUCON4にチームぽわわで参加しました</a>
       </li>
     
   </ul>
@@ -706,7 +662,7 @@ Consumer Key と Consumer Secretだけ設定すればいいので、簡単に使
     </div>
   </div>
   <footer role="contentinfo"><p>
-  Copyright &copy; 2014 - Shogo Ichinose -
+  Copyright &copy; 2015 - Shogo Ichinose -
   <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
 </p>
 
