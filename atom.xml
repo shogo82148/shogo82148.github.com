@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2015-02-22T13:06:07+09:00</updated>
+  <updated>2015-03-25T00:25:22+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,211 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[git diffでcsvの差分を見やすく表示する]]></title>
+    <link href="http://shogo82148.github.io/blog/2015/03/24/git-diff-csv/"/>
+    <updated>2015-03-24T23:08:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2015/03/24/git-diff-csv</id>
+    <content type="html"><![CDATA[<p>ExcelやGoogle Spreadsheetを使って作ったデータをプログラムに取り込むのにcsv形式が便利でよく使っているんですが、
+gitで履歴管理をしてもdiffが見づらい・・・。
+gitのdiffがかなり自由にカスタマイズできることを知ったので、いろいろいじってみたメモ。</p>
+
+<!-- More -->
+
+
+<p>例として、以下のようなcsvファイルを編集することを考えます。</p>
+
+<figure class='code'><figcaption><span>hogehoge.csv</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>id,name,param_a,param_b,param_c,param_d,param_e
+</span><span class='line'>101,hoge,314,159,265,358,979
+</span><span class='line'>102,fuga,271,828,182,845,904</span></code></pre></td></tr></table></div></figure>
+
+
+<p>一行目は列の見出しになっていて、プログラムからは列番号ではなく<code>param_d</code>の様に指定する、
+という作りになってます。
+<code>id: 101</code>の行の<code>param_d</code>の数値に変更が入った場合、普通のgitだと以下のようになります。</p>
+
+<figure class='code'><figcaption><span>git-diff</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+</pre></td><td class='code'><pre><code class='diff'><span class='line'><span class="gh">diff --git a/hogehoge.csv b/hogehoge.csv</span>
+</span><span class='line'><span class="gh">index c8dbd17..37f4ff5 100644</span>
+</span><span class='line'><span class="gd">--- a/hogehoge.csv</span>
+</span><span class='line'><span class="gi">+++ b/hogehoge.csv</span>
+</span><span class='line'><span class="gu">@@ -1,3 +1,3 @@</span>
+</span><span class='line'>id,name,param_a,param_b,param_c,param_d,param_e
+</span><span class='line'><span class="gd">-101,hoge,314,159,265,358,979</span>
+</span><span class='line'><span class="gi">+101,hoge,314,159,265,359,979</span>
+</span><span class='line'> 102,fuga,271,828,182,845,904
+</span><span class='line'>``
+</span><span class='line'>
+</span><span class='line'>二行目に何か変更があったことはわかりますが、
+</span><span class='line'>`param_d` だとはすぐにはわかりませんね・・・
+</span><span class='line'>
+</span><span class='line'>
+</span><span class='line'>## YAMLに変換して比較する
+</span><span class='line'>
+</span><span class='line'>バイナリファイルであっても差分が確認できるよう、
+</span><span class='line'>git-diffを実行する前に変換ツールを実行する機能があります。
+</span><span class='line'>拡張子がcsvのファイルに対してこの機能が働くように`.gitattributes`に以下の行を足します。
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p> plain .gitattributes
+*.csv diff=csv</p>
+
+<figure class='code'><figcaption><span>git-diff</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='diff'><span class='line'>`.git/config` に変換ツールの設定を追加します。
+</span><span class='line'>`key: value`の形式になっていると見やすそうなので、変換先の形式にはyamlを選びました。
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p> plain .git/config
+[diff &#8220;csv&#8221;]</p>
+
+<pre><code>textconv = csv2yaml
+</code></pre>
+
+<figure class='code'><figcaption><span>git-diff</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='diff'><span class='line'>ここで指定している`csv2yaml`は自前で用意する必要があります。
+</span><span class='line'>インターネット上をさまよえば同名のツールはいくらでもありそうですが、今回は自分でgoを使って書きました。
+</span><span class='line'>[csv2yaml.go](https://gist.github.com/shogo82148/8f19cb771dc6f91308a7)をコンパイルしてパスの通る場所においておきましょう。
+</span><span class='line'>csv2yamlは自分のよく使うcsvのフォーマットにあわせて以下のようなカスタマイズをしてあります。
+</span><span class='line'>
+</span><span class='line'><span class="gd">- `id`という名前のキーを必ず最初にする</span>
+</span><span class='line'><span class="gd">- それ以外のキーはアルファベット順にソートする</span>
+</span><span class='line'>
+</span><span class='line'>この状態で`git diff`を実行すると以下のようになります。
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p> diff git-diff
+diff &#8211;git a/hogehoge.csv b/hogehoge.csv
+index c8dbd17..37f4ff5 100644
+&#8212; a/hogehoge.csv
++++ b/hogehoge.csv
+@@ -3,7 +3,7 @@
+   param_a: &#8220;314&#8221;
+   param_b: &#8220;159&#8221;
+   param_c: &#8220;265&#8221;
+-  param_d: &#8220;358&#8221;
++  param_d: &#8220;359&#8221;
+   param_e: &#8220;979&#8221;
+ - id: &#8220;102&#8221;
+   name: fuga</p>
+
+<figure class='code'><figcaption><span>git-diff</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='diff'><span class='line'>これなら `param_d` が変更されたとすぐに分かりますね。
+</span><span class='line'>
+</span><span class='line'>## hunk-headerを設定する
+</span><span class='line'>
+</span><span class='line'>めでたく`param_d`が変更されていることがわかるようになったのですが、
+</span><span class='line'>今度はどの行が変更されたのかがわからなくなってしまいました。
+</span><span class='line'>
+</span><span class='line'>差分の `@@ -3,7 +3,7 @@` となっている部分はhunk-headerといって、自由にカスタマイズすることができます。
+</span><span class='line'>`.git/config` に表示した文字列のパターンを入力しましょう。
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p> plain .git/config
+[diff &#8220;csv&#8221;]</p>
+
+<pre><code>textconv = csv2yaml
+xfuncname = "^- .*$"
+</code></pre>
+
+<figure class='code'><figcaption><span>git-diff</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='diff'><span class='line'>この状態で差分を確認すると「`id: 101`の`param_d`をいうパラメータ」が更新されたことが一目瞭然ですね！
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p> diff git-diff
+diff &#8211;git a/hogehoge.csv b/hogehoge.csv
+index c8dbd17..37f4ff5 100644
+&#8212; a/hogehoge.csv
++++ b/hogehoge.csv
+@@ -3,7 +3,7 @@ - id: &#8220;101&#8221;
+   param_a: &#8220;314&#8221;
+   param_b: &#8220;159&#8221;
+   param_c: &#8220;265&#8221;
+-  param_d: &#8220;358&#8221;
++  param_d: &#8220;359&#8221;
+   param_e: &#8220;979&#8221;
+ - id: &#8220;102&#8221;
+   name: fuga
+&#8220;`</p>
+
+<p><code>csv2yaml</code>を作るときに「<code>id</code>という名前のキーを必ず最初にする」としたのはこの機能を使うためです。
+僕のユースケースでは<code>id</code>がわかれば十分なことがほとんどですが、
+場合によってはもっと別の情報の方がいいかもしれませんね。</p>
+
+<p>まだ設定したばっかりなので本当に有用かはよくわかってないですが、しばらくこの設定で試してみようと思います。</p>
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="http://qiita.com/YasuOza/items/c472f803dab51b7d4f51">gitのdiffを見やすく表示する</a></li>
+<li><a href="http://git-scm.com/docs/gitattributes">gitattributes</a></li>
+</ul>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[git で管理しているリポジトリの各ブランチの中身をそれぞれ個別のディレクトリにエクスポートする(git-archive版)]]></title>
+    <link href="http://shogo82148.github.io/blog/2015/03/20/git-pack-branch/"/>
+    <updated>2015-03-20T18:38:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2015/03/20/git-pack-branch</id>
+    <content type="html"><![CDATA[<p><a href="http://moznion.hatenadiary.com/entry/2015/03/20/175035">git で管理しているリポジトリの各ブランチの中身をそれぞれ個別のディレクトリにエクスポートする</a> を読んで、
+git-archive を使うともう少しシンプルに書けるんじゃないかと思ってやってみた。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>git branch | sed -e <span class="s1">&#39;s/^[\* ]*//g&#39;</span> | xargs -n1 -I% sh -c <span class="s1">&#39;git archive --prefix=%/ % | tar x&#39;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>.gitconfig とかでエイリアスを設定しておくといいんじゃないでしょうか</p>
+
+<p>以上</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[map[string]Hoge or map[string]*Hoge ?]]></title>
@@ -2529,326 +2734,6 @@ autoconfは2014/05/18現在2.69が最新版ですが、travis-ciは2.68がイン
 バージョン指定を削除するか、古いバージョンに書き換えましょう。</p>
 
 <p>C++のお作法がよくわかっていないですが、ちょっとずつ頑張っていきます。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Redis::Fast 0.07 をリリースしました！]]></title>
-    <link href="http://shogo82148.github.io/blog/2014/05/17/redis-fast-0-dot-07-released/"/>
-    <updated>2014-05-17T16:27:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2014/05/17/redis-fast-0-dot-07-released</id>
-    <content type="html"><![CDATA[<p><a href="https://metacpan.org/release/Redis-Fast">Redis::Fast 0.07</a> をリリースしました。
-現時点での最新バージョンである Redis.pm 1.974 とコンパチブルになります。</p>
-
-<!-- More -->
-
-
-<p>主な修正点は以下の通りです</p>
-
-<ul>
-<li>Redis Sentinel 対応</li>
-<li>トランザクション内での再接続禁止</li>
-<li>再接続にDB選択し直し</li>
-</ul>
-
-
-<h2>Redis Sentinel 対応</h2>
-
-<p>Redis Sentinel というのは自動フェールオーバーの仕組みらしいです。
-(ソースはコピペしたきただけで仕組みはあまり理解していない)
-どんなものかは本家ドキュメントや実際に検証してみた人の記事をご参照ください。</p>
-
-<ul>
-<li><a href="http://redis.io/topics/sentinel">Redis Sentinel Documentation</a></li>
-<li><a href="http://chrone.hatenablog.com/entry/2014/02/28/212616">Redis 2.8 の Sentinel の動きを検証してみた</a></li>
-<li><a href="http://blog.kenjiskywalker.org/blog/2013/01/24/redis-sentiel-howto/">Redis Sentinelを動かしてみた</a></li>
-</ul>
-
-
-<p>前から移植作業は進めてたのですが、本家 Redis.pm でもテストがコケたりしてちょっと不安だったのでリリースを見送ってました。
-今日 Redis.pm の安定版がリリースされたのでこっちも追従しますよ！！</p>
-
-<p>コネクションを作るときに <code>sentinels</code> を渡すと Redis Sentinel から接続情報を取ってきてくれます。
-一緒に <code>reconnect</code> を設定しておいてあげると、Masterに何かあった時に接続情報を再取得→
-自動的に Slave へフェールオーバーしてくれます。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="nn">Redis::</span><span class="n">Fast</span><span class="p">;</span>
-</span><span class='line'><span class="k">my</span> <span class="nv">$redis</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">Fast</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span>
-</span><span class='line'>    <span class="n">sentinels</span> <span class="o">=&gt;</span> <span class="p">[</span> <span class="s">&#39;127.0.0.1:26379&#39;</span> <span class="p">],</span>
-</span><span class='line'>  <span class="n">service</span> <span class="o">=&gt;</span> <span class="s">&#39;mymaster&#39;</span><span class="p">,</span>
-</span><span class='line'>  <span class="n">reconnect</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span>
-</span><span class='line'><span class="p">);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>トランザクション内での再接続禁止</h2>
-
-<p>Redisにも簡単な<a href="http://redis.io/topics/transactions">トランザクション機能</a>があって、
-複数の命令を同時に実行することができます。
-トランザクション中に再接続が発生するとトランザクションがリセットされてしまうので、
-接続前の命令を再投入する必要があるのですが、Redis.pm/Redis::Fastの再接続処理はそこまで面倒を見てくれません。
-以前のバージョンではそこの面倒を見てくれないのに適当に処理してしまい、
-トランザクションが中途半端なまま実行されてしました。</p>
-
-<p>0.07 からはトランザクション内では再接続を行わずに例外を吐きます。
-トランザクションを最初からやり直すなど、よしなに対応してください。</p>
-
-<h2>再接続時にDB選択し直し</h2>
-
-<p>一つのRedis-Serverが複数のデータベースを持てるようになっていて、
-<a href="http://redis.io/commands/select">SELECT</a>コマンドを使って切り替え可能です。
-今までのバージョンでは、SELECTコマンドでデータベースを切り替えていても、
-再接続時にリセットされてしまう問題がありました。
-0.07では再接続の中でSELECTを実行し直すので、再接続を気にする必要はありません。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Androidのバイナリファイルを解析するgoのライブラリ]]></title>
-    <link href="http://shogo82148.github.io/blog/2014/05/07/androidbinary/"/>
-    <updated>2014-05-07T13:29:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2014/05/07/androidbinary</id>
-    <content type="html"><![CDATA[<p>Androidのアプリの実態はzipファイルなのでunzipすれば簡単に中身を見ることができるわけですが、
-開いてもバイナリファイルが入っているだけでよくわかりません。
-AndroidSDKに付属しているaaptというツールを使えば読めるんだけどインストールが大変で苦しんでいる人がいたので、
-お手軽に解析できるgolangのライブラリを書いてみました。</p>
-
-<!-- More -->
-
-
-<h2>使い方</h2>
-
-<h3>go getしてくる</h3>
-
-<p><a href="https://github.com/shogo82148/androidbinary">githubのレポジトリ</a> からダウンロードしてきます。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>go get github.com/shogo82148/androidbinary
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h3>AndroidManifest.xmlを解析する</h3>
-
-<p><code>io.ReaderAt</code>インターフェースを満たすオブジェクトを<code>androidbinary.NewXMLFile</code>に渡すと解析してくれます。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="nx">f</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Open</span><span class="p">(</span><span class="s">&quot;AndroidManifest.xml&quot;</span><span class="p">)</span>
-</span><span class='line'><span class="nx">xmlFile</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">androidbinary</span><span class="p">.</span><span class="nx">NewXMLFile</span><span class="p">(</span><span class="nx">f</span><span class="p">)</span>
-</span><span class='line'><span class="nx">reader</span> <span class="o">:=</span> <span class="nx">xmlFile</span><span class="p">.</span><span class="nx">Reader</span><span class="p">()</span>
-</span><span class='line'><span class="c1">// reader を読むと普通のXMLファイルとして読める</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h3>resources.arscを解析する</h3>
-
-<p>アプリ名などの設定はAndroidManifest.xmlには直接書かれておらず、
-リソースファイルに書いてあることがほとんどです(開発者がよほどものぐさでなければ)。
-リソースの情報はapk内のresources.arscに書かれているので、
-このファイルを読む機能もついてます。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="nx">f</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Open</span><span class="p">(</span><span class="s">&quot;resources.arsc&quot;</span><span class="p">)</span>
-</span><span class='line'><span class="nx">tableFile</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">androidbinary</span><span class="p">.</span><span class="nx">NewTableFile</span><span class="p">(</span><span class="nx">f</span><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">// ID 0x7F040000 に対応するリソースを読む</span>
-</span><span class='line'><span class="nx">config</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">androidbinary</span><span class="p">.</span><span class="nx">ResTableConfig</span><span class="p">{}</span>
-</span><span class='line'><span class="nx">val</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">tableFile</span><span class="p">.</span><span class="nx">GetResource</span><span class="p">(</span><span class="nx">androidbinary</span><span class="p">.</span><span class="nx">ResId</span><span class="p">(</span><span class="mh">0x7f040000</span><span class="p">),</span> <span class="nx">config</span><span class="p">)</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>アプリ名はロケールによって変わったりするので、
-<code>config</code>で設定できます。
-例えば日本語の名前を取得したい場合はこんな感じ。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="c1">// ID 0x7F040000 に対応するリソース(日本語)を読む</span>
-</span><span class='line'><span class="nx">config</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">androidbinary</span><span class="p">.</span><span class="nx">ResTableConfig</span><span class="p">{}</span>
-</span><span class='line'><span class="nx">config</span><span class="p">.</span><span class="nx">Language</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="p">=</span> <span class="sc">&#39;j&#39;</span>
-</span><span class='line'><span class="nx">config</span><span class="p">.</span><span class="nx">Language</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="p">=</span> <span class="sc">&#39;a&#39;</span>
-</span><span class='line'><span class="nx">val</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">tableFile</span><span class="p">.</span><span class="nx">GetResource</span><span class="p">(</span><span class="nx">androidbinary</span><span class="p">.</span><span class="nx">ResId</span><span class="p">(</span><span class="mh">0x7f040000</span><span class="p">),</span> <span class="nx">config</span><span class="p">)</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h3>サンプルコード</h3>
-
-<p>apkを解析してアプリの日本語名を取得する例。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-<span class='line-number'>37</span>
-<span class='line-number'>38</span>
-<span class='line-number'>39</span>
-<span class='line-number'>40</span>
-<span class='line-number'>41</span>
-<span class='line-number'>42</span>
-<span class='line-number'>43</span>
-<span class='line-number'>44</span>
-<span class='line-number'>45</span>
-<span class='line-number'>46</span>
-<span class='line-number'>47</span>
-<span class='line-number'>48</span>
-<span class='line-number'>49</span>
-<span class='line-number'>50</span>
-<span class='line-number'>51</span>
-<span class='line-number'>52</span>
-<span class='line-number'>53</span>
-<span class='line-number'>54</span>
-<span class='line-number'>55</span>
-<span class='line-number'>56</span>
-<span class='line-number'>57</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
-</span><span class='line'>
-</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
-</span><span class='line'>  <span class="s">&quot;archive/zip&quot;</span>
-</span><span class='line'>  <span class="s">&quot;bytes&quot;</span>
-</span><span class='line'>  <span class="s">&quot;encoding/xml&quot;</span>
-</span><span class='line'>  <span class="s">&quot;fmt&quot;</span>
-</span><span class='line'>  <span class="s">&quot;github.com/shogo82148/androidbinary&quot;</span>
-</span><span class='line'>  <span class="s">&quot;io/ioutil&quot;</span>
-</span><span class='line'>  <span class="s">&quot;strconv&quot;</span>
-</span><span class='line'><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">type</span> <span class="nx">XMLManifest</span> <span class="kd">struct</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">XMLName</span>      <span class="nx">xml</span><span class="p">.</span><span class="nx">Name</span>          <span class="s">`xml:&quot;manifest&quot;`</span>
-</span><span class='line'>  <span class="nx">Applications</span> <span class="p">[]</span><span class="o">*</span><span class="nx">XMLApplication</span> <span class="s">`xml:&quot;application&quot;`</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">type</span> <span class="nx">XMLApplication</span> <span class="kd">struct</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">XMLName</span> <span class="nx">xml</span><span class="p">.</span><span class="nx">Name</span> <span class="s">`xml:&quot;application&quot;`</span>
-</span><span class='line'>  <span class="nx">Label</span>   <span class="kt">string</span>   <span class="s">`xml:&quot;http://schemas.android.com/apk/res/android label,attr&quot;`</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">r</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">zip</span><span class="p">.</span><span class="nx">OpenReader</span><span class="p">(</span><span class="s">&quot;sample.apk&quot;</span><span class="p">)</span>
-</span><span class='line'>  <span class="k">defer</span> <span class="nx">r</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="c1">// read manifest and resource</span>
-</span><span class='line'>  <span class="kd">var</span> <span class="nx">xmlFile</span> <span class="o">*</span><span class="nx">androidbinary</span><span class="p">.</span><span class="nx">XMLFile</span>
-</span><span class='line'>  <span class="kd">var</span> <span class="nx">tableFile</span> <span class="o">*</span><span class="nx">androidbinary</span><span class="p">.</span><span class="nx">TableFile</span>
-</span><span class='line'>  <span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">f</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">r</span><span class="p">.</span><span class="nx">File</span> <span class="p">{</span>
-</span><span class='line'>      <span class="k">switch</span> <span class="nx">f</span><span class="p">.</span><span class="nx">Name</span> <span class="p">{</span>
-</span><span class='line'>      <span class="k">case</span> <span class="s">&quot;AndroidManifest.xml&quot;</span><span class="p">:</span>
-</span><span class='line'>          <span class="nx">rc</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">f</span><span class="p">.</span><span class="nx">Open</span><span class="p">()</span>
-</span><span class='line'>          <span class="nx">buf</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">ioutil</span><span class="p">.</span><span class="nx">ReadAll</span><span class="p">(</span><span class="nx">rc</span><span class="p">)</span>
-</span><span class='line'>          <span class="nx">xmlFile</span><span class="p">,</span> <span class="nx">_</span> <span class="p">=</span> <span class="nx">androidbinary</span><span class="p">.</span><span class="nx">NewXMLFile</span><span class="p">(</span><span class="nx">bytes</span><span class="p">.</span><span class="nx">NewReader</span><span class="p">(</span><span class="nx">buf</span><span class="p">))</span>
-</span><span class='line'>          <span class="nx">rc</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
-</span><span class='line'>      <span class="k">case</span> <span class="s">&quot;resources.arsc&quot;</span><span class="p">:</span>
-</span><span class='line'>          <span class="nx">rc</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">f</span><span class="p">.</span><span class="nx">Open</span><span class="p">()</span>
-</span><span class='line'>          <span class="nx">buf</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">ioutil</span><span class="p">.</span><span class="nx">ReadAll</span><span class="p">(</span><span class="nx">rc</span><span class="p">)</span>
-</span><span class='line'>          <span class="nx">tableFile</span><span class="p">,</span> <span class="nx">_</span> <span class="p">=</span> <span class="nx">androidbinary</span><span class="p">.</span><span class="nx">NewTableFile</span><span class="p">(</span><span class="nx">bytes</span><span class="p">.</span><span class="nx">NewReader</span><span class="p">(</span><span class="nx">buf</span><span class="p">))</span>
-</span><span class='line'>          <span class="nx">rc</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
-</span><span class='line'>      <span class="p">}</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="c1">// parse xml</span>
-</span><span class='line'>  <span class="nx">decoder</span> <span class="o">:=</span> <span class="nx">xml</span><span class="p">.</span><span class="nx">NewDecoder</span><span class="p">(</span><span class="nx">xmlFile</span><span class="p">.</span><span class="nx">Reader</span><span class="p">())</span>
-</span><span class='line'>  <span class="nx">xmlManifest</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">XMLManifest</span><span class="p">{}</span>
-</span><span class='line'>  <span class="nx">decoder</span><span class="p">.</span><span class="nx">Decode</span><span class="p">(</span><span class="nx">xmlManifest</span><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="c1">// get application label</span>
-</span><span class='line'>  <span class="nx">labelId</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">strconv</span><span class="p">.</span><span class="nx">ParseInt</span><span class="p">(</span><span class="nx">xmlManifest</span><span class="p">.</span><span class="nx">Applications</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">Label</span><span class="p">[</span><span class="mi">3</span><span class="p">:],</span> <span class="mi">16</span><span class="p">,</span> <span class="mi">32</span><span class="p">)</span>
-</span><span class='line'>  <span class="nx">config</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">androidbinary</span><span class="p">.</span><span class="nx">ResTableConfig</span><span class="p">{}</span>
-</span><span class='line'>  <span class="nx">config</span><span class="p">.</span><span class="nx">Language</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="p">=</span> <span class="sc">&#39;j&#39;</span>
-</span><span class='line'>  <span class="nx">config</span><span class="p">.</span><span class="nx">Language</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="p">=</span> <span class="sc">&#39;a&#39;</span>
-</span><span class='line'>  <span class="nx">label</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">tableFile</span><span class="p">.</span><span class="nx">GetResource</span><span class="p">(</span><span class="nx">androidbinary</span><span class="p">.</span><span class="nx">ResId</span><span class="p">(</span><span class="nx">labelId</span><span class="p">),</span> <span class="nx">config</span><span class="p">)</span>
-</span><span class='line'>  <span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;Application Name:&quot;</span><span class="p">,</span> <span class="nx">label</span><span class="p">)</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>エラー処理とか完全に省いているので上手く補ってください。</p>
-
-<h2>制限事項</h2>
-
-<p>GW中頑張ったけど途中で力尽きたので、今のところ以下のような制限があります。</p>
-
-<ul>
-<li>リソース名を扱えない
-
-<ul>
-<li>普通AndroidManifest.xmlにリソースを埋め込むときは<code>@string/app_name</code>みたいな名前を埋め込みますが、リソースファイルとの連携機能がないため<code>@0x7F04000000</code>のような数値を返します</li>
-<li>resources.arsc からリソース名を読み取ったり、リソース名からリソースを取得する機能はありません</li>
-</ul>
-</li>
-<li>configの設定が一部しか対応していない
-
-<ul>
-<li>ロケール、画面サイズ、SDKバージョン等にしか対応してません</li>
-<li>IMEの設定や画面の細かいオプションとかも指定はできるけど、<code>GetResource</code>が解釈してくれないので誤った結果を返すかも</li>
-</ul>
-</li>
-<li>リソースタイプ
-
-<ul>
-<li>文字列、整数、ブーリアン値にしか対応してません</li>
-<li>string-array とかいうのとかあったりするけど、そんなの知らない</li>
-</ul>
-</li>
-</ul>
-
-
-<p>いろいろ制限はありますが、アプリ名を読み取ったり、パーミッションを解析するくらいはできるんじゃないですかね。
-golang初心者なのでイケてないところがあったら教えて下さい。</p>
-
-<h2>参考</h2>
-
-<ul>
-<li><a href="http://dsas.blog.klab.org/archives/52011424.html">エンコードされた AndroidManifest.xml を読む</a></li>
-<li><a href="https://gist.github.com/cielavenir/4365521">ruby_apk Android::Resource can relate string pool (partially)</a></li>
-</ul>
-
 ]]></content>
   </entry>
   
