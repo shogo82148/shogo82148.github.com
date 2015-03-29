@@ -5,12 +5,28 @@
 <!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
 <head>
   <meta charset="utf-8">
-  <title>C#のconditional Attributeのコンパイル結果を見てみる - Shogo's Blog</title>
+  <title>名前付き引数とオプション引数とオーバーロードを同時に使うとUnityが死ぬ - Shogo's Blog</title>
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="description" content="C#で「ある環境では関数の定義ごと消したい」みたいな要件があって、
-そういう用途にconditinal attributeが使えるのかなーと話題のあがったので、実際に確認してみました。 結論から言えばできないのですが、せっかく調べたのでメモとして残しておきます。 conditional &hellip;">
+  <meta name="description" content="オーバーロードの優先順位付けが少しおかしくて、
+名前付き引数とオプション引数と一緒に使うと死ぬ場合があるというお話。
+ぴーちんが昨日言ってたやつ。
+いんたーねっつにも乗っけておく。 問題となるのは以下のようなコード。 1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15 &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -19,7 +35,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   
-  <link rel="canonical" href="http://shogo82148.github.io/blog/2014/05/29/conditional-attribute/">
+  <link rel="canonical" href="http://shogo82148.github.io/blog/2015/03/29/unity-internal-compiler-error/">
   <link href="/favicon.png" rel="icon">
   <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
   <script src="/javascripts/modernizr-2.0.js"></script>
@@ -100,7 +116,7 @@ Hatena.Star.SiteConfig = {
   
   <header>
     
-      <h1 class="entry-title">C#のconditional Attributeのコンパイル結果を見てみる</h1>
+      <h1 class="entry-title">名前付き引数とオプション引数とオーバーロードを同時に使うとUnityが死ぬ</h1>
     
     
       <p class="meta">
@@ -116,24 +132,22 @@ Hatena.Star.SiteConfig = {
   
 
 
-<time datetime="2014-05-29T19:20:00+09:00" pubdate data-updated="true">May 29<span>th</span>, 2014</time>
+<time datetime="2015-03-29T12:13:00+09:00" pubdate data-updated="true">Mar 29<span>th</span>, 2015</time>
         
       </p>
     
   </header>
 
 
-<div class="entry-content"><p>C#で「ある環境では関数の定義ごと消したい」みたいな要件があって、
-そういう用途にconditinal attributeが使えるのかなーと話題のあがったので、実際に確認してみました。</p>
-
-<p>結論から言えばできないのですが、せっかく調べたのでメモとして残しておきます。</p>
+<div class="entry-content"><p>オーバーロードの優先順位付けが少しおかしくて、
+名前付き引数とオプション引数と一緒に使うと死ぬ場合があるというお話。
+ぴーちんが昨日言ってたやつ。
+いんたーねっつにも乗っけておく。</p>
 
 <!-- More -->
 
 
-<h2>conditional attribute</h2>
-
-<p>「デバッグ時のみにしか実行して欲しくない関数」みたいなものを定義するための機能です。</p>
+<p>問題となるのは以下のようなコード。</p>
 
 <figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
@@ -150,52 +164,79 @@ Hatena.Star.SiteConfig = {
 <span class='line-number'>13</span>
 <span class='line-number'>14</span>
 <span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-</pre></td><td class='code'><pre><code class='csharp'><span class='line'><span class="k">using</span> <span class="nn">System</span><span class="p">;</span>
-</span><span class='line'><span class="k">using</span> <span class="nn">System.IO</span><span class="p">;</span>
-</span><span class='line'><span class="k">using</span> <span class="nn">System.Diagnostics</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">namespace</span> <span class="nn">ConditionalAttributeTest</span>
+</pre></td><td class='code'><pre><code class='csharp'><span class='line'><span class="k">class</span> <span class="nc">MainClass</span>
 </span><span class='line'><span class="p">{</span>
-</span><span class='line'>    <span class="k">class</span> <span class="nc">MainClass</span>
+</span><span class='line'>    <span class="k">void</span> <span class="nf">Foo</span> <span class="p">(</span><span class="kt">int</span> <span class="n">fuga</span><span class="p">)</span>
 </span><span class='line'>    <span class="p">{</span>
-</span><span class='line'>        <span class="k">public</span> <span class="k">static</span> <span class="k">void</span> <span class="nf">Main</span> <span class="p">(</span><span class="kt">string</span><span class="p">[]</span> <span class="n">args</span><span class="p">)</span>
-</span><span class='line'>        <span class="p">{</span>
-</span><span class='line'>            <span class="n">Log</span><span class="p">(</span><span class="s">&quot;fugu&quot;</span><span class="p">);</span>
-</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>    <span class="p">}</span>
 </span><span class='line'>
-</span><span class='line'><span class="na">        [ConditionalAttribute(&quot;DEBUG&quot;)]</span>
-</span><span class='line'>        <span class="k">public</span> <span class="k">static</span> <span class="k">void</span> <span class="nf">Log</span><span class="p">(</span><span class="kt">string</span> <span class="n">message</span><span class="p">)</span>
-</span><span class='line'>        <span class="p">{</span>
-</span><span class='line'>            <span class="n">Console</span><span class="p">.</span><span class="n">WriteLine</span><span class="p">(</span><span class="n">message</span><span class="p">);</span>
-</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>    <span class="k">void</span> <span class="nf">Foo</span> <span class="p">(</span><span class="kt">string</span> <span class="n">hoge</span><span class="p">,</span> <span class="kt">int</span> <span class="n">fuga</span> <span class="p">=</span> <span class="m">10</span><span class="p">)</span>
+</span><span class='line'>    <span class="p">{</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">void</span> <span class="nf">Bar</span><span class="p">()</span>
+</span><span class='line'>    <span class="p">{</span>
+</span><span class='line'>        <span class="n">Foo</span> <span class="p">(</span><span class="n">fuga</span><span class="p">:</span> <span class="m">20</span><span class="p">);</span>
 </span><span class='line'>    <span class="p">}</span>
 </span><span class='line'><span class="p">}</span>
 </span></code></pre></td></tr></table></div></figure>
 
 
-<p>こんなふうに書いておくと <code>DEBUG</code> シンボルが定義されている時にだけ<code>Log</code>の呼び出しが行われます。</p>
+<p>このコードは以下のような例外を吐いて死ぬ。</p>
 
 <figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
 <span class='line-number'>4</span>
 <span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>&gt; mcs -d:DEBUG ConditionalAttributeTest.cs
-</span><span class='line'>&gt; mono ConditionalAttributeTest
-</span><span class='line'>fugu
-</span><span class='line'>&gt; mcs ConditionalAttributeTest.cs
-</span><span class='line'>&gt; mono ConditionalAttributeTest
-</span></code></pre></td></tr></table></div></figure>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>Internal compiler error. See the console log for more information. output was:
+</span><span class='line'>Unhandled Exception: Mono.CSharp.InternalErrorException: Internal error
+</span><span class='line'>  at Mono.CSharp.MethodGroupExpr.IsApplicable (Mono.CSharp.ResolveContext ec, Mono.CSharp.Arguments& arguments, Int32 arg_count, System.Reflection.MethodBase& method, System.Boolean& params_expanded_form) [0x00000] in &lt;filename unknown&gt;:0 
+</span><span class='line'>  at Mono.CSharp.MethodGroupExpr.OverloadResolve (Mono.CSharp.ResolveContext ec, Mono.CSharp.Arguments& Arguments, Boolean may_fail, Location loc) [0x00000] in &lt;filename unknown&gt;:0 
+</span><span class='line'>  at Mono.CSharp.Invocation.DoResolveOverload (Mono.CSharp.ResolveContext ec) [0x00000] in &lt;filename unknown&gt;:0 
+</span><span class='line'>  at Mono.CSharp.Invocation.DoResolve (Mono.CSharp.ResolveContext ec) [0x00000] in &lt;filename unknown&gt;:0 
+</span><span class='line'>  at Mono.CSharp.Expression.Resolve (Mono.CSharp.ResolveContext ec, ResolveFlags flags) [0x00000] in &lt;filename unknown&gt;:0 
+</span><span class='line'>  at Mono.CSharp.Expression.Resolve (Mono.CSharp.ResolveContext ec) [0x00000] in &lt;filename unknown&gt;:0 
+</span><span class='line'>  at Mono.CSharp.ExpressionStatement.ResolveStatement (Mono.CSharp.BlockContext ec) [0x00000] in &lt;filename unknown&gt;:0 
+</span><span class='line'>  at Mono.CSharp.StatementExpression.Resolve (Mono.CSharp.BlockContext ec) [0x00000] in &lt;filename unknown&gt;:0 
+</span><span class='line'>  at Mono.CSharp.Block.Resolve (Mono.CSharp.BlockContext ec) [0x00000] in &lt;filename unknown&gt;:0 
+</span><span class='line'>  at Mono.CSharp.ToplevelBlock.Resolve (Mono.CSharp.FlowBranching parent, Mono.CSharp.BlockContext rc, Mono.CSharp.ParametersCompiled ip, IMethodData md) [0x00000] in &lt;filename unknown&gt;:0 
+</span><span class='line'>
+</span><span class='line'>
+</span><span class='line'>All compiler errors have to be fixed before you can enter playmode!
+</span><span class='line'>UnityEditor.SceneView:ShowCompileErrorNotification()</span></code></pre></td></tr></table></div></figure>
 
 
-<h2>逆アセンブルしてみる</h2>
+<p>内部エラーだからどこが間違っているのか全くわからないという・・・。</p>
 
-<p>DEBUG付きでコンパイルした結果を逆アセンブルしてみます。</p>
+<p>このエラーに遭遇したのはUnity4.5.3だけど、
+Unity5.0.0f4でも同じように死んだ。</p>
+
+<p><code>Foo (fuga: 20);</code> は <code>void Foo (int fuga)</code> を読んで欲しいけど、
+Unityがなぜか <code>void Foo (string hoge, int fuga = 10)</code> を呼び出してしまい、
+コード生成時にエラーで落ちたんじゃないかと予想している。</p>
+
+<ul>
+<li>引数でオプションを取るのをやめる <code>void Foo (string hoge, int fuga)</code></li>
+<li>引数の名前を変える <code>void Foo (string hoge, int fugaa = 10)</code></li>
+</ul>
+
+
+<p>という対処をすると大丈夫っぽい。</p>
+
+<p>メソッド名自体を変えるべきではって気もするけど、
+どうしてもインターフェースを変えたくなったら以下のようにオプション引数を使わずに、すべてオーバーロードで解決するとかかなあ。</p>
 
 <figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
@@ -217,98 +258,28 @@ Hatena.Star.SiteConfig = {
 <span class='line-number'>18</span>
 <span class='line-number'>19</span>
 <span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>// ...前略
-</span><span class='line'>// method line 2
-</span><span class='line'>.method public static hidebysig
-</span><span class='line'>    default void Main (string[] args)  cil managed
-</span><span class='line'>{
-</span><span class='line'>    // Method begins at RVA 0x2058
-</span><span class='line'>    .entrypoint
-</span><span class='line'>    // Code size 11 (0xb)
-</span><span class='line'>    .maxstack 8
-</span><span class='line'>    IL_0000:  ldstr "fugu"
-</span><span class='line'>    IL_0005:  call void class ConditionalAttributeTest.MainClass::Log(string)
-</span><span class='line'>    IL_000a:  ret
-</span><span class='line'>} // end of method MainClass::Main
+</pre></td><td class='code'><pre><code class='csharp'><span class='line'><span class="k">class</span> <span class="nc">MainClass</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="k">void</span> <span class="nf">Foo</span> <span class="p">(</span><span class="kt">int</span> <span class="n">fuga</span><span class="p">)</span>
+</span><span class='line'>    <span class="p">{</span>
+</span><span class='line'>    <span class="p">}</span>
 </span><span class='line'>
-</span><span class='line'>// method line 3
-</span><span class='line'>.method public static hidebysig
-</span><span class='line'>    default void Log (string message)  cil managed
-</span><span class='line'>{
-</span><span class='line'>    .custom instance void class [mscorlib]System.Diagnostics.ConditionalAttribute::'.ctor'(string) =  (01 00 05 44 45 42 55 47 00 00 ) // ...DEBUG..
+</span><span class='line'>    <span class="k">void</span> <span class="nf">Foo</span> <span class="p">(</span><span class="kt">string</span> <span class="n">hoge</span><span class="p">)</span>
+</span><span class='line'>    <span class="p">{</span>
+</span><span class='line'>      <span class="n">Foo</span> <span class="p">(</span><span class="n">hoge</span><span class="p">,</span> <span class="m">10</span><span class="p">);</span>
+</span><span class='line'>    <span class="p">}</span>
 </span><span class='line'>
-</span><span class='line'>    // Method begins at RVA 0x2064
-</span><span class='line'>    // Code size 7 (0x7)
-</span><span class='line'>    .maxstack 8
-</span><span class='line'>    IL_0000:  ldarg.0
-</span><span class='line'>    IL_0001:  call void class [mscorlib]System.Console::WriteLine(string)
-</span><span class='line'>    IL_0006:  ret
-</span><span class='line'>}</span></code></pre></td></tr></table></div></figure>
-
-
-<p>DEBUGを付けなかったときとのDIFFをとってみます。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-</pre></td><td class='code'><pre><code class='diff'><span class='line'>15c15
-</span><span class='line'>&lt; .module ConditionalAttributeTest.exe // GUID = {A54F3644-5083-4EC7-B846-8A354DD113AA}
-</span><span class='line'><span class="gd">---</span>
-</span><span class='line'>&gt; .module ConditionalAttributeTest.exe // GUID = {436FE462-17D6-4FDB-9AA7-15DA92658168}
-</span><span class='line'>42c42
-</span><span class='line'>&lt;  // Code size 11 (0xb)
-</span><span class='line'><span class="gd">---</span>
-</span><span class='line'>&gt;  // Code size 1 (0x1)
-</span><span class='line'>44,46c44
-</span><span class='line'>&lt;  IL_0000:  ldstr &quot;fugu&quot;
-</span><span class='line'>&lt;  IL_0005:  call void class ConditionalAttributeTest.MainClass::Log(string)
-</span><span class='line'>&lt;  IL_000a:  ret
-</span><span class='line'><span class="gd">---</span>
-</span><span class='line'>&gt;  IL_0000:  ret
-</span><span class='line'>55c53
-</span><span class='line'>&lt;         // Method begins at RVA 0x2064
-</span><span class='line'><span class="gd">---</span>
-</span><span class='line'>&gt;         // Method begins at RVA 0x205a
+</span><span class='line'>    <span class="k">void</span> <span class="nf">Foo</span> <span class="p">(</span><span class="kt">string</span> <span class="n">hoge</span><span class="p">,</span> <span class="kt">int</span> <span class="n">fuga</span><span class="p">)</span>
+</span><span class='line'>    <span class="p">{</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">void</span> <span class="nf">Bar</span><span class="p">()</span>
+</span><span class='line'>    <span class="p">{</span>
+</span><span class='line'>        <span class="n">Foo</span> <span class="p">(</span><span class="n">fuga</span><span class="p">:</span> <span class="m">20</span><span class="p">);</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
 </span></code></pre></td></tr></table></div></figure>
 
-
-<p>変わったのは呼び出し側であるmain関数だけで、ConditionalAttributeがついたメソッド自体はDEBUGの有無に関係なく同じコードが吐かれます。</p>
-
-<h2>SEE ALSO</h2>
-
-<p>例によってこのことはドキュメントにバッチリ載っております。</p>
-
-<ul>
-<li><a href="http://msdn.microsoft.com/ja-jp/library/system.diagnostics.conditionalattribute.aspx">ConditionalAttribute クラス</a></li>
-</ul>
-
-
-<blockquote><p>指定した条件付きコンパイルのシンボルが定義されていない限り、メソッド呼び出しまたは属性を無視するようにコンパイラに指示します。</p></blockquote>
-
-<p>ドキュメントには「呼び出しを無視する」としか書かれてないので、定義がなくなるわけではないですね。
-そもそも関数定義がなくなったら、リンク時に Conditional Attribute があるかないか確認する方法がないじゃないですか・・・。</p>
 </div>
 
 
@@ -331,12 +302,12 @@ Hatena.Star.SiteConfig = {
   
 
 
-<time datetime="2014-05-29T19:20:00+09:00" pubdate data-updated="true">May 29<span>th</span>, 2014</time>
+<time datetime="2015-03-29T12:13:00+09:00" pubdate data-updated="true">Mar 29<span>th</span>, 2015</time>
       
 
 <span class="categories">
   
-    <a class='category' href='/blog/categories/csharp/'>csharp</a>
+    <a class='category' href='/blog/categories/csharp/'>csharp</a>, <a class='category' href='/blog/categories/unity/'>unity</a>
   
 </span>
 
@@ -345,10 +316,10 @@ Hatena.Star.SiteConfig = {
     
       <div class="sharing">
   
-  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.io/blog/2014/05/29/conditional-attribute/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.io/blog/2015/03/29/unity-internal-compiler-error/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
   
   
-  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.io/blog/2014/05/29/conditional-attribute/" data-via="shogo82148" data-counturl="http://shogo82148.github.io/blog/2014/05/29/conditional-attribute/" >Tweet</a>
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.io/blog/2015/03/29/unity-internal-compiler-error/" data-via="shogo82148" data-counturl="http://shogo82148.github.io/blog/2015/03/29/unity-internal-compiler-error/" >Tweet</a>
   
   
   <div class="g-plusone" data-size="medium"></div>
@@ -361,10 +332,8 @@ Hatena.Star.SiteConfig = {
     
     <p class="meta">
       
-        <a class="basic-alignment left" href="/blog/2014/05/27/using-statement-without-instantiating/" title="Previous Post: 初期化なしのusing文ってOK？">&laquo; 初期化なしのusing文ってOK？</a>
+        <a class="basic-alignment left" href="/blog/2015/03/29/travis-supports-csharp/" title="Previous Post: travisがいつのまにやらcsharpをサポートしていた件">&laquo; travisがいつのまにやらcsharpをサポートしていた件</a>
       
-      
-        <a class="basic-alignment right" href="/blog/2014/06/01/anti-sizukatter/" title="Next Post: キレイになったコトバとハートを元に戻すツール作った">キレイになったコトバとハートを元に戻すツール作った &raquo;</a>
       
     </p>
   </footer>
@@ -476,8 +445,8 @@ Hatena.Star.SiteConfig = {
       
         
         // var disqus_developer = 1;
-        var disqus_identifier = 'http://shogo82148.github.io/blog/2014/05/29/conditional-attribute/';
-        var disqus_url = 'http://shogo82148.github.io/blog/2014/05/29/conditional-attribute/';
+        var disqus_identifier = 'http://shogo82148.github.io/blog/2015/03/29/unity-internal-compiler-error/';
+        var disqus_url = 'http://shogo82148.github.io/blog/2015/03/29/unity-internal-compiler-error/';
         var disqus_script = 'embed.js';
       
     (function () {
