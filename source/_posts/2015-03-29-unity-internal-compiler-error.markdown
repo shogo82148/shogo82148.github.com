@@ -93,3 +93,8 @@ class MainClass
     }
 }
 ```
+
+
+## 追記
+
+[ぴーちんも書いてくれた](http://pchin.hatenablog.com/entry/2015/03/30/093130)
