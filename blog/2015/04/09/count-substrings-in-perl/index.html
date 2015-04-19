@@ -1,0 +1,422 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Perlで文字列の出現回数を調べる - Shogo's Blog</title>
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="description" content="Perlで特定の文字列の出現回数を調べたくなって、調べてみたメモ。 ググるとすぐに見つかった。
+perlで指定文字列の出現回数を取得する(正規表現) 指定文字列の出現回数は正規表現を使って $count++ while($str =~ m/$pattern/g); もしくは $count &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://shogo82148.github.io/blog/2015/04/09/count-substrings-in-perl/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  <link href="/atom.xml" rel="alternate" title="Shogo's Blog" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-4526627-4']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+  <script type="text/javascript" src="http://s.hatena.ne.jp/js/HatenaStar.js"></script>
+<script type="text/javascript">
+Hatena.Star.Token = '0da43945db72b59fd47eb24198fc7a0293c0191f';
+Hatena.Star.SiteConfig = {
+  entryNodes: {
+    'article': {
+      uri: 'h1 a',
+      title: 'h1',
+      container: 'h1'
+    },
+    'article.hentry': {
+      uri: 'window.location',
+      title: 'h1.entry-title',
+      container: 'h1.entry-title'
+    }
+  }
+};
+</script>
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Shogo's Blog</a></h1>
+  
+    <h2>たぶんプログラミングとかについて書いていくブログ</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:shogo82148.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/blog/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Perlで文字列の出現回数を調べる</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-04-09T23:28:00+09:00" pubdate data-updated="true">Apr 9<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>Perlで特定の文字列の出現回数を調べたくなって、調べてみたメモ。</p>
+
+<!-- More -->
+
+
+<p>ググるとすぐに見つかった。
+<a href="http://d.hatena.ne.jp/shuer/20120907/1347025991">perlで指定文字列の出現回数を取得する(正規表現)</a></p>
+
+<blockquote><p>指定文字列の出現回数は正規表現を使って</p>
+
+<p><code>$count++ while($str =~ m/$pattern/g);</code></p>
+
+<p>もしくは</p>
+
+<p><code>$count = (() = $str =~ m/$pattern/g);</code></p></blockquote>
+
+<p>が、一瞬何をやっているのか把握できない・・・。
+こういう意味なのかなーって予想はしてみたけど、あってるか一応調査。</p>
+
+<h2>whileを使った方法</h2>
+
+<p><code>//g</code> をスカラーコンテキストの中でマッチさせると、
+前回マッチした場所を覚えておいてくれて、次のマッチでその場所から検索を再開してくれるらしい。
+(<a href="http://perldoc.perl.org/perlretut.html#Using-regular-expressions-in-Perl">Using regular expressions in Perl - perlretut</a>)
+マッチした場所は <code>pos</code> で取得可能。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">my</span> <span class="nv">$str</span> <span class="o">=</span> <span class="s">&quot;hoge fuga foo bar&quot;</span><span class="p">;</span>
+</span><span class='line'><span class="k">while</span> <span class="p">(</span><span class="nv">$str</span> <span class="o">=~</span> <span class="sr">m/[a-z]+/g</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">say</span> <span class="nb">pos</span> <span class="nv">$str</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>while</code>を後置にして、ループの回数を数えるようにすれば、最初の方法になる。</p>
+
+<h2>ループを使わない方法</h2>
+
+<p>これが一番謎だった。</p>
+
+<p><code>//g</code> をリストコンテキストで評価すると、マッチした文字列がリストになって帰ってくるらしい。
+(<a href="http://perldoc.perl.org/perlop.html#Regexp-Quote-Like-Operators">Quote-Like Operators - perlop</a>)</p>
+
+<p>複数の変数に一括して代入するときに <code>($foo, $bar) = (1, 2)</code> みたいな書き方をするけど、
+<code>() = ...</code> の部分はこれの代入先の変数が一個もないケース。
+要するに「リストコンテキストで評価してね」という意味のイディオムみたい。</p>
+
+<p>まとめると、以下のような処理を簡略化して一行にしたのがループを使わない方法みたいです。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">my</span> <span class="nv">$str</span> <span class="o">=</span> <span class="s">&quot;hoge fuga foo bar&quot;</span><span class="p">;</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">@matches</span> <span class="o">=</span> <span class="nv">$str</span> <span class="o">=~</span> <span class="sr">m/[a-z]+/g</span><span class="p">;</span> <span class="c1"># @matches = qw(hoge fuga foo bar);</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$count</span> <span class="o">=</span> <span class="nb">scalar</span><span class="p">(</span><span class="nv">@matches</span><span class="p">);</span>     <span class="c1"># $count = 4;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>ちなみに代入演算子は右に書いた物が優先されるので、実はカッコは無くてもOK。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">my</span> <span class="nv">$count</span> <span class="o">=</span> <span class="p">()</span> <span class="o">=</span> <span class="nv">$str</span> <span class="o">=~</span> <span class="sr">m/$pattern/g</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>余計に闇な感じになった。
+何故「リストコンテキストで評価してね」に専用のキーワードがないのか。
+Perl難しすぎる。</p>
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="http://perldoc.perl.org/perlretut.html#Using-regular-expressions-in-Perl">Using regular expressions in Perl - perlretut</a></li>
+<li><a href="http://perldoc.perl.org/perlop.html#Regexp-Quote-Like-Operators">Quote-Like Operators - perlop</a></li>
+<li><a href="http://perldoc.perl.org/perldata.html#List-value-constructors">List value constructors</a></li>
+</ul>
+
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-04-09T23:28:00+09:00" pubdate data-updated="true">Apr 9<span>th</span>, 2015</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/perl/'>perl</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.io/blog/2015/04/09/count-substrings-in-perl/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.io/blog/2015/04/09/count-substrings-in-perl/" data-via="shogo82148" data-counturl="http://shogo82148.github.io/blog/2015/04/09/count-substrings-in-perl/" >Tweet</a>
+  
+  
+  <div class="g-plusone" data-size="medium"></div>
+  
+  
+    <div class="fb-like" data-send="true" data-width="450" data-show-faces="false"></div>
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2015/03/29/unity-internal-compiler-error/" title="Previous Post: 名前付き引数とオプション引数とオーバーロードを同時に使うとUnityが死ぬ">&laquo; 名前付き引数とオプション引数とオーバーロードを同時に使うとUnityが死ぬ</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2015/04/19/kayac-isucon/" title="Next Post: 社内ISUCONにチームぽわわ3.5で参加しました">社内ISUCONにチームぽわわ3.5で参加しました &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2015/04/19/kayac-isucon/">社内ISUCONにチームぽわわ3.5で参加しました</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/04/09/count-substrings-in-perl/">Perlで文字列の出現回数を調べる</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/03/29/unity-internal-compiler-error/">名前付き引数とオプション引数とオーバーロードを同時に使うとUnityが死ぬ</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/03/29/travis-supports-csharp/">travisがいつのまにやらcsharpをサポートしていた件</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/03/24/git-diff-csv/">git diffでcsvの差分を見やすく表示する</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>GitHub Repos</h1>
+  <ul id="gh_repos">
+    <li class="loading">Status updating...</li>
+  </ul>
+  
+  <a href="https://github.com/shogo82148">@shogo82148</a> on GitHub
+  
+  <script type="text/javascript">
+    $.domReady(function(){
+        if (!window.jXHR){
+            var jxhr = document.createElement('script');
+            jxhr.type = 'text/javascript';
+            jxhr.src = '/javascripts/libs/jXHR.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(jxhr, s);
+        }
+
+        github.showRepos({
+            user: 'shogo82148',
+            count: 0,
+            skip_forks: true,
+            target: '#gh_repos'
+        });
+    });
+  </script>
+  <script src="/javascripts/github.js" type="text/javascript"> </script>
+</section>
+
+
+<section>
+  <h1>Latest Tweets</h1>
+  <ul id="tweets">
+    <li class="loading">Status updating...</li>
+  </ul>
+  <script type="text/javascript">
+    $.domReady(function(){
+      getTwitterFeed("shogo82148", 4, false);
+    });
+  </script>
+  <script src="/javascripts/twitter.js" type="text/javascript"> </script>
+  
+    <a href="http://twitter.com/shogo82148" class="twitter-follow-button" data-show-count="false">Follow @shogo82148</a>
+  
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2015 - Shogo Ichinose -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'shogosblog';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://shogo82148.github.io/blog/2015/04/09/count-substrings-in-perl/';
+        var disqus_url = 'http://shogo82148.github.io/blog/2015/04/09/count-substrings-in-perl/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) {return;}
+  js = d.createElement(s); js.id = id;
+  js.src = "//connect.facebook.net/en_US/all.js#appId=212934732101925&xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var script = document.createElement('script'); script.type = 'text/javascript'; script.async = true;
+      script.src = 'https://apis.google.com/js/plusone.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(script, s);
+    })();
+  </script>
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>
