@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2015-04-19T20:34:12+09:00</updated>
+  <updated>2015-04-25T20:08:53+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,258 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Go言語でshuffleする話]]></title>
+    <link href="http://shogo82148.github.io/blog/2015/04/25/shuffle-in-golang/"/>
+    <updated>2015-04-25T18:07:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2015/04/25/shuffle-in-golang</id>
+    <content type="html"><![CDATA[<p><a href="http://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle">Fisher-Yates shuffle</a>を使ってシャッフルライブラリ作ってみました。</p>
+
+<ul>
+<li>https://github.com/shogo82148/go-shuffle</li>
+</ul>
+
+
+<p>標準ライブラリのsortと似たような感じで使えます。
+デフォルトでintとfloat64とstringのシャッフルに対応していて、
+他の型をシャッフルしたい場合はインターフェースを実装してね、って感じです。
+実装が簡単なので、インターフェース定義する手間とシャッフルのアルゴリズム自前で書く手間ほとんど一緒ではという気もするけど、
+まあライブラリ作成の練習ってことで。</p>
+
+<p>ここからが本題。
+Fisher-Yates shuffleの名前は以前から知ってたけど、
+この前某プロジェクトで以下のようなshuffleの実装を発見。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="s">&quot;math/rand&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">shuffle</span><span class="p">(</span><span class="nx">a</span> <span class="p">[]</span><span class="kt">int</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">a</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">j</span> <span class="o">:=</span> <span class="nx">rand</span><span class="p">.</span><span class="nx">Intn</span><span class="p">(</span><span class="nx">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+</span><span class='line'>      <span class="nx">a</span><span class="p">[</span><span class="nx">i</span><span class="p">],</span> <span class="nx">a</span><span class="p">[</span><span class="nx">j</span><span class="p">]</span> <span class="p">=</span> <span class="nx">a</span><span class="p">[</span><span class="nx">j</span><span class="p">],</span> <span class="nx">a</span><span class="p">[</span><span class="nx">i</span><span class="p">]</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Fisher-Yates shuffleと似ているけど、なにかが違う。
+ちゃんとシャッフルされているのか気になったので検証してみました。</p>
+
+<!-- More -->
+
+
+<h2>検証</h2>
+
+<p>n個の数列をシャッフルすることを考えます。
+シャッフルの後i番目の要素がj番目に移動する確率を</p>
+
+<script type="math/tex">P_n(i, j)</script>
+
+
+<p>と定義します(golangのコードにあわせて0-originで考えます)。</p>
+
+<p>完全にランダムにシャッフルされていれば、
+元の数列のどの要素も0からn-1の範囲に一様分布するはずです。
+つまり、以下の式がなりたてば「シャッフルされている」と言えそうです。</p>
+
+<script type="math/tex; mode=display">
+P_n(i, j) = \frac{1}{n} (i, j = 0, \dots, n - 1)
+</script>
+
+
+<h3>n=1の場合</h3>
+
+<p>n=1の場合は、必ず0番目と0番目の入れ替え(つまり順番変わらない)になります。
+上で定義した確率を計算すると<script type="math/tex">P_1(0, 0) = 1/1</script>となるので、シャッフルされていると言えます。</p>
+
+<h3>n=k+1の場合</h3>
+
+<p>ループがk回周ったあと0&#8230;k-1の要素はシャッフルされていると仮定して、
+最後のn=k+1回目のループが周ったあと正しくシャッフルされているかを検証します。
+全てのi, jの組み合わせについて考えるのは大変なので、いくつか場合分け。</p>
+
+<p>i=n-1の場合。
+n-1番目の要素と交換されるのは、0&#8230;n-1番目の中からランダムに一つなので、以下のことはすぐに分かりますね。</p>
+
+<script type="math/tex; mode=display">
+P_n(n-1, j) = \frac{1}{n} (j = 0, \dots, n - 1)
+</script>
+
+
+<p>i,j &lt; n-1 の場合。
+n回目のループでi番目の要素がj番目に来る確率＝i番目の要素がn-1回のループでj番目に来る確率×最後のループでj番目が入れ替え対象にならない確率なので、
+以下のようになります。</p>
+
+<script type="math/tex; mode=display">
+P_n(i, j) = P_{n-1}(i,j) \times \frac{n-1}{n} = \frac{1}{n-1} \times \frac{n-1}{n} = \frac{1}{n}
+</script>
+
+
+<p>i&lt;n-1, j=n-1の場合。
+n回目のループでi番目の要素がj番目に来る確率＝i番目の要素がn-1回のループでj番目に来る確率×最後のループでj番目が入れ替え対象になる確率です。</p>
+
+<script type="math/tex; mode=display">
+P_n(i, n-1) = \sum_{j=0}^{n-2}P_{n-1}(i,j)\times\frac{1}{n} = \frac{1}{n}
+</script>
+
+
+<p>これで全ての場合について</p>
+
+<script type="math/tex; mode=display">
+P_n(i, j) = \frac{1}{n} (i, j = 0, \dots, n - 1)
+</script>
+
+
+<p>が成り立ち、シャッフルされているということがわかりました。
+数学的帰納法により、1以上の全ての自然数についてシャッフルが行われることになります。</p>
+
+<h2>ループの中でaの値を書き換えるていることについて</h2>
+
+<p><code>for i := range a</code>でイテレーションしている最中に
+元のコレクションを書き換える操作をしているのが気になって逆アセンブルしてみた。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+<span class='line-number'>61</span>
+<span class='line-number'>62</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>--- prog list "shuffle" ---
+</span><span class='line'>0000 (/Users/shogo/shuffle.go:5) TEXT    shuffle+0(SB),$40-24
+</span><span class='line'>0001 (/Users/shogo/shuffle.go:5) FUNCDATA $0,gcargs·0+0(SB)
+</span><span class='line'>0002 (/Users/shogo/shuffle.go:5) FUNCDATA $1,gclocals·0+0(SB)
+</span><span class='line'>0003 (/Users/shogo/shuffle.go:5) TYPE    a+0(FP){[]int},$24
+</span><span class='line'>0004 (/Users/shogo/shuffle.go:5) TYPE    i+-16(SP){int},$8
+</span><span class='line'>0005 (/Users/shogo/shuffle.go:5) TYPE    autotmp_0001+-24(SP){int},$8
+</span><span class='line'>0006 (/Users/shogo/shuffle.go:5) TYPE    autotmp_0002+-8(SP){int},$8
+</span><span class='line'>0007 (/Users/shogo/shuffle.go:5) TYPE    autotmp_0003+0(SP){int},$8
+</span><span class='line'>0008 (/Users/shogo/shuffle.go:6) MOVQ    a+8(FP),BX
+</span><span class='line'>0009 (/Users/shogo/shuffle.go:6) MOVQ    $0,DI
+</span><span class='line'>0010 (/Users/shogo/shuffle.go:6) MOVQ    BX,autotmp_0002+-8(SP)
+</span><span class='line'>0011 (/Users/shogo/shuffle.go:6) JMP     ,13
+</span><span class='line'>0012 (/Users/shogo/shuffle.go:6) INCQ    ,DI
+</span><span class='line'>0013 (/Users/shogo/shuffle.go:6) MOVQ    autotmp_0002+-8(SP),BP
+</span><span class='line'>0014 (/Users/shogo/shuffle.go:6) CMPQ    DI,BP
+</span><span class='line'>0015 (/Users/shogo/shuffle.go:6) JGE     $0,60
+</span><span class='line'>0016 (/Users/shogo/shuffle.go:6) MOVQ    DI,autotmp_0001+-24(SP)
+</span><span class='line'>0017 (/Users/shogo/shuffle.go:7) MOVQ    DI,BX
+</span><span class='line'>0018 (/Users/shogo/shuffle.go:7) MOVQ    DI,i+-16(SP)
+</span><span class='line'>0019 (/Users/shogo/shuffle.go:7) INCQ    ,BX
+</span><span class='line'>0020 (/Users/shogo/shuffle.go:7) MOVQ    BX,(SP)
+</span><span class='line'>0021 (/Users/shogo/shuffle.go:7) CALL    ,rand.Intn+0(SB)
+</span><span class='line'>0022 (/Users/shogo/shuffle.go:7) MOVQ    i+-16(SP),R9
+</span><span class='line'>0023 (/Users/shogo/shuffle.go:7) MOVQ    autotmp_0001+-24(SP),DI
+</span><span class='line'>0024 (/Users/shogo/shuffle.go:7) MOVQ    a+8(FP),DX
+</span><span class='line'>0025 (/Users/shogo/shuffle.go:7) MOVQ    a+0(FP),AX
+</span><span class='line'>0026 (/Users/shogo/shuffle.go:7) MOVQ    8(SP),CX
+</span><span class='line'>0027 (/Users/shogo/shuffle.go:8) MOVQ    AX,BX
+</span><span class='line'>0028 (/Users/shogo/shuffle.go:8) MOVQ    R9,BP
+</span><span class='line'>0029 (/Users/shogo/shuffle.go:8) CMPQ    R9,DX
+</span><span class='line'>0030 (/Users/shogo/shuffle.go:8) JCS     $1,33
+</span><span class='line'>0031 (/Users/shogo/shuffle.go:8) CALL    ,runtime.panicindex+0(SB)
+</span><span class='line'>0032 (/Users/shogo/shuffle.go:8) UNDEF   ,
+</span><span class='line'>0033 (/Users/shogo/shuffle.go:8) LEAQ    (BX)(BP*8),BX
+</span><span class='line'>0034 (/Users/shogo/shuffle.go:8) MOVQ    (BX),SI
+</span><span class='line'>0035 (/Users/shogo/shuffle.go:8) MOVQ    AX,BX
+</span><span class='line'>0036 (/Users/shogo/shuffle.go:8) MOVQ    R9,BP
+</span><span class='line'>0037 (/Users/shogo/shuffle.go:8) CMPQ    R9,DX
+</span><span class='line'>0038 (/Users/shogo/shuffle.go:8) JCS     $1,41
+</span><span class='line'>0039 (/Users/shogo/shuffle.go:8) CALL    ,runtime.panicindex+0(SB)
+</span><span class='line'>0040 (/Users/shogo/shuffle.go:8) UNDEF   ,
+</span><span class='line'>0041 (/Users/shogo/shuffle.go:8) LEAQ    (BX)(BP*8),BX
+</span><span class='line'>0042 (/Users/shogo/shuffle.go:8) MOVQ    AX,BP
+</span><span class='line'>0043 (/Users/shogo/shuffle.go:8) MOVQ    CX,R8
+</span><span class='line'>0044 (/Users/shogo/shuffle.go:8) CMPQ    CX,DX
+</span><span class='line'>0045 (/Users/shogo/shuffle.go:8) JCS     $1,48
+</span><span class='line'>0046 (/Users/shogo/shuffle.go:8) CALL    ,runtime.panicindex+0(SB)
+</span><span class='line'>0047 (/Users/shogo/shuffle.go:8) UNDEF   ,
+</span><span class='line'>0048 (/Users/shogo/shuffle.go:8) LEAQ    (BP)(R8*8),BP
+</span><span class='line'>0049 (/Users/shogo/shuffle.go:8) MOVQ    (BP),R8
+</span><span class='line'>0050 (/Users/shogo/shuffle.go:8) MOVQ    R8,(BX)
+</span><span class='line'>0051 (/Users/shogo/shuffle.go:8) MOVQ    AX,BX
+</span><span class='line'>0052 (/Users/shogo/shuffle.go:8) MOVQ    CX,BP
+</span><span class='line'>0053 (/Users/shogo/shuffle.go:8) CMPQ    CX,DX
+</span><span class='line'>0054 (/Users/shogo/shuffle.go:8) JCS     $1,57
+</span><span class='line'>0055 (/Users/shogo/shuffle.go:8) CALL    ,runtime.panicindex+0(SB)
+</span><span class='line'>0056 (/Users/shogo/shuffle.go:8) UNDEF   ,
+</span><span class='line'>0057 (/Users/shogo/shuffle.go:8) LEAQ    (BX)(BP*8),BX
+</span><span class='line'>0058 (/Users/shogo/shuffle.go:8) MOVQ    SI,(BX)
+</span><span class='line'>0059 (/Users/shogo/shuffle.go:6) JMP     ,12
+</span><span class='line'>0060 (/Users/shogo/shuffle.go:10) RET     ,</span></code></pre></td></tr></table></div></figure>
+
+
+<p>アセンブル読めてないけど、ループの最初で<code>len(a)</code>を<code>autotmp_0002+-8(SP)</code>に保存しているっぽいのを感じる。
+自動的に<code>size := len(a) for i := 0; i &lt; size; i++ {</code> みたいな処理に書き換えているみたい。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[社内ISUCONにチームぽわわ3.5で参加しました]]></title>
@@ -2217,200 +2469,6 @@ MeCabを使って名詞っぽいものを抽出して、タグ名に使います
 igo-javascriptのバグを発見できたりしたので、いいのです。</p>
 
 <p>自宅警備員でお時間ある方の皆様、天才だと思ったらぜひおしゃべり広場や「いいね！」広場で共有をお願いします。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[C#のconditional Attributeのコンパイル結果を見てみる]]></title>
-    <link href="http://shogo82148.github.io/blog/2014/05/29/conditional-attribute/"/>
-    <updated>2014-05-29T19:20:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2014/05/29/conditional-attribute</id>
-    <content type="html"><![CDATA[<p>C#で「ある環境では関数の定義ごと消したい」みたいな要件があって、
-そういう用途にconditinal attributeが使えるのかなーと話題のあがったので、実際に確認してみました。</p>
-
-<p>結論から言えばできないのですが、せっかく調べたのでメモとして残しておきます。</p>
-
-<!-- More -->
-
-
-<h2>conditional attribute</h2>
-
-<p>「デバッグ時のみにしか実行して欲しくない関数」みたいなものを定義するための機能です。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-</pre></td><td class='code'><pre><code class='csharp'><span class='line'><span class="k">using</span> <span class="nn">System</span><span class="p">;</span>
-</span><span class='line'><span class="k">using</span> <span class="nn">System.IO</span><span class="p">;</span>
-</span><span class='line'><span class="k">using</span> <span class="nn">System.Diagnostics</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">namespace</span> <span class="nn">ConditionalAttributeTest</span>
-</span><span class='line'><span class="p">{</span>
-</span><span class='line'>    <span class="k">class</span> <span class="nc">MainClass</span>
-</span><span class='line'>    <span class="p">{</span>
-</span><span class='line'>        <span class="k">public</span> <span class="k">static</span> <span class="k">void</span> <span class="nf">Main</span> <span class="p">(</span><span class="kt">string</span><span class="p">[]</span> <span class="n">args</span><span class="p">)</span>
-</span><span class='line'>        <span class="p">{</span>
-</span><span class='line'>            <span class="n">Log</span><span class="p">(</span><span class="s">&quot;fugu&quot;</span><span class="p">);</span>
-</span><span class='line'>        <span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="na">        [ConditionalAttribute(&quot;DEBUG&quot;)]</span>
-</span><span class='line'>        <span class="k">public</span> <span class="k">static</span> <span class="k">void</span> <span class="nf">Log</span><span class="p">(</span><span class="kt">string</span> <span class="n">message</span><span class="p">)</span>
-</span><span class='line'>        <span class="p">{</span>
-</span><span class='line'>            <span class="n">Console</span><span class="p">.</span><span class="n">WriteLine</span><span class="p">(</span><span class="n">message</span><span class="p">);</span>
-</span><span class='line'>        <span class="p">}</span>
-</span><span class='line'>    <span class="p">}</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>こんなふうに書いておくと <code>DEBUG</code> シンボルが定義されている時にだけ<code>Log</code>の呼び出しが行われます。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>&gt; mcs -d:DEBUG ConditionalAttributeTest.cs
-</span><span class='line'>&gt; mono ConditionalAttributeTest
-</span><span class='line'>fugu
-</span><span class='line'>&gt; mcs ConditionalAttributeTest.cs
-</span><span class='line'>&gt; mono ConditionalAttributeTest
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>逆アセンブルしてみる</h2>
-
-<p>DEBUG付きでコンパイルした結果を逆アセンブルしてみます。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>// ...前略
-</span><span class='line'>// method line 2
-</span><span class='line'>.method public static hidebysig
-</span><span class='line'>    default void Main (string[] args)  cil managed
-</span><span class='line'>{
-</span><span class='line'>    // Method begins at RVA 0x2058
-</span><span class='line'>    .entrypoint
-</span><span class='line'>    // Code size 11 (0xb)
-</span><span class='line'>    .maxstack 8
-</span><span class='line'>    IL_0000:  ldstr "fugu"
-</span><span class='line'>    IL_0005:  call void class ConditionalAttributeTest.MainClass::Log(string)
-</span><span class='line'>    IL_000a:  ret
-</span><span class='line'>} // end of method MainClass::Main
-</span><span class='line'>
-</span><span class='line'>// method line 3
-</span><span class='line'>.method public static hidebysig
-</span><span class='line'>    default void Log (string message)  cil managed
-</span><span class='line'>{
-</span><span class='line'>    .custom instance void class [mscorlib]System.Diagnostics.ConditionalAttribute::'.ctor'(string) =  (01 00 05 44 45 42 55 47 00 00 ) // ...DEBUG..
-</span><span class='line'>
-</span><span class='line'>    // Method begins at RVA 0x2064
-</span><span class='line'>    // Code size 7 (0x7)
-</span><span class='line'>    .maxstack 8
-</span><span class='line'>    IL_0000:  ldarg.0
-</span><span class='line'>    IL_0001:  call void class [mscorlib]System.Console::WriteLine(string)
-</span><span class='line'>    IL_0006:  ret
-</span><span class='line'>}</span></code></pre></td></tr></table></div></figure>
-
-
-<p>DEBUGを付けなかったときとのDIFFをとってみます。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-</pre></td><td class='code'><pre><code class='diff'><span class='line'>15c15
-</span><span class='line'>&lt; .module ConditionalAttributeTest.exe // GUID = {A54F3644-5083-4EC7-B846-8A354DD113AA}
-</span><span class='line'><span class="gd">---</span>
-</span><span class='line'>&gt; .module ConditionalAttributeTest.exe // GUID = {436FE462-17D6-4FDB-9AA7-15DA92658168}
-</span><span class='line'>42c42
-</span><span class='line'>&lt;  // Code size 11 (0xb)
-</span><span class='line'><span class="gd">---</span>
-</span><span class='line'>&gt;  // Code size 1 (0x1)
-</span><span class='line'>44,46c44
-</span><span class='line'>&lt;  IL_0000:  ldstr &quot;fugu&quot;
-</span><span class='line'>&lt;  IL_0005:  call void class ConditionalAttributeTest.MainClass::Log(string)
-</span><span class='line'>&lt;  IL_000a:  ret
-</span><span class='line'><span class="gd">---</span>
-</span><span class='line'>&gt;  IL_0000:  ret
-</span><span class='line'>55c53
-</span><span class='line'>&lt;         // Method begins at RVA 0x2064
-</span><span class='line'><span class="gd">---</span>
-</span><span class='line'>&gt;         // Method begins at RVA 0x205a
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>変わったのは呼び出し側であるmain関数だけで、ConditionalAttributeがついたメソッド自体はDEBUGの有無に関係なく同じコードが吐かれます。</p>
-
-<h2>SEE ALSO</h2>
-
-<p>例によってこのことはドキュメントにバッチリ載っております。</p>
-
-<ul>
-<li><a href="http://msdn.microsoft.com/ja-jp/library/system.diagnostics.conditionalattribute.aspx">ConditionalAttribute クラス</a></li>
-</ul>
-
-
-<blockquote><p>指定した条件付きコンパイルのシンボルが定義されていない限り、メソッド呼び出しまたは属性を無視するようにコンパイラに指示します。</p></blockquote>
-
-<p>ドキュメントには「呼び出しを無視する」としか書かれてないので、定義がなくなるわけではないですね。
-そもそも関数定義がなくなったら、リンク時に Conditional Attribute があるかないか確認する方法がないじゃないですか・・・。</p>
 ]]></content>
   </entry>
   
