@@ -1,0 +1,623 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Go言語で画像の減色を行う - Shogo's Blog</title>
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="description" content="ちょっとGIFアニメを作りたくなって、最近Go触ってるしGoでやってみよう！とやってみたメモ。
+ImageMagikでいいじゃん説もあるけど、最終的にツールとして配布したいなってことでGoです。 主に減色まわりについて。 何はともあれ実装してみる 以前、「ターミナル操作の記録(ttyrec) &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://shogo82148.github.io/blog/2015/04/25/quantize-image-in-golang/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  <link href="/atom.xml" rel="alternate" title="Shogo's Blog" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-4526627-4']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+  <script type="text/javascript" src="http://s.hatena.ne.jp/js/HatenaStar.js"></script>
+<script type="text/javascript">
+Hatena.Star.Token = '0da43945db72b59fd47eb24198fc7a0293c0191f';
+Hatena.Star.SiteConfig = {
+  entryNodes: {
+    'article': {
+      uri: 'h1 a',
+      title: 'h1',
+      container: 'h1'
+    },
+    'article.hentry': {
+      uri: 'window.location',
+      title: 'h1.entry-title',
+      container: 'h1.entry-title'
+    }
+  }
+};
+</script>
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Shogo's Blog</a></h1>
+  
+    <h2>たぶんプログラミングとかについて書いていくブログ</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:shogo82148.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/blog/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Go言語で画像の減色を行う</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-04-25T21:49:00+09:00" pubdate data-updated="true">Apr 25<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>ちょっとGIFアニメを作りたくなって、最近Go触ってるしGoでやってみよう！とやってみたメモ。
+ImageMagikでいいじゃん説もあるけど、最終的にツールとして配布したいなってことでGoです。</p>
+
+<p>主に減色まわりについて。</p>
+
+<!-- More -->
+
+
+<h2>何はともあれ実装してみる</h2>
+
+<p>以前、「<a href="http://d.hatena.ne.jp/sugyan/20140719/1405729672">ターミナル操作の記録(ttyrec)からGIFアニメを生成するツールを作った</a>」という記事を見たので、
+これを参考に実装してみる。</p>
+
+<figure class='code'><figcaption><span>naive.go</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;image&quot;</span>
+</span><span class='line'>  <span class="s">&quot;image/color/palette&quot;</span>
+</span><span class='line'>  <span class="s">&quot;image/gif&quot;</span>
+</span><span class='line'>  <span class="nx">_</span> <span class="s">&quot;image/png&quot;</span>
+</span><span class='line'>  <span class="s">&quot;os&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">reader</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Open</span><span class="p">(</span><span class="s">&quot;Lenna.png&quot;</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">return</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">defer</span> <span class="nx">reader</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">img</span><span class="p">,</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nx">Decode</span><span class="p">(</span><span class="nx">reader</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">return</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">paletted</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nx">NewPaletted</span><span class="p">(</span><span class="nx">img</span><span class="p">.</span><span class="nx">Bounds</span><span class="p">(),</span> <span class="nx">palette</span><span class="p">.</span><span class="nx">WebSafe</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">for</span> <span class="nx">y</span> <span class="o">:=</span> <span class="nx">img</span><span class="p">.</span><span class="nx">Bounds</span><span class="p">().</span><span class="nx">Min</span><span class="p">.</span><span class="nx">Y</span><span class="p">;</span> <span class="nx">y</span> <span class="p">&lt;</span> <span class="nx">img</span><span class="p">.</span><span class="nx">Bounds</span><span class="p">().</span><span class="nx">Max</span><span class="p">.</span><span class="nx">Y</span><span class="p">;</span> <span class="nx">y</span><span class="o">++</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">for</span> <span class="nx">x</span> <span class="o">:=</span> <span class="nx">img</span><span class="p">.</span><span class="nx">Bounds</span><span class="p">().</span><span class="nx">Min</span><span class="p">.</span><span class="nx">X</span><span class="p">;</span> <span class="nx">x</span> <span class="p">&lt;</span> <span class="nx">img</span><span class="p">.</span><span class="nx">Bounds</span><span class="p">().</span><span class="nx">Max</span><span class="p">.</span><span class="nx">X</span><span class="p">;</span> <span class="nx">x</span><span class="o">++</span> <span class="p">{</span>
+</span><span class='line'>          <span class="nx">paletted</span><span class="p">.</span><span class="nx">Set</span><span class="p">(</span><span class="nx">x</span><span class="p">,</span> <span class="nx">y</span><span class="p">,</span> <span class="nx">img</span><span class="p">.</span><span class="nx">At</span><span class="p">(</span><span class="nx">x</span><span class="p">,</span> <span class="nx">y</span><span class="p">))</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">f</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Create</span><span class="p">(</span><span class="s">&quot;naive.gif&quot;</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">defer</span> <span class="nx">f</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">opts</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">gif</span><span class="p">.</span><span class="nx">GIF</span><span class="p">{</span>
+</span><span class='line'>      <span class="nx">Image</span><span class="p">:</span>     <span class="p">[]</span><span class="o">*</span><span class="nx">image</span><span class="p">.</span><span class="nx">Paletted</span><span class="p">{</span><span class="nx">paletted</span><span class="p">},</span>
+</span><span class='line'>      <span class="nx">Delay</span><span class="p">:</span>     <span class="p">[]</span><span class="kt">int</span><span class="p">{</span><span class="mi">0</span><span class="p">},</span>
+</span><span class='line'>      <span class="nx">LoopCount</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="nx">gif</span><span class="p">.</span><span class="nx">EncodeAll</span><span class="p">(</span><span class="nx">f</span><span class="p">,</span> <span class="nx">opts</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>画像用意するの面倒だったので静止画になちゃったけど、
+<code>gif.GIF.Image</code> に複数枚画像を渡すとアニメーションGIFになります。
+みんなだいすきLenaさんをGIFに変換してみます。</p>
+
+<p>元画像:
+<img src="http://upload.wikimedia.org/wikipedia/en/2/24/Lenna.png" alt="Lena" /></p>
+
+<p>変換後:
+<img src="/images/2015-04-25-naive.gif" alt="naive.gif" /></p>
+
+<p>あれ、なんか肌の色とか全然違う・・・</p>
+
+<h2>誤差拡散を行う</h2>
+
+<p>皆さんご存知の通りGIFはインデックスカラー方式で色を指定するので、一枚の画像で256色までしか扱えません。
+少ない色数でより多い色数を表現するためにディザリングがよく行われます。
+Goの標準ライブラリのimage/drawに<a href="http://ja.wikipedia.org/wiki/%E3%83%95%E3%83%AD%E3%82%A4%E3%83%89-%E3%82%B9%E3%82%BF%E3%82%A4%E3%83%B3%E3%83%90%E3%83%BC%E3%82%B0%E3%83%BB%E3%83%87%E3%82%A3%E3%82%B6%E3%83%AA%E3%83%B3%E3%82%B0">フロイド-スタインバーグ・ディザリング</a>を実装してものがあるので、
+それを使ってみます。</p>
+
+<p><code>gif.Encode</code> を使って静止画GIFを作るときにデフォルトでこの方法が使われるみたいですが、
+アニメーションGIFを作るときにはディザリング処理の呼び出しを自分でやらないといけないようです。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;image&quot;</span>
+</span><span class='line'>  <span class="s">&quot;image/color/palette&quot;</span>
+</span><span class='line'>  <span class="s">&quot;image/draw&quot;</span>
+</span><span class='line'>  <span class="s">&quot;image/gif&quot;</span>
+</span><span class='line'>  <span class="nx">_</span> <span class="s">&quot;image/png&quot;</span>
+</span><span class='line'>  <span class="s">&quot;os&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">reader</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Open</span><span class="p">(</span><span class="s">&quot;Lenna.png&quot;</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">return</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">defer</span> <span class="nx">reader</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">img</span><span class="p">,</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nx">Decode</span><span class="p">(</span><span class="nx">reader</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">return</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">paletted</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nx">NewPaletted</span><span class="p">(</span><span class="nx">img</span><span class="p">.</span><span class="nx">Bounds</span><span class="p">(),</span> <span class="nx">palette</span><span class="p">.</span><span class="nx">WebSafe</span><span class="p">)</span>
+</span><span class='line'>  <span class="nx">draw</span><span class="p">.</span><span class="nx">FloydSteinberg</span><span class="p">.</span><span class="nx">Draw</span><span class="p">(</span><span class="nx">paletted</span><span class="p">,</span> <span class="nx">img</span><span class="p">.</span><span class="nx">Bounds</span><span class="p">(),</span> <span class="nx">img</span><span class="p">,</span> <span class="nx">image</span><span class="p">.</span><span class="nx">ZP</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">f</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Create</span><span class="p">(</span><span class="s">&quot;floyd_steinberg.gif&quot;</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">defer</span> <span class="nx">f</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">opts</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">gif</span><span class="p">.</span><span class="nx">GIF</span><span class="p">{</span>
+</span><span class='line'>      <span class="nx">Image</span><span class="p">:</span>     <span class="p">[]</span><span class="o">*</span><span class="nx">image</span><span class="p">.</span><span class="nx">Paletted</span><span class="p">{</span><span class="nx">paletted</span><span class="p">},</span>
+</span><span class='line'>      <span class="nx">Delay</span><span class="p">:</span>     <span class="p">[]</span><span class="kt">int</span><span class="p">{</span><span class="mi">0</span><span class="p">},</span>
+</span><span class='line'>      <span class="nx">LoopCount</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="nx">gif</span><span class="p">.</span><span class="nx">EncodeAll</span><span class="p">(</span><span class="nx">f</span><span class="p">,</span> <span class="nx">opts</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>結果:
+<img src="/images/2015-04-25-floyd_steinberg.gif" alt="floyd_steinberg.gif" /></p>
+
+<p>最初よりはかなり良くなったものの、なんだかざらついた感じがします。
+昔はこんな感じの画像よく見ましたね・・・すごく20世紀な感じがします。</p>
+
+<h2>メディアンカットで減色してみる</h2>
+
+<p>20世紀感の原因は<a href="http://www.htmq.com/color/websafe216.shtml">Webセーフカラー</a>(この言葉ってもはや死語なのでは)を使ってるからです。
+21世紀の現在においてはWebセーフカラーでない色を使っても、色が変わることはほとんど無いので、
+24bitカラーで表現可能な1677万色の中から自由に256色を選択できます。</p>
+
+<p>で、問題はその256色をどうやって選択するかなんですが、
+Goの標準ライブラリにはインターフェースは定義されているものの実装が存在しない(？)みたいです。
+いろいろ探しまわって<a href="https://github.com/soniakeys/quant">soniakeys/quant</a>というパッケージを見つけたのでこれを使ってみます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;github.com/soniakeys/quant/median&quot;</span>
+</span><span class='line'>  <span class="s">&quot;image&quot;</span>
+</span><span class='line'>  <span class="s">&quot;image/gif&quot;</span>
+</span><span class='line'>  <span class="nx">_</span> <span class="s">&quot;image/png&quot;</span>
+</span><span class='line'>  <span class="s">&quot;os&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">reader</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Open</span><span class="p">(</span><span class="s">&quot;Lenna.png&quot;</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">return</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">defer</span> <span class="nx">reader</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">img</span><span class="p">,</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nx">Decode</span><span class="p">(</span><span class="nx">reader</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">return</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">q</span> <span class="o">:=</span> <span class="nx">median</span><span class="p">.</span><span class="nx">Quantizer</span><span class="p">(</span><span class="mi">256</span><span class="p">)</span>
+</span><span class='line'>  <span class="nx">paletted</span> <span class="o">:=</span> <span class="nx">q</span><span class="p">.</span><span class="nx">Image</span><span class="p">(</span><span class="nx">img</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">f</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Create</span><span class="p">(</span><span class="s">&quot;median.gif&quot;</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">defer</span> <span class="nx">f</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">opts</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">gif</span><span class="p">.</span><span class="nx">GIF</span><span class="p">{</span>
+</span><span class='line'>      <span class="nx">Image</span><span class="p">:</span>     <span class="p">[]</span><span class="o">*</span><span class="nx">image</span><span class="p">.</span><span class="nx">Paletted</span><span class="p">{</span><span class="nx">paletted</span><span class="p">},</span>
+</span><span class='line'>      <span class="nx">Delay</span><span class="p">:</span>     <span class="p">[]</span><span class="kt">int</span><span class="p">{</span><span class="mi">0</span><span class="p">},</span>
+</span><span class='line'>      <span class="nx">LoopCount</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="nx">gif</span><span class="p">.</span><span class="nx">EncodeAll</span><span class="p">(</span><span class="nx">f</span><span class="p">,</span> <span class="nx">opts</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><img src="/images/2015-04-25-median.gif" alt="median.gif" /></p>
+
+<h2>メディアンカットで減色してディザリングもやってみる</h2>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-04-25T21:49:00+09:00" pubdate data-updated="true">Apr 25<span>th</span>, 2015</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/golang/'>golang</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.io/blog/2015/04/25/quantize-image-in-golang/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.io/blog/2015/04/25/quantize-image-in-golang/" data-via="shogo82148" data-counturl="http://shogo82148.github.io/blog/2015/04/25/quantize-image-in-golang/" >Tweet</a>
+  
+  
+  <div class="g-plusone" data-size="medium"></div>
+  
+  
+    <div class="fb-like" data-send="true" data-width="450" data-show-faces="false"></div>
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2015/04/25/shuffle-in-golang/" title="Previous Post: Go言語でshuffleする話">&laquo; Go言語でshuffleする話</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2015/04/25/quantize-image-in-golang/">Go言語で画像の減色を行う</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/04/25/shuffle-in-golang/">Go言語でshuffleする話</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/04/19/kayac-isucon/">社内ISUCONにチームぽわわ3.5で参加しました</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/04/09/count-substrings-in-perl/">Perlで文字列の出現回数を調べる</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/03/29/unity-internal-compiler-error/">名前付き引数とオプション引数とオーバーロードを同時に使うとUnityが死ぬ</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>GitHub Repos</h1>
+  <ul id="gh_repos">
+    <li class="loading">Status updating...</li>
+  </ul>
+  
+  <a href="https://github.com/shogo82148">@shogo82148</a> on GitHub
+  
+  <script type="text/javascript">
+    $.domReady(function(){
+        if (!window.jXHR){
+            var jxhr = document.createElement('script');
+            jxhr.type = 'text/javascript';
+            jxhr.src = '/javascripts/libs/jXHR.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(jxhr, s);
+        }
+
+        github.showRepos({
+            user: 'shogo82148',
+            count: 0,
+            skip_forks: true,
+            target: '#gh_repos'
+        });
+    });
+  </script>
+  <script src="/javascripts/github.js" type="text/javascript"> </script>
+</section>
+
+
+<section>
+  <h1>Latest Tweets</h1>
+  <ul id="tweets">
+    <li class="loading">Status updating...</li>
+  </ul>
+  <script type="text/javascript">
+    $.domReady(function(){
+      getTwitterFeed("shogo82148", 4, false);
+    });
+  </script>
+  <script src="/javascripts/twitter.js" type="text/javascript"> </script>
+  
+    <a href="http://twitter.com/shogo82148" class="twitter-follow-button" data-show-count="false">Follow @shogo82148</a>
+  
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2015 - Shogo Ichinose -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'shogosblog';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://shogo82148.github.io/blog/2015/04/25/quantize-image-in-golang/';
+        var disqus_url = 'http://shogo82148.github.io/blog/2015/04/25/quantize-image-in-golang/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) {return;}
+  js = d.createElement(s); js.id = id;
+  js.src = "//connect.facebook.net/en_US/all.js#appId=212934732101925&xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var script = document.createElement('script'); script.type = 'text/javascript'; script.async = true;
+      script.src = 'https://apis.google.com/js/plusone.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(script, s);
+    })();
+  </script>
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2015-04-25T20:15:50+09:00</updated>
+  <updated>2015-04-25T22:48:51+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,297 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Go言語で画像の減色を行う]]></title>
+    <link href="http://shogo82148.github.io/blog/2015/04/25/quantize-image-in-golang/"/>
+    <updated>2015-04-25T21:49:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2015/04/25/quantize-image-in-golang</id>
+    <content type="html"><![CDATA[<p>ちょっとGIFアニメを作りたくなって、最近Go触ってるしGoでやってみよう！とやってみたメモ。
+ImageMagikでいいじゃん説もあるけど、最終的にツールとして配布したいなってことでGoです。</p>
+
+<p>主に減色まわりについて。</p>
+
+<!-- More -->
+
+
+<h2>何はともあれ実装してみる</h2>
+
+<p>以前、「<a href="http://d.hatena.ne.jp/sugyan/20140719/1405729672">ターミナル操作の記録(ttyrec)からGIFアニメを生成するツールを作った</a>」という記事を見たので、
+これを参考に実装してみる。</p>
+
+<figure class='code'><figcaption><span>naive.go</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;image&quot;</span>
+</span><span class='line'>  <span class="s">&quot;image/color/palette&quot;</span>
+</span><span class='line'>  <span class="s">&quot;image/gif&quot;</span>
+</span><span class='line'>  <span class="nx">_</span> <span class="s">&quot;image/png&quot;</span>
+</span><span class='line'>  <span class="s">&quot;os&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">reader</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Open</span><span class="p">(</span><span class="s">&quot;Lenna.png&quot;</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">return</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">defer</span> <span class="nx">reader</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">img</span><span class="p">,</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nx">Decode</span><span class="p">(</span><span class="nx">reader</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">return</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">paletted</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nx">NewPaletted</span><span class="p">(</span><span class="nx">img</span><span class="p">.</span><span class="nx">Bounds</span><span class="p">(),</span> <span class="nx">palette</span><span class="p">.</span><span class="nx">WebSafe</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">for</span> <span class="nx">y</span> <span class="o">:=</span> <span class="nx">img</span><span class="p">.</span><span class="nx">Bounds</span><span class="p">().</span><span class="nx">Min</span><span class="p">.</span><span class="nx">Y</span><span class="p">;</span> <span class="nx">y</span> <span class="p">&lt;</span> <span class="nx">img</span><span class="p">.</span><span class="nx">Bounds</span><span class="p">().</span><span class="nx">Max</span><span class="p">.</span><span class="nx">Y</span><span class="p">;</span> <span class="nx">y</span><span class="o">++</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">for</span> <span class="nx">x</span> <span class="o">:=</span> <span class="nx">img</span><span class="p">.</span><span class="nx">Bounds</span><span class="p">().</span><span class="nx">Min</span><span class="p">.</span><span class="nx">X</span><span class="p">;</span> <span class="nx">x</span> <span class="p">&lt;</span> <span class="nx">img</span><span class="p">.</span><span class="nx">Bounds</span><span class="p">().</span><span class="nx">Max</span><span class="p">.</span><span class="nx">X</span><span class="p">;</span> <span class="nx">x</span><span class="o">++</span> <span class="p">{</span>
+</span><span class='line'>          <span class="nx">paletted</span><span class="p">.</span><span class="nx">Set</span><span class="p">(</span><span class="nx">x</span><span class="p">,</span> <span class="nx">y</span><span class="p">,</span> <span class="nx">img</span><span class="p">.</span><span class="nx">At</span><span class="p">(</span><span class="nx">x</span><span class="p">,</span> <span class="nx">y</span><span class="p">))</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">f</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Create</span><span class="p">(</span><span class="s">&quot;naive.gif&quot;</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">defer</span> <span class="nx">f</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">opts</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">gif</span><span class="p">.</span><span class="nx">GIF</span><span class="p">{</span>
+</span><span class='line'>      <span class="nx">Image</span><span class="p">:</span>     <span class="p">[]</span><span class="o">*</span><span class="nx">image</span><span class="p">.</span><span class="nx">Paletted</span><span class="p">{</span><span class="nx">paletted</span><span class="p">},</span>
+</span><span class='line'>      <span class="nx">Delay</span><span class="p">:</span>     <span class="p">[]</span><span class="kt">int</span><span class="p">{</span><span class="mi">0</span><span class="p">},</span>
+</span><span class='line'>      <span class="nx">LoopCount</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="nx">gif</span><span class="p">.</span><span class="nx">EncodeAll</span><span class="p">(</span><span class="nx">f</span><span class="p">,</span> <span class="nx">opts</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>画像用意するの面倒だったので静止画になちゃったけど、
+<code>gif.GIF.Image</code> に複数枚画像を渡すとアニメーションGIFになります。
+みんなだいすきLenaさんをGIFに変換してみます。</p>
+
+<p>元画像:
+<img src="http://upload.wikimedia.org/wikipedia/en/2/24/Lenna.png" alt="Lena" /></p>
+
+<p>変換後:
+<img src="http://shogo82148.github.io/images/2015-04-25-naive.gif" alt="naive.gif" /></p>
+
+<p>あれ、なんか肌の色とか全然違う・・・</p>
+
+<h2>誤差拡散を行う</h2>
+
+<p>皆さんご存知の通りGIFはインデックスカラー方式で色を指定するので、一枚の画像で256色までしか扱えません。
+少ない色数でより多い色数を表現するためにディザリングがよく行われます。
+Goの標準ライブラリのimage/drawに<a href="http://ja.wikipedia.org/wiki/%E3%83%95%E3%83%AD%E3%82%A4%E3%83%89-%E3%82%B9%E3%82%BF%E3%82%A4%E3%83%B3%E3%83%90%E3%83%BC%E3%82%B0%E3%83%BB%E3%83%87%E3%82%A3%E3%82%B6%E3%83%AA%E3%83%B3%E3%82%B0">フロイド-スタインバーグ・ディザリング</a>を実装してものがあるので、
+それを使ってみます。</p>
+
+<p><code>gif.Encode</code> を使って静止画GIFを作るときにデフォルトでこの方法が使われるみたいですが、
+アニメーションGIFを作るときにはディザリング処理の呼び出しを自分でやらないといけないようです。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;image&quot;</span>
+</span><span class='line'>  <span class="s">&quot;image/color/palette&quot;</span>
+</span><span class='line'>  <span class="s">&quot;image/draw&quot;</span>
+</span><span class='line'>  <span class="s">&quot;image/gif&quot;</span>
+</span><span class='line'>  <span class="nx">_</span> <span class="s">&quot;image/png&quot;</span>
+</span><span class='line'>  <span class="s">&quot;os&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">reader</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Open</span><span class="p">(</span><span class="s">&quot;Lenna.png&quot;</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">return</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">defer</span> <span class="nx">reader</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">img</span><span class="p">,</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nx">Decode</span><span class="p">(</span><span class="nx">reader</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">return</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">paletted</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nx">NewPaletted</span><span class="p">(</span><span class="nx">img</span><span class="p">.</span><span class="nx">Bounds</span><span class="p">(),</span> <span class="nx">palette</span><span class="p">.</span><span class="nx">WebSafe</span><span class="p">)</span>
+</span><span class='line'>  <span class="nx">draw</span><span class="p">.</span><span class="nx">FloydSteinberg</span><span class="p">.</span><span class="nx">Draw</span><span class="p">(</span><span class="nx">paletted</span><span class="p">,</span> <span class="nx">img</span><span class="p">.</span><span class="nx">Bounds</span><span class="p">(),</span> <span class="nx">img</span><span class="p">,</span> <span class="nx">image</span><span class="p">.</span><span class="nx">ZP</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">f</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Create</span><span class="p">(</span><span class="s">&quot;floyd_steinberg.gif&quot;</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">defer</span> <span class="nx">f</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">opts</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">gif</span><span class="p">.</span><span class="nx">GIF</span><span class="p">{</span>
+</span><span class='line'>      <span class="nx">Image</span><span class="p">:</span>     <span class="p">[]</span><span class="o">*</span><span class="nx">image</span><span class="p">.</span><span class="nx">Paletted</span><span class="p">{</span><span class="nx">paletted</span><span class="p">},</span>
+</span><span class='line'>      <span class="nx">Delay</span><span class="p">:</span>     <span class="p">[]</span><span class="kt">int</span><span class="p">{</span><span class="mi">0</span><span class="p">},</span>
+</span><span class='line'>      <span class="nx">LoopCount</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="nx">gif</span><span class="p">.</span><span class="nx">EncodeAll</span><span class="p">(</span><span class="nx">f</span><span class="p">,</span> <span class="nx">opts</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>結果:
+<img src="http://shogo82148.github.io/images/2015-04-25-floyd_steinberg.gif" alt="floyd_steinberg.gif" /></p>
+
+<p>最初よりはかなり良くなったものの、なんだかざらついた感じがします。
+昔はこんな感じの画像よく見ましたね・・・すごく20世紀な感じがします。</p>
+
+<h2>メディアンカットで減色してみる</h2>
+
+<p>20世紀感の原因は<a href="http://www.htmq.com/color/websafe216.shtml">Webセーフカラー</a>(この言葉ってもはや死語なのでは)を使ってるからです。
+21世紀の現在においてはWebセーフカラーでない色を使っても、色が変わることはほとんど無いので、
+24bitカラーで表現可能な1677万色の中から自由に256色を選択できます。</p>
+
+<p>で、問題はその256色をどうやって選択するかなんですが、
+Goの標準ライブラリにはインターフェースは定義されているものの実装が存在しない(？)みたいです。
+いろいろ探しまわって<a href="https://github.com/soniakeys/quant">soniakeys/quant</a>というパッケージを見つけたのでこれを使ってみます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;github.com/soniakeys/quant/median&quot;</span>
+</span><span class='line'>  <span class="s">&quot;image&quot;</span>
+</span><span class='line'>  <span class="s">&quot;image/gif&quot;</span>
+</span><span class='line'>  <span class="nx">_</span> <span class="s">&quot;image/png&quot;</span>
+</span><span class='line'>  <span class="s">&quot;os&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">reader</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Open</span><span class="p">(</span><span class="s">&quot;Lenna.png&quot;</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">return</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">defer</span> <span class="nx">reader</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">img</span><span class="p">,</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nx">Decode</span><span class="p">(</span><span class="nx">reader</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">return</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">q</span> <span class="o">:=</span> <span class="nx">median</span><span class="p">.</span><span class="nx">Quantizer</span><span class="p">(</span><span class="mi">256</span><span class="p">)</span>
+</span><span class='line'>  <span class="nx">paletted</span> <span class="o">:=</span> <span class="nx">q</span><span class="p">.</span><span class="nx">Image</span><span class="p">(</span><span class="nx">img</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">f</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Create</span><span class="p">(</span><span class="s">&quot;median.gif&quot;</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">defer</span> <span class="nx">f</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">opts</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">gif</span><span class="p">.</span><span class="nx">GIF</span><span class="p">{</span>
+</span><span class='line'>      <span class="nx">Image</span><span class="p">:</span>     <span class="p">[]</span><span class="o">*</span><span class="nx">image</span><span class="p">.</span><span class="nx">Paletted</span><span class="p">{</span><span class="nx">paletted</span><span class="p">},</span>
+</span><span class='line'>      <span class="nx">Delay</span><span class="p">:</span>     <span class="p">[]</span><span class="kt">int</span><span class="p">{</span><span class="mi">0</span><span class="p">},</span>
+</span><span class='line'>      <span class="nx">LoopCount</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="nx">gif</span><span class="p">.</span><span class="nx">EncodeAll</span><span class="p">(</span><span class="nx">f</span><span class="p">,</span> <span class="nx">opts</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><img src="http://shogo82148.github.io/images/2015-04-25-median.gif" alt="median.gif" /></p>
+
+<h2>メディアンカットで減色してディザリングもやってみる</h2>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Go言語でshuffleする話]]></title>
@@ -2419,51 +2710,6 @@ MeCabを使って名詞っぽいものを抽出して、タグ名に使います
 
 
 <p>これで癒やしをうさぎで頼まれてもウサギ画像を返せるようになりました。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[キレイになったコトバとハートを元に戻すツール作った]]></title>
-    <link href="http://shogo82148.github.io/blog/2014/06/01/anti-sizukatter/"/>
-    <updated>2014-06-01T00:24:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2014/06/01/anti-sizukatter</id>
-    <content type="html"><![CDATA[<p>現実世界にご満足の方消えてなくなってほしいの！！！</p>
-
-<p><a href="http://www.toyotown.jp/sizukatter/">しずかったー</a>を使うと個性あふれるコトバを使ってもキレイにしてくれるので
-とっても便利ですね！
-でも、本当は何を言っているのか真意を知りたい・・・。</p>
-
-<p>そんな人のために、キレイになったコトバとハートを元に戻す
-<a href="http://shogo82148.github.io/anti-sizukatter/">アンチしずかったー</a>
-を作りました。</p>
-
-<!-- More -->
-
-
-<h2>仕組み</h2>
-
-<p>しずかったーは単純な文字列置換で動いているみたいなので、
-対応表を頑張って作りました。
-それを<a href="http://mecab.googlecode.com/svn/trunk/mecab/doc/index.html">MeCab</a>用の辞書に変換し、
-<a href="http://igo.sourceforge.jp/">Igo</a>を使ってバイナリ辞書に変換、
-<a href="https://github.com/shogo82148/igo-javascript">igo-javascript</a>でブラ失礼しちゃう上で解析できるようにしました。</p>
-
-<h2>既知の問題点</h2>
-
-<p>しずかったー前後の文脈関係なく変換しちゃうので、
-同音異義語は元に戻らないことがあります。
-特にひらがな・カタカナは失敗することが多いです。(「（お昼寝したい）ふわふわ」だとか「ブラ失礼しちゃう」だとか)</p>
-
-<p>あと、マシュマロ的な内緒の言葉はさすがのしずかちゃんでも代替表現が思いつかなかったらしく、
-全部ハートになってしまいます。
-元に戻せと言う方が頑張ればなんとかできそうなので期待しないでく時代が変わればかっこいい。</p>
-
-<h2>まとめ</h2>
-
-<p>またおもしろいものを作ってしまいましたが、
-igo-javascriptのバグを発見できたりしたので、いいのです。</p>
-
-<p>自宅警備員でお時間ある方の皆様、天才だと思ったらぜひおしゃべり広場や「いいね！」広場で共有をお願いします。</p>
 ]]></content>
   </entry>
   
