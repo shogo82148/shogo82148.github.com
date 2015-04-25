@@ -229,7 +229,7 @@ ImageMagikでいいじゃん説もあるけど、最終的にツールとして�
 
 <p>あれ、なんか肌の色とか全然違う・・・</p>
 
-<h2>誤差拡散を行う</h2>
+<h2>誤差拡散法でディザリングする</h2>
 
 <p>皆さんご存知の通りGIFはインデックスカラー方式で色を指定するので、一枚の画像で256色までしか扱えません。
 少ない色数でより多い色数を表現するためにディザリングがよく行われます。
@@ -406,6 +406,97 @@ Goの標準ライブラリにはインターフェースは定義されている
 <p><img src="/images/2015-04-25-median.gif" alt="median.gif" /></p>
 
 <h2>メディアンカットで減色してディザリングもやってみる</h2>
+
+<p>減色前の画像を渡すと減色したあとの画像を返してくれる<a href="https://github.com/soniakeys/quant">soniakeys/quant</a>の便利メソッドを
+使って実装してみましたが、
+ディザリングをしてくれないのでグラデーション部分があまりキレイではありません。</p>
+
+<p><a href="https://github.com/soniakeys/quant">soniakeys/quant</a>を使うのはパレットの作成だけにして、
+draw.FloydSteinbergでディザリングを行ってみます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;github.com/soniakeys/quant/median&quot;</span>
+</span><span class='line'>  <span class="s">&quot;image&quot;</span>
+</span><span class='line'>  <span class="s">&quot;image/color&quot;</span>
+</span><span class='line'>  <span class="s">&quot;image/draw&quot;</span>
+</span><span class='line'>  <span class="s">&quot;image/gif&quot;</span>
+</span><span class='line'>  <span class="nx">_</span> <span class="s">&quot;image/png&quot;</span>
+</span><span class='line'>  <span class="s">&quot;os&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">reader</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Open</span><span class="p">(</span><span class="s">&quot;Lenna.png&quot;</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">return</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">defer</span> <span class="nx">reader</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">img</span><span class="p">,</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nx">Decode</span><span class="p">(</span><span class="nx">reader</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">return</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">q</span> <span class="o">:=</span> <span class="nx">median</span><span class="p">.</span><span class="nx">Quantizer</span><span class="p">(</span><span class="mi">256</span><span class="p">)</span>
+</span><span class='line'>  <span class="nx">p</span> <span class="o">:=</span> <span class="nx">q</span><span class="p">.</span><span class="nx">Quantize</span><span class="p">(</span><span class="nb">make</span><span class="p">(</span><span class="nx">color</span><span class="p">.</span><span class="nx">Palette</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">256</span><span class="p">),</span> <span class="nx">img</span><span class="p">)</span>
+</span><span class='line'>  <span class="nx">paletted</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nx">NewPaletted</span><span class="p">(</span><span class="nx">img</span><span class="p">.</span><span class="nx">Bounds</span><span class="p">(),</span> <span class="nx">p</span><span class="p">)</span>
+</span><span class='line'>  <span class="nx">draw</span><span class="p">.</span><span class="nx">FloydSteinberg</span><span class="p">.</span><span class="nx">Draw</span><span class="p">(</span><span class="nx">paletted</span><span class="p">,</span> <span class="nx">img</span><span class="p">.</span><span class="nx">Bounds</span><span class="p">(),</span> <span class="nx">img</span><span class="p">,</span> <span class="nx">image</span><span class="p">.</span><span class="nx">ZP</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">f</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Create</span><span class="p">(</span><span class="s">&quot;median-floyd-steinberg.gif&quot;</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">defer</span> <span class="nx">f</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">opts</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">gif</span><span class="p">.</span><span class="nx">GIF</span><span class="p">{</span>
+</span><span class='line'>      <span class="nx">Image</span><span class="p">:</span>     <span class="p">[]</span><span class="o">*</span><span class="nx">image</span><span class="p">.</span><span class="nx">Paletted</span><span class="p">{</span><span class="nx">paletted</span><span class="p">},</span>
+</span><span class='line'>      <span class="nx">Delay</span><span class="p">:</span>     <span class="p">[]</span><span class="kt">int</span><span class="p">{</span><span class="mi">0</span><span class="p">},</span>
+</span><span class='line'>      <span class="nx">LoopCount</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="nx">gif</span><span class="p">.</span><span class="nx">EncodeAll</span><span class="p">(</span><span class="nx">f</span><span class="p">,</span> <span class="nx">opts</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>結果:
+<img src="/images/2015-04-25-median-floyd-steinberg.gif" alt="median-floyd-steinberg.gif" /></p>
 </div>
 
 
