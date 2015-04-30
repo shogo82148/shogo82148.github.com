@@ -189,7 +189,7 @@ func main() {
 [soniakeys/quant](https://github.com/soniakeys/quant)を使うのはパレットの作成だけにして、
 draw.FloydSteinbergでディザリングを行ってみます。
 
-``` golang
+``` go
 package main
 
 import (
