@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2015-04-25T23:03:18+09:00</updated>
+  <updated>2015-05-05T00:37:34+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,455 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Go言語でGraceful Restartをする]]></title>
+    <link href="http://shogo82148.github.io/blog/2015/05/03/golang-graceful-restart/"/>
+    <updated>2015-05-03T12:10:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2015/05/03/golang-graceful-restart</id>
+    <content type="html"><![CDATA[<p>とあるHTTPサーバをGolangで立てようって話になったんだけど、
+止まると困るので無停止でサーバ再起動をしたい。
+Perlには<a href="https://metacpan.org/pod/Server::Starter">Server::Starter</a>という有名モジュールがあるんだけど、
+Golangはどうなってるの？ってことで調べてみました。</p>
+
+<!-- More -->
+
+
+<h2>gracefulじゃないバージョン</h2>
+
+<p>Golangの標準ライブラリを使ってHTTPサーバを立ててみる例。
+レスポンスが一瞬で終わってしまうとよくわからないので、sleepするhandlerを追加しておきます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;fmt&quot;</span>
+</span><span class='line'>  <span class="s">&quot;log&quot;</span>
+</span><span class='line'>  <span class="s">&quot;net/http&quot;</span>
+</span><span class='line'>  <span class="s">&quot;os&quot;</span>
+</span><span class='line'>  <span class="s">&quot;time&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">var</span> <span class="nx">now</span> <span class="p">=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&quot;start pid %d\n&quot;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Getpid</span><span class="p">())</span>
+</span><span class='line'>  <span class="nx">s</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Server</span><span class="p">{</span><span class="nx">Addr</span><span class="p">:</span> <span class="s">&quot;:8080&quot;</span><span class="p">,</span> <span class="nx">Handler</span><span class="p">:</span> <span class="nx">newHandler</span><span class="p">()}</span>
+</span><span class='line'>  <span class="nx">s</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">()</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// https://github.com/facebookgo/grace/blob/master/gracedemo/demo.go から一部拝借</span>
+</span><span class='line'><span class="kd">func</span> <span class="nx">newHandler</span><span class="p">()</span> <span class="nx">http</span><span class="p">.</span><span class="nx">Handler</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">mux</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">NewServeMux</span><span class="p">()</span>
+</span><span class='line'>  <span class="nx">mux</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">&quot;/sleep/&quot;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">duration</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">ParseDuration</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nx">FormValue</span><span class="p">(</span><span class="s">&quot;duration&quot;</span><span class="p">))</span>
+</span><span class='line'>      <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>          <span class="nx">http</span><span class="p">.</span><span class="nx">Error</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">err</span><span class="p">.</span><span class="nx">Error</span><span class="p">(),</span> <span class="mi">400</span><span class="p">)</span>
+</span><span class='line'>          <span class="k">return</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>      <span class="nx">time</span><span class="p">.</span><span class="nx">Sleep</span><span class="p">(</span><span class="nx">duration</span><span class="p">)</span>
+</span><span class='line'>      <span class="nx">fmt</span><span class="p">.</span><span class="nx">Fprintf</span><span class="p">(</span>
+</span><span class='line'>          <span class="nx">w</span><span class="p">,</span>
+</span><span class='line'>          <span class="s">&quot;started at %s slept for %d nanoseconds from pid %d.\n&quot;</span><span class="p">,</span>
+</span><span class='line'>          <span class="nx">now</span><span class="p">,</span>
+</span><span class='line'>          <span class="nx">duration</span><span class="p">.</span><span class="nx">Nanoseconds</span><span class="p">(),</span>
+</span><span class='line'>          <span class="nx">os</span><span class="p">.</span><span class="nx">Getpid</span><span class="p">(),</span>
+</span><span class='line'>      <span class="p">)</span>
+</span><span class='line'>  <span class="p">})</span>
+</span><span class='line'>  <span class="k">return</span> <span class="nx">mux</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>以下のような感じで実行してみる。
+(それぞれのコマンドは処理が終わるまでブロックするので、コンソールを3つ程開いて実行してね！)</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ go run main.go
+</span><span class='line'>2015/05/03 12:04:08 start pid 69046
+</span><span class='line'>$ curl 'http://localhost:8080/sleep/?duration=20s'
+</span><span class='line'>$ kill -TERM 69046</span></code></pre></td></tr></table></div></figure>
+
+
+<p>curlからのリクエストをさばく前に終了してしまい
+<code>curl: (52) Empty reply from server</code> といわれてしまいます。</p>
+
+<h2>facebookgo/grace</h2>
+
+<p>facebook製の<a href="https://github.com/facebookgo/grace/gracehttp">grace</a>は
+gracefulな終了と再起動をしてくれるライブラリ。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;fmt&quot;</span>
+</span><span class='line'>  <span class="s">&quot;log&quot;</span>
+</span><span class='line'>  <span class="s">&quot;net/http&quot;</span>
+</span><span class='line'>  <span class="s">&quot;os&quot;</span>
+</span><span class='line'>  <span class="s">&quot;time&quot;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="s">&quot;github.com/facebookgo/grace/gracehttp&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">var</span> <span class="nx">now</span> <span class="p">=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&quot;start pid %d\n&quot;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Getpid</span><span class="p">())</span>
+</span><span class='line'>  <span class="nx">s</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Server</span><span class="p">{</span><span class="nx">Addr</span><span class="p">:</span> <span class="s">&quot;:8080&quot;</span><span class="p">,</span> <span class="nx">Handler</span><span class="p">:</span> <span class="nx">newHandler</span><span class="p">()}</span>
+</span><span class='line'>  <span class="c1">// s.ListenAndServe()</span>
+</span><span class='line'>  <span class="nx">gracehttp</span><span class="p">.</span><span class="nx">Serve</span><span class="p">(</span><span class="nx">s</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// newHanderは一緒なので、以下省略。適当に補完して実行して</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>さっきと同じように実行してみるとリクエストを捌き切るまで終了しなくなります。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ go run main.go
+</span><span class='line'>2015/05/03 12:04:08 start pid 69046
+</span><span class='line'>2015/05/03 12:04:08 Serving [::]:8080 with pid 69046
+</span><span class='line'>$ curl 'http://localhost:8080/sleep/?duration=20s'
+</span><span class='line'>started at 2015-05-04 12:04:08.562569712 +0900 JST slept for 20000000000 nanoseconds from pid
+</span><span class='line'>$ kill -TERM 69046</span></code></pre></td></tr></table></div></figure>
+
+
+<p>TERMの代わりにUSR2シグナルを送るとgracefulに再起動できる。
+ただ、再起動すると最初のプロセスは死んでしまうので、daemontoolsみたいなデーモン管理ツールと一緒には使えない。
+そのためデーモン化に必要なもろもろ(PID・標準出力・標準エラー等をファイルに書き出す等)は全部自前でやる必要があります。
+<a href="https://github.com/facebookgo/cmdctrl">cmdctrl</a>を使うとそこら辺の処理をやってくれる。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;fmt&quot;</span>
+</span><span class='line'>  <span class="s">&quot;log&quot;</span>
+</span><span class='line'>  <span class="s">&quot;net/http&quot;</span>
+</span><span class='line'>  <span class="s">&quot;os&quot;</span>
+</span><span class='line'>  <span class="s">&quot;time&quot;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="s">&quot;github.com/facebookgo/cmdctrl&quot;</span>
+</span><span class='line'>  <span class="s">&quot;github.com/facebookgo/grace/gracehttp&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">var</span> <span class="nx">now</span> <span class="p">=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">cmdctrl</span><span class="p">.</span><span class="nx">SimpleStart</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&quot;start pid %d\n&quot;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Getpid</span><span class="p">())</span>
+</span><span class='line'>  <span class="nx">s</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Server</span><span class="p">{</span><span class="nx">Addr</span><span class="p">:</span> <span class="s">&quot;:8080&quot;</span><span class="p">,</span> <span class="nx">Handler</span><span class="p">:</span> <span class="nx">newHandler</span><span class="p">()}</span>
+</span><span class='line'>  <span class="nx">gracehttp</span><span class="p">.</span><span class="nx">Serve</span><span class="p">(</span><span class="nx">s</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// newHanderは一緒なので、以下省略。適当に補完して実行して</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ go run main.go -c hoge.conf -pidfile hoge.pid start
+</span><span class='line'>2015/05/03 12:04:08 start pid 69046
+</span><span class='line'>2015/05/03 12:04:08 Serving [::]:8080 with pid 69046
+</span><span class='line'>$ curl 'http://localhost:8080/sleep/?duration=20s'
+</span><span class='line'>started at 2015-05-04 12:04:08.562569712 +0900 JST slept for 20000000000 nanoseconds from pid
+</span><span class='line'>$ go run main.go stop</span></code></pre></td></tr></table></div></figure>
+
+
+<p>ただ、デーモン化はされないみたいなので、実際に使うには他にもいろいろ工夫しないといけないっぽい。</p>
+
+<h2>go-server-starter-listener</h2>
+
+<p>牧さん作の<a href="https://github.com/lestrrat/go-server-starter-listener">go-server-starter-listener</a>。
+Perlの<a href="https://metacpan.org/pod/Server::Starter">Server::Starter</a>と一緒に使える。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;fmt&quot;</span>
+</span><span class='line'>  <span class="s">&quot;log&quot;</span>
+</span><span class='line'>  <span class="s">&quot;net&quot;</span>
+</span><span class='line'>  <span class="s">&quot;net/http&quot;</span>
+</span><span class='line'>  <span class="s">&quot;os&quot;</span>
+</span><span class='line'>  <span class="s">&quot;time&quot;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="s">&quot;github.com/lestrrat/go-server-starter-listener&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">var</span> <span class="nx">now</span> <span class="p">=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&quot;start pid %d\n&quot;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Getpid</span><span class="p">())</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">l</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">ss</span><span class="p">.</span><span class="nx">NewListener</span><span class="p">()</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">l</span> <span class="o">==</span> <span class="kc">nil</span> <span class="o">||</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="c1">// Fallback if not running under Server::Starter</span>
+</span><span class='line'>      <span class="nx">l</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Listen</span><span class="p">(</span><span class="s">&quot;tcp&quot;</span><span class="p">,</span> <span class="s">&quot;:8080&quot;</span><span class="p">)</span>
+</span><span class='line'>      <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>          <span class="nb">panic</span><span class="p">(</span><span class="s">&quot;Failed to listen to port 8080&quot;</span><span class="p">)</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">s</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Server</span><span class="p">{</span><span class="nx">Handler</span><span class="p">:</span> <span class="nx">newHandler</span><span class="p">()}</span>
+</span><span class='line'>  <span class="nx">s</span><span class="p">.</span><span class="nx">Serve</span><span class="p">(</span><span class="nx">l</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// newHanderは一緒なので、以下省略。適当に補完して実行して</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>以下のようにstart_serverコマンドと組み合わせて起動することで、
+Server::Starterの管理下で実行されるようになります。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ start_server --port=8080 ./main
+</span><span class='line'>start_server (pid:6941) starting now...
+</span><span class='line'>starting new worker 6942
+</span><span class='line'>2015/05/03 08:27:54 start pid 6942
+</span><span class='line'>$ kill -HUP 6941</span></code></pre></td></tr></table></div></figure>
+
+
+<p>ただ、<a href="https://github.com/lestrrat/go-server-starter-listener">go-server-starter-listener</a>自体はgracefulなシャットダウンに対応していないので、
+再起動の途中のコネクションは破棄されてしまいます。
+これを避けるには<a href="https://github.com/braintree/manners">manners</a>を使うといいようです。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;fmt&quot;</span>
+</span><span class='line'>  <span class="s">&quot;log&quot;</span>
+</span><span class='line'>  <span class="s">&quot;net&quot;</span>
+</span><span class='line'>  <span class="s">&quot;net/http&quot;</span>
+</span><span class='line'>  <span class="s">&quot;os&quot;</span>
+</span><span class='line'>  <span class="s">&quot;os/signal&quot;</span>
+</span><span class='line'>  <span class="s">&quot;syscall&quot;</span>
+</span><span class='line'>  <span class="s">&quot;time&quot;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="s">&quot;github.com/braintree/manners&quot;</span>
+</span><span class='line'>  <span class="s">&quot;github.com/lestrrat/go-server-starter-listener&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">var</span> <span class="nx">now</span> <span class="p">=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&quot;start pid %d\n&quot;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Getpid</span><span class="p">())</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">signal_chan</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Signal</span><span class="p">)</span>
+</span><span class='line'>  <span class="nx">signal</span><span class="p">.</span><span class="nx">Notify</span><span class="p">(</span><span class="nx">signal_chan</span><span class="p">,</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">for</span> <span class="p">{</span>
+</span><span class='line'>          <span class="nx">s</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">signal_chan</span>
+</span><span class='line'>          <span class="k">if</span> <span class="nx">s</span> <span class="o">==</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span> <span class="p">{</span>
+</span><span class='line'>              <span class="nx">manners</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+</span><span class='line'>          <span class="p">}</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>  <span class="p">}()</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">l</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">ss</span><span class="p">.</span><span class="nx">NewListener</span><span class="p">()</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">l</span> <span class="o">==</span> <span class="kc">nil</span> <span class="o">||</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="c1">// Fallback if not running under Server::Starter</span>
+</span><span class='line'>      <span class="nx">l</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Listen</span><span class="p">(</span><span class="s">&quot;tcp&quot;</span><span class="p">,</span> <span class="s">&quot;:8080&quot;</span><span class="p">)</span>
+</span><span class='line'>      <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>          <span class="nb">panic</span><span class="p">(</span><span class="s">&quot;Failed to listen to port 8080&quot;</span><span class="p">)</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">manners</span><span class="p">.</span><span class="nx">Serve</span><span class="p">(</span><span class="nx">l</span><span class="p">,</span> <span class="nx">newHandler</span><span class="p">())</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// newHanderは一緒なので、以下省略。適当に補完して実行して</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>manners自体はシグナルの扱いをやってくれないみたいなので、
+そこだけ自分で書く必要がありますが、
+今回調べた中ではこれがベストっぽい。
+自前でデーモン化はできませんが、daemontoolsが使えるのでそれで十分でしょう。</p>
+
+<p>ちなみに、Server::StarterのGo版<a href="https://github.com/lestrrat/go-server-starter">go-server-starter</a>もあるので、
+デーモン化以外はGo化できそう。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Go言語で画像の減色を行う]]></title>
@@ -2621,186 +3070,6 @@ XS中でもこいつを呼べばできるのでは！ってことでやってみ
 <li><code>PERL_ASYNC_CHECK</code>を使えば解決しそうだけど、どこからか椅子が飛んでくるんじゃないだろうか怖い</li>
 </ul>
 
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[IRCに癒やしボットを入れてみた]]></title>
-    <link href="http://shogo82148.github.io/blog/2014/06/04/irc-healing-bot/"/>
-    <updated>2014-06-04T07:37:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2014/06/04/irc-healing-bot</id>
-    <content type="html"><![CDATA[<p>別チームがIRCに癒やしボットを入れてたので、自分のチームのチャンネルにも入れてみた。</p>
-
-<!-- More -->
-
-
-<h2>Instagramに登録する</h2>
-
-<p><a href="http://instagram.com/developer/">InstagramのDeveloperサイト</a>に開発者として登録します。
-<a href="http://instagram.com/developer/authentication/">Authentication</a>
-のページを見ながら、Server-side (Explicit) Flow を参考にアクセストークンを取得します。</p>
-
-<h2>Instagram APIを叩く</h2>
-
-<p><code>https://api.instagram.com/v1/tags/$TAGNAME/media/recent?access_token=YOUR_ACCESS_TOKEN</code>を叩くと
-TAGNAMEに関連する画像の情報がJSONで帰ってくるので、
-Perlからこのエンドポイントを叩きます。
-IRCとのやりとりには<a href="http://www.songmu.jp/riji/entry/2013-09-09-unazusan.html">UnazuSan</a>を使いました。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-<span class='line-number'>37</span>
-<span class='line-number'>38</span>
-<span class='line-number'>39</span>
-<span class='line-number'>40</span>
-<span class='line-number'>41</span>
-<span class='line-number'>42</span>
-<span class='line-number'>43</span>
-<span class='line-number'>44</span>
-<span class='line-number'>45</span>
-<span class='line-number'>46</span>
-<span class='line-number'>47</span>
-<span class='line-number'>48</span>
-<span class='line-number'>49</span>
-<span class='line-number'>50</span>
-<span class='line-number'>51</span>
-<span class='line-number'>52</span>
-<span class='line-number'>53</span>
-<span class='line-number'>54</span>
-<span class='line-number'>55</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="o">!</span><span class="sr">/usr/</span><span class="n">bin</span><span class="o">/</span><span class="n">env</span> <span class="n">perl</span>
-</span><span class='line'><span class="k">use</span> <span class="mf">5.014</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="n">warnings</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="n">strict</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="n">utf8</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="n">Encode</span> <span class="sx">qw/encode_utf8/</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="n">Furl</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="n">JSON</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">use</span> <span class="n">UnazuSan</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">sub </span><span class="nf">neko</span> <span class="p">{</span>
-</span><span class='line'>    <span class="n">state</span> <span class="nv">$data</span> <span class="o">=</span> <span class="nb">undef</span><span class="p">;</span>
-</span><span class='line'>    <span class="n">state</span> <span class="nv">$time</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
-</span><span class='line'>    <span class="k">if</span><span class="p">(</span> <span class="o">!</span><span class="nv">$data</span> <span class="o">||</span> <span class="nb">time</span> <span class="o">-</span> <span class="nv">$time</span> <span class="o">&gt;</span> <span class="mi">60</span> <span class="o">*</span> <span class="mi">60</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>        <span class="nv">$time</span> <span class="o">=</span> <span class="nb">time</span><span class="p">;</span>
-</span><span class='line'>        <span class="k">my</span> <span class="nv">$furl</span> <span class="o">=</span> <span class="n">Furl</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">;</span>
-</span><span class='line'>        <span class="k">my</span> <span class="nv">$res</span> <span class="o">=</span> <span class="nv">$furl</span><span class="o">-&gt;</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;https://api.instagram.com/v1/tags/%E7%8C%AB/media/recent?access_token=YOUR_ACCESS_TOKEN&#39;</span><span class="p">);</span>
-</span><span class='line'>        <span class="k">my</span> <span class="nv">$hash</span> <span class="o">=</span> <span class="nn">JSON::</span><span class="n">decode_json</span><span class="p">(</span><span class="nv">$res</span><span class="o">-&gt;</span><span class="n">content</span><span class="p">);</span>
-</span><span class='line'>        <span class="nv">$data</span> <span class="o">=</span> <span class="nv">$hash</span><span class="o">-&gt;</span><span class="p">{</span><span class="n">data</span><span class="p">};</span>
-</span><span class='line'>    <span class="p">}</span>
-</span><span class='line'>    <span class="k">my</span> <span class="nv">$media</span> <span class="o">=</span> <span class="nv">$data</span><span class="o">-&gt;</span><span class="p">[</span><span class="nb">rand</span><span class="p">(</span><span class="nb">scalar</span> <span class="nv">@$data</span><span class="p">)];</span>
-</span><span class='line'>    <span class="k">return</span> <span class="nv">$media</span><span class="o">-&gt;</span><span class="p">{</span><span class="n">images</span><span class="p">}{</span><span class="n">standard_resolution</span><span class="p">}{</span><span class="n">url</span><span class="p">};</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">my</span> <span class="nv">$unazu_san</span><span class="p">;</span>
-</span><span class='line'><span class="k">my</span> <span class="nv">$NICKNAME</span> <span class="o">=</span> <span class="s">&#39;iyashi&#39;</span><span class="p">;</span>
-</span><span class='line'><span class="nv">$unazu_san</span> <span class="o">=</span> <span class="n">UnazuSan</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span>
-</span><span class='line'>    <span class="n">host</span>       <span class="o">=&gt;</span> <span class="s">&#39;127.0.0.1&#39;</span><span class="p">,</span>
-</span><span class='line'>    <span class="n">enable_ssl</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span>
-</span><span class='line'>    <span class="n">join_channels</span> <span class="o">=&gt;</span> <span class="p">[</span><span class="s">&#39;#test&#39;</span><span class="p">],</span>
-</span><span class='line'>    <span class="n">respond_all</span>   <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span>
-</span><span class='line'>    <span class="n">nickname</span>      <span class="o">=&gt;</span> <span class="nv">$NICKNAME</span><span class="p">,</span>
-</span><span class='line'><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'><span class="nv">$unazu_san</span><span class="o">-&gt;</span><span class="n">on_message</span><span class="p">(</span>
-</span><span class='line'>    <span class="sx">qr/^\s+$NICKNAME:/</span> <span class="o">=&gt;</span> <span class="k">sub </span><span class="p">{</span>
-</span><span class='line'>        <span class="k">my</span> <span class="nv">$receive</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
-</span><span class='line'>        <span class="nv">$receive</span><span class="o">-&gt;</span><span class="n">reply</span><span class="p">(</span><span class="s">&#39;うんうん&#39;</span><span class="p">);</span>
-</span><span class='line'>    <span class="p">},</span>
-</span><span class='line'>    <span class="sx">qr/(.*)/</span> <span class="o">=&gt;</span> <span class="k">sub </span><span class="p">{</span>
-</span><span class='line'>        <span class="k">my</span> <span class="p">(</span><span class="nv">$receive</span><span class="p">,</span> <span class="nv">$match</span><span class="p">)</span> <span class="o">=</span> <span class="nv">@_</span><span class="p">;</span>
-</span><span class='line'>        <span class="n">say</span> <span class="nv">$match</span><span class="p">;</span>
-</span><span class='line'>        <span class="n">say</span> <span class="nv">$receive</span><span class="o">-&gt;</span><span class="n">message</span><span class="p">;</span>
-</span><span class='line'>    <span class="p">},</span>
-</span><span class='line'><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'><span class="nv">$unazu_san</span><span class="o">-&gt;</span><span class="n">on_command</span><span class="p">(</span>
-</span><span class='line'>   <span class="s">&#39; 癒やし&#39;</span> <span class="o">=&gt;</span> <span class="k">sub </span><span class="p">{</span>
-</span><span class='line'>        <span class="k">my</span> <span class="p">(</span><span class="nv">$receive</span><span class="p">,</span> <span class="nv">@args</span><span class="p">)</span> <span class="o">=</span> <span class="nv">@_</span><span class="p">;</span>
-</span><span class='line'>        <span class="nv">$receive</span><span class="o">-&gt;</span><span class="n">reply</span><span class="p">(</span><span class="n">neko</span><span class="p">());</span>
-</span><span class='line'>    <span class="p">}</span>
-</span><span class='line'><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'><span class="nv">$unazu_san</span><span class="o">-&gt;</span><span class="n">run</span><span class="p">;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>「癒して」と話しかけると猫画像を検索して返してくれます。</p>
-
-<h2>引数をMeCabで解析する</h2>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>acidlemon unazu_san: 癒やしをうさぎで頼む
-</span><span class='line'>acidlemon ネコやん! ('-'#)</span></code></pre></td></tr></table></div></figure>
-
-
-<p>みたいなことがあったので、「癒して」のあとも見ることにしました。
-MeCabを使って名詞っぽいものを抽出して、タグ名に使います。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="n">state</span> <span class="nv">$mecab</span> <span class="o">=</span> <span class="nn">Text::</span><span class="n">MeCab</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">();</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">my</span> <span class="nv">$n</span> <span class="o">=</span> <span class="nv">$mecab</span><span class="o">-&gt;</span><span class="n">parse</span><span class="p">(</span><span class="nb">join</span> <span class="s">&#39; &#39;</span><span class="p">,</span> <span class="nv">@_</span><span class="p">);</span>
-</span><span class='line'><span class="k">my</span> <span class="nv">$keyword</span> <span class="o">=</span> <span class="nb">undef</span><span class="p">;</span>
-</span><span class='line'><span class="k">while</span> <span class="p">(</span><span class="nv">$n</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>    <span class="k">my</span> <span class="nv">$f</span> <span class="o">=</span> <span class="n">decode_utf8</span> <span class="nv">$n</span><span class="o">-&gt;</span><span class="n">feature</span><span class="p">;</span>
-</span><span class='line'>    <span class="nv">$keyword</span> <span class="sr">//</span><span class="o">=</span> <span class="n">decode_utf8</span><span class="p">(</span><span class="nv">$n</span><span class="o">-&gt;</span><span class="n">surface</span><span class="p">)</span> <span class="k">if</span> <span class="p">(</span><span class="nv">$f</span> <span class="o">=~</span><span class="sr"> /^名詞,/</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="p">(</span><span class="nv">$f</span> <span class="o">!~</span> <span class="sr">/^名詞,代名詞,/</span><span class="p">);</span>
-</span><span class='line'>    <span class="nv">$n</span> <span class="o">=</span> <span class="nv">$n</span><span class="o">-&gt;</span><span class="k">next</span><span class="p">;</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'><span class="nv">$keyword</span> <span class="sr">//</span><span class="o">=</span> <span class="s">&#39;猫&#39;</span><span class="p">;</span>
-</span><span class='line'><span class="k">my</span> <span class="nv">$word</span> <span class="o">=</span> <span class="n">uri_escape_utf8</span><span class="p">(</span><span class="nv">$keyword</span><span class="p">);</span>
-</span><span class='line'><span class="k">my</span> <span class="nv">$res</span> <span class="o">=</span> <span class="nv">$furl</span><span class="o">-&gt;</span><span class="n">get</span><span class="p">(</span><span class="s">&quot;https://api.instagram.com/v1/tags/$word/media/recent?access_token=ACCESS_TOKEN&quot;</span><span class="p">);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>これで癒やしをうさぎで頼まれてもウサギ画像を返せるようになりました。</p>
 ]]></content>
   </entry>
   
