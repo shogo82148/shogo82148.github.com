@@ -268,3 +268,70 @@ manners自体はシグナルの扱いをやってくれないみたいなので�
 
 ちなみに、Server::StarterのGo版[go-server-starter](https://github.com/lestrrat/go-server-starter)もあるので、
 デーモン化以外はGo化できそう。
+
+
+## 2015-05-07 追記
+
+{% oembed https://twitter.com/lestrrat/status/596154619740303360 %}
+
+こっち見んな！
+作者の方によると、[go-server-starter-listener](https://github.com/lestrrat/go-server-starter-listener)は非推奨らしいです。
+[go-server-starter](https://github.com/lestrrat/go-server-starter) にlistenerも一緒に入っているのでこちらを使います。
+
+``` go
+package main
+
+import (
+	"fmt"
+	"log"
+	"net"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/braintree/manners"
+	"github.com/lestrrat/go-server-starter/listener"
+)
+
+var now = time.Now()
+
+func main() {
+	log.Printf("start pid %d\n", os.Getpid())
+
+	signal_chan := make(chan os.Signal)
+	signal.Notify(signal_chan, syscall.SIGTERM)
+	go func() {
+		for {
+			s := <-signal_chan
+			if s == syscall.SIGTERM {
+				log.Printf("SIGTERM!!!!\n")
+				manners.Close()
+			}
+		}
+	}()
+
+	listeners, err := listener.ListenAll()
+	if err != nil {
+		panic(err)
+	}
+	var l net.Listener
+	if len(listeners) == 0 {
+		// Fallback if not running under Server::Starter
+		l, err = net.Listen("tcp", ":8080")
+		if err != nil {
+			panic("Failed to listen to port 8080")
+		}
+	} else {
+		l = listeners[0]
+	}
+
+	manners.Serve(l, newHandler())
+}
+
+// newHanderは一緒なので、以下省略。適当に補完して実行して
+```
+
+こっちのほうが複数ポートの読み込みにも対応していて高機能みたいなので、
+[go-server-starter](https://github.com/lestrrat/go-server-starter) を使いましょう！
