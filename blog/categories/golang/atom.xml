@@ -4,7 +4,7 @@
   <title><![CDATA[Category: golang | Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/blog/categories/golang/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2015-05-05T00:37:34+09:00</updated>
+  <updated>2015-05-07T21:26:46+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -312,6 +312,79 @@ manners.Serve(l, newHandler())
 
 <p>ちなみに、Server::StarterのGo版<a href="https://github.com/lestrrat/go-server-starter">go-server-starter</a>もあるので、
 デーモン化以外はGo化できそう。</p>
+
+<h2>2015-05-07 追記</h2>
+
+<p><blockquote class="twitter-tweet"><p lang="ja" dir="ltr">やーやー、ドキュメント書いてなくてごめん。「こっちみんな」的なコメント書いておいた <a href="https://t.co/T9Dx3EmBmo">https://t.co/T9Dx3EmBmo</a> <a href="https://twitter.com/hashtag/golang?src=hash">#golang</a></p>&mdash; Daisuke Maki (@lestrrat) <a href="https://twitter.com/lestrrat/status/596154619740303360">May 7, 2015</a></blockquote>
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script></p>
+
+<p>こっち見んな！
+作者の方によると、<a href="https://github.com/lestrrat/go-server-starter-listener">go-server-starter-listener</a>は非推奨らしいです。
+<a href="https://github.com/lestrrat/go-server-starter">go-server-starter</a> にlistenerも一緒に入っているのでこちらを使います。</p>
+
+<p>``` go
+package main</p>
+
+<p>import (</p>
+
+<pre><code>"fmt"
+"log"
+"net"
+"net/http"
+"os"
+"os/signal"
+"syscall"
+"time"
+
+"github.com/braintree/manners"
+"github.com/lestrrat/go-server-starter/listener"
+</code></pre>
+
+<p>)</p>
+
+<p>var now = time.Now()</p>
+
+<p>func main() {</p>
+
+<pre><code>log.Printf("start pid %d\n", os.Getpid())
+
+signal_chan := make(chan os.Signal)
+signal.Notify(signal_chan, syscall.SIGTERM)
+go func() {
+    for {
+        s := &lt;-signal_chan
+        if s == syscall.SIGTERM {
+            log.Printf("SIGTERM!!!!\n")
+            manners.Close()
+        }
+    }
+}()
+
+listeners, err := listener.ListenAll()
+if err != nil {
+    panic(err)
+}
+var l net.Listener
+if len(listeners) == 0 {
+    // Fallback if not running under Server::Starter
+    l, err = net.Listen("tcp", ":8080")
+    if err != nil {
+        panic("Failed to listen to port 8080")
+    }
+} else {
+    l = listeners[0]
+}
+
+manners.Serve(l, newHandler())
+</code></pre>
+
+<p>}</p>
+
+<p>// newHanderは一緒なので、以下省略。適当に補完して実行して
+```</p>
+
+<p>こっちのほうが複数ポートの読み込みにも対応していて高機能みたいなので、
+<a href="https://github.com/lestrrat/go-server-starter">go-server-starter</a> を使いましょう！</p>
 ]]></content>
   </entry>
   

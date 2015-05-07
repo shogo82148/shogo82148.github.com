@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2015-05-05T00:37:34+09:00</updated>
+  <updated>2015-05-07T21:26:46+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -459,6 +459,128 @@ Server::Starterの管理下で実行されるようになります。</p>
 
 <p>ちなみに、Server::StarterのGo版<a href="https://github.com/lestrrat/go-server-starter">go-server-starter</a>もあるので、
 デーモン化以外はGo化できそう。</p>
+
+<h2>2015-05-07 追記</h2>
+
+<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">やーやー、ドキュメント書いてなくてごめん。「こっちみんな」的なコメント書いておいた <a href="https://t.co/T9Dx3EmBmo">https://t.co/T9Dx3EmBmo</a> <a href="https://twitter.com/hashtag/golang?src=hash">#golang</a></p>&mdash; Daisuke Maki (@lestrrat) <a href="https://twitter.com/lestrrat/status/596154619740303360">May 7, 2015</a></blockquote>
+
+
+<script async src="http://shogo82148.github.io//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+
+<p>こっち見んな！
+作者の方によると、<a href="https://github.com/lestrrat/go-server-starter-listener">go-server-starter-listener</a>は非推奨らしいです。
+<a href="https://github.com/lestrrat/go-server-starter">go-server-starter</a> にlistenerも一緒に入っているのでこちらを使います。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;fmt&quot;</span>
+</span><span class='line'>  <span class="s">&quot;log&quot;</span>
+</span><span class='line'>  <span class="s">&quot;net&quot;</span>
+</span><span class='line'>  <span class="s">&quot;net/http&quot;</span>
+</span><span class='line'>  <span class="s">&quot;os&quot;</span>
+</span><span class='line'>  <span class="s">&quot;os/signal&quot;</span>
+</span><span class='line'>  <span class="s">&quot;syscall&quot;</span>
+</span><span class='line'>  <span class="s">&quot;time&quot;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="s">&quot;github.com/braintree/manners&quot;</span>
+</span><span class='line'>  <span class="s">&quot;github.com/lestrrat/go-server-starter/listener&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">var</span> <span class="nx">now</span> <span class="p">=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&quot;start pid %d\n&quot;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Getpid</span><span class="p">())</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">signal_chan</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Signal</span><span class="p">)</span>
+</span><span class='line'>  <span class="nx">signal</span><span class="p">.</span><span class="nx">Notify</span><span class="p">(</span><span class="nx">signal_chan</span><span class="p">,</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">for</span> <span class="p">{</span>
+</span><span class='line'>          <span class="nx">s</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">signal_chan</span>
+</span><span class='line'>          <span class="k">if</span> <span class="nx">s</span> <span class="o">==</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span> <span class="p">{</span>
+</span><span class='line'>              <span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&quot;SIGTERM!!!!\n&quot;</span><span class="p">)</span>
+</span><span class='line'>              <span class="nx">manners</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+</span><span class='line'>          <span class="p">}</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>  <span class="p">}()</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">listeners</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ListenAll</span><span class="p">()</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">l</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Listener</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="nx">listeners</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span> <span class="p">{</span>
+</span><span class='line'>      <span class="c1">// Fallback if not running under Server::Starter</span>
+</span><span class='line'>      <span class="nx">l</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Listen</span><span class="p">(</span><span class="s">&quot;tcp&quot;</span><span class="p">,</span> <span class="s">&quot;:8080&quot;</span><span class="p">)</span>
+</span><span class='line'>      <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>          <span class="nb">panic</span><span class="p">(</span><span class="s">&quot;Failed to listen to port 8080&quot;</span><span class="p">)</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>  <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">l</span> <span class="p">=</span> <span class="nx">listeners</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">manners</span><span class="p">.</span><span class="nx">Serve</span><span class="p">(</span><span class="nx">l</span><span class="p">,</span> <span class="nx">newHandler</span><span class="p">())</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// newHanderは一緒なので、以下省略。適当に補完して実行して</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>こっちのほうが複数ポートの読み込みにも対応していて高機能みたいなので、
+<a href="https://github.com/lestrrat/go-server-starter">go-server-starter</a> を使いましょう！</p>
 ]]></content>
   </entry>
   
