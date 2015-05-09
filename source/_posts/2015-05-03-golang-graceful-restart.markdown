@@ -335,3 +335,10 @@ func main() {
 
 こっちのほうが複数ポートの読み込みにも対応していて高機能みたいなので、
 [go-server-starter](https://github.com/lestrrat/go-server-starter) を使いましょう！
+
+### 2015-05-09 追記
+
+検証が不十分で、[go-server-starter](https://github.com/lestrrat/go-server-starter)を使った上記のコード
+Server::Starterから起動されなかった場合のフォールバックが正しく機能しません。
+現状では自前で`SERVER_STARTER_PORT`環境変数が定義されているのを確認するしかなさそうです。
+handlename先輩が[PR](https://github.com/lestrrat/go-server-starter/pull/3)を出しているので、これがマージされたら状況が変わるかも。
