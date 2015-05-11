@@ -1,7 +1,6 @@
 #!/bin/sh
 
-STATUS=`git status --short`
-if [ -n "STATUS" ]; then
+if [[ -n `git status --short` ]]; then
     echo "コミットされていない変更があります！"
     exit 1
 fi
