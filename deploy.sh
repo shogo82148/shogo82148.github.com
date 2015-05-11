@@ -7,4 +7,4 @@ fi
 
 echo "反映するよ！！"
 
-git push origin source && bundle exec rake gen_deloy
+git push origin source && bundle exec rake gen_deploy
