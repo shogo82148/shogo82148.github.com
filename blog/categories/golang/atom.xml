@@ -4,7 +4,7 @@
   <title><![CDATA[Category: golang | Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/blog/categories/golang/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2015-05-11T22:06:34+09:00</updated>
+  <updated>2015-05-13T08:39:46+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,131 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Go言語でSQLのトレースをする]]></title>
+    <link href="http://shogo82148.github.io/blog/2015/05/13/golang-sql-proxy/"/>
+    <updated>2015-05-13T01:22:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2015/05/13/golang-sql-proxy</id>
+    <content type="html"><![CDATA[<p>ぴっぴ先輩が「Go言語で発行したクエリを確認したい」って言ってて、
+「MySQL使っているならGeneral Logを吐けばよいのでは？」と返したんだけども、
+もっと汎用的な方法はないものかと考えてみました。</p>
+
+<!-- More -->
+
+
+<p>Golangの <code>database/sql</code> はどんなDBでも対応できるよう、ドライバを自由に入れ替えることができます。
+ドライバは単に<code>database/sql/driver</code>にあるインターフェースを満たしている何かなので、
+ユーザが自由に作ることができるし、<code>interface</code>を経由して直接呼び出すことも可能です。
+この仕組を使って、別のドライバにそのまま渡すプロキシを作れば、ログを吐けるのでは？ということでやってみました。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/go-sql-proxy">go-sql-proxy</a></li>
+</ul>
+
+
+<h2>使い方</h2>
+
+<p>まず最初にgo-sql-proxyをドライバとして登録します。</p>
+
+<p>``` go
+hooks := &amp;proxy.Hooks{</p>
+
+<pre><code>// Hook functions here(Open, Exec, Query, etc.)
+</code></pre>
+
+<p>}
+sql.Register("new-proxy-name", proxy.NewProxy(&amp;another.Driver{}, hooks))
+```</p>
+
+<p>あとは登録したドライバと使って新しいDBハンドラを開くだけです。</p>
+
+<p><code>go
+db, err := sql.Open("new-proxy-name", dataSourceName)
+</code></p>
+
+<p>このハンドラを使ってクエリ実行を行うと、Hooksで登録した関数が呼び出されます。
+元のドライバを直接使った場合と同じように振る舞うので、既存のコードを一切変えること無くHookを差し込めて便利！</p>
+
+<h2>トレーサの例</h2>
+
+<p>簡単なトレーサを書いてみるとこんな感じ。
+発行したSQLのクエリをログに吐き出します。</p>
+
+<p>``` go
+package proxy</p>
+
+<p>import (</p>
+
+<pre><code>"database/sql"
+"database/sql/driver"
+"log"
+
+"github.com/mattn/go-sqlite3"
+"github.com/shogo82148/txmanager"
+</code></pre>
+
+<p>)</p>
+
+<p>func main() {</p>
+
+<pre><code>sql.Register("sqlite3-proxy", NewProxy(&amp;sqlite3.SQLiteDriver{}, &amp;Hooks{
+    Open: func(conn *Conn) error {
+        log.Println("Open")
+        return nil
+    },
+    Exec: func(stmt *Stmt, args []driver.Value, result driver.Result) error {
+        log.Printf("Exec: %s; args = %v\n", stmt.QueryString, args)
+        return nil
+    },
+    Query: func(stmt *Stmt, args []driver.Value, rows driver.Rows) error {
+        log.Printf("Query: %s; args = %v\n", stmt.QueryString, args)
+        return nil
+    },
+    Begin: func(conn *Conn) error {
+        log.Println("Begin")
+        return nil
+    },
+    Commit: func(tx *Tx) error {
+        log.Println("Commit")
+        return nil
+    },
+    Rollback: func(tx *Tx) error {
+        log.Println("Rollback")
+        return nil
+    },
+}))
+
+db, err := sql.Open("sqlite3-proxy", ":memory:")
+if err != nil {
+    log.Fatalf("Open filed: %v", err)
+}
+defer db.Close()
+
+_, err = db.Exec(
+    "CREATE TABLE t1 (id INTEGER PRIMARY KEY)",
+)
+if err != nil {
+    log.Fatal(err)
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<h2>おまけ機能</h2>
+
+<p><code>proxy.NewTraceProxy</code> を使うと上記のコードと同様のプロキシを簡単につくれます。
+<code>db.Exec</code>, <code>db.Query</code> 等の呼び出しもとを報告するという便利機能付き。
+ただ、<code>logger.Output(6, "Begin")</code> みたいな感じで「6個スタックトレースをさかのぼってログに表示」という実装をしているので、
+<code>database/sql</code>のアップデートと共にすぐに壊れそう。(<code>database/sql</code>で何回関数呼び出しがあったかに強く依存している)
+一応、Go1.1から1.4までで同じ結果を返すことは確認はしてるんだけど、将来のことまではちょっと分からない・・・。
+あんまり信用はしないほうがいいかも。</p>
+
+<p>こういう情報を知りたい場合どうするのがいいんだろうね。
+この前作った<a href="http://shogo82148.github.io/blog/2015/05/09/go-txmanager/">txmanger</a>のレベルでプロキシを作ったほうがいいのかなあ。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Goのトランザクションマネージャ作った]]></title>
