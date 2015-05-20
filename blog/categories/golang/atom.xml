@@ -1,0 +1,1183 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: golang | Shogo's Blog]]></title>
+  <link href="http://shogo82148.github.io/blog/categories/golang/atom.xml" rel="self"/>
+  <link href="http://shogo82148.github.io/"/>
+  <updated>2015-05-21T01:24:35+09:00</updated>
+  <id>http://shogo82148.github.io/</id>
+  <author>
+    <name><![CDATA[Shogo Ichinose]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Go言語でSQLのトレースをする]]></title>
+    <link href="http://shogo82148.github.io/blog/2015/05/13/golang-sql-proxy/"/>
+    <updated>2015-05-13T01:22:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2015/05/13/golang-sql-proxy</id>
+    <content type="html"><![CDATA[<p>ぴっぴ先輩が「Go言語で発行したクエリを確認したい」って言ってて、
+「MySQL使っているならGeneral Logを吐けばよいのでは？」と返したんだけども、
+もっと汎用的な方法はないものかと考えてみました。</p>
+
+<!-- More -->
+
+
+<p>Golangの <code>database/sql</code> はどんなDBでも対応できるよう、ドライバを自由に入れ替えることができます。
+ドライバは単に<code>database/sql/driver</code>にあるインターフェースを満たしている何かなので、
+ユーザが自由に作ることができるし、<code>interface</code>を経由して直接呼び出すことも可能です。
+この仕組を使って、別のドライバにそのまま渡すプロキシを作れば、ログを吐けるのでは？ということでやってみました。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/go-sql-proxy">go-sql-proxy</a></li>
+</ul>
+
+
+<h2>使い方</h2>
+
+<p>まず最初にgo-sql-proxyをドライバとして登録します。</p>
+
+<p>``` go
+hooks := &amp;proxy.Hooks{</p>
+
+<pre><code>// Hook functions here(Open, Exec, Query, etc.)
+</code></pre>
+
+<p>}
+sql.Register("new-proxy-name", proxy.NewProxy(&amp;another.Driver{}, hooks))
+```</p>
+
+<p>あとは登録したドライバと使って新しいDBハンドラを開くだけです。</p>
+
+<p><code>go
+db, err := sql.Open("new-proxy-name", dataSourceName)
+</code></p>
+
+<p>このハンドラを使ってクエリ実行を行うと、Hooksで登録した関数が呼び出されます。
+元のドライバを直接使った場合と同じように振る舞うので、既存のコードを一切変えること無くHookを差し込めて便利！</p>
+
+<h2>トレーサの例</h2>
+
+<p>簡単なトレーサを書いてみるとこんな感じ。
+発行したSQLのクエリをログに吐き出します。</p>
+
+<p>``` go
+package proxy</p>
+
+<p>import (</p>
+
+<pre><code>"database/sql"
+"database/sql/driver"
+"log"
+
+"github.com/mattn/go-sqlite3"
+"github.com/shogo82148/txmanager"
+</code></pre>
+
+<p>)</p>
+
+<p>func main() {</p>
+
+<pre><code>sql.Register("sqlite3-proxy", NewProxy(&amp;sqlite3.SQLiteDriver{}, &amp;Hooks{
+    Open: func(conn *Conn) error {
+        log.Println("Open")
+        return nil
+    },
+    Exec: func(stmt *Stmt, args []driver.Value, result driver.Result) error {
+        log.Printf("Exec: %s; args = %v\n", stmt.QueryString, args)
+        return nil
+    },
+    Query: func(stmt *Stmt, args []driver.Value, rows driver.Rows) error {
+        log.Printf("Query: %s; args = %v\n", stmt.QueryString, args)
+        return nil
+    },
+    Begin: func(conn *Conn) error {
+        log.Println("Begin")
+        return nil
+    },
+    Commit: func(tx *Tx) error {
+        log.Println("Commit")
+        return nil
+    },
+    Rollback: func(tx *Tx) error {
+        log.Println("Rollback")
+        return nil
+    },
+}))
+
+db, err := sql.Open("sqlite3-proxy", ":memory:")
+if err != nil {
+    log.Fatalf("Open filed: %v", err)
+}
+defer db.Close()
+
+_, err = db.Exec(
+    "CREATE TABLE t1 (id INTEGER PRIMARY KEY)",
+)
+if err != nil {
+    log.Fatal(err)
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<h2>おまけ機能</h2>
+
+<p><code>proxy.NewTraceProxy</code> を使うと上記のコードと同様のプロキシを簡単につくれます。
+<code>db.Exec</code>, <code>db.Query</code> 等の呼び出しもとを報告するという便利機能付き。
+ただ、<code>logger.Output(6, "Begin")</code> みたいな感じで「6個スタックトレースをさかのぼってログに表示」という実装をしているので、
+<code>database/sql</code>のアップデートと共にすぐに壊れそう。(<code>database/sql</code>で何回関数呼び出しがあったかに強く依存している)
+一応、Go1.1から1.4までで同じ結果を返すことは確認はしてるんだけど、将来のことまではちょっと分からない・・・。
+あんまり信用はしないほうがいいかも。</p>
+
+<p>こういう情報を知りたい場合どうするのがいいんだろうね。
+この前作った<a href="http://shogo82148.github.io/blog/2015/05/09/go-txmanager/">txmanger</a>のレベルでプロキシを作ったほうがいいのかなあ。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Goのトランザクションマネージャ作った]]></title>
+    <link href="http://shogo82148.github.io/blog/2015/05/09/go-txmanager/"/>
+    <updated>2015-05-09T15:17:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2015/05/09/go-txmanager</id>
+    <content type="html"><![CDATA[<p>Golangの<code>database/sql</code>はBeginとCommitでトランザクションの制御を行うことができます。
+クエリの実行が確実に成功するのであれば難しくは無いのですが、
+トランザクション内でエラーが発生場合、確実にトランザクションを終了させるのは少し面倒です。
+また、ネストができないので、「トランザクションの中から呼び出しても外から呼び出しても、関数の中はトランザクション内」みたいなことができません。
+Perlには<a href="https://metacpan.org/release/DBIx-TransactionManager">DBIx-TransactionManager</a>というものがあるのですが、
+このGolang版が欲しくなったので作ってみました。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/txmanager">txmanager</a></li>
+</ul>
+
+
+<!-- More -->
+
+
+<h2>簡単な使い方</h2>
+
+<p><code>sql.DB</code> をラップした <code>txmanager.DB</code> を使います。
+<code>Begin</code>, <code>Commit</code> する代わりに <code>TxBegin</code>, <code>TxCommit</code> を使ってトランザクションを開始・終了すると
+txmanagerの管理下になります。
+確実にトランザクションが終了させるために、トランザクションを開始したら<code>defer tx.TxFinish()</code>を忘れないように。</p>
+
+<p>``` go
+import (</p>
+
+<pre><code>"database/sql"
+
+"github.com/shogo82148/txmanager"
+</code></pre>
+
+<p>)</p>
+
+<p>func Example(db *sql.DB) {</p>
+
+<pre><code>dbm := txmanager.NewDB(db)
+
+// トランザクション開始
+tx, _ := dbm.TxBegin()
+defer tx.TxFinish()
+
+// INSERTはトランザクションの中で実行される
+_, err := tx.Exec("INSERT INTO t1 (id) VALUES(1)")
+if err != nil {
+    tx.TxRollback()
+}
+tx.TxCommit()
+</code></pre>
+
+<p>}
+```</p>
+
+<p>実際にはこれに加えてエラー処理も必要です。
+<code>txmanager.Do</code> を使うと、トランザクションの開始処理・終了をtxmangerがやってくれるので少し楽になります。</p>
+
+<p>``` go
+import (</p>
+
+<pre><code>"database/sql"
+
+"github.com/shogo82148/txmanager"
+</code></pre>
+
+<p>)</p>
+
+<p>func Example(db *sql.DB) error {</p>
+
+<pre><code>dbm := txmanager.NewDB(db)
+return txmanager.Do(dbm, func(tx txmanager.Tx) error {
+    // INSERTはトランザクションの中で実行される
+    _, err := tx.Exec("INSERT INTO t1 (id) VALUES(1)")
+    return err
+})
+</code></pre>
+
+<p>}
+```</p>
+
+<h2>トランザクションをネストする</h2>
+
+<p>以下のようにトランザクションをネストすることができます。
+ネストした内側のトランザクションは<code>TxCommit</code>しても特に何もしません。
+一番外側のトランザクションで<code>TxCommit</code>が実行されたときにコミットが行われます。</p>
+
+<p>``` go
+import (</p>
+
+<pre><code>"database/sql"
+
+"github.com/shogo82148/txmanager"
+</code></pre>
+
+<p>)</p>
+
+<p>//トランザクションの外からでも中からでもFooを呼び出すことができる
+func Example(db *sql.DB) {</p>
+
+<pre><code>dbm := txmanager.NewDB(db)
+
+txmanager.Do(dbm, func(tx txmanager.Tx) error {
+    txmanager.Do(tx, func(tx txmanager.Tx) error {
+        // INSERTはトランザクションの中で実行される
+        _, err := tx.Exec("INSERT INTO t1 (id) VALUES(1)")
+        return err
+    })
+    // この時点ではまだコミットされていない
+    _, err := tx.Exec("INSERT INTO t1 (id) VALUES(2)")
+    return err
+})
+// 全部のトランザクションが終了した時点ではじめてコミットされる
+</code></pre>
+
+<p>}
+```</p>
+
+<p>トランザクションの中で実行するべき処理を、関数に切り出すときなどに便利ですね。</p>
+
+<p>``` go
+import (</p>
+
+<pre><code>"database/sql"
+
+"github.com/shogo82148/txmanager"
+</code></pre>
+
+<p>)</p>
+
+<p>func Foo(dbm *txmanager.DB) error {</p>
+
+<pre><code>// この時点ではトランザクションの中にいるのか、外にいるのか分からない
+return txmanager.Do(dbm, func(tx txmanager.Tx) error {
+    // INSERTを確実にトランザクションの中で実行する
+    _, err := tx.Exec("INSERT INTO t1 (id) VALUES(1)")
+    return err
+})
+</code></pre>
+
+<p>}</p>
+
+<p>//トランザクションの外からでも中からでもFooを呼び出すことができる
+func Example(db *sql.DB) {</p>
+
+<pre><code>dbm := txmanager.NewDB(db)
+
+Foo(dbm)
+
+txmanager.Do(dbm, func(tx txmanager.Tx) error {
+    return Foo(tx)
+})
+</code></pre>
+
+<p>}
+```</p>
+
+<h2>コミットしたら何かする</h2>
+
+<p><a href="https://github.com/soh335/DBIx-TransactionManager-EndHook">DBIx::TransactionManager::EndHook</a>相当の機能も追加してみました。</p>
+
+<p>トランザクションはネスト可能なため、<code>TxCommit</code>でコミットを行ったからと言って、その場でコミットが行われるとは限りません。
+後からROLLBACKされてしまう可能性があります。
+例えば、以下のコードではINSERTした行はロールバックされたにもかかわらず「INSERTに成功したよ！！」というログが流れてしまいます。</p>
+
+<p>``` go
+import (</p>
+
+<pre><code>"database/sql"
+
+"github.com/shogo82148/txmanager"
+</code></pre>
+
+<p>)</p>
+
+<p>func Foo(dbm *txmanager.DB) error {</p>
+
+<pre><code>err := txmanager.Do(dbm, func(tx txmanager.Tx) error {
+    _, err := tx.Exec("INSERT INTO t1 (id) VALUES(1)")
+    return nil
+})
+if err != nil {
+    return err
+}
+log.Println("INSERTに成功したよ！！")
+return nil
+</code></pre>
+
+<p>}</p>
+
+<p>func Example(db *sql.DB) {</p>
+
+<pre><code>dbm := txmanager.NewDB(db)
+
+txmanager.Do(dbm, func(tx txmanager.Tx) error {
+    Foo(tx)
+    // ...その他トランザクション内で実行しないといけない処理...
+    // エラーが発生するとロールバックされる
+    return errors.New("何かのエラー！")
+})
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>TxAddEndHook</code>を使うと全てのトランザクションが正常に終了した場合にのみ処理を実行することができます。</p>
+
+<p>``` go
+func Foo(dbm *txmanager.DB) error {</p>
+
+<pre><code>return txmanager.Do(dbm, func(tx txmanager.Tx) error {
+    if _, err := tx.Exec("INSERT INTO t1 (id) VALUES(1)"); err != nil {
+        return err
+    }
+    tx.TxAddEndHook(func() error {
+        // 全てのトランザクションが正常に終了した場合にのみ呼ばれる
+        log.Println("INSERTに成功したよ！！")
+        return nil
+    })
+    return nil
+})
+</code></pre>
+
+<p>}
+```</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Go言語でGraceful Restartをする]]></title>
+    <link href="http://shogo82148.github.io/blog/2015/05/03/golang-graceful-restart/"/>
+    <updated>2015-05-03T12:10:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2015/05/03/golang-graceful-restart</id>
+    <content type="html"><![CDATA[<p>とあるHTTPサーバをGolangで立てようって話になったんだけど、
+止まると困るので無停止でサーバ再起動をしたい。
+Perlには<a href="https://metacpan.org/pod/Server::Starter">Server::Starter</a>という有名モジュールがあるんだけど、
+Golangはどうなってるの？ってことで調べてみました。</p>
+
+<!-- More -->
+
+
+<h2>gracefulじゃないバージョン</h2>
+
+<p>Golangの標準ライブラリを使ってHTTPサーバを立ててみる例。
+レスポンスが一瞬で終わってしまうとよくわからないので、sleepするhandlerを追加しておきます。</p>
+
+<p>``` go
+package main</p>
+
+<p>import (</p>
+
+<pre><code>"fmt"
+"log"
+"net/http"
+"os"
+"time"
+</code></pre>
+
+<p>)</p>
+
+<p>var now = time.Now()</p>
+
+<p>func main() {</p>
+
+<pre><code>log.Printf("start pid %d\n", os.Getpid())
+s := &amp;http.Server{Addr: ":8080", Handler: newHandler()}
+s.ListenAndServe()
+</code></pre>
+
+<p>}</p>
+
+<p>// https://github.com/facebookgo/grace/blob/master/gracedemo/demo.go から一部拝借
+func newHandler() http.Handler {</p>
+
+<pre><code>mux := http.NewServeMux()
+mux.HandleFunc("/sleep/", func(w http.ResponseWriter, r *http.Request) {
+    duration, err := time.ParseDuration(r.FormValue("duration"))
+    if err != nil {
+        http.Error(w, err.Error(), 400)
+        return
+    }
+    time.Sleep(duration)
+    fmt.Fprintf(
+        w,
+        "started at %s slept for %d nanoseconds from pid %d.\n",
+        now,
+        duration.Nanoseconds(),
+        os.Getpid(),
+    )
+})
+return mux
+</code></pre>
+
+<p>}
+```</p>
+
+<p>以下のような感じで実行してみる。
+(それぞれのコマンドは処理が終わるまでブロックするので、コンソールを3つ程開いて実行してね！)</p>
+
+<p><code>plain
+$ go run main.go
+2015/05/03 12:04:08 start pid 69046
+$ curl 'http://localhost:8080/sleep/?duration=20s'
+$ kill -TERM 69046
+</code></p>
+
+<p>curlからのリクエストをさばく前に終了してしまい
+<code>curl: (52) Empty reply from server</code> といわれてしまいます。</p>
+
+<h2>facebookgo/grace</h2>
+
+<p>facebook製の<a href="https://github.com/facebookgo/grace/gracehttp">grace</a>は
+gracefulな終了と再起動をしてくれるライブラリ。</p>
+
+<p>``` go
+package main</p>
+
+<p>import (</p>
+
+<pre><code>"fmt"
+"log"
+"net/http"
+"os"
+"time"
+
+"github.com/facebookgo/grace/gracehttp"
+</code></pre>
+
+<p>)</p>
+
+<p>var now = time.Now()</p>
+
+<p>func main() {</p>
+
+<pre><code>log.Printf("start pid %d\n", os.Getpid())
+s := &amp;http.Server{Addr: ":8080", Handler: newHandler()}
+// s.ListenAndServe()
+gracehttp.Serve(s)
+</code></pre>
+
+<p>}</p>
+
+<p>// newHanderは一緒なので、以下省略。適当に補完して実行して
+```</p>
+
+<p>さっきと同じように実行してみるとリクエストを捌き切るまで終了しなくなります。</p>
+
+<p><code>plain
+$ go run main.go
+2015/05/03 12:04:08 start pid 69046
+2015/05/03 12:04:08 Serving [::]:8080 with pid 69046
+$ curl 'http://localhost:8080/sleep/?duration=20s'
+started at 2015-05-04 12:04:08.562569712 +0900 JST slept for 20000000000 nanoseconds from pid
+$ kill -TERM 69046
+</code></p>
+
+<p>TERMの代わりにUSR2シグナルを送るとgracefulに再起動できる。
+ただ、再起動すると最初のプロセスは死んでしまうので、daemontoolsみたいなデーモン管理ツールと一緒には使えない。
+そのためデーモン化に必要なもろもろ(PID・標準出力・標準エラー等をファイルに書き出す等)は全部自前でやる必要があります。
+<a href="https://github.com/facebookgo/cmdctrl">cmdctrl</a>を使うとそこら辺の処理をやってくれる。</p>
+
+<p>``` go
+package main</p>
+
+<p>import (</p>
+
+<pre><code>"fmt"
+"log"
+"net/http"
+"os"
+"time"
+
+"github.com/facebookgo/cmdctrl"
+"github.com/facebookgo/grace/gracehttp"
+</code></pre>
+
+<p>)</p>
+
+<p>var now = time.Now()</p>
+
+<p>func main() {</p>
+
+<pre><code>cmdctrl.SimpleStart()
+
+log.Printf("start pid %d\n", os.Getpid())
+s := &amp;http.Server{Addr: ":8080", Handler: newHandler()}
+gracehttp.Serve(s)
+</code></pre>
+
+<p>}</p>
+
+<p>// newHanderは一緒なので、以下省略。適当に補完して実行して
+```</p>
+
+<p><code>plain
+$ go run main.go -c hoge.conf -pidfile hoge.pid start
+2015/05/03 12:04:08 start pid 69046
+2015/05/03 12:04:08 Serving [::]:8080 with pid 69046
+$ curl 'http://localhost:8080/sleep/?duration=20s'
+started at 2015-05-04 12:04:08.562569712 +0900 JST slept for 20000000000 nanoseconds from pid
+$ go run main.go stop
+</code></p>
+
+<p>ただ、デーモン化はされないみたいなので、実際に使うには他にもいろいろ工夫しないといけないっぽい。</p>
+
+<h2>go-server-starter-listener</h2>
+
+<p>牧さん作の<a href="https://github.com/lestrrat/go-server-starter-listener">go-server-starter-listener</a>。
+Perlの<a href="https://metacpan.org/pod/Server::Starter">Server::Starter</a>と一緒に使える。</p>
+
+<p>``` go
+package main</p>
+
+<p>import (</p>
+
+<pre><code>"fmt"
+"log"
+"net"
+"net/http"
+"os"
+"time"
+
+"github.com/lestrrat/go-server-starter-listener"
+</code></pre>
+
+<p>)</p>
+
+<p>var now = time.Now()</p>
+
+<p>func main() {</p>
+
+<pre><code>log.Printf("start pid %d\n", os.Getpid())
+
+l, err := ss.NewListener()
+if l == nil || err != nil {
+    // Fallback if not running under Server::Starter
+    l, err = net.Listen("tcp", ":8080")
+    if err != nil {
+        panic("Failed to listen to port 8080")
+    }
+}
+
+s := &amp;http.Server{Handler: newHandler()}
+s.Serve(l)
+</code></pre>
+
+<p>}</p>
+
+<p>// newHanderは一緒なので、以下省略。適当に補完して実行して
+```</p>
+
+<p>以下のようにstart_serverコマンドと組み合わせて起動することで、
+Server::Starterの管理下で実行されるようになります。</p>
+
+<p><code>plain
+$ start_server --port=8080 ./main
+start_server (pid:6941) starting now...
+starting new worker 6942
+2015/05/03 08:27:54 start pid 6942
+$ kill -HUP 6941
+</code></p>
+
+<p>ただ、<a href="https://github.com/lestrrat/go-server-starter-listener">go-server-starter-listener</a>自体はgracefulなシャットダウンに対応していないので、
+再起動の途中のコネクションは破棄されてしまいます。
+これを避けるには<a href="https://github.com/braintree/manners">manners</a>を使うといいようです。</p>
+
+<p>``` go
+package main</p>
+
+<p>import (</p>
+
+<pre><code>"fmt"
+"log"
+"net"
+"net/http"
+"os"
+"os/signal"
+"syscall"
+"time"
+
+"github.com/braintree/manners"
+"github.com/lestrrat/go-server-starter-listener"
+</code></pre>
+
+<p>)</p>
+
+<p>var now = time.Now()</p>
+
+<p>func main() {</p>
+
+<pre><code>log.Printf("start pid %d\n", os.Getpid())
+
+signal_chan := make(chan os.Signal)
+signal.Notify(signal_chan, syscall.SIGTERM)
+go func() {
+    for {
+        s := &lt;-signal_chan
+        if s == syscall.SIGTERM {
+            manners.Close()
+        }
+    }
+}()
+
+l, err := ss.NewListener()
+if l == nil || err != nil {
+    // Fallback if not running under Server::Starter
+    l, err = net.Listen("tcp", ":8080")
+    if err != nil {
+        panic("Failed to listen to port 8080")
+    }
+}
+
+manners.Serve(l, newHandler())
+</code></pre>
+
+<p>}</p>
+
+<p>// newHanderは一緒なので、以下省略。適当に補完して実行して
+```</p>
+
+<p>manners自体はシグナルの扱いをやってくれないみたいなので、
+そこだけ自分で書く必要がありますが、
+今回調べた中ではこれがベストっぽい。
+自前でデーモン化はできませんが、daemontoolsが使えるのでそれで十分でしょう。</p>
+
+<p>ちなみに、Server::StarterのGo版<a href="https://github.com/lestrrat/go-server-starter">go-server-starter</a>もあるので、
+デーモン化以外はGo化できそう。</p>
+
+<h2>2015-05-07 追記</h2>
+
+<p><blockquote class="twitter-tweet"><p lang="ja" dir="ltr">やーやー、ドキュメント書いてなくてごめん。「こっちみんな」的なコメント書いておいた <a href="https://t.co/T9Dx3EmBmo">https://t.co/T9Dx3EmBmo</a> <a href="https://twitter.com/hashtag/golang?src=hash">#golang</a></p>&mdash; Daisuke Maki (@lestrrat) <a href="https://twitter.com/lestrrat/status/596154619740303360">May 7, 2015</a></blockquote>
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script></p>
+
+<p>こっち見んな！
+作者の方によると、<a href="https://github.com/lestrrat/go-server-starter-listener">go-server-starter-listener</a>は非推奨らしいです。
+<a href="https://github.com/lestrrat/go-server-starter">go-server-starter</a> にlistenerも一緒に入っているのでこちらを使います。</p>
+
+<p>``` go
+package main</p>
+
+<p>import (</p>
+
+<pre><code>"fmt"
+"log"
+"net"
+"net/http"
+"os"
+"os/signal"
+"syscall"
+"time"
+
+"github.com/braintree/manners"
+"github.com/lestrrat/go-server-starter/listener"
+</code></pre>
+
+<p>)</p>
+
+<p>var now = time.Now()</p>
+
+<p>func main() {</p>
+
+<pre><code>log.Printf("start pid %d\n", os.Getpid())
+
+signal_chan := make(chan os.Signal)
+signal.Notify(signal_chan, syscall.SIGTERM)
+go func() {
+    for {
+        s := &lt;-signal_chan
+        if s == syscall.SIGTERM {
+            log.Printf("SIGTERM!!!!\n")
+            manners.Close()
+        }
+    }
+}()
+
+listeners, err := listener.ListenAll()
+if err != nil {
+    panic(err)
+}
+var l net.Listener
+if len(listeners) == 0 {
+    // Fallback if not running under Server::Starter
+    l, err = net.Listen("tcp", ":8080")
+    if err != nil {
+        panic("Failed to listen to port 8080")
+    }
+} else {
+    l = listeners[0]
+}
+
+manners.Serve(l, newHandler())
+</code></pre>
+
+<p>}</p>
+
+<p>// newHanderは一緒なので、以下省略。適当に補完して実行して
+```</p>
+
+<p>こっちのほうが複数ポートの読み込みにも対応していて高機能みたいなので、
+<a href="https://github.com/lestrrat/go-server-starter">go-server-starter</a> を使いましょう！</p>
+
+<h3>2015-05-09 追記</h3>
+
+<p>検証が不十分で、<a href="https://github.com/lestrrat/go-server-starter">go-server-starter</a>を使った上記のコード
+Server::Starterから起動されなかった場合のフォールバックが正しく機能しません。
+現状では自前で<code>SERVER_STARTER_PORT</code>環境変数が定義されているのを確認するしかなさそうです。
+handlename先輩が<a href="https://github.com/lestrrat/go-server-starter/pull/3">PR</a>を出しているので、これがマージされたら状況が変わるかも。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Go言語で画像の減色を行う]]></title>
+    <link href="http://shogo82148.github.io/blog/2015/04/25/quantize-image-in-golang/"/>
+    <updated>2015-04-25T21:49:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2015/04/25/quantize-image-in-golang</id>
+    <content type="html"><![CDATA[<p>ちょっとGIFアニメを作りたくなって、最近Go触ってるしGoでやってみよう！とやってみたメモ。
+ImageMagikでいいじゃん説もあるけど、最終的にツールとして配布したいなってことでGoです。</p>
+
+<p>主に減色まわりについて。</p>
+
+<!-- More -->
+
+
+<h2>何はともあれ実装してみる</h2>
+
+<p>以前、「<a href="http://d.hatena.ne.jp/sugyan/20140719/1405729672">ターミナル操作の記録(ttyrec)からGIFアニメを生成するツールを作った</a>」という記事を見たので、
+これを参考に実装してみる。</p>
+
+<p>``` go naive.go
+package main</p>
+
+<p>import (</p>
+
+<pre><code>"image"
+"image/color/palette"
+"image/gif"
+_ "image/png"
+"os"
+</code></pre>
+
+<p>)</p>
+
+<p>func main() {</p>
+
+<pre><code>reader, err := os.Open("Lenna.png")
+if err != nil {
+    return
+}
+defer reader.Close()
+
+img, _, err := image.Decode(reader)
+if err != nil {
+    return
+}
+
+paletted := image.NewPaletted(img.Bounds(), palette.WebSafe)
+for y := img.Bounds().Min.Y; y &lt; img.Bounds().Max.Y; y++ {
+    for x := img.Bounds().Min.X; x &lt; img.Bounds().Max.X; x++ {
+        paletted.Set(x, y, img.At(x, y))
+    }
+}
+
+f, _ := os.Create("naive.gif")
+defer f.Close()
+
+opts := &amp;gif.GIF{
+    Image:     []*image.Paletted{paletted},
+    Delay:     []int{0},
+    LoopCount: 0,
+}
+gif.EncodeAll(f, opts)
+</code></pre>
+
+<p>}
+```</p>
+
+<p>画像用意するの面倒だったので静止画になちゃったけど、
+<code>gif.GIF.Image</code> に複数枚画像を渡すとアニメーションGIFになります。
+みんなだいすきLenaさんをGIFに変換してみます。</p>
+
+<p>元画像:
+<img src="http://upload.wikimedia.org/wikipedia/en/2/24/Lenna.png" alt="Lena" /></p>
+
+<p>変換後:
+<img src="/images/2015-04-25-naive.gif" alt="naive.gif" /></p>
+
+<p>あれ、なんか肌の色とか全然違う・・・</p>
+
+<h2>誤差拡散法でディザリングする</h2>
+
+<p>皆さんご存知の通りGIFはインデックスカラー方式で色を指定するので、一枚の画像で256色までしか扱えません。
+少ない色数でより多い色数を表現するためにディザリングがよく行われます。
+Goの標準ライブラリのimage/drawに<a href="http://ja.wikipedia.org/wiki/%E3%83%95%E3%83%AD%E3%82%A4%E3%83%89-%E3%82%B9%E3%82%BF%E3%82%A4%E3%83%B3%E3%83%90%E3%83%BC%E3%82%B0%E3%83%BB%E3%83%87%E3%82%A3%E3%82%B6%E3%83%AA%E3%83%B3%E3%82%B0">フロイド-スタインバーグ・ディザリング</a>を実装してものがあるので、
+それを使ってみます。</p>
+
+<p><code>gif.Encode</code> を使って静止画GIFを作るときにデフォルトでこの方法が使われるみたいですが、
+アニメーションGIFを作るときにはディザリング処理の呼び出しを自分でやらないといけないようです。</p>
+
+<p>``` go
+package main</p>
+
+<p>import (</p>
+
+<pre><code>"image"
+"image/color/palette"
+"image/draw"
+"image/gif"
+_ "image/png"
+"os"
+</code></pre>
+
+<p>)</p>
+
+<p>func main() {</p>
+
+<pre><code>reader, err := os.Open("Lenna.png")
+if err != nil {
+    return
+}
+defer reader.Close()
+
+img, _, err := image.Decode(reader)
+if err != nil {
+    return
+}
+
+paletted := image.NewPaletted(img.Bounds(), palette.WebSafe)
+draw.FloydSteinberg.Draw(paletted, img.Bounds(), img, image.ZP)
+
+f, _ := os.Create("floyd_steinberg.gif")
+defer f.Close()
+
+opts := &amp;gif.GIF{
+    Image:     []*image.Paletted{paletted},
+    Delay:     []int{0},
+    LoopCount: 0,
+}
+gif.EncodeAll(f, opts)
+</code></pre>
+
+<p>}
+```</p>
+
+<p>結果:
+<img src="/images/2015-04-25-floyd_steinberg.gif" alt="floyd_steinberg.gif" /></p>
+
+<p>最初よりはかなり良くなったものの、なんだかざらついた感じがします。
+昔はこんな感じの画像よく見ましたね・・・すごく20世紀な感じがします。</p>
+
+<h2>メディアンカットで減色してみる</h2>
+
+<p>20世紀感の原因は<a href="http://www.htmq.com/color/websafe216.shtml">Webセーフカラー</a>(この言葉ってもはや死語なのでは)を使ってるからです。
+21世紀の現在においてはWebセーフカラーでない色を使っても、色が変わることはほとんど無いので、
+24bitカラーで表現可能な1677万色の中から自由に256色を選択できます。</p>
+
+<p>で、問題はその256色をどうやって選択するかなんですが、
+Goの標準ライブラリにはインターフェースは定義されているものの実装が存在しない(？)みたいです。
+いろいろ探しまわって<a href="https://github.com/soniakeys/quant">soniakeys/quant</a>というパッケージを見つけたのでこれを使ってみます。</p>
+
+<p>``` go
+package main</p>
+
+<p>import (</p>
+
+<pre><code>"github.com/soniakeys/quant/median"
+"image"
+"image/gif"
+_ "image/png"
+"os"
+</code></pre>
+
+<p>)</p>
+
+<p>func main() {</p>
+
+<pre><code>reader, err := os.Open("Lenna.png")
+if err != nil {
+    return
+}
+defer reader.Close()
+
+img, _, err := image.Decode(reader)
+if err != nil {
+    return
+}
+
+q := median.Quantizer(256)
+paletted := q.Image(img)
+
+f, _ := os.Create("median.gif")
+defer f.Close()
+
+opts := &amp;gif.GIF{
+    Image:     []*image.Paletted{paletted},
+    Delay:     []int{0},
+    LoopCount: 0,
+}
+gif.EncodeAll(f, opts)
+</code></pre>
+
+<p>}
+```</p>
+
+<p><img src="/images/2015-04-25-median.gif" alt="median.gif" /></p>
+
+<h2>メディアンカットで減色してディザリングもやってみる</h2>
+
+<p>減色前の画像を渡すと減色したあとの画像を返してくれる<a href="https://github.com/soniakeys/quant">soniakeys/quant</a>の便利メソッドを
+使って実装してみましたが、
+ディザリングをしてくれないのでグラデーション部分があまりキレイではありません。</p>
+
+<p><a href="https://github.com/soniakeys/quant">soniakeys/quant</a>を使うのはパレットの作成だけにして、
+draw.FloydSteinbergでディザリングを行ってみます。</p>
+
+<p>``` go
+package main</p>
+
+<p>import (</p>
+
+<pre><code>"github.com/soniakeys/quant/median"
+"image"
+"image/color"
+"image/draw"
+"image/gif"
+_ "image/png"
+"os"
+</code></pre>
+
+<p>)</p>
+
+<p>func main() {</p>
+
+<pre><code>reader, err := os.Open("Lenna.png")
+if err != nil {
+    return
+}
+defer reader.Close()
+
+img, _, err := image.Decode(reader)
+if err != nil {
+    return
+}
+
+q := median.Quantizer(256)
+p := q.Quantize(make(color.Palette, 0, 256), img)
+paletted := image.NewPaletted(img.Bounds(), p)
+draw.FloydSteinberg.Draw(paletted, img.Bounds(), img, image.ZP)
+
+f, _ := os.Create("median-floyd-steinberg.gif")
+defer f.Close()
+
+opts := &amp;gif.GIF{
+    Image:     []*image.Paletted{paletted},
+    Delay:     []int{0},
+    LoopCount: 0,
+}
+gif.EncodeAll(f, opts)
+</code></pre>
+
+<p>}
+```</p>
+
+<p>結果:
+<img src="/images/2015-04-25-median-floyd-steinberg.gif" alt="median-floyd-steinberg.gif" /></p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Go言語でshuffleする話]]></title>
+    <link href="http://shogo82148.github.io/blog/2015/04/25/shuffle-in-golang/"/>
+    <updated>2015-04-25T18:07:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2015/04/25/shuffle-in-golang</id>
+    <content type="html"><![CDATA[<p><a href="http://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle">Fisher-Yates shuffle</a>を使ってシャッフルライブラリ作ってみました。</p>
+
+<ul>
+<li>https://github.com/shogo82148/go-shuffle</li>
+</ul>
+
+
+<p>標準ライブラリのsortと似たような感じで使えます。
+デフォルトでintとfloat64とstringのシャッフルに対応していて、
+他の型をシャッフルしたい場合はインターフェースを実装してね、って感じです。
+実装が簡単なので、インターフェース定義する手間とシャッフルのアルゴリズム自前で書く手間ほとんど一緒ではという気もするけど、
+まあライブラリ作成の練習ってことで。</p>
+
+<p>で、ここからが本題。
+Fisher-Yates shuffleの名前は以前から知ってたけど、
+この前某プロジェクトで以下のようなshuffleの実装を発見。</p>
+
+<p>``` go
+package main</p>
+
+<p>import "math/rand"</p>
+
+<p>func shuffle(a []int) {</p>
+
+<pre><code>for i := range a {
+    j := rand.Intn(i + 1)
+    a[i], a[j] = a[j], a[i]
+}
+</code></pre>
+
+<p>}
+```</p>
+
+<p>Fisher-Yates shuffleと似ているけど、なにかが違う。
+ちゃんとシャッフルされているのか気になったので検証してみました。</p>
+
+<!-- More -->
+
+
+<h2>検証</h2>
+
+<p>n個の数列をシャッフルすることを考えます。
+シャッフルの後i番目の要素がj番目に移動する確率を <script type="math/tex">P_n(i, j)</script> と定義します(golangのコードにあわせて0-originで考えます)。</p>
+
+<p>完全にランダムにシャッフルされていれば、
+元の数列のどの要素も0からn-1の範囲に一様分布するはずです。
+つまり、以下の式がなりたてば「シャッフルされている」と言えそうです。</p>
+
+<p><script type="math/tex; mode=display">
+P_n(i, j) = \frac{1}{n}　　　(i, j = 0, \dots, n - 1)
+</script></p>
+
+<h3>n=1の場合</h3>
+
+<p>n=1の場合は、必ず0番目と0番目の入れ替え(つまり順番変わらない)になります。
+上で定義した確率を計算すると<script type="math/tex">P_1(0, 0) = 1/1</script>となるので、シャッフルされていると言えます。</p>
+
+<h3>n=k+1の場合</h3>
+
+<p>ループがk回周ったあと0...k-1の要素はシャッフルされていると仮定して、
+最後のn=k+1回目のループが周ったあと正しくシャッフルされているかを検証します。
+全てのi, jの組み合わせについて考えるのは大変なので、いくつか場合分け。</p>
+
+<p>i=n-1の場合。
+n-1番目の要素と交換されるのは、0...n-1番目の中からランダムに一つなので、以下のことはすぐに分かりますね。</p>
+
+<p><script type="math/tex; mode=display">
+P_n(n-1, j) = \frac{1}{n}　　　(j = 0, \dots, n - 1)
+</script></p>
+
+<p>i,j &lt; n-1 の場合。
+n回目のループでi番目の要素がj番目に来る確率＝i番目の要素がn-1回のループでj番目に来る確率×最後のループでj番目が入れ替え対象にならない確率なので、
+以下のようになります。</p>
+
+<p><script type="math/tex; mode=display">
+P_n(i, j) = P_{n-1}(i,j) \times \frac{n-1}{n} = \frac{1}{n-1} \times \frac{n-1}{n} = \frac{1}{n}
+</script></p>
+
+<p>i&lt;n-1, j=n-1の場合。
+n回目のループでi番目の要素がj番目に来る確率＝i番目の要素がn-1回のループでj番目に来る確率×最後のループでj番目が入れ替え対象になる確率です。</p>
+
+<p><script type="math/tex; mode=display">
+P_n(i, n-1) = \sum_{j=0}<sup>{n-2}P_{n-1}(i,j)\times\frac{1}{n}</sup> = \frac{1}{n}
+</script></p>
+
+<p>これで全ての場合について</p>
+
+<p><script type="math/tex; mode=display">
+P_n(i, j) = \frac{1}{n}　　　(i, j = 0, \dots, n - 1)
+</script></p>
+
+<p>が成り立ち、シャッフルされているということがわかりました。
+数学的帰納法により、1以上の全ての自然数についてシャッフルが行われることになります。</p>
+
+<h2>ループの中でaの値を書き換えるていることについて</h2>
+
+<p><code>for i := range a</code>でイテレーションしている最中に
+元のコレクションを書き換える操作をしているのが気になって逆アセンブルしてみた。</p>
+
+<p><code>plain
+--- prog list "shuffle" ---
+0000 (/Users/shogo/shuffle.go:5) TEXT    shuffle+0(SB),$40-24
+0001 (/Users/shogo/shuffle.go:5) FUNCDATA $0,gcargs·0+0(SB)
+0002 (/Users/shogo/shuffle.go:5) FUNCDATA $1,gclocals·0+0(SB)
+0003 (/Users/shogo/shuffle.go:5) TYPE    a+0(FP){[]int},$24
+0004 (/Users/shogo/shuffle.go:5) TYPE    i+-16(SP){int},$8
+0005 (/Users/shogo/shuffle.go:5) TYPE    autotmp_0001+-24(SP){int},$8
+0006 (/Users/shogo/shuffle.go:5) TYPE    autotmp_0002+-8(SP){int},$8
+0007 (/Users/shogo/shuffle.go:5) TYPE    autotmp_0003+0(SP){int},$8
+0008 (/Users/shogo/shuffle.go:6) MOVQ    a+8(FP),BX
+0009 (/Users/shogo/shuffle.go:6) MOVQ    $0,DI
+0010 (/Users/shogo/shuffle.go:6) MOVQ    BX,autotmp_0002+-8(SP)
+0011 (/Users/shogo/shuffle.go:6) JMP     ,13
+0012 (/Users/shogo/shuffle.go:6) INCQ    ,DI
+0013 (/Users/shogo/shuffle.go:6) MOVQ    autotmp_0002+-8(SP),BP
+0014 (/Users/shogo/shuffle.go:6) CMPQ    DI,BP
+0015 (/Users/shogo/shuffle.go:6) JGE     $0,60
+0016 (/Users/shogo/shuffle.go:6) MOVQ    DI,autotmp_0001+-24(SP)
+0017 (/Users/shogo/shuffle.go:7) MOVQ    DI,BX
+0018 (/Users/shogo/shuffle.go:7) MOVQ    DI,i+-16(SP)
+0019 (/Users/shogo/shuffle.go:7) INCQ    ,BX
+0020 (/Users/shogo/shuffle.go:7) MOVQ    BX,(SP)
+0021 (/Users/shogo/shuffle.go:7) CALL    ,rand.Intn+0(SB)
+0022 (/Users/shogo/shuffle.go:7) MOVQ    i+-16(SP),R9
+0023 (/Users/shogo/shuffle.go:7) MOVQ    autotmp_0001+-24(SP),DI
+0024 (/Users/shogo/shuffle.go:7) MOVQ    a+8(FP),DX
+0025 (/Users/shogo/shuffle.go:7) MOVQ    a+0(FP),AX
+0026 (/Users/shogo/shuffle.go:7) MOVQ    8(SP),CX
+0027 (/Users/shogo/shuffle.go:8) MOVQ    AX,BX
+0028 (/Users/shogo/shuffle.go:8) MOVQ    R9,BP
+0029 (/Users/shogo/shuffle.go:8) CMPQ    R9,DX
+0030 (/Users/shogo/shuffle.go:8) JCS     $1,33
+0031 (/Users/shogo/shuffle.go:8) CALL    ,runtime.panicindex+0(SB)
+0032 (/Users/shogo/shuffle.go:8) UNDEF   ,
+0033 (/Users/shogo/shuffle.go:8) LEAQ    (BX)(BP*8),BX
+0034 (/Users/shogo/shuffle.go:8) MOVQ    (BX),SI
+0035 (/Users/shogo/shuffle.go:8) MOVQ    AX,BX
+0036 (/Users/shogo/shuffle.go:8) MOVQ    R9,BP
+0037 (/Users/shogo/shuffle.go:8) CMPQ    R9,DX
+0038 (/Users/shogo/shuffle.go:8) JCS     $1,41
+0039 (/Users/shogo/shuffle.go:8) CALL    ,runtime.panicindex+0(SB)
+0040 (/Users/shogo/shuffle.go:8) UNDEF   ,
+0041 (/Users/shogo/shuffle.go:8) LEAQ    (BX)(BP*8),BX
+0042 (/Users/shogo/shuffle.go:8) MOVQ    AX,BP
+0043 (/Users/shogo/shuffle.go:8) MOVQ    CX,R8
+0044 (/Users/shogo/shuffle.go:8) CMPQ    CX,DX
+0045 (/Users/shogo/shuffle.go:8) JCS     $1,48
+0046 (/Users/shogo/shuffle.go:8) CALL    ,runtime.panicindex+0(SB)
+0047 (/Users/shogo/shuffle.go:8) UNDEF   ,
+0048 (/Users/shogo/shuffle.go:8) LEAQ    (BP)(R8*8),BP
+0049 (/Users/shogo/shuffle.go:8) MOVQ    (BP),R8
+0050 (/Users/shogo/shuffle.go:8) MOVQ    R8,(BX)
+0051 (/Users/shogo/shuffle.go:8) MOVQ    AX,BX
+0052 (/Users/shogo/shuffle.go:8) MOVQ    CX,BP
+0053 (/Users/shogo/shuffle.go:8) CMPQ    CX,DX
+0054 (/Users/shogo/shuffle.go:8) JCS     $1,57
+0055 (/Users/shogo/shuffle.go:8) CALL    ,runtime.panicindex+0(SB)
+0056 (/Users/shogo/shuffle.go:8) UNDEF   ,
+0057 (/Users/shogo/shuffle.go:8) LEAQ    (BX)(BP*8),BX
+0058 (/Users/shogo/shuffle.go:8) MOVQ    SI,(BX)
+0059 (/Users/shogo/shuffle.go:6) JMP     ,12
+0060 (/Users/shogo/shuffle.go:10) RET     ,
+</code></p>
+
+<p>アセンブル読めてないけど、ループの最初で<code>len(a)</code>を<code>autotmp_0002+-8(SP)</code>に保存しているっぽいのを感じる。
+自動的に<code>size := len(a) for i := 0; i &lt; size; i++ {</code> みたいな処理に書き換えているみたい。</p>
+]]></content>
+  </entry>
+  
+</feed>

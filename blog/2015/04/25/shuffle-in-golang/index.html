@@ -1,0 +1,581 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Go言語でshuffleする話 - Shogo's Blog</title>
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="description" content="Fisher-Yates shuffleを使ってシャッフルライブラリ作ってみました。 https://github.com/shogo82148/go-shuffle 標準ライブラリのsortと似たような感じで使えます。
+デフォルトでintとfloat64とstringのシャッフルに対応していて &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://shogo82148.github.io/blog/2015/04/25/shuffle-in-golang/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  <link href="/atom.xml" rel="alternate" title="Shogo's Blog" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-4526627-4']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+  <script type="text/javascript" src="http://s.hatena.ne.jp/js/HatenaStar.js"></script>
+<script type="text/javascript">
+Hatena.Star.Token = '0da43945db72b59fd47eb24198fc7a0293c0191f';
+Hatena.Star.SiteConfig = {
+  entryNodes: {
+    'article': {
+      uri: 'h1 a',
+      title: 'h1',
+      container: 'h1'
+    },
+    'article.hentry': {
+      uri: 'window.location',
+      title: 'h1.entry-title',
+      container: 'h1.entry-title'
+    }
+  }
+};
+</script>
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Shogo's Blog</a></h1>
+  
+    <h2>たぶんプログラミングとかについて書いていくブログ</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:shogo82148.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/blog/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Go言語でshuffleする話</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-04-25T18:07:00+09:00" pubdate data-updated="true">Apr 25<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p><a href="http://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle">Fisher-Yates shuffle</a>を使ってシャッフルライブラリ作ってみました。</p>
+
+<ul>
+<li>https://github.com/shogo82148/go-shuffle</li>
+</ul>
+
+
+<p>標準ライブラリのsortと似たような感じで使えます。
+デフォルトでintとfloat64とstringのシャッフルに対応していて、
+他の型をシャッフルしたい場合はインターフェースを実装してね、って感じです。
+実装が簡単なので、インターフェース定義する手間とシャッフルのアルゴリズム自前で書く手間ほとんど一緒ではという気もするけど、
+まあライブラリ作成の練習ってことで。</p>
+
+<p>で、ここからが本題。
+Fisher-Yates shuffleの名前は以前から知ってたけど、
+この前某プロジェクトで以下のようなshuffleの実装を発見。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="s">&quot;math/rand&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">shuffle</span><span class="p">(</span><span class="nx">a</span> <span class="p">[]</span><span class="kt">int</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">a</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">j</span> <span class="o">:=</span> <span class="nx">rand</span><span class="p">.</span><span class="nx">Intn</span><span class="p">(</span><span class="nx">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+</span><span class='line'>      <span class="nx">a</span><span class="p">[</span><span class="nx">i</span><span class="p">],</span> <span class="nx">a</span><span class="p">[</span><span class="nx">j</span><span class="p">]</span> <span class="p">=</span> <span class="nx">a</span><span class="p">[</span><span class="nx">j</span><span class="p">],</span> <span class="nx">a</span><span class="p">[</span><span class="nx">i</span><span class="p">]</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Fisher-Yates shuffleと似ているけど、なにかが違う。
+ちゃんとシャッフルされているのか気になったので検証してみました。</p>
+
+<!-- More -->
+
+
+<h2>検証</h2>
+
+<p>n個の数列をシャッフルすることを考えます。
+シャッフルの後i番目の要素がj番目に移動する確率を <script type="math/tex">P_n(i, j)</script> と定義します(golangのコードにあわせて0-originで考えます)。</p>
+
+<p>完全にランダムにシャッフルされていれば、
+元の数列のどの要素も0からn-1の範囲に一様分布するはずです。
+つまり、以下の式がなりたてば「シャッフルされている」と言えそうです。</p>
+
+<script type="math/tex; mode=display">
+P_n(i, j) = \frac{1}{n}　　　(i, j = 0, \dots, n - 1)
+</script>
+
+
+<h3>n=1の場合</h3>
+
+<p>n=1の場合は、必ず0番目と0番目の入れ替え(つまり順番変わらない)になります。
+上で定義した確率を計算すると<script type="math/tex">P_1(0, 0) = 1/1</script>となるので、シャッフルされていると言えます。</p>
+
+<h3>n=k+1の場合</h3>
+
+<p>ループがk回周ったあと0&#8230;k-1の要素はシャッフルされていると仮定して、
+最後のn=k+1回目のループが周ったあと正しくシャッフルされているかを検証します。
+全てのi, jの組み合わせについて考えるのは大変なので、いくつか場合分け。</p>
+
+<p>i=n-1の場合。
+n-1番目の要素と交換されるのは、0&#8230;n-1番目の中からランダムに一つなので、以下のことはすぐに分かりますね。</p>
+
+<script type="math/tex; mode=display">
+P_n(n-1, j) = \frac{1}{n}　　　(j = 0, \dots, n - 1)
+</script>
+
+
+<p>i,j &lt; n-1 の場合。
+n回目のループでi番目の要素がj番目に来る確率＝i番目の要素がn-1回のループでj番目に来る確率×最後のループでj番目が入れ替え対象にならない確率なので、
+以下のようになります。</p>
+
+<script type="math/tex; mode=display">
+P_n(i, j) = P_{n-1}(i,j) \times \frac{n-1}{n} = \frac{1}{n-1} \times \frac{n-1}{n} = \frac{1}{n}
+</script>
+
+
+<p>i&lt;n-1, j=n-1の場合。
+n回目のループでi番目の要素がj番目に来る確率＝i番目の要素がn-1回のループでj番目に来る確率×最後のループでj番目が入れ替え対象になる確率です。</p>
+
+<script type="math/tex; mode=display">
+P_n(i, n-1) = \sum_{j=0}^{n-2}P_{n-1}(i,j)\times\frac{1}{n} = \frac{1}{n}
+</script>
+
+
+<p>これで全ての場合について</p>
+
+<script type="math/tex; mode=display">
+P_n(i, j) = \frac{1}{n}　　　(i, j = 0, \dots, n - 1)
+</script>
+
+
+<p>が成り立ち、シャッフルされているということがわかりました。
+数学的帰納法により、1以上の全ての自然数についてシャッフルが行われることになります。</p>
+
+<h2>ループの中でaの値を書き換えるていることについて</h2>
+
+<p><code>for i := range a</code>でイテレーションしている最中に
+元のコレクションを書き換える操作をしているのが気になって逆アセンブルしてみた。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+<span class='line-number'>61</span>
+<span class='line-number'>62</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>--- prog list "shuffle" ---
+</span><span class='line'>0000 (/Users/shogo/shuffle.go:5) TEXT    shuffle+0(SB),$40-24
+</span><span class='line'>0001 (/Users/shogo/shuffle.go:5) FUNCDATA $0,gcargs·0+0(SB)
+</span><span class='line'>0002 (/Users/shogo/shuffle.go:5) FUNCDATA $1,gclocals·0+0(SB)
+</span><span class='line'>0003 (/Users/shogo/shuffle.go:5) TYPE    a+0(FP){[]int},$24
+</span><span class='line'>0004 (/Users/shogo/shuffle.go:5) TYPE    i+-16(SP){int},$8
+</span><span class='line'>0005 (/Users/shogo/shuffle.go:5) TYPE    autotmp_0001+-24(SP){int},$8
+</span><span class='line'>0006 (/Users/shogo/shuffle.go:5) TYPE    autotmp_0002+-8(SP){int},$8
+</span><span class='line'>0007 (/Users/shogo/shuffle.go:5) TYPE    autotmp_0003+0(SP){int},$8
+</span><span class='line'>0008 (/Users/shogo/shuffle.go:6) MOVQ    a+8(FP),BX
+</span><span class='line'>0009 (/Users/shogo/shuffle.go:6) MOVQ    $0,DI
+</span><span class='line'>0010 (/Users/shogo/shuffle.go:6) MOVQ    BX,autotmp_0002+-8(SP)
+</span><span class='line'>0011 (/Users/shogo/shuffle.go:6) JMP     ,13
+</span><span class='line'>0012 (/Users/shogo/shuffle.go:6) INCQ    ,DI
+</span><span class='line'>0013 (/Users/shogo/shuffle.go:6) MOVQ    autotmp_0002+-8(SP),BP
+</span><span class='line'>0014 (/Users/shogo/shuffle.go:6) CMPQ    DI,BP
+</span><span class='line'>0015 (/Users/shogo/shuffle.go:6) JGE     $0,60
+</span><span class='line'>0016 (/Users/shogo/shuffle.go:6) MOVQ    DI,autotmp_0001+-24(SP)
+</span><span class='line'>0017 (/Users/shogo/shuffle.go:7) MOVQ    DI,BX
+</span><span class='line'>0018 (/Users/shogo/shuffle.go:7) MOVQ    DI,i+-16(SP)
+</span><span class='line'>0019 (/Users/shogo/shuffle.go:7) INCQ    ,BX
+</span><span class='line'>0020 (/Users/shogo/shuffle.go:7) MOVQ    BX,(SP)
+</span><span class='line'>0021 (/Users/shogo/shuffle.go:7) CALL    ,rand.Intn+0(SB)
+</span><span class='line'>0022 (/Users/shogo/shuffle.go:7) MOVQ    i+-16(SP),R9
+</span><span class='line'>0023 (/Users/shogo/shuffle.go:7) MOVQ    autotmp_0001+-24(SP),DI
+</span><span class='line'>0024 (/Users/shogo/shuffle.go:7) MOVQ    a+8(FP),DX
+</span><span class='line'>0025 (/Users/shogo/shuffle.go:7) MOVQ    a+0(FP),AX
+</span><span class='line'>0026 (/Users/shogo/shuffle.go:7) MOVQ    8(SP),CX
+</span><span class='line'>0027 (/Users/shogo/shuffle.go:8) MOVQ    AX,BX
+</span><span class='line'>0028 (/Users/shogo/shuffle.go:8) MOVQ    R9,BP
+</span><span class='line'>0029 (/Users/shogo/shuffle.go:8) CMPQ    R9,DX
+</span><span class='line'>0030 (/Users/shogo/shuffle.go:8) JCS     $1,33
+</span><span class='line'>0031 (/Users/shogo/shuffle.go:8) CALL    ,runtime.panicindex+0(SB)
+</span><span class='line'>0032 (/Users/shogo/shuffle.go:8) UNDEF   ,
+</span><span class='line'>0033 (/Users/shogo/shuffle.go:8) LEAQ    (BX)(BP*8),BX
+</span><span class='line'>0034 (/Users/shogo/shuffle.go:8) MOVQ    (BX),SI
+</span><span class='line'>0035 (/Users/shogo/shuffle.go:8) MOVQ    AX,BX
+</span><span class='line'>0036 (/Users/shogo/shuffle.go:8) MOVQ    R9,BP
+</span><span class='line'>0037 (/Users/shogo/shuffle.go:8) CMPQ    R9,DX
+</span><span class='line'>0038 (/Users/shogo/shuffle.go:8) JCS     $1,41
+</span><span class='line'>0039 (/Users/shogo/shuffle.go:8) CALL    ,runtime.panicindex+0(SB)
+</span><span class='line'>0040 (/Users/shogo/shuffle.go:8) UNDEF   ,
+</span><span class='line'>0041 (/Users/shogo/shuffle.go:8) LEAQ    (BX)(BP*8),BX
+</span><span class='line'>0042 (/Users/shogo/shuffle.go:8) MOVQ    AX,BP
+</span><span class='line'>0043 (/Users/shogo/shuffle.go:8) MOVQ    CX,R8
+</span><span class='line'>0044 (/Users/shogo/shuffle.go:8) CMPQ    CX,DX
+</span><span class='line'>0045 (/Users/shogo/shuffle.go:8) JCS     $1,48
+</span><span class='line'>0046 (/Users/shogo/shuffle.go:8) CALL    ,runtime.panicindex+0(SB)
+</span><span class='line'>0047 (/Users/shogo/shuffle.go:8) UNDEF   ,
+</span><span class='line'>0048 (/Users/shogo/shuffle.go:8) LEAQ    (BP)(R8*8),BP
+</span><span class='line'>0049 (/Users/shogo/shuffle.go:8) MOVQ    (BP),R8
+</span><span class='line'>0050 (/Users/shogo/shuffle.go:8) MOVQ    R8,(BX)
+</span><span class='line'>0051 (/Users/shogo/shuffle.go:8) MOVQ    AX,BX
+</span><span class='line'>0052 (/Users/shogo/shuffle.go:8) MOVQ    CX,BP
+</span><span class='line'>0053 (/Users/shogo/shuffle.go:8) CMPQ    CX,DX
+</span><span class='line'>0054 (/Users/shogo/shuffle.go:8) JCS     $1,57
+</span><span class='line'>0055 (/Users/shogo/shuffle.go:8) CALL    ,runtime.panicindex+0(SB)
+</span><span class='line'>0056 (/Users/shogo/shuffle.go:8) UNDEF   ,
+</span><span class='line'>0057 (/Users/shogo/shuffle.go:8) LEAQ    (BX)(BP*8),BX
+</span><span class='line'>0058 (/Users/shogo/shuffle.go:8) MOVQ    SI,(BX)
+</span><span class='line'>0059 (/Users/shogo/shuffle.go:6) JMP     ,12
+</span><span class='line'>0060 (/Users/shogo/shuffle.go:10) RET     ,</span></code></pre></td></tr></table></div></figure>
+
+
+<p>アセンブル読めてないけど、ループの最初で<code>len(a)</code>を<code>autotmp_0002+-8(SP)</code>に保存しているっぽいのを感じる。
+自動的に<code>size := len(a) for i := 0; i &lt; size; i++ {</code> みたいな処理に書き換えているみたい。</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-04-25T18:07:00+09:00" pubdate data-updated="true">Apr 25<span>th</span>, 2015</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/golang/'>golang</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.io/blog/2015/04/25/shuffle-in-golang/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.io/blog/2015/04/25/shuffle-in-golang/" data-via="shogo82148" data-counturl="http://shogo82148.github.io/blog/2015/04/25/shuffle-in-golang/" >Tweet</a>
+  
+  
+  <div class="g-plusone" data-size="medium"></div>
+  
+  
+    <div class="fb-like" data-send="true" data-width="450" data-show-faces="false"></div>
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2015/04/19/kayac-isucon/" title="Previous Post: 社内ISUCONにチームぽわわ3.5で参加しました">&laquo; 社内ISUCONにチームぽわわ3.5で参加しました</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2015/04/25/quantize-image-in-golang/" title="Next Post: Go言語で画像の減色を行う">Go言語で画像の減色を行う &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2015/05/21/branch-committer/">各ブランチの最後にコミットした人を知る</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/05/13/golang-sql-proxy/">Go言語でSQLのトレースをする</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/05/09/go-txmanager/">Goのトランザクションマネージャ作った</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/05/03/golang-graceful-restart/">Go言語でGraceful Restartをする</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/04/25/quantize-image-in-golang/">Go言語で画像の減色を行う</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>GitHub Repos</h1>
+  <ul id="gh_repos">
+    <li class="loading">Status updating...</li>
+  </ul>
+  
+  <a href="https://github.com/shogo82148">@shogo82148</a> on GitHub
+  
+  <script type="text/javascript">
+    $.domReady(function(){
+        if (!window.jXHR){
+            var jxhr = document.createElement('script');
+            jxhr.type = 'text/javascript';
+            jxhr.src = '/javascripts/libs/jXHR.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(jxhr, s);
+        }
+
+        github.showRepos({
+            user: 'shogo82148',
+            count: 0,
+            skip_forks: true,
+            target: '#gh_repos'
+        });
+    });
+  </script>
+  <script src="/javascripts/github.js" type="text/javascript"> </script>
+</section>
+
+
+<section>
+  <h1>Latest Tweets</h1>
+  <ul id="tweets">
+    <li class="loading">Status updating...</li>
+  </ul>
+  <script type="text/javascript">
+    $.domReady(function(){
+      getTwitterFeed("shogo82148", 4, false);
+    });
+  </script>
+  <script src="/javascripts/twitter.js" type="text/javascript"> </script>
+  
+    <a href="http://twitter.com/shogo82148" class="twitter-follow-button" data-show-count="false">Follow @shogo82148</a>
+  
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2015 - Shogo Ichinose -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'shogosblog';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://shogo82148.github.io/blog/2015/04/25/shuffle-in-golang/';
+        var disqus_url = 'http://shogo82148.github.io/blog/2015/04/25/shuffle-in-golang/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) {return;}
+  js = d.createElement(s); js.id = id;
+  js.src = "//connect.facebook.net/en_US/all.js#appId=212934732101925&xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var script = document.createElement('script'); script.type = 'text/javascript'; script.async = true;
+      script.src = 'https://apis.google.com/js/plusone.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(script, s);
+    })();
+  </script>
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>
