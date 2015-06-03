@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
 
-  <title><![CDATA[Category: MeCab | Shogo's Blog]]></title>
+  <title><![CDATA[Category: mecab | Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/blog/categories/mecab/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2015-05-21T01:24:35+09:00</updated>
+  <updated>2015-06-03T10:09:29+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -14,165 +14,136 @@
 
   
   <entry>
-    <title type="html"><![CDATA[MeCabをPythonから使う注意点とか]]></title>
-    <link href="http://shogo82148.github.io/blog/2012/12/15/mecab-python/"/>
-    <updated>2012-12-15T17:38:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2012/12/15/mecab-python</id>
-    <content type="html"><![CDATA[<p>日本語の文章をコンピュータで色々いじるときに，
-必ずと言っていいほどよく使うのが形態素解析器．
-スペースなどの明示的な区切りの無い日本語を単語に分割してくれるツールです．
-中でもMeCabが非常に有名で，さまざまなところで使われています．</p>
+    <title type="html"><![CDATA[MeCabをPython3から使う(中間報告)]]></title>
+    <link href="http://shogo82148.github.io/blog/2015/06/02/mecab-in-python3/"/>
+    <updated>2015-06-02T23:12:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2015/06/02/mecab-in-python3</id>
+    <content type="html"><![CDATA[<p>先日このようなツイートを見かけて、
+「Python3になってGCの挙動変わったのかな？」と疑問に思ったので調査してみました。</p>
 
-<p>MeCabはいろいろな言語から呼び出すことができます．
-自然言語処理の分野ではPythonが人気のようですね．僕も使っています．
-しかし，MeCabをPythonから使う場合，注意する点がいくつかあります．
-そこにハマっている後輩を見かけたので，文章として残しておくことにします．
-Python2系が対象です(3系はよくわからない)．
-注意するのは以下の二点です．</p>
-
-<ul>
-<li>MeCabに渡す文字列はencode，戻ってきた文字列はdecodeする</li>
-<li>MeCabに渡した文字列は必ず変数に入れておく</li>
-</ul>
-
+<p><blockquote class="twitter-tweet"><p lang="ja" dir="ltr">MeCabをPythonから使う注意点とか - Shogo&#39;s Blog <a href="http://t.co/vJnOqZfUd7">http://t.co/vJnOqZfUd7</a> <a href="https://twitter.com/shogo82148">@shogo82148</a>さんから python3だと変数に代入しなくても動くのだけど2.xでは留意しないといけない</p>&mdash; NOKUBI Takatsugu野首貴嗣 (@knok) <a href="https://twitter.com/knok/status/605197292086263808">June 1, 2015</a></blockquote>
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script></p>
 
 <!-- More -->
 
 
-<h2>EncodeとDecode</h2>
+<h2>Python3へのMeCabインストール</h2>
 
-<p>Python2系の文字列には，バイト列として扱われる文字列(str)と，Unicodeで表現された文字列(unicode)があります．
-日本語を扱う場合，strだといろいろ問題があるので，特に理由がなければunicodeを使うべきです．
-しかし，MeCabはstrしか受け付けません．
-そこでMeCabに渡す直前・直後でencode・decodeするようにします．</p>
+<p>手元のPython3.4.3にMeCab Bindingをインストールします。
+MeCabの公式(Google Codeサービス停止にともない<a href="https://taku910.github.io/mecab/">github pageへ移行している模様</a>)から落とせる
+Python BindingはPython2.x向けのため、setup.pyがそのままでは動きません。
+Python3.xでは非互換な文法の変更が入ったので以下のように書き換える必要があります。</p>
 
-<p>```python
-import MeCab
-tagger = MeCab.tagger('-Owakati')
-text = u'MeCabで遊んでみよう！'</p>
+<p>``` diff
+diff --git a/setup.py.org b/setup.py
+index 4486cbb..657945a 100644
+--- a/setup.py.org
++++ b/setup.py
+@@ -7,7 +7,7 @@ def cmd1(str):</p>
 
-<p>result = tagger.parse(text) # エラー！</p>
+<pre><code> return os.popen(str).readlines()[0][:-1]
+</code></pre>
 
-<p>encoded_text = text.encode('utf-8') # encodeが必要
-encoded_result = tagger.parse(text)
-result = result.decode('utf-8') # 必ずdecode
-```</p>
+<p> def cmd2(str):
+-    return string.split (cmd1(str))
++    return cmd1(str).split()</p>
 
-<p><code>'utf-8'</code>の部分は辞書の文字コードに合わせて適宜書き換えてください．
-デフォルトはeuc-jpですが，utf-8の方が幸せになれると思います．</p>
+<p> setup(name = "mecab-python",</p>
 
-<h2>必ず変数に入れる</h2>
+<pre><code>    version = cmd1("mecab-config --version"),
+</code></pre>
 
-<p>次にMeCabの作ったノードに直接アクセスして，品詞情報などを取ってくることを考えます．
-適当に書いてみるとこんな感じでしょうか．</p>
+<p>```</p>
 
-<p>```python
+<p>あとは <code>python setup.py install</code> で入ります。</p>
+
+<h2>動かしてみる</h2>
+
+<p>以前書いた「<a href="http://shogo82148.github.io/blog/2012/12/15/mecab-python/">MeCabをPythonから使う注意点とか</a>」を見返しながら、
+GCされて上手く動かない例 をPython3.4.3で動かしてみます。
+文字列の扱いが変わったり、print文の扱いが変わったりしているので、その部分だけ書き換えが必要です。</p>
+
+<p>``` python
 import MeCab
 tagger = MeCab.tagger('')
 text = u'MeCabで遊んでみよう！'</p>
 
-<p>node = tagger.parseToNode(text.encode('utf-8'))
-while node:</p>
+<p>node = tagger.parseToNode(text)</p>
 
-<pre><code>#printはstrを渡す必要があるのでdecodeは不要
-print node.surface + '\t' + node.feature
+<h1>Python2.x ではencode必須だったのが要らなくなった！</h1>
+
+<h1>node = tagger.parseToNode(text.encode('utf-8'))</h1>
+
+<p>while node:</p>
+
+<pre><code>print(node.surface + '\t' + node.feature)
+# printは文ではなくなったのでカッコで囲う必要がある
 node = node.next
 </code></pre>
 
 <p>```</p>
 
-<p>MeCabに渡す直前にencodeもしているので上手く動きそうです．
-(decodeしてないのはprintに渡すためなので気にしなくておｋ)
-しかし，このコードの出力は下のような悲惨なものとなるのです
-(ブラウザさんに配慮して一部修正，環境によっても違うと思います)</p>
+<p>さて、動かしてみましょう。</p>
 
 <p>``` plain</p>
 
-<pre><code>    BOS/EOS,*,*,*,*,*,*,*,*
+<pre><code>BOS/EOS,*,*,*,*,*,*,*,*
+名詞,一般,*,*,*,*,*
+助詞,格助詞,一般,*,*,*,で,デ,デ
+動詞,自立,*,*,五段・バ行,連用タ接続,遊ぶ,アソン,アソン
+助詞,接続助詞,*,*,*,*,で,デ,デ
 </code></pre>
 
-<p>MeCab   名詞,一般,<em>,</em>,<em>,</em>,*</p>
+<p>Traceback (most recent call last):
+  File "m.py", line 10, in <module></p>
 
-<pre><code>    ??   助詞,格助詞,一般,*,*,*,で,デ,デ
+<pre><code>print( node.surface + '\t' + node.feature )
 </code></pre>
 
-<p>?詞,?   動詞,自立,<em>,</em>,五段・バ行,連用タ接続,遊ぶ,アソン,アソン
-???     助詞,接続助詞,<em>,</em>,<em>,</em>,で,デ,デ
-??,<em>,</em>       動詞,非自立,<em>,</em>,一段,未然ウ接続,みる,ミヨ,ミヨ
-,<em>,     助動詞,</em>,<em>,</em>,不変化型,基本形,う,ウ,ウ
-<em>,</em>     記号,一般,<em>,</em>,<em>,</em>,！,！,！</p>
+<p>UnicodeDecodeError: 'utf-8' codec can't decode byte 0xa3 in position 1: invalid start byt
+```</p>
 
-<pre><code>    BOS/EOS,*,*,*,*,*,*,*,*
-</code></pre>
+<p>surfaceが全く読み取れていない・・・。
+最後にはutf-8のデコードができず死んでしまっています。
+全然変わってないじゃないか！</p>
 
-<p>```</p>
+<p>変わってないどころか、状況はさらに悪くなっています。
+解決方法は以前の記事の通り「エンコード済みtext」を変数に保存・・・なのですが、
+Python3.x(+SWIG)ではエンコードが自動的に行われてしまうので <strong>ユーザが「エンコード済みtext」にアクセスすることができません！ </strong></p>
 
-<p>なぜこのようなことが起きてしまったのでしょう？
-答えは<code>text.encode('utf-8')</code>の戻り値の寿命と，MeCabノードの構造にあります．</p>
-
-<p>みんなさんが普段お使いのPythonは，C言語で実装されたCPythonだと思います．
-「CPythonでは、ガベージコレクションの方式として参照カウント方式とマーク・アンド・スイープ方式を併用」しています
-(<a href="http://ja.wikipedia.org/wiki/Python#.E3.83.87.E3.83.BC.E3.82.BF.E5.9E.8B">Python - Wikipedia</a>)．
-参照カウント方式おかげでCPythonは不要になったオブジェクトを不要になった瞬間に検出し，そのオブジェクトを解放することができます．
-つまり実際には5行目を少し細かく見ると，Pythonは以下の処理をします．</p>
-
-<ol>
-<li><code>text.encode('utf-8')</code>を呼び出し，"エンコード済みtext"を作成</li>
-<li><code>tagger.parseToNode</code>を呼び出し，結果を<code>node</code>に代入</li>
-<li>不要になった<strong> "エンコード済みtext"を破棄 </strong></li>
-</ol>
-
-
-<p>ポイントは3番ですね．6行目を実行する前に，"エンコード済みtext"は破棄されてしまいます．</p>
-
-<p>さて，次にMeCabがどのようにノードの情報を扱っているか見てみましょう．
-MeCabの言語バインディングのページには，ノードのsurfaceは文字列型であるような定義が書いてありますが，あれは嘘です．
-<a href="http://code.google.com/p/mecab/source/browse/trunk/mecab/src/mecab.h">ソース</a>を見ればわかりますが，みんな大好きポインタとして定義されています．
-実はこのポインタ，<strong> "エンコード済みtext"上の開始点を指し示しています </strong>．</p>
-
-<p>つまり，どういうことかというと，</p>
-
-<ul>
-<li>MeCabはsurfaceを作るのに毎回"エンコード済みtext"からコピペしてた</li>
-<li>しかし，MeCabはPythonにそのことを伝えていなかった</li>
-<li>不要と判断したPythonによって"エンコード済みtext"はすでに破棄されており，そこには何もなかった</li>
-</ul>
-
-
-<p>これを解決するにはPythonに"エンコード済みtext"が使用中であることを伝え，破棄されないようにする必要があります．
-一番簡単な方法は変数に保存しておくことです．変数のスコープにいる間は"エンコード済みtext"が破棄される心配はありません．</p>
-
-<p>```python
-import MeCab
-tagger = MeCab.tagger('')
-text = u'MeCabで遊んでみよう！'</p>
-
-<p>encoded_text = text.encode('utf-8')
-node = tagger.parseToNode(encoded_text) # 変数に入れる！
-while node:</p>
-
-<pre><code>print node.surface + '\t' + node.feature
-node = node.next
-</code></pre>
-
-<p>```</p>
-
-<p>これで上手く行きます．</p>
-
-<p>encode_textとnodeの寿命が一致している必要があります．
-nodeの結果を何度も利用する場合は一度nodeの内容をすべてPythonのリストか何かに格納しましょう．
-一度変換してしまえば，ガーベージコレクションは正しく動きます．</p>
+<p><a href="http://samurait.hatenablog.com/entry/Mecab-python3">python3対応 Mecabの紹介</a>や
+<a href="https://github.com/taku910/mecab/pull/16">SWIG 3.0.5で作りなおしたPR</a>等を試してみましたが、
+同様の症状でした。</p>
 
 <h2>まとめ</h2>
 
 <ul>
-<li>MeCabに渡す文字列はencode，戻ってきた文字列はdecodeする</li>
-<li>MeCabに渡した文字列は必ず変数に入れておく</li>
+<li>Python3.xでもPython2.xと同様で、元テキストがGCで回収されてしまう</li>
+<li>Python3.xになって回避策が無くなった</li>
 </ul>
 
 
-<p>面倒なのでラッパーを書くかといいかもしれませんね．
-もしくは自前で実装とか．</p>
+<p>ぱっと思いつく回避策は以下のような感じでしょうか・・・。</p>
+
+<ul>
+<li>諦めて <code>parseToNode</code> を使わず、<code>parse</code>の結果を頑張って解析する</li>
+<li>SWIGの設定やC++側の書き方で頑張る(具体策は未調査)</li>
+</ul>
+
+
+<p>インターフェースを変えずに後者の方法で何とかならないか、
+引き続きいじってみようと思います。</p>
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="https://github.com/taku910/mecab">taku910/MeCab</a></li>
+<li><a href="https://taku910.github.io/mecab/">MeCab</a></li>
+<li><a href="http://shogo82148.github.io/blog/2012/12/15/mecab-python/">MeCabをPythonから使う注意点とか</a></li>
+<li><a href="http://www.trifields.jp/how-to-use-mecab-in-ubuntu-14-04-and-python-3-1196">Ubuntu14.04とPython3でMeCabを使う方法</a></li>
+<li><a href="http://samurait.hatenablog.com/entry/Mecab-python3">python3対応 Mecabの紹介</a></li>
+</ul>
+
 ]]></content>
   </entry>
   
