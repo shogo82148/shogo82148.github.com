@@ -5,13 +5,12 @@
 <!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
 <head>
   <meta charset="utf-8">
-  <title>Redis::NamespaceのPerl版書いた - Shogo's Blog</title>
+  <title>Test::mysqld::Multiというモジュールを書いてみた - Shogo's Blog</title>
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="description" content="Redis のキーにプリフィックスつけるの面倒だなー自動的につけてくれないかなーと思い、
-調べてみると Ruby に Redis-Namespace というものがあるらしい。
-だけども、Perl では探しても見つからなかったので書いてみた。 レポジトリはこちら→Redis::Namespace &hellip;">
+  <meta name="description" content="Test::mysqldのインスタンスを一度に大量に作りたい人向けに
+Test::mysqld::Multiというモジュールを書いてみました。 背景 先日Jenkins EC2 Plugin で Spot Instance を使ってテストを回すというのを、 &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -20,7 +19,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   
-  <link rel="canonical" href="http://shogo82148.github.io/blog/2013/09/14/redis-namespace-perl/">
+  <link rel="canonical" href="http://shogo82148.github.io/blog/2015/06/20/test-mysqld-multi/">
   <link href="/favicon.png" rel="icon">
   <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
   <script src="/javascripts/modernizr-2.0.js"></script>
@@ -101,7 +100,7 @@ Hatena.Star.SiteConfig = {
   
   <header>
     
-      <h1 class="entry-title">Redis::NamespaceのPerl版書いた</h1>
+      <h1 class="entry-title">Test::mysqld::Multiというモジュールを書いてみた</h1>
     
     
       <p class="meta">
@@ -117,51 +116,52 @@ Hatena.Star.SiteConfig = {
   
 
 
-<time datetime="2013-09-14T18:36:00+09:00" pubdate data-updated="true">Sep 14<span>th</span>, 2013</time>
+<time datetime="2015-06-20T10:41:00+09:00" pubdate data-updated="true">Jun 20<span>th</span>, 2015</time>
         
       </p>
     
   </header>
 
 
-<div class="entry-content"><p><a href="http://redis.io/">Redis</a> のキーにプリフィックスつけるの面倒だなー自動的につけてくれないかなーと思い、
-調べてみると Ruby に <a href="https://github.com/resque/redis-namespace">Redis-Namespace</a> というものがあるらしい。
-だけども、Perl では探しても見つからなかったので書いてみた。</p>
-
-<p>レポジトリはこちら→<a href="https://github.com/shogo82148/Redis-Namepace">Redis::Namespace</a></p>
+<div class="entry-content"><p><a href="https://metacpan.org/pod/Test::mysqld">Test::mysqld</a>のインスタンスを一度に大量に作りたい人向けに
+Test::mysqld::Multiというモジュールを書いてみました。</p>
 
 <!-- More -->
 
 
-<h2>使い方</h2>
+<h2>背景</h2>
 
-<p>インターフェースは <a href="http://search.cpan.org/~melo/Redis/">Perl Redis</a> と一緒。
-コマンドのキー名に当たる部分に、自動的にプレフィックスをつけてくれる。</p>
+<p>先日<a href="http://tkuchiki.hatenablog.com/entry/2015/04/24/192851">Jenkins EC2 Plugin で Spot Instance を使ってテストを回す</a>というのを、
+tkuchikiさんにお願いして僕の関わっているプロジェクトでやっていただきました。
+CPUのたくさん載ったインスタンスを安く使えるようになったので、
+8並列で動いてたテストを24並列で動かせるようになりました。やった3倍速だ！！！
+9分程かかってたテストが7分で終わるようになりました！！！
+あれ・・・思ったほど早くなってない・・・。</p>
 
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">Redis</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="nn">Redis::</span><span class="n">Namespace</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">my</span> <span class="nv">$redis</span> <span class="o">=</span> <span class="n">Redis</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">;</span>
-</span><span class='line'><span class="k">my</span> <span class="nv">$ns</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">Namespace</span><span class="p">(</span><span class="n">redis</span> <span class="o">=&gt;</span> <span class="nv">$redis</span><span class="p">,</span> <span class="n">namespace</span> <span class="o">=&gt;</span> <span class="s">&#39;fugu&#39;</span><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'><span class="nv">$ns</span><span class="o">-&gt;</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;foo&#39;</span><span class="p">,</span> <span class="s">&#39;bar&#39;</span><span class="p">);</span>    <span class="c1"># $redis-&gt;set(&#39;fugu:foo&#39;, &#39;bar&#39;);</span>
-</span><span class='line'><span class="k">my</span> <span class="nv">$foo</span> <span class="o">=</span> <span class="nv">$ns</span><span class="o">-&gt;</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;foo&#39;</span><span class="p">);</span> <span class="c1"># my $foo = $redis-&gt;get(&#39;fugu:foo&#39;);</span>
-</span></code></pre></td></tr></table></div></figure>
+<p>ログを眺めているとproveコマンドが立ち上がってから、実際にテストが走り始めるまで数分の時間がありました。
+<a href="http://maaash.jp/2013/03/perl-app-prove-plugin-mysqlpool/">App::Prove::Plugin::MySQLPool</a>を使っているのですが、
+ここで時間がかかっているようです。</p>
 
+<p>App::Prove::Plugin::MySQLPoolはテストの並列度分だけMySQLのインスタンスを立ち上げますが、
+一個インスタンスを立ち上げたら、それにアクセスできるようになるまでずっと待っているようです。
+MySQLの起動に5秒かかるとして24並列で動かしたら2分かかるわけで無視できない長さになります。</p>
 
-<p>大体のコマンドには対応したつもり。
-別のプレフィックスがついたキーには基本的にアクセスできなくなるので、
-キー名の管理が少し楽になると思います。</p>
+<h2>作ったもの</h2>
 
-<p>でも、flushdb とか flushall すると全部消えるので気をつけてね！</p>
+<p>n個一度に立ち上げて全部にアクセスできるまで待つ実装にすれば速くなるのでは！ってことでTest::mysqld::Multiというのを書いて、
+App::Prove::Plugin::MySQLPoolからそれを使うようにしました。
+とりあえず<a href="https://github.com/mash/App-Prove-Plugin-MySQLPool/compare/master...shogo82148:test-mysqld-multi">test-mysql-multiブランチ</a>にコミットしてあります。
+App::Prove::Plugin::MySQLPoolに取り込んでもらうか別のモジュールとして分離するか、後々のことは未定。
+今のプロジェクトで使ってみてちょっとの間様子見してみます。
+7分かかってたテストが5分程度で終わるようになったので、効果はあるようです。</p>
+
+<p>ちなみに、並列度が24と半端なのはそれ以上並列度を上げても速くならなかったため。
+32コアあるマシンなんだけど使い切れてません。
+どこにボトルネックがあるんだろうな・・・。</p>
+
+<h2>まとめ</h2>
+
+<p>プロセス一覧にmysqldが24個並ぶの楽しい</p>
 </div>
 
 
@@ -184,12 +184,12 @@ Hatena.Star.SiteConfig = {
   
 
 
-<time datetime="2013-09-14T18:36:00+09:00" pubdate data-updated="true">Sep 14<span>th</span>, 2013</time>
+<time datetime="2015-06-20T10:41:00+09:00" pubdate data-updated="true">Jun 20<span>th</span>, 2015</time>
       
 
 <span class="categories">
   
-    <a class='category' href='/blog/categories/perl/'>perl</a>, <a class='category' href='/blog/categories/redis/'>redis</a>
+    <a class='category' href='/blog/categories/perl/'>perl</a>
   
 </span>
 
@@ -198,10 +198,10 @@ Hatena.Star.SiteConfig = {
     
       <div class="sharing">
   
-  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.io/blog/2013/09/14/redis-namespace-perl/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.io/blog/2015/06/20/test-mysqld-multi/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
   
   
-  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.io/blog/2013/09/14/redis-namespace-perl/" data-via="shogo82148" data-counturl="http://shogo82148.github.io/blog/2013/09/14/redis-namespace-perl/" >Tweet</a>
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.io/blog/2015/06/20/test-mysqld-multi/" data-via="shogo82148" data-counturl="http://shogo82148.github.io/blog/2015/06/20/test-mysqld-multi/" >Tweet</a>
   
   
   <div class="g-plusone" data-size="medium"></div>
@@ -214,10 +214,8 @@ Hatena.Star.SiteConfig = {
     
     <p class="meta">
       
-        <a class="basic-alignment left" href="/blog/2013/08/24/perl-redis-libraries/" title="Previous Post: Perl の Redis ライブラリを調べた">&laquo; Perl の Redis ライブラリを調べた</a>
+        <a class="basic-alignment left" href="/blog/2015/06/02/mecab-in-python3/" title="Previous Post: MeCabをPython3から使う(中間報告)">&laquo; MeCabをPython3から使う(中間報告)</a>
       
-      
-        <a class="basic-alignment right" href="/blog/2013/09/20/yapc-first-day/" title="Next Post: YAPCへ行ってきた(一日目)">YAPCへ行ってきた(一日目) &raquo;</a>
       
     </p>
   </footer>
@@ -329,8 +327,8 @@ Hatena.Star.SiteConfig = {
       
         
         // var disqus_developer = 1;
-        var disqus_identifier = 'http://shogo82148.github.io/blog/2013/09/14/redis-namespace-perl/';
-        var disqus_url = 'http://shogo82148.github.io/blog/2013/09/14/redis-namespace-perl/';
+        var disqus_identifier = 'http://shogo82148.github.io/blog/2015/06/20/test-mysqld-multi/';
+        var disqus_url = 'http://shogo82148.github.io/blog/2015/06/20/test-mysqld-multi/';
         var disqus_script = 'embed.js';
       
     (function () {
