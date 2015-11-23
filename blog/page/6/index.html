@@ -9,9 +9,10 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="description" content="気づかぬ間に第10回６さいカンファレンスが開催されていました。 第10回６さいカンファレンス「C言語のポインタ復習」 くいなちゃんSNS上で行われ、ログも残っているのでそちらを参照。
-「６さいカンファレンス」のカテゴリから辿れるように記事にしておきます。
-">
+  <meta name="description" content="ISUCON3の予選を何とか通過し、
+本戦へと参戦してきました。 大会中の方針とか考えたこととかメモ。 お題 Tw○tter&#8211;likeな画像投稿サービス ユーザをフォローできる
+フォローしたユーザが画像を投稿すると、タイムラインに画像が流れる
+公開範囲を全員に公開・フォロワーのみに公開 &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -98,6 +99,142 @@ Hatena.Star.SiteConfig = {
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2013/11/09/isucon3/">ISUCON3の本戦に参加してきた</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2013-11-09T23:58:00+09:00" pubdate data-updated="true">Nov 9<span>th</span>, 2013</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p><a href="http://shogo82148.github.io/blog/2013/10/07/isucon3-qualify/">ISUCON3の予選</a>を何とか通過し、
+本戦へと参戦してきました。</p>
+
+<p>大会中の方針とか考えたこととかメモ。</p>
+
+<h2>お題</h2>
+
+<ul>
+<li>Tw○tter&#8211;likeな画像投稿サービス
+
+<ul>
+<li>ユーザをフォローできる</li>
+<li>フォローしたユーザが画像を投稿すると、タイムラインに画像が流れる</li>
+<li>公開範囲を全員に公開・フォロワーのみに公開・自分だけに公開から選べる</li>
+</ul>
+</li>
+<li>タイムラインはロングポーリングを使ってリアルタイム反映
+
+<ul>
+<li>JSON-APIが用意されていて、Javascriptから叩く</li>
+</ul>
+</li>
+<li>使用できるサーバは5台</li>
+</ul>
+
+
+<p>画像を扱うお題と聞いて、会場がざわめきました。</p>
+
+<h2>MySQLのクエリを見てみる</h2>
+
+<p>開始直後、鍵を用意したり、gitのレポジトリを立てたりなんだりした後、
+一回目の計測。</p>
+
+<p>topコマンドで走っているプロセスを見ていると、大量のconvertが！！
+プロセス名とお題から考えるに、こいつら確実にImage Magickだ・・・。
+CPUのほとんどが画像の変換にくわれていたので、
+まずは「どこかでキャッシュする」作戦をとることに。
+キャッシュするならフロントに近いほうがいいだろうということで、
+フロントのnginxでキャッシュする作戦をとることにしました
+(アクセス制限があるimageは難しいかもしれないけど、全部publicなiconならすぐできるだろうとこのときは思ってました)。</p>
+
+<p>僕はnginxがconvertを駆逐してくれると信じて、MySQLに投げているクエリを中心にPerlのコードを見てました。
+役割分担はこんな感じ。</p>
+
+<ul>
+<li>サーバの設定とか(@mackee_wさん)</li>
+<li>nginxでキャッシュする設定(@9reさん)</li>
+<li>コード読む、主にMySQLに投げてるクエリとか(@shogo82148)</li>
+</ul>
+
+
+<p>毎回、ひどいクエリが仕込まれているようなイメージがあったけど、
+今回はそこまでひどくない。
+クエリチューニング全然効果なさそうと判断して、次の作戦を考えることにしました。</p>
+
+<h2>No Image Magick, use Imager!</h2>
+
+<p>やっぱり一番のボトルネックは画像変換。
+nginxでキャッシュするとはいえ軽いほうがいいよね、ということで、
+外部プロセスで実行している画像変換をImagerを使ってPerlと同じプロセスでやる作戦。</p>
+
+<p>Imagerに置き換え後ベンチにかけたら、若干スコアが・・・上がった・・・ような・・・？
+しかし、画像が変化していると怒られて、スコアは無効。
+画像エラーを修正するコストと、スコアの上がり具合を見て、Image Magickのままにすることにしました。</p>
+
+<p>予選でも同じように外部プロセス起動している部分をPerlのライブラリにしたけど、
+その時はあっさり動いた。
+あれは外部プロセス起動をやめたらスコア上がると思い込ませるための布石だったんだ・・・。
+(今回の場合、プロセスの起動より画像の変換のほうが重いので、スコアが上がらないのは当たり前)</p>
+
+<h2>いろいろ諦めてPerl側でファイルキャッシュ</h2>
+
+<p>Imagerはテストを通らず、nginxの設定キャッシュ設定も上手く動作しなかったので、
+Perlでファイルキャッシュする方針に変更。
+convertの結果にmvで適当な場所にコピーして保存。
+これだけでスコアが5倍くらいに跳ね上がり、一気に上位に浮上！
+最初からやっておくべきだった・・・。
+もうちょっと早ければ特別賞もらえたかもしれないのに。</p>
+
+<h2>rsync! rsync!</h2>
+
+<p>ファイルキャッシュの作業をやっている間に、@mackee_wさんがnfsの設定をやってくれたので、
+アップロードされたファイルやキャッシュファイルの保存先をnfsに変更。</p>
+
+<p>あとは物量作戦でいくしかないだろうということで、rsyncで他のサーバにコピーして調整を繰り返してた。
+(並行してnginxのキャッシュ設定にも再チャレンジしてたけど、nginx力が足りなかった)</p>
+
+<h2>最終結果</h2>
+
+<p>テストFAILした!! No Score!!</p>
+
+<p>なんかこんなの前もあった！</p>
+
+<h2>反省点</h2>
+
+<ul>
+<li>画像変換をGETでやってたけど、POSTでやったほうがよかったかも</li>
+<li>nginxについて勉強しよう</li>
+<li>nfsについて勉強しよう</li>
+</ul>
+
+</div>
+  
+  
+
+
+    </article>
   
   
     <article>
@@ -555,48 +692,6 @@ Redisのキーをオブジェクトとして扱うことができるようです
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2013/07/13/random-sample/">ランダム抽出アルゴリズムについて考える</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2013-07-13T22:13:00+09:00" pubdate data-updated="true">Jul 13<span>th</span>, 2013</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>数日前に社内IRCで「スマートな非復元抽出の方法はないか」と話題になったので、
-ランダムサンプリングのアルゴリズムについて調べたり考えたりしてみた。</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2013/07/13/random-sample/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/7/">&larr; Older</a>
@@ -614,6 +709,10 @@ Redisのキーをオブジェクトとして扱うことができるようです
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2015/11/23/golang-graceful-restart-2nd/">Go言語でGraceful Restartをするときに取りこぼしを少なくする</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2015/10/14/go-all-stars/">Goオールスターズで登壇してきました</a>
       </li>
     
@@ -627,10 +726,6 @@ Redisのキーをオブジェクトとして扱うことができるようです
     
       <li class="post">
         <a href="/blog/2015/09/19/ok-macopy/">テストでも:ok_maopy:したい人へ</a>
-      </li>
-    
-      <li class="post">
-        <a href="/blog/2015/09/19/faster-perl-test-with-go-lang/">Go言語でPerlのテストを早くする</a>
       </li>
     
   </ul>

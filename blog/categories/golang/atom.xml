@@ -4,7 +4,7 @@
   <title><![CDATA[Category: golang | Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/blog/categories/golang/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2015-10-14T08:40:56+09:00</updated>
+  <updated>2015-11-23T23:16:23+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,209 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Go言語でGraceful Restartをするときに取りこぼしを少なくする]]></title>
+    <link href="http://shogo82148.github.io/blog/2015/11/23/golang-graceful-restart-2nd/"/>
+    <updated>2015-11-23T20:51:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2015/11/23/golang-graceful-restart-2nd</id>
+    <content type="html"><![CDATA[<p>少し前に<a href="https://github.com/kazuho/Starlet">Starlet</a>にGraceful Restartが時たま上手く動かない問題を修正する<a href="https://github.com/kazuho/Starlet/pull/21">pullreq</a>を投げました。
+原因は割り込みハンドラ内でexitを呼んでいたからでした。
+「割り込みハンドラ内ではフラグを建てるだけ」
+「メインのプログラム内でそのフラグを見て分岐する」という原則があるのですが、それを守るのは難しいということですね。
+(しかし新たな問題を産んでしまい<a href="https://github.com/kazuho/Starlet/pull/23">revertされてしまいましたが・・・</a>
+まあ修正後のコードも考え方は一緒です。割り込みホント難しい・・・)</p>
+
+<p>このpullreqを取り込んでもらうときに再現実験をやってみたのですが、
+Goでもちゃんと動くのかな？と気になったので
+<a href="http://shogo82148.github.io/blog/2015/05/03/golang-graceful-restart/">Go言語でGraceful Restartをする</a>で紹介した
+プログラムに同じテストをやってみました。</p>
+
+<!-- More -->
+
+
+<h2>mannersでテストしてみる</h2>
+
+<p>前回の記事では<a href="https://github.com/braintree/manners">manners</a>と<a href="https://github.com/lestrrat/go-server-starter">go-server-starter</a>の
+組み合わせが良さそうとの結論になったので、この組み合わせでテストしてみます。
+以下テストに使用したコードです。
+(今回の内容とは直接関係は無いですが、go-server-starterに変更が入ってFallbackのやり方が前回から少し変わってます)</p>
+
+<p>``` go
+package main</p>
+
+<p>import (</p>
+
+<pre><code>    "fmt"
+    "log"
+    "net"
+    "net/http"
+    "os"
+    "os/signal"
+    "syscall"
+    "time"
+
+    "github.com/braintree/manners"
+    "github.com/lestrrat/go-server-starter/listener"
+</code></pre>
+
+<p>)</p>
+
+<p>var now = time.Now()</p>
+
+<p>func main() {</p>
+
+<pre><code>    log.Printf("start pid %d\n", os.Getpid())
+
+    signal_chan := make(chan os.Signal)
+    signal.Notify(signal_chan, syscall.SIGTERM)
+    go func() {
+            for {
+                    s := &lt;-signal_chan
+                    if s == syscall.SIGTERM {
+                            log.Printf("SIGTERM!!!!\n")
+                            manners.Close()
+                    }
+            }
+    }()
+
+    listeners, err := listener.ListenAll()
+    if err != nil &amp;&amp; err != listener.ErrNoListeningTarget {
+            panic(err)
+    }
+    var l net.Listener
+    if err == listener.ErrNoListeningTarget {
+            // Fallback if not running under Server::Starter
+            l, err = net.Listen("tcp", ":8080")
+            if err != nil {
+                    panic("Failed to listen to port 8080")
+            }
+    } else {
+            l = listeners[0]
+    }
+
+    manners.Serve(l, newHandler())
+</code></pre>
+
+<p>}</p>
+
+<p>func newHandler() http.Handler {</p>
+
+<pre><code>    mux := http.NewServeMux()
+    mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+            fmt.Fprintf(
+                    w,
+                    "from pid %d.\n",
+                    os.Getpid(),
+            )
+    })
+    return mux
+</code></pre>
+
+<p>}
+```</p>
+
+<p>1秒毎にgraceful restartを行いながら負荷をかけます。
+以下のコマンドを別々のターミナルから実行します。
+<code>go run main.go</code>だと自分で書いたプログラムがシグナルを受け取れなくなってしまうので、
+<code>go build main.go</code>とコンパイルしてから実行するところがポイントです。</p>
+
+<p><code>bash
+$ start_server --port 8080 --pid app.pid -- ./main
+$ while true; do kill -HUP `cat app.pid`; sleep 1; done
+$ ab -r -n 1000000 -c 10 http://localhost:8080/
+</code></p>
+
+<p><a href="https://gist.github.com/shogo82148/a1524f31292202ec34f3#file-manners">mannersを使った場合の実験結果</a>へのリンクを貼っておきます。
+「Failed requests:        122」となっており、残念ながら取りこぼしが発生してしまいました。
+負荷をかけた時間は72.437秒なので、70回ほどリスタートをかけたことになります。
+github-flowを採用しているようなところだと毎日数回デプロイをするということも珍しくないので、
+1〜2ヶ月も運用していれば一度くらいはこの現象に遭遇することになります(秒間1万リクエストさばく必要のあるようなサービスの場合ですが)。
+ちょっと気になりますね。</p>
+
+<h2>自分で書いてみた</h2>
+
+<p>mannersの改造、難しそうだったので、自分で書いてみました。</p>
+
+<ul>
+<li>https://github.com/shogo82148/go-gracedown</li>
+</ul>
+
+
+<p>mannersと全く同じインタフェースなので、s/manners/gracedown/するだけです。
+これを使って実験してみた結果がこちら https://gist.github.com/shogo82148/a1524f31292202ec34f3#file-gracedown
+「Failed requests:        0」やったね！</p>
+
+<h2>その他メモ</h2>
+
+<p>これ書くのに色々しらべたのでメモとして残しておきます。</p>
+
+<h3>acceptの直後にcloseされた場合の挙動について</h3>
+
+<p>Starletで起こっていた不具合の原因は、
+acceptから処理が帰ってきてからcanExitフラグを落とすまでにわずかな期間があるのが問題でした。
+この期間にシグナルを受け取ると間違えてサーバを終了させてしまいます。
+GoでもacceptしてからステートがStateNewになるまでの間に若干の時間差があるので、
+ここが問題にならないか少し気になっていました。</p>
+
+<p>net/httpの処理を追ってみると、acceptとStateNewは<code>Serve(net.Listener)</code>を実行したのと同じgoroutineで実行されているようです。
+したがって、サーバシャットダウンの判定も<code>Serve(net.Listener)</code>と同じgoroutineで行えば、
+誤ってacceptしてからステートがStateNewになるまでの間にサーバをシャットダウンしてしまうことは防げるということがわかりました。</p>
+
+<h3>Acceptがブロックしているのを解除する方法について</h3>
+
+<p><a href="http://qiita.com/hiratara/items/0f0b6103a0dc9280cea9">UnixListener.Closeでソケットファイルが消えて困っている</a> という記事に</p>
+
+<blockquote><p>POSIX では Close() を呼んだからといって Accept() が制御を戻してくれる保証はないといことでしょうか。</p></blockquote>
+
+<p>という一文が書いてありました。</p>
+
+<p>これについて実際はどうなんだろうと調べてみたところ<a href="net.Listener">https://golang.org/pkg/net/#Listener</a>のコメントに</p>
+
+<blockquote><p>Close closes the listener.
+Any blocked Accept operations will be unblocked and return errors.</p></blockquote>
+
+<p>とありました。
+このコメントを読む限りGo言語では「<code>Close()</code> を呼んだら<code>Accept()</code>が制御を戻す」と考えて良さそうです。
+POSIXでどう規定されているかまでは調査しきれていませんが、
+たとえどう規定されていようとも互換性を保つために裏で色々やってくれていると信じています。</p>
+
+<p>この記事の主題である「UnixListener.Closeでソケットファイルが消えて困っている」件についても調べてはみたのですが、
+結論は出ませんでした・・・。
+たしかにソケットファイルは使い終わったらunlinkすることが推奨されているということがわかったくらいです。
+nameが「@」で始まっていると「abstract socket address」と見なされて削除されなくなるから、「@」をテキトウにつけるとか・・・？</p>
+
+<h3>keep-aliveの挙動について</h3>
+
+<p>mannersはKeep-Aliveなコネクションがあった場合でも、それがIdle状態であればシャットダウンしてしまいます。
+それに対してgo-gracedownは全部のコネクションがClosedになるまでまちます。
+終了処理に入った段階でKeep-Aliveは無効にしているので、
+go-gracedown側で特に操作しなくてもnet/httpがそのうちクローズしてくれるだろうとの考えからです。</p>
+
+<p>Keep-Aliveはクライアントからリクエストがないと切断できない(レスポンスに「Connection: Close」ヘッダを含める必要があるため)ので
+リクエストがないと永遠にシャットダウンできません。
+それでは困るので一応タイムアウトも入れてあります。</p>
+
+<p>この挙動のおかげで<a href="https://github.com/rakyll/boom">boom</a>(http benchで検索したら一番上にきた)でのベンチでも
+<a href="https://gist.github.com/shogo82148/a1524f31292202ec34f3#file-gracedown-boom">エラー無しで処理できています</a>。
+ちなみにApache Benchでも-kオプションでKeep-Aliveを有効にできるのですが、
+HTTP/1.0だと「Connection: Close」を送る方法が使えないので、<a href="https://gist.github.com/shogo82148/a1524f31292202ec34f3#file-gracedown-keep-alive">残念ながらエラーが出てしまいました</a>。</p>
+
+<h2>まとめ</h2>
+
+<ul>
+<li>実験の結果<a href="https://github.com/braintree/manners">manners</a>はときどきGraceful Shutdownに失敗する場合があることがわかった</li>
+<li><a href="https://github.com/shogo82148/go-gracedown">go-gracedown</a>というのを書いてみた
+
+<ul>
+<li>今回行った再現実験ではすべてのリクエストを正常に処理できました</li>
+</ul>
+</li>
+<li>Graceful Restartむずかしい</li>
+</ul>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Goオールスターズで登壇してきました]]></title>
@@ -813,263 +1016,6 @@ manners.Serve(l, newHandler())
 Server::Starterから起動されなかった場合のフォールバックが正しく機能しません。
 現状では自前で<code>SERVER_STARTER_PORT</code>環境変数が定義されているのを確認するしかなさそうです。
 handlename先輩が<a href="https://github.com/lestrrat/go-server-starter/pull/3">PR</a>を出しているので、これがマージされたら状況が変わるかも。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Go言語で画像の減色を行う]]></title>
-    <link href="http://shogo82148.github.io/blog/2015/04/25/quantize-image-in-golang/"/>
-    <updated>2015-04-25T21:49:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2015/04/25/quantize-image-in-golang</id>
-    <content type="html"><![CDATA[<p>ちょっとGIFアニメを作りたくなって、最近Go触ってるしGoでやってみよう！とやってみたメモ。
-ImageMagikでいいじゃん説もあるけど、最終的にツールとして配布したいなってことでGoです。</p>
-
-<p>主に減色まわりについて。</p>
-
-<!-- More -->
-
-
-<h2>何はともあれ実装してみる</h2>
-
-<p>以前、「<a href="http://d.hatena.ne.jp/sugyan/20140719/1405729672">ターミナル操作の記録(ttyrec)からGIFアニメを生成するツールを作った</a>」という記事を見たので、
-これを参考に実装してみる。</p>
-
-<p>``` go naive.go
-package main</p>
-
-<p>import (</p>
-
-<pre><code>"image"
-"image/color/palette"
-"image/gif"
-_ "image/png"
-"os"
-</code></pre>
-
-<p>)</p>
-
-<p>func main() {</p>
-
-<pre><code>reader, err := os.Open("Lenna.png")
-if err != nil {
-    return
-}
-defer reader.Close()
-
-img, _, err := image.Decode(reader)
-if err != nil {
-    return
-}
-
-paletted := image.NewPaletted(img.Bounds(), palette.WebSafe)
-for y := img.Bounds().Min.Y; y &lt; img.Bounds().Max.Y; y++ {
-    for x := img.Bounds().Min.X; x &lt; img.Bounds().Max.X; x++ {
-        paletted.Set(x, y, img.At(x, y))
-    }
-}
-
-f, _ := os.Create("naive.gif")
-defer f.Close()
-
-opts := &amp;gif.GIF{
-    Image:     []*image.Paletted{paletted},
-    Delay:     []int{0},
-    LoopCount: 0,
-}
-gif.EncodeAll(f, opts)
-</code></pre>
-
-<p>}
-```</p>
-
-<p>画像用意するの面倒だったので静止画になちゃったけど、
-<code>gif.GIF.Image</code> に複数枚画像を渡すとアニメーションGIFになります。
-みんなだいすきLenaさんをGIFに変換してみます。</p>
-
-<p>元画像:
-<img src="http://upload.wikimedia.org/wikipedia/en/2/24/Lenna.png" alt="Lena" /></p>
-
-<p>変換後:
-<img src="/images/2015-04-25-naive.gif" alt="naive.gif" /></p>
-
-<p>あれ、なんか肌の色とか全然違う・・・</p>
-
-<h2>誤差拡散法でディザリングする</h2>
-
-<p>皆さんご存知の通りGIFはインデックスカラー方式で色を指定するので、一枚の画像で256色までしか扱えません。
-少ない色数でより多い色数を表現するためにディザリングがよく行われます。
-Goの標準ライブラリのimage/drawに<a href="http://ja.wikipedia.org/wiki/%E3%83%95%E3%83%AD%E3%82%A4%E3%83%89-%E3%82%B9%E3%82%BF%E3%82%A4%E3%83%B3%E3%83%90%E3%83%BC%E3%82%B0%E3%83%BB%E3%83%87%E3%82%A3%E3%82%B6%E3%83%AA%E3%83%B3%E3%82%B0">フロイド-スタインバーグ・ディザリング</a>を実装してものがあるので、
-それを使ってみます。</p>
-
-<p><code>gif.Encode</code> を使って静止画GIFを作るときにデフォルトでこの方法が使われるみたいですが、
-アニメーションGIFを作るときにはディザリング処理の呼び出しを自分でやらないといけないようです。</p>
-
-<p>``` go
-package main</p>
-
-<p>import (</p>
-
-<pre><code>"image"
-"image/color/palette"
-"image/draw"
-"image/gif"
-_ "image/png"
-"os"
-</code></pre>
-
-<p>)</p>
-
-<p>func main() {</p>
-
-<pre><code>reader, err := os.Open("Lenna.png")
-if err != nil {
-    return
-}
-defer reader.Close()
-
-img, _, err := image.Decode(reader)
-if err != nil {
-    return
-}
-
-paletted := image.NewPaletted(img.Bounds(), palette.WebSafe)
-draw.FloydSteinberg.Draw(paletted, img.Bounds(), img, image.ZP)
-
-f, _ := os.Create("floyd_steinberg.gif")
-defer f.Close()
-
-opts := &amp;gif.GIF{
-    Image:     []*image.Paletted{paletted},
-    Delay:     []int{0},
-    LoopCount: 0,
-}
-gif.EncodeAll(f, opts)
-</code></pre>
-
-<p>}
-```</p>
-
-<p>結果:
-<img src="/images/2015-04-25-floyd_steinberg.gif" alt="floyd_steinberg.gif" /></p>
-
-<p>最初よりはかなり良くなったものの、なんだかざらついた感じがします。
-昔はこんな感じの画像よく見ましたね・・・すごく20世紀な感じがします。</p>
-
-<h2>メディアンカットで減色してみる</h2>
-
-<p>20世紀感の原因は<a href="http://www.htmq.com/color/websafe216.shtml">Webセーフカラー</a>(この言葉ってもはや死語なのでは)を使ってるからです。
-21世紀の現在においてはWebセーフカラーでない色を使っても、色が変わることはほとんど無いので、
-24bitカラーで表現可能な1677万色の中から自由に256色を選択できます。</p>
-
-<p>で、問題はその256色をどうやって選択するかなんですが、
-Goの標準ライブラリにはインターフェースは定義されているものの実装が存在しない(？)みたいです。
-いろいろ探しまわって<a href="https://github.com/soniakeys/quant">soniakeys/quant</a>というパッケージを見つけたのでこれを使ってみます。</p>
-
-<p>``` go
-package main</p>
-
-<p>import (</p>
-
-<pre><code>"github.com/soniakeys/quant/median"
-"image"
-"image/gif"
-_ "image/png"
-"os"
-</code></pre>
-
-<p>)</p>
-
-<p>func main() {</p>
-
-<pre><code>reader, err := os.Open("Lenna.png")
-if err != nil {
-    return
-}
-defer reader.Close()
-
-img, _, err := image.Decode(reader)
-if err != nil {
-    return
-}
-
-q := median.Quantizer(256)
-paletted := q.Image(img)
-
-f, _ := os.Create("median.gif")
-defer f.Close()
-
-opts := &amp;gif.GIF{
-    Image:     []*image.Paletted{paletted},
-    Delay:     []int{0},
-    LoopCount: 0,
-}
-gif.EncodeAll(f, opts)
-</code></pre>
-
-<p>}
-```</p>
-
-<p><img src="/images/2015-04-25-median.gif" alt="median.gif" /></p>
-
-<h2>メディアンカットで減色してディザリングもやってみる</h2>
-
-<p>減色前の画像を渡すと減色したあとの画像を返してくれる<a href="https://github.com/soniakeys/quant">soniakeys/quant</a>の便利メソッドを
-使って実装してみましたが、
-ディザリングをしてくれないのでグラデーション部分があまりキレイではありません。</p>
-
-<p><a href="https://github.com/soniakeys/quant">soniakeys/quant</a>を使うのはパレットの作成だけにして、
-draw.FloydSteinbergでディザリングを行ってみます。</p>
-
-<p>``` go
-package main</p>
-
-<p>import (</p>
-
-<pre><code>"github.com/soniakeys/quant/median"
-"image"
-"image/color"
-"image/draw"
-"image/gif"
-_ "image/png"
-"os"
-</code></pre>
-
-<p>)</p>
-
-<p>func main() {</p>
-
-<pre><code>reader, err := os.Open("Lenna.png")
-if err != nil {
-    return
-}
-defer reader.Close()
-
-img, _, err := image.Decode(reader)
-if err != nil {
-    return
-}
-
-q := median.Quantizer(256)
-p := q.Quantize(make(color.Palette, 0, 256), img)
-paletted := image.NewPaletted(img.Bounds(), p)
-draw.FloydSteinberg.Draw(paletted, img.Bounds(), img, image.ZP)
-
-f, _ := os.Create("median-floyd-steinberg.gif")
-defer f.Close()
-
-opts := &amp;gif.GIF{
-    Image:     []*image.Paletted{paletted},
-    Delay:     []int{0},
-    LoopCount: 0,
-}
-gif.EncodeAll(f, opts)
-</code></pre>
-
-<p>}
-```</p>
-
-<p>結果:
-<img src="/images/2015-04-25-median-floyd-steinberg.gif" alt="median-floyd-steinberg.gif" /></p>
 ]]></content>
   </entry>
   

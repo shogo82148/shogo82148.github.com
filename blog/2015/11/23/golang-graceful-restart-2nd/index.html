@@ -1,0 +1,593 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Go言語でGraceful Restartをするときに取りこぼしを少なくする - Shogo's Blog</title>
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="description" content="少し前にStarletにGraceful Restartが時たま上手く動かない問題を修正するpullreqを投げました。
+原因は割り込みハンドラ内でexitを呼んでいたからでした。
+「割り込みハンドラ内ではフラグを建てるだけ」
+「メインのプログラム内でそのフラグを見て分岐する」 &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://shogo82148.github.io/blog/2015/11/23/golang-graceful-restart-2nd/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  <link href="/atom.xml" rel="alternate" title="Shogo's Blog" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-4526627-4']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+  <script type="text/javascript" src="http://s.hatena.ne.jp/js/HatenaStar.js"></script>
+<script type="text/javascript">
+Hatena.Star.Token = '0da43945db72b59fd47eb24198fc7a0293c0191f';
+Hatena.Star.SiteConfig = {
+  entryNodes: {
+    'article': {
+      uri: 'h1 a',
+      title: 'h1',
+      container: 'h1'
+    },
+    'article.hentry': {
+      uri: 'window.location',
+      title: 'h1.entry-title',
+      container: 'h1.entry-title'
+    }
+  }
+};
+</script>
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Shogo's Blog</a></h1>
+  
+    <h2>たぶんプログラミングとかについて書いていくブログ</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:shogo82148.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/blog/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Go言語でGraceful Restartをするときに取りこぼしを少なくする</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-11-23T20:51:00+09:00" pubdate data-updated="true">Nov 23<span>rd</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>少し前に<a href="https://github.com/kazuho/Starlet">Starlet</a>にGraceful Restartが時たま上手く動かない問題を修正する<a href="https://github.com/kazuho/Starlet/pull/21">pullreq</a>を投げました。
+原因は割り込みハンドラ内でexitを呼んでいたからでした。
+「割り込みハンドラ内ではフラグを建てるだけ」
+「メインのプログラム内でそのフラグを見て分岐する」という原則があるのですが、それを守るのは難しいということですね。
+(しかし新たな問題を産んでしまい<a href="https://github.com/kazuho/Starlet/pull/23">revertされてしまいましたが・・・</a>
+まあ修正後のコードも考え方は一緒です。割り込みホント難しい・・・)</p>
+
+<p>このpullreqを取り込んでもらうときに再現実験をやってみたのですが、
+Goでもちゃんと動くのかな？と気になったので
+<a href="http://shogo82148.github.io/blog/2015/05/03/golang-graceful-restart/">Go言語でGraceful Restartをする</a>で紹介した
+プログラムに同じテストをやってみました。</p>
+
+<!-- More -->
+
+
+<h2>mannersでテストしてみる</h2>
+
+<p>前回の記事では<a href="https://github.com/braintree/manners">manners</a>と<a href="https://github.com/lestrrat/go-server-starter">go-server-starter</a>の
+組み合わせが良さそうとの結論になったので、この組み合わせでテストしてみます。
+以下テストに使用したコードです。
+(今回の内容とは直接関係は無いですが、go-server-starterに変更が入ってFallbackのやり方が前回から少し変わってます)</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+<span class='line-number'>61</span>
+<span class='line-number'>62</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>        <span class="s">&quot;fmt&quot;</span>
+</span><span class='line'>        <span class="s">&quot;log&quot;</span>
+</span><span class='line'>        <span class="s">&quot;net&quot;</span>
+</span><span class='line'>        <span class="s">&quot;net/http&quot;</span>
+</span><span class='line'>        <span class="s">&quot;os&quot;</span>
+</span><span class='line'>        <span class="s">&quot;os/signal&quot;</span>
+</span><span class='line'>        <span class="s">&quot;syscall&quot;</span>
+</span><span class='line'>        <span class="s">&quot;time&quot;</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="s">&quot;github.com/braintree/manners&quot;</span>
+</span><span class='line'>        <span class="s">&quot;github.com/lestrrat/go-server-starter/listener&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">var</span> <span class="nx">now</span> <span class="p">=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>        <span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&quot;start pid %d\n&quot;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Getpid</span><span class="p">())</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="nx">signal_chan</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Signal</span><span class="p">)</span>
+</span><span class='line'>        <span class="nx">signal</span><span class="p">.</span><span class="nx">Notify</span><span class="p">(</span><span class="nx">signal_chan</span><span class="p">,</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span><span class="p">)</span>
+</span><span class='line'>        <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>                <span class="k">for</span> <span class="p">{</span>
+</span><span class='line'>                        <span class="nx">s</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">signal_chan</span>
+</span><span class='line'>                        <span class="k">if</span> <span class="nx">s</span> <span class="o">==</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span> <span class="p">{</span>
+</span><span class='line'>                                <span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&quot;SIGTERM!!!!\n&quot;</span><span class="p">)</span>
+</span><span class='line'>                                <span class="nx">manners</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+</span><span class='line'>                        <span class="p">}</span>
+</span><span class='line'>                <span class="p">}</span>
+</span><span class='line'>        <span class="p">}()</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="nx">listeners</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ListenAll</span><span class="p">()</span>
+</span><span class='line'>        <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="o">&amp;&amp;</span> <span class="nx">err</span> <span class="o">!=</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ErrNoListeningTarget</span> <span class="p">{</span>
+</span><span class='line'>                <span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>        <span class="kd">var</span> <span class="nx">l</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Listener</span>
+</span><span class='line'>        <span class="k">if</span> <span class="nx">err</span> <span class="o">==</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ErrNoListeningTarget</span> <span class="p">{</span>
+</span><span class='line'>                <span class="c1">// Fallback if not running under Server::Starter</span>
+</span><span class='line'>                <span class="nx">l</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Listen</span><span class="p">(</span><span class="s">&quot;tcp&quot;</span><span class="p">,</span> <span class="s">&quot;:8080&quot;</span><span class="p">)</span>
+</span><span class='line'>                <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>                        <span class="nb">panic</span><span class="p">(</span><span class="s">&quot;Failed to listen to port 8080&quot;</span><span class="p">)</span>
+</span><span class='line'>                <span class="p">}</span>
+</span><span class='line'>        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>                <span class="nx">l</span> <span class="p">=</span> <span class="nx">listeners</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="nx">manners</span><span class="p">.</span><span class="nx">Serve</span><span class="p">(</span><span class="nx">l</span><span class="p">,</span> <span class="nx">newHandler</span><span class="p">())</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">newHandler</span><span class="p">()</span> <span class="nx">http</span><span class="p">.</span><span class="nx">Handler</span> <span class="p">{</span>
+</span><span class='line'>        <span class="nx">mux</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">NewServeMux</span><span class="p">()</span>
+</span><span class='line'>        <span class="nx">mux</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">&quot;/&quot;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>                <span class="nx">fmt</span><span class="p">.</span><span class="nx">Fprintf</span><span class="p">(</span>
+</span><span class='line'>                        <span class="nx">w</span><span class="p">,</span>
+</span><span class='line'>                        <span class="s">&quot;from pid %d.\n&quot;</span><span class="p">,</span>
+</span><span class='line'>                        <span class="nx">os</span><span class="p">.</span><span class="nx">Getpid</span><span class="p">(),</span>
+</span><span class='line'>                <span class="p">)</span>
+</span><span class='line'>        <span class="p">})</span>
+</span><span class='line'>        <span class="k">return</span> <span class="nx">mux</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>1秒毎にgraceful restartを行いながら負荷をかけます。
+以下のコマンドを別々のターミナルから実行します。
+<code>go run main.go</code>だと自分で書いたプログラムがシグナルを受け取れなくなってしまうので、
+<code>go build main.go</code>とコンパイルしてから実行するところがポイントです。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>start_server --port 8080 --pid app.pid -- ./main
+</span><span class='line'><span class="nv">$ </span><span class="k">while </span><span class="nb">true</span>; <span class="k">do </span><span class="nb">kill</span> -HUP <span class="sb">`</span>cat app.pid<span class="sb">`</span>; sleep 1; <span class="k">done</span>
+</span><span class='line'><span class="nv">$ </span>ab -r -n 1000000 -c 10 http://localhost:8080/
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><a href="https://gist.github.com/shogo82148/a1524f31292202ec34f3#file-manners">mannersを使った場合の実験結果</a>へのリンクを貼っておきます。
+「Failed requests:        122」となっており、残念ながら取りこぼしが発生してしまいました。
+負荷をかけた時間は72.437秒なので、70回ほどリスタートをかけたことになります。
+github-flowを採用しているようなところだと毎日数回デプロイをするということも珍しくないので、
+1〜2ヶ月も運用していれば一度くらいはこの現象に遭遇することになります(秒間1万リクエストさばく必要のあるようなサービスの場合ですが)。
+ちょっと気になりますね。</p>
+
+<h2>自分で書いてみた</h2>
+
+<p>mannersの改造、難しそうだったので、自分で書いてみました。</p>
+
+<ul>
+<li>https://github.com/shogo82148/go-gracedown</li>
+</ul>
+
+
+<p>mannersと全く同じインタフェースなので、s/manners/gracedown/するだけです。
+これを使って実験してみた結果がこちら https://gist.github.com/shogo82148/a1524f31292202ec34f3#file-gracedown
+「Failed requests:        0」やったね！</p>
+
+<h2>その他メモ</h2>
+
+<p>これ書くのに色々しらべたのでメモとして残しておきます。</p>
+
+<h3>acceptの直後にcloseされた場合の挙動について</h3>
+
+<p>Starletで起こっていた不具合の原因は、
+acceptから処理が帰ってきてからcanExitフラグを落とすまでにわずかな期間があるのが問題でした。
+この期間にシグナルを受け取ると間違えてサーバを終了させてしまいます。
+GoでもacceptしてからステートがStateNewになるまでの間に若干の時間差があるので、
+ここが問題にならないか少し気になっていました。</p>
+
+<p>net/httpの処理を追ってみると、acceptとStateNewは<code>Serve(net.Listener)</code>を実行したのと同じgoroutineで実行されているようです。
+したがって、サーバシャットダウンの判定も<code>Serve(net.Listener)</code>と同じgoroutineで行えば、
+誤ってacceptしてからステートがStateNewになるまでの間にサーバをシャットダウンしてしまうことは防げるということがわかりました。</p>
+
+<h3>Acceptがブロックしているのを解除する方法について</h3>
+
+<p><a href="http://qiita.com/hiratara/items/0f0b6103a0dc9280cea9">UnixListener.Closeでソケットファイルが消えて困っている</a> という記事に</p>
+
+<blockquote><p>POSIX では Close() を呼んだからといって Accept() が制御を戻してくれる保証はないといことでしょうか。</p></blockquote>
+
+<p>という一文が書いてありました。</p>
+
+<p>これについて実際はどうなんだろうと調べてみたところ<a href="net.Listener">https://golang.org/pkg/net/#Listener</a>のコメントに</p>
+
+<blockquote><p>Close closes the listener.
+Any blocked Accept operations will be unblocked and return errors.</p></blockquote>
+
+<p>とありました。
+このコメントを読む限りGo言語では「<code>Close()</code> を呼んだら<code>Accept()</code>が制御を戻す」と考えて良さそうです。
+POSIXでどう規定されているかまでは調査しきれていませんが、
+たとえどう規定されていようとも互換性を保つために裏で色々やってくれていると信じています。</p>
+
+<p>この記事の主題である「UnixListener.Closeでソケットファイルが消えて困っている」件についても調べてはみたのですが、
+結論は出ませんでした・・・。
+たしかにソケットファイルは使い終わったらunlinkすることが推奨されているということがわかったくらいです。
+nameが「@」で始まっていると「abstract socket address」と見なされて削除されなくなるから、「@」をテキトウにつけるとか・・・？</p>
+
+<h3>keep-aliveの挙動について</h3>
+
+<p>mannersはKeep-Aliveなコネクションがあった場合でも、それがIdle状態であればシャットダウンしてしまいます。
+それに対してgo-gracedownは全部のコネクションがClosedになるまでまちます。
+終了処理に入った段階でKeep-Aliveは無効にしているので、
+go-gracedown側で特に操作しなくてもnet/httpがそのうちクローズしてくれるだろうとの考えからです。</p>
+
+<p>Keep-Aliveはクライアントからリクエストがないと切断できない(レスポンスに「Connection: Close」ヘッダを含める必要があるため)ので
+リクエストがないと永遠にシャットダウンできません。
+それでは困るので一応タイムアウトも入れてあります。</p>
+
+<p>この挙動のおかげで<a href="https://github.com/rakyll/boom">boom</a>(http benchで検索したら一番上にきた)でのベンチでも
+<a href="https://gist.github.com/shogo82148/a1524f31292202ec34f3#file-gracedown-boom">エラー無しで処理できています</a>。
+ちなみにApache Benchでも-kオプションでKeep-Aliveを有効にできるのですが、
+HTTP/1.0だと「Connection: Close」を送る方法が使えないので、<a href="https://gist.github.com/shogo82148/a1524f31292202ec34f3#file-gracedown-keep-alive">残念ながらエラーが出てしまいました</a>。</p>
+
+<h2>まとめ</h2>
+
+<ul>
+<li>実験の結果<a href="https://github.com/braintree/manners">manners</a>はときどきGraceful Shutdownに失敗する場合があることがわかった</li>
+<li><a href="https://github.com/shogo82148/go-gracedown">go-gracedown</a>というのを書いてみた
+
+<ul>
+<li>今回行った再現実験ではすべてのリクエストを正常に処理できました</li>
+</ul>
+</li>
+<li>Graceful Restartむずかしい</li>
+</ul>
+
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-11-23T20:51:00+09:00" pubdate data-updated="true">Nov 23<span>rd</span>, 2015</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/golang/'>golang</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.io/blog/2015/11/23/golang-graceful-restart-2nd/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.io/blog/2015/11/23/golang-graceful-restart-2nd/" data-via="shogo82148" data-counturl="http://shogo82148.github.io/blog/2015/11/23/golang-graceful-restart-2nd/" >Tweet</a>
+  
+  
+  <div class="g-plusone" data-size="medium"></div>
+  
+  
+    <div class="fb-like" data-send="true" data-width="450" data-show-faces="false"></div>
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2015/10/14/go-all-stars/" title="Previous Post: Goオールスターズで登壇してきました">&laquo; Goオールスターズで登壇してきました</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2015/11/23/golang-graceful-restart-2nd/">Go言語でGraceful Restartをするときに取りこぼしを少なくする</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/10/14/go-all-stars/">Goオールスターズで登壇してきました</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/09/28/anysan-provider-slack-and-ape-slack/">AnySan::Provider::Slackとape-slackを書いた</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/09/28/isucon5-qualifying/">ISUCON5の予選に参加して惨敗してきた</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/09/19/ok-macopy/">テストでも:ok_maopy:したい人へ</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>GitHub Repos</h1>
+  <ul id="gh_repos">
+    <li class="loading">Status updating...</li>
+  </ul>
+  
+  <a href="https://github.com/shogo82148">@shogo82148</a> on GitHub
+  
+  <script type="text/javascript">
+    $.domReady(function(){
+        if (!window.jXHR){
+            var jxhr = document.createElement('script');
+            jxhr.type = 'text/javascript';
+            jxhr.src = '/javascripts/libs/jXHR.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(jxhr, s);
+        }
+
+        github.showRepos({
+            user: 'shogo82148',
+            count: 0,
+            skip_forks: true,
+            target: '#gh_repos'
+        });
+    });
+  </script>
+  <script src="/javascripts/github.js" type="text/javascript"> </script>
+</section>
+
+
+<section>
+  <h1>Latest Tweets</h1>
+  <ul id="tweets">
+    <li class="loading">Status updating...</li>
+  </ul>
+  <script type="text/javascript">
+    $.domReady(function(){
+      getTwitterFeed("shogo82148", 4, false);
+    });
+  </script>
+  <script src="/javascripts/twitter.js" type="text/javascript"> </script>
+  
+    <a href="http://twitter.com/shogo82148" class="twitter-follow-button" data-show-count="false">Follow @shogo82148</a>
+  
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2015 - Shogo Ichinose -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'shogosblog';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://shogo82148.github.io/blog/2015/11/23/golang-graceful-restart-2nd/';
+        var disqus_url = 'http://shogo82148.github.io/blog/2015/11/23/golang-graceful-restart-2nd/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) {return;}
+  js = d.createElement(s); js.id = id;
+  js.src = "//connect.facebook.net/en_US/all.js#appId=212934732101925&xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var script = document.createElement('script'); script.type = 'text/javascript'; script.async = true;
+      script.src = 'https://apis.google.com/js/plusone.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(script, s);
+    })();
+  </script>
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>
