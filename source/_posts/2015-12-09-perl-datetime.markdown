@@ -80,7 +80,7 @@ use feature 'say';
 use DateTime;
 
 my $dt = DateTime->new(year => 2015, month => 12, day => 9);
-my $after_an_hour = $dt->add(hours => 1);
+my $after_an_hour = $dt->clone->add(hours => 1);
 
 say $dt; # 2015-12-09T00:00:00
 say $after_an_hour; # 2015-12-09T01:00:00
