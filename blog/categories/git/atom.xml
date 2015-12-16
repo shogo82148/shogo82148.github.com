@@ -4,7 +4,7 @@
   <title><![CDATA[Category: git | Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/blog/categories/git/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2015-12-13T12:07:11+09:00</updated>
+  <updated>2015-12-16T23:46:09+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,242 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[git-mergeの挙動をカスタマイズする]]></title>
+    <link href="http://shogo82148.github.io/blog/2015/12/16/customize-git-merge/"/>
+    <updated>2015-12-16T22:24:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2015/12/16/customize-git-merge</id>
+    <content type="html"><![CDATA[<p>最近gitのコンフリクト解消職人みたいになっていてすごくつらいです。
+普通のプログラムであれば順番が重要なので手動でのコンフリクト解消は避けられないのですが、
+僕が相手にしているのは最終的にMySQLに食わせるデータなのでそこまで順番は重要ではありません。
+順番に挿入したところで、MySQLが順番にかえしてくれるとは限りませんからね。
+このようなケースではある程度機械的にマージできるのでは？と調べてみました。</p>
+
+<!-- More -->
+
+
+<h2>merge driver</h2>
+
+<p>いろいろググってみると<a href="http://git-scm.com/docs/gitattributes">gitattributes</a>でファイル毎にマージの細かい挙動を制御できるようです。
+通常マージの方法はgitがよしなに選択してくれますが、merge属性に以下の項目を指定することでマージの方法を強制することができます。</p>
+
+<ul>
+<li>text
+
+<ul>
+<li>テキストファイルとしてマージする。</li>
+<li>コンフリクトすると <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code>, <code>=======</code>, <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code>でコンフリクトした場所を教えてくれる。</li>
+</ul>
+</li>
+<li>binary
+
+<ul>
+<li>バイナリファイルとしてマージする。</li>
+<li>コンフリクトするとマージしようとしたファイルを残しておいてくれる。</li>
+</ul>
+</li>
+<li>union
+
+<ul>
+<li>テキストファイルとしてマージする。</li>
+<li>textと違ってコンフリクトしてもマーカを付けない。どちらの変更も残すように適当にマージしてくれる。</li>
+<li>適当なので <strong>コンフリクト時の行の順番は保証されない</strong></li>
+</ul>
+</li>
+</ul>
+
+
+<p>text, binaryはコンフリクトしたときによく見る挙動ですね。
+unionは初めて知ったので、簡単なレポジトリを作って挙動を確かめてみました。</p>
+
+<p>``` bash
+$ # masterブランチ上でmembers.txtにAliceを追加する
+$ git init
+$ echo Alice > members.txt
+$ git add members.txt
+$ git commit -m 'add Alice'
+[master (root-commit) 8c39714] add Alice
+ 1 file changed, 1 insertion(+)
+  create mode 100644 members.txt
+$
+$ # add-bobブランチ上でmembers.txtにBobを追加する
+$ git checkout -b add-bob
+Switched to a new branch 'add-bob'
+$ echo 'Bob' >> members.txt
+$ git add members.txt
+$ git commit -m 'add Bob'
+[add-bob 9c406ae] add Bob
+ 1 file changed, 1 insertion(+)
+$
+$ # masterブランチ上でmembers.txtにEveを追加する
+$ git checkout -
+ Switched to branch 'master'
+$ echo 'Eve' >> members.txt
+$ git add members.txt
+$ git commit -m 'add Eve'
+[master 9eabd8a] add Eve
+ 1 file changed, 1 insertion(+)
+$ git merge add-bob
+ Auto-merging members.txt
+ CONFLICT (content): Merge conflict in members.txt
+ Automatic merge failed; fix conflicts and then commit the result.
+$ cat members.txt
+ Alice
+ &lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD
+ Eve
+ =======
+ Bob</p>
+
+<blockquote><blockquote><blockquote><blockquote><blockquote><blockquote><blockquote><p>add-bob
+```</p></blockquote></blockquote></blockquote></blockquote></blockquote></blockquote></blockquote>
+
+<p>わざとコンフリクトを起こしてみるテストです。
+ファイル末尾にEveとBobをそれぞれ別々のブランチで追加したためコンフリクトしてしまっています。</p>
+
+<p>では次にgitattributeを追加して<code>merge=union</code>を指定した場合に挙動を確認してみましょう。</p>
+
+<p><code>bash
+$ # merge=union属性を追加
+$ echo 'members.txt merge=union' &gt; .gitattributes
+$ git add -f .gitattributes
+$ git commit -m 'add gitattributes'
+[master 61d2cfc] add gitattributes
+ 1 file changed, 1 insertion(+)
+  create mode 100644 .gitattributes
+$
+$ # もう一度マージしてみる
+$ git merge add-bob
+Auto-merging members.txt
+Merge made by the 'recursive' strategy.
+ members.txt | 1 +
+  1 file changed, 1 insertion(+)
+$ cat members.txt
+Alice
+Eve
+Bob
+</code></p>
+
+<p>通常はコンフリクトするケースですが、今度はうまくマージできました。</p>
+
+<h2>merge driverをカスタマイズする</h2>
+
+<p>デフォルトではtext, binary, unionしか用意されていないmerge driverですが、<code>.git/config</code>をいじることで自前のmerge driverを追加することができます。
+unionでは行の順番が不定になって不便なので、試しに「必ずソートされており重複がないファイルをマージする」ためのmerge driverを作ってみます。
+まずはマージするためのコマンド用意しましょう。</p>
+
+<p>``` bash merge-sorted-set.sh</p>
+
+<h1>!/bin/bash</h1>
+
+<p>A="$1"
+O="$2"
+B="$3"
+tmpfile=$(mktemp temp.XXXXXX)
+cp "$A" "$tmpfile"
+git merge-file -p -q --union "$tmpfile" "$O" "$B" | sort | uniq > "$A"
+rm "$tmpfile"
+```</p>
+
+<p>パスの通った場所にこのファイルを置き、<code>.git/config</code>にこれを呼び出す設定を書けば、gitattributeから使用できるようになります。</p>
+
+<p>``` plain .git/config
+[merge "zset"]</p>
+
+<pre><code>    name = merge sorted set
+    driver = merge-sorted-set.sh %A %O %B
+</code></pre>
+
+<p>```</p>
+
+<ul>
+<li><code>%A</code>: 現在のブランチの状態</li>
+<li><code>%B</code>: マージしようとしているブランチの状態</li>
+<li><code>%O</code>: 共通の祖先の状態</li>
+<li><code>%L</code>: コンフリクトマーカの長さ。<a href="https://github.com/git/git/commit/23a64c9e771e3caf19cf2ee9a32c8942ddde4a81">1.7から使えるらしい</a></li>
+<li><code>%P</code>: ファイルのパス。<a href="https://github.com/git/git/commit/ef45bb1f8156030446658d5bfb3983ce214a9e16">2.5.0から使えるらしい</a></li>
+</ul>
+
+
+<p>このmerge driverを使ってマージすると、先の例ではAlice, Bob, Eveの順番で並ぶようになります。</p>
+
+<h2>theirs-oursの順番に並べてみる</h2>
+
+<p>僕のケースではtheirs-oursの順番で並んでくれると都合が良いので、こんなスクリプトを書いてみました。</p>
+
+<p>``` bash merge-theirs-ours.sh</p>
+
+<h1>!/bin/bash</h1>
+
+<p>A="$1"
+O="$2"
+B="$3"
+tmpfile=$(mktemp temp.XXXXXX)
+cp "$A" "$tmpfile"
+git merge-file -p -q --union "$B" "$O" "$tmpfile" > "$A"
+rm "$tmpfile"
+```</p>
+
+<p>``` plain .git/config
+[merge "theirsours"]</p>
+
+<pre><code>    name = theirs first
+    driver = merge-theirs-ours.sh %A %O %B
+    recursive = text
+</code></pre>
+
+<p>```</p>
+
+<p>あとは勝手にコンフリクト解消して欲しいファイルに対して
+.gitattributesで<code>merge=theirsours</code>を指定すれば通常はコンフリクトする場合でもマージしてくれます。</p>
+
+<p>ただ、さすがに全自動だとちょっと怖いので、以下の様にコンフリクトするようであればユーザに確認(<code>exit 1</code>するとコンフリクトした扱いになる)
+したほうが無難な気もしますね。</p>
+
+<p>``` bash merge-theirs-ours.sh</p>
+
+<h1>!/bin/bash</h1>
+
+<p>A="$1"
+O="$2"
+B="$3"
+if git merge-file -p -q "$A" "$O" "$B" > /dev/null; then</p>
+
+<pre><code>git merge-file "$A" "$O" "$B";
+</code></pre>
+
+<p>else</p>
+
+<pre><code>tmpfile=$(mktemp temp.XXXXXX)
+cp "$A" "$tmpfile"
+git merge-file -p -q --union "$B" "$O" "$tmpfile" &gt; "$A"
+rm "$tmpfile"
+exit 1
+</code></pre>
+
+<p>fi
+```</p>
+
+<h2>まとめ</h2>
+
+<p>gitattribute便利。
+gitattributeを使って<a href="http://shogo82148.github.io/blog/2015/03/24/git-diff-csv/">Git Diffでcsvの差分を見やすく表示する</a>のもどうぞ。</p>
+
+<p>ただmerge driverからはファイルのメタ情報に触れないので、「コミット日時が新しい方を残す」みたいなことができないのが残念です。
+<a href="http://stackoverflow.com/questions/7607125/git-merge-conflict-to-always-take-the-newest-file">ブランチ決め打ちにする</a>のはちょっと怖いし、
+merge strategyのカスタマイズは大変そう・・・
+(一応 <code>git-merge-hogehoge</code> をいうコマンドを用意しておけば <code>git merge --strategy hogehoge</code> と使えるようです。が、<code>git-merge-hogehoge &lt;base&gt;... -- &lt;head&gt; &lt;remote&gt; ...</code> の形式で渡ってくるので、そこから再実装するのはつらい・・・)</p>
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="http://git-scm.com/docs/gitattributes">gitattributes</a></li>
+<li><a href="http://stackoverflow.com/questions/23140240/git-how-do-i-add-a-custom-merge-strategy">git: How do I add a custom merge strategy?</a></li>
+<li><a href="http://stackoverflow.com/questions/7607125/git-merge-conflict-to-always-take-the-newest-file">Git merge conflict to always take the newest file</a></li>
+</ul>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[各ブランチの最後にコミットした人を知る]]></title>
@@ -322,103 +558,6 @@ gitの扱いに慣れてない人が触っているレポジトリなのでト�
 <h2>まとめ</h2>
 
 <p>大文字小文字を区別しないファイルシステムなんか滅んでしまえ。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[gitで作業ディレクトリの変更を破棄したのに差分が出続けて困った話]]></title>
-    <link href="http://shogo82148.github.io/blog/2014/10/04/gitattribute-eol-equals-crlf/"/>
-    <updated>2014-10-04T15:05:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2014/10/04/gitattribute-eol-equals-crlf</id>
-    <content type="html"><![CDATA[<p>gitで変更した覚えの無いファイルに差分が出ていたので、
-作業ディレクトリの変更を破棄したのに、
-<code>git status</code>で差分が出続けて困ったのでメモ。</p>
-
-<!-- More -->
-
-
-<h2>症状</h2>
-
-<p>gitでは<code>git checkout -- &lt;file&gt;</code> ってコマンドを叩くと、
-作業ディレクトリの変更を破棄できます。</p>
-
-<p>``` plain
-$ git checkout -- hoge.txt
-$ git status
-On branch master
-Changes not staged for commit:
- (use "git add <file>..." to update what will be committed)
- (use "git checkout -- <file>..." to discard changes in working directory)</p>
-
-<p>   modified:   hoge.txt
-```</p>
-
-<p>しかし、差分が出続ける...
-<code>git checkout -- &lt;file&gt;</code> ならさっきやったよ！</p>
-
-<p><code>git reset --hard HEAD</code> して全変更を破棄してもダメでした。</p>
-
-<h2>原因</h2>
-
-<p>.gitattributesに改行コードの指定があったからでした。</p>
-
-<p><code>plain .gitattributes
-*.txt text=auto eol=crlf
-</code></p>
-
-<p>これが指定されていると、CRLFなファイルをコミットしようとしても、
-レポジトリには改行コードがLFで保存されるようになる。</p>
-
-<p><code>plain
-$ cat .gitattributes # .gitattributes には eol=crlf が指定されている
-*.txt text=auto eol=crlf
-$ hexdump hoge.txt   # hoge.txt は改行コードCRLFで保存されている
-0000000 48 65 6c 6c 6f 20 57 6f 72 6c 64 21 21 0d 0a
-000000f
-$ git add hoge.txt
-$ git commit -m 'add hoge.txt'  # 改行コードがCRLFなhoge.txtをコミット
-$ git cat-file -p master^{tree} # レポジトリにコミットされているオブジェクトを確認
-100644 blob 523f058ebd4f1a280b5a33a79af8f22b74415f37   .gitattributes
-100644 blob 936977184a9fa89d82f86957a90b92d4924b6573   hoge.txt
-$ git cat-file -p 936977184a9fa89d82f86957a90b92d4924b6573 | hexdump # 改行コードがLF(末尾が0a)になっている！！
-0000000 48 65 6c 6c 6f 20 57 6f 72 6c 64 21 21 0a
-000000e
-</code></p>
-
-<p>ところがレポジトリ上にCRLFなファイルがコミットされていると、
-コミットすべき内容と一致しないので差分がでてしまう。</p>
-
-<p>``` plain
-$ git cat-file -p master<sup>{tree}</sup>
-100644 blob 523f058ebd4f1a280b5a33a79af8f22b74415f37   .gitattributes
-100644 blob 23c3aefeda706ec02f4a724edc2faf1913a547ef   hoge.txt
-$ git cat-file -p 23c3aefeda706ec02f4a724edc2faf1913a547ef | hexdump # 改行コードはCRLF(末尾が0d 0a)
-0000000 48 65 6c 6c 6f 20 57 6f 72 6c 64 21 21 0d 0a
-000000f
-$ git status # 差分がでてしまう
-On branch master
-Changes not staged for commit:
-  (use "git add <file>..." to update what will be committed)
-  (use "git checkout -- <file>..." to discard changes in working directory)</p>
-
-<pre><code>modified:   hoge.txt
-</code></pre>
-
-<p>  no changes added to commit (use "git add" and/or "git commit -a")
-```</p>
-
-<p>作業ディレクトリが壊れているわけでなく、レポジトリの内容がおかしい(<code>eol=crlf</code>が設定されているときは全てのファイルはLFでコミットされているべき)ので、
-今回はコミットして正しい状態にすることで解決。
-差分計算の効率化のためにタイムスタンプを最初に見ているみたいなので、
-touchしただけで差分が！ってなってびっくりした。</p>
-
-<h2>まとめ</h2>
-
-<p>CRLF滅びろ</p>
-
-<h2>追記</h2>
-
-<p><a href="http://shogo82148.github.io/blog/2014/10/21/git-case-sensitivity/">続編</a>がでました</p>
 ]]></content>
   </entry>
   

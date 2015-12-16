@@ -1,0 +1,642 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>git-mergeの挙動をカスタマイズする - Shogo's Blog</title>
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="description" content="最近gitのコンフリクト解消職人みたいになっていてすごくつらいです。
+普通のプログラムであれば順番が重要なので手動でのコンフリクト解消は避けられないのですが、
+僕が相手にしているのは最終的にMySQLに食わせるデータなのでそこまで順番は重要ではありません。
+順番に挿入したところで、 &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://shogo82148.github.io/blog/2015/12/16/customize-git-merge/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  <link href="/atom.xml" rel="alternate" title="Shogo's Blog" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-4526627-4']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+  <script type="text/javascript" src="http://s.hatena.ne.jp/js/HatenaStar.js"></script>
+<script type="text/javascript">
+Hatena.Star.Token = '0da43945db72b59fd47eb24198fc7a0293c0191f';
+Hatena.Star.SiteConfig = {
+  entryNodes: {
+    'article': {
+      uri: 'h1 a',
+      title: 'h1',
+      container: 'h1'
+    },
+    'article.hentry': {
+      uri: 'window.location',
+      title: 'h1.entry-title',
+      container: 'h1.entry-title'
+    }
+  }
+};
+</script>
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Shogo's Blog</a></h1>
+  
+    <h2>たぶんプログラミングとかについて書いていくブログ</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:shogo82148.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/blog/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Git-mergeの挙動をカスタマイズする</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-12-16T22:24:00+09:00" pubdate data-updated="true">Dec 16<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>最近gitのコンフリクト解消職人みたいになっていてすごくつらいです。
+普通のプログラムであれば順番が重要なので手動でのコンフリクト解消は避けられないのですが、
+僕が相手にしているのは最終的にMySQLに食わせるデータなのでそこまで順番は重要ではありません。
+順番に挿入したところで、MySQLが順番にかえしてくれるとは限りませんからね。
+このようなケースではある程度機械的にマージできるのでは？と調べてみました。</p>
+
+<!-- More -->
+
+
+<h2>merge driver</h2>
+
+<p>いろいろググってみると<a href="http://git-scm.com/docs/gitattributes">gitattributes</a>でファイル毎にマージの細かい挙動を制御できるようです。
+通常マージの方法はgitがよしなに選択してくれますが、merge属性に以下の項目を指定することでマージの方法を強制することができます。</p>
+
+<ul>
+<li>text
+
+<ul>
+<li>テキストファイルとしてマージする。</li>
+<li>コンフリクトすると <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code>, <code>=======</code>, <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code>でコンフリクトした場所を教えてくれる。</li>
+</ul>
+</li>
+<li>binary
+
+<ul>
+<li>バイナリファイルとしてマージする。</li>
+<li>コンフリクトするとマージしようとしたファイルを残しておいてくれる。</li>
+</ul>
+</li>
+<li>union
+
+<ul>
+<li>テキストファイルとしてマージする。</li>
+<li>textと違ってコンフリクトしてもマーカを付けない。どちらの変更も残すように適当にマージしてくれる。</li>
+<li>適当なので <strong>コンフリクト時の行の順番は保証されない</strong></li>
+</ul>
+</li>
+</ul>
+
+
+<p>text, binaryはコンフリクトしたときによく見る挙動ですね。
+unionは初めて知ったので、簡単なレポジトリを作って挙動を確かめてみました。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span><span class="c"># masterブランチ上でmembers.txtにAliceを追加する</span>
+</span><span class='line'><span class="nv">$ </span>git init
+</span><span class='line'><span class="nv">$ </span><span class="nb">echo </span>Alice &gt; members.txt
+</span><span class='line'><span class="nv">$ </span>git add members.txt
+</span><span class='line'><span class="nv">$ </span>git commit -m <span class="s1">&#39;add Alice&#39;</span>
+</span><span class='line'><span class="o">[</span>master <span class="o">(</span>root-commit<span class="o">)</span> 8c39714<span class="o">]</span> add Alice
+</span><span class='line'> 1 file changed, 1 insertion<span class="o">(</span>+<span class="o">)</span>
+</span><span class='line'>  create mode 100644 members.txt
+</span><span class='line'><span class="err">$</span>
+</span><span class='line'><span class="nv">$ </span><span class="c"># add-bobブランチ上でmembers.txtにBobを追加する</span>
+</span><span class='line'><span class="nv">$ </span>git checkout -b add-bob
+</span><span class='line'>Switched to a new branch <span class="s1">&#39;add-bob&#39;</span>
+</span><span class='line'><span class="nv">$ </span><span class="nb">echo</span> <span class="s1">&#39;Bob&#39;</span> &gt;&gt; members.txt
+</span><span class='line'><span class="nv">$ </span>git add members.txt
+</span><span class='line'><span class="nv">$ </span>git commit -m <span class="s1">&#39;add Bob&#39;</span>
+</span><span class='line'><span class="o">[</span>add-bob 9c406ae<span class="o">]</span> add Bob
+</span><span class='line'> 1 file changed, 1 insertion<span class="o">(</span>+<span class="o">)</span>
+</span><span class='line'><span class="err">$</span>
+</span><span class='line'><span class="nv">$ </span><span class="c"># masterブランチ上でmembers.txtにEveを追加する</span>
+</span><span class='line'><span class="nv">$ </span>git checkout -
+</span><span class='line'> Switched to branch <span class="s1">&#39;master&#39;</span>
+</span><span class='line'><span class="nv">$ </span><span class="nb">echo</span> <span class="s1">&#39;Eve&#39;</span> &gt;&gt; members.txt
+</span><span class='line'><span class="nv">$ </span>git add members.txt
+</span><span class='line'><span class="nv">$ </span>git commit -m <span class="s1">&#39;add Eve&#39;</span>
+</span><span class='line'><span class="o">[</span>master 9eabd8a<span class="o">]</span> add Eve
+</span><span class='line'> 1 file changed, 1 insertion<span class="o">(</span>+<span class="o">)</span>
+</span><span class='line'><span class="nv">$ </span>git merge add-bob
+</span><span class='line'> Auto-merging members.txt
+</span><span class='line'> CONFLICT <span class="o">(</span>content<span class="o">)</span>: Merge conflict in members.txt
+</span><span class='line'> Automatic merge failed; fix conflicts and <span class="k">then </span>commit the result.
+</span><span class='line'><span class="nv">$ </span>cat members.txt
+</span><span class='line'> Alice
+</span><span class='line'> <span class="o">&lt;&lt;&lt;&lt;&lt;&lt;</span>&lt; HEAD
+</span><span class='line'> <span class="nv">Eve</span>
+</span><span class='line'> <span class="o">=======</span>
+</span><span class='line'> Bob
+</span><span class='line'> &gt;&gt;&gt;&gt;&gt;&gt;&gt; add-bob
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>わざとコンフリクトを起こしてみるテストです。
+ファイル末尾にEveとBobをそれぞれ別々のブランチで追加したためコンフリクトしてしまっています。</p>
+
+<p>では次にgitattributeを追加して<code>merge=union</code>を指定した場合に挙動を確認してみましょう。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span><span class="c"># merge=union属性を追加</span>
+</span><span class='line'><span class="nv">$ </span><span class="nb">echo</span> <span class="s1">&#39;members.txt merge=union&#39;</span> &gt; .gitattributes
+</span><span class='line'><span class="nv">$ </span>git add -f .gitattributes
+</span><span class='line'><span class="nv">$ </span>git commit -m <span class="s1">&#39;add gitattributes&#39;</span>
+</span><span class='line'><span class="o">[</span>master 61d2cfc<span class="o">]</span> add gitattributes
+</span><span class='line'> 1 file changed, 1 insertion<span class="o">(</span>+<span class="o">)</span>
+</span><span class='line'>  create mode 100644 .gitattributes
+</span><span class='line'><span class="err">$</span>
+</span><span class='line'><span class="nv">$ </span><span class="c"># もう一度マージしてみる</span>
+</span><span class='line'><span class="nv">$ </span>git merge add-bob
+</span><span class='line'>Auto-merging members.txt
+</span><span class='line'>Merge made by the <span class="s1">&#39;recursive&#39;</span> strategy.
+</span><span class='line'> members.txt | 1 +
+</span><span class='line'>  1 file changed, 1 insertion<span class="o">(</span>+<span class="o">)</span>
+</span><span class='line'><span class="nv">$ </span>cat members.txt
+</span><span class='line'>Alice
+</span><span class='line'>Eve
+</span><span class='line'>Bob
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>通常はコンフリクトするケースですが、今度はうまくマージできました。</p>
+
+<h2>merge driverをカスタマイズする</h2>
+
+<p>デフォルトではtext, binary, unionしか用意されていないmerge driverですが、<code>.git/config</code>をいじることで自前のmerge driverを追加することができます。
+unionでは行の順番が不定になって不便なので、試しに「必ずソートされており重複がないファイルをマージする」ためのmerge driverを作ってみます。
+まずはマージするためのコマンド用意しましょう。</p>
+
+<figure class='code'><figcaption><span>merge-sorted-set.sh</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="c">#!/bin/bash</span>
+</span><span class='line'><span class="nv">A</span><span class="o">=</span><span class="s2">&quot;$1&quot;</span>
+</span><span class='line'><span class="nv">O</span><span class="o">=</span><span class="s2">&quot;$2&quot;</span>
+</span><span class='line'><span class="nv">B</span><span class="o">=</span><span class="s2">&quot;$3&quot;</span>
+</span><span class='line'><span class="nv">tmpfile</span><span class="o">=</span><span class="k">$(</span>mktemp temp.XXXXXX<span class="k">)</span>
+</span><span class='line'>cp <span class="s2">&quot;$A&quot;</span> <span class="s2">&quot;$tmpfile&quot;</span>
+</span><span class='line'>git merge-file -p -q --union <span class="s2">&quot;$tmpfile&quot;</span> <span class="s2">&quot;$O&quot;</span> <span class="s2">&quot;$B&quot;</span> | sort | uniq &gt; <span class="s2">&quot;$A&quot;</span>
+</span><span class='line'>rm <span class="s2">&quot;$tmpfile&quot;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>パスの通った場所にこのファイルを置き、<code>.git/config</code>にこれを呼び出す設定を書けば、gitattributeから使用できるようになります。</p>
+
+<figure class='code'><figcaption><span>.git/config</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>[merge "zset"]
+</span><span class='line'>        name = merge sorted set
+</span><span class='line'>        driver = merge-sorted-set.sh %A %O %B</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li><code>%A</code>: 現在のブランチの状態</li>
+<li><code>%B</code>: マージしようとしているブランチの状態</li>
+<li><code>%O</code>: 共通の祖先の状態</li>
+<li><code>%L</code>: コンフリクトマーカの長さ。<a href="https://github.com/git/git/commit/23a64c9e771e3caf19cf2ee9a32c8942ddde4a81">1.7から使えるらしい</a></li>
+<li><code>%P</code>: ファイルのパス。<a href="https://github.com/git/git/commit/ef45bb1f8156030446658d5bfb3983ce214a9e16">2.5.0から使えるらしい</a></li>
+</ul>
+
+
+<p>このmerge driverを使ってマージすると、先の例ではAlice, Bob, Eveの順番で並ぶようになります。</p>
+
+<h2>theirs-oursの順番に並べてみる</h2>
+
+<p>僕のケースではtheirs-oursの順番で並んでくれると都合が良いので、こんなスクリプトを書いてみました。</p>
+
+<figure class='code'><figcaption><span>merge-theirs-ours.sh</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="c">#!/bin/bash</span>
+</span><span class='line'><span class="nv">A</span><span class="o">=</span><span class="s2">&quot;$1&quot;</span>
+</span><span class='line'><span class="nv">O</span><span class="o">=</span><span class="s2">&quot;$2&quot;</span>
+</span><span class='line'><span class="nv">B</span><span class="o">=</span><span class="s2">&quot;$3&quot;</span>
+</span><span class='line'><span class="nv">tmpfile</span><span class="o">=</span><span class="k">$(</span>mktemp temp.XXXXXX<span class="k">)</span>
+</span><span class='line'>cp <span class="s2">&quot;$A&quot;</span> <span class="s2">&quot;$tmpfile&quot;</span>
+</span><span class='line'>git merge-file -p -q --union <span class="s2">&quot;$B&quot;</span> <span class="s2">&quot;$O&quot;</span> <span class="s2">&quot;$tmpfile&quot;</span> &gt; <span class="s2">&quot;$A&quot;</span>
+</span><span class='line'>rm <span class="s2">&quot;$tmpfile&quot;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>.git/config</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>[merge "theirsours"]
+</span><span class='line'>        name = theirs first
+</span><span class='line'>        driver = merge-theirs-ours.sh %A %O %B
+</span><span class='line'>        recursive = text</span></code></pre></td></tr></table></div></figure>
+
+
+<p>あとは勝手にコンフリクト解消して欲しいファイルに対して
+.gitattributesで<code>merge=theirsours</code>を指定すれば通常はコンフリクトする場合でもマージしてくれます。</p>
+
+<p>ただ、さすがに全自動だとちょっと怖いので、以下の様にコンフリクトするようであればユーザに確認(<code>exit 1</code>するとコンフリクトした扱いになる)
+したほうが無難な気もしますね。</p>
+
+<figure class='code'><figcaption><span>merge-theirs-ours.sh</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="c">#!/bin/bash</span>
+</span><span class='line'><span class="nv">A</span><span class="o">=</span><span class="s2">&quot;$1&quot;</span>
+</span><span class='line'><span class="nv">O</span><span class="o">=</span><span class="s2">&quot;$2&quot;</span>
+</span><span class='line'><span class="nv">B</span><span class="o">=</span><span class="s2">&quot;$3&quot;</span>
+</span><span class='line'><span class="k">if </span>git merge-file -p -q <span class="s2">&quot;$A&quot;</span> <span class="s2">&quot;$O&quot;</span> <span class="s2">&quot;$B&quot;</span> &gt; /dev/null; <span class="k">then</span>
+</span><span class='line'><span class="k">    </span>git merge-file <span class="s2">&quot;$A&quot;</span> <span class="s2">&quot;$O&quot;</span> <span class="s2">&quot;$B&quot;</span>;
+</span><span class='line'><span class="k">else</span>
+</span><span class='line'><span class="k">    </span><span class="nv">tmpfile</span><span class="o">=</span><span class="k">$(</span>mktemp temp.XXXXXX<span class="k">)</span>
+</span><span class='line'>    cp <span class="s2">&quot;$A&quot;</span> <span class="s2">&quot;$tmpfile&quot;</span>
+</span><span class='line'>    git merge-file -p -q --union <span class="s2">&quot;$B&quot;</span> <span class="s2">&quot;$O&quot;</span> <span class="s2">&quot;$tmpfile&quot;</span> &gt; <span class="s2">&quot;$A&quot;</span>
+</span><span class='line'>    rm <span class="s2">&quot;$tmpfile&quot;</span>
+</span><span class='line'>    <span class="nb">exit </span>1
+</span><span class='line'><span class="k">fi</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>まとめ</h2>
+
+<p>gitattribute便利。
+gitattributeを使って<a href="http://shogo82148.github.io/blog/2015/03/24/git-diff-csv/">Git Diffでcsvの差分を見やすく表示する</a>のもどうぞ。</p>
+
+<p>ただmerge driverからはファイルのメタ情報に触れないので、「コミット日時が新しい方を残す」みたいなことができないのが残念です。
+<a href="http://stackoverflow.com/questions/7607125/git-merge-conflict-to-always-take-the-newest-file">ブランチ決め打ちにする</a>のはちょっと怖いし、
+merge strategyのカスタマイズは大変そう・・・
+(一応 <code>git-merge-hogehoge</code> をいうコマンドを用意しておけば <code>git merge --strategy hogehoge</code> と使えるようです。が、<code>git-merge-hogehoge &lt;base&gt;... -- &lt;head&gt; &lt;remote&gt; ...</code> の形式で渡ってくるので、そこから再実装するのはつらい・・・)</p>
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="http://git-scm.com/docs/gitattributes">gitattributes</a></li>
+<li><a href="http://stackoverflow.com/questions/23140240/git-how-do-i-add-a-custom-merge-strategy">git: How do I add a custom merge strategy?</a></li>
+<li><a href="http://stackoverflow.com/questions/7607125/git-merge-conflict-to-always-take-the-newest-file">Git merge conflict to always take the newest file</a></li>
+</ul>
+
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-12-16T22:24:00+09:00" pubdate data-updated="true">Dec 16<span>th</span>, 2015</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/git/'>git</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.io/blog/2015/12/16/customize-git-merge/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.io/blog/2015/12/16/customize-git-merge/" data-via="shogo82148" data-counturl="http://shogo82148.github.io/blog/2015/12/16/customize-git-merge/" >Tweet</a>
+  
+  
+  <div class="g-plusone" data-size="medium"></div>
+  
+  
+    <div class="fb-like" data-send="true" data-width="450" data-show-faces="false"></div>
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2015/12/13/go-deploy-shrine/" title="Previous Post: Goでデプロイ神社書いてみた">&laquo; Goでデプロイ神社書いてみた</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2015/12/16/customize-git-merge/">git-mergeの挙動をカスタマイズする</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/12/13/go-deploy-shrine/">Goでデプロイ神社書いてみた</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/12/09/perl-datetime/">Perl の DateTime 利用上の注意点</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/11/23/golang-graceful-restart-2nd/">Go言語でGraceful Restartをするときに取りこぼしを少なくする</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/10/14/go-all-stars/">Goオールスターズで登壇してきました</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>GitHub Repos</h1>
+  <ul id="gh_repos">
+    <li class="loading">Status updating...</li>
+  </ul>
+  
+  <a href="https://github.com/shogo82148">@shogo82148</a> on GitHub
+  
+  <script type="text/javascript">
+    $.domReady(function(){
+        if (!window.jXHR){
+            var jxhr = document.createElement('script');
+            jxhr.type = 'text/javascript';
+            jxhr.src = '/javascripts/libs/jXHR.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(jxhr, s);
+        }
+
+        github.showRepos({
+            user: 'shogo82148',
+            count: 0,
+            skip_forks: true,
+            target: '#gh_repos'
+        });
+    });
+  </script>
+  <script src="/javascripts/github.js" type="text/javascript"> </script>
+</section>
+
+
+<section>
+  <h1>Latest Tweets</h1>
+  <ul id="tweets">
+    <li class="loading">Status updating...</li>
+  </ul>
+  <script type="text/javascript">
+    $.domReady(function(){
+      getTwitterFeed("shogo82148", 4, false);
+    });
+  </script>
+  <script src="/javascripts/twitter.js" type="text/javascript"> </script>
+  
+    <a href="http://twitter.com/shogo82148" class="twitter-follow-button" data-show-count="false">Follow @shogo82148</a>
+  
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2015 - Shogo Ichinose -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'shogosblog';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://shogo82148.github.io/blog/2015/12/16/customize-git-merge/';
+        var disqus_url = 'http://shogo82148.github.io/blog/2015/12/16/customize-git-merge/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) {return;}
+  js = d.createElement(s); js.id = id;
+  js.src = "//connect.facebook.net/en_US/all.js#appId=212934732101925&xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var script = document.createElement('script'); script.type = 'text/javascript'; script.async = true;
+      script.src = 'https://apis.google.com/js/plusone.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(script, s);
+    })();
+  </script>
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>
