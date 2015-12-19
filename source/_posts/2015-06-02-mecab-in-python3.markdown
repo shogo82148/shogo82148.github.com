@@ -98,6 +98,10 @@ Python3.x(+SWIG)ではエンコードが自動的に行われてしまうので 
 インターフェースを変えずに後者の方法で何とかならないか、
 引き続きいじってみようと思います。
 
+## 追記(2015-12-20)
+
+[続報](http://shogo82148.github.io/blog/2015/12/20/mecab-in-python3-final/)を書きました。
+
 ## 参考
 
 - [taku910/MeCab](https://github.com/taku910/mecab)
