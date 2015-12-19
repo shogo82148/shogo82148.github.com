@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2015-12-17T18:37:35+09:00</updated>
+  <updated>2015-12-20T02:06:21+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,191 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[MeCabをPython3から使う(続報)]]></title>
+    <link href="http://shogo82148.github.io/blog/2015/12/20/mecab-in-python3-final/"/>
+    <updated>2015-12-20T01:03:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2015/12/20/mecab-in-python3-final</id>
+    <content type="html"><![CDATA[<p>Python3からMeCabを扱おうとして挫折していたのですが
+(<a href="http://shogo82148.github.io/blog/2015/06/02/mecab-in-python3/">MeCabをPython3から使う(中間報告)</a>)、
+改めて調査して、上手くいかなかった原因が分かったのでご報告します。</p>
+
+<!-- More -->
+
+
+<h2>おさらい</h2>
+
+<p>Python3で以下のようにMeCabを使おうとすると</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="kn">import</span> <span class="nn">MeCab</span>
+</span><span class='line'><span class="n">tagger</span> <span class="o">=</span> <span class="n">MeCab</span><span class="o">.</span><span class="n">Tagger</span><span class="p">(</span><span class="s">&#39;&#39;</span><span class="p">)</span>
+</span><span class='line'><span class="n">text</span> <span class="o">=</span> <span class="s">u&#39;MeCabで遊んでみよう!&#39;</span>
+</span><span class='line'><span class="n">node</span> <span class="o">=</span> <span class="n">tagger</span><span class="o">.</span><span class="n">parseToNode</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+</span><span class='line'><span class="k">while</span> <span class="n">node</span><span class="p">:</span>
+</span><span class='line'>    <span class="k">print</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">surface</span> <span class="o">+</span> <span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span> <span class="o">+</span> <span class="n">node</span><span class="o">.</span><span class="n">feature</span><span class="p">)</span>
+</span><span class='line'>    <span class="n">node</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">next</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>surfaceが全く読み取れないという現象に遭遇していました。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>BOS/EOS,*,*,*,*,*,*,*,*
+</span><span class='line'>名詞,一般,*,*,*,*,*
+</span><span class='line'>助詞,格助詞,一般,*,*,*,で,デ,デ
+</span><span class='line'>動詞,自立,*,*,五段・バ行,連用タ接続,遊ぶ,アソン,アソン
+</span><span class='line'>助詞,接続助詞,*,*,*,*,で,デ,デ
+</span><span class='line'>Traceback (most recent call last):
+</span><span class='line'>  File "m.py", line 10, in &lt;module&gt;
+</span><span class='line'>  print( node.surface + '\t' + node.feature )
+</span><span class='line'>  UnicodeDecodeError: 'utf-8' codec can't decode byte 0xa3 in position 1: invalid start byte</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>解決策</h2>
+
+<p>詳しい原因なんてどうでもいいからMeCabを使いたい人向けに、最初に解決方法を書いておきます。
+以下のように本当に解析したい対象を解析する前に、一度<code>parse</code>をしておけばOKです。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="kn">import</span> <span class="nn">MeCab</span>
+</span><span class='line'><span class="n">tagger</span> <span class="o">=</span> <span class="n">MeCab</span><span class="o">.</span><span class="n">Tagger</span><span class="p">(</span><span class="s">&#39;&#39;</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">tagger</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="s">&#39;&#39;</span><span class="p">)</span> <span class="c"># これ重要！！！！</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">text</span> <span class="o">=</span> <span class="s">u&#39;MeCabで遊んでみよう!&#39;</span>
+</span><span class='line'><span class="n">node</span> <span class="o">=</span> <span class="n">tagger</span><span class="o">.</span><span class="n">parseToNode</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+</span><span class='line'><span class="k">while</span> <span class="n">node</span><span class="p">:</span>
+</span><span class='line'>    <span class="k">print</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">surface</span> <span class="o">+</span> <span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span> <span class="o">+</span> <span class="n">node</span><span class="o">.</span><span class="n">feature</span><span class="p">)</span>
+</span><span class='line'>    <span class="n">node</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">next</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>解析結果を全く使わずに捨てていて無駄のように思えますが、この一行が重要です！
+これを入れると以下のように正常に解析ができます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>    BOS/EOS,*,*,*,*,*,*,*,*
+</span><span class='line'>MeCab   名詞,一般,*,*,*,*,*
+</span><span class='line'>で      助詞,格助詞,一般,*,*,*,で,デ,デ
+</span><span class='line'>遊ん    動詞,自立,*,*,五段・バ行,連用タ接続,遊ぶ,アソン,アソン
+</span><span class='line'>で      助詞,接続助詞,*,*,*,*,で,デ,デ
+</span><span class='line'>みよ    動詞,非自立,*,*,一段,未然ウ接続,みる,ミヨ,ミヨ
+</span><span class='line'>う      助動詞,*,*,*,不変化型,基本形,う,ウ,ウ
+</span><span class='line'>!       名詞,サ変接続,*,*,*,*,*
+</span><span class='line'>    BOS/EOS,*,*,*,*,*,*,*,*</span></code></pre></td></tr></table></div></figure>
+
+
+<p>解析を行うメソッドであれば<code>parseToNode</code>でも構いません。</p>
+
+<h2>原因</h2>
+
+<p>結果が壊れる直接的な原因は<a href="http://shogo82148.github.io/blog/2012/12/15/mecab-python/">MeCabをPythonから使う注意点とか</a>で紹介したように、
+解析対象の文字列がPythonの管理下から外れGCされてしまったからです。
+高速化のために余計なメモリーアロケーションを避けており、メモリ管理は利用者の責任というわけです。</p>
+
+<p>なんとかならないものかと、よくソースコードを追ってみると<code>MECAB_ALLOCATE_SENTENCE</code>というフラグをONにすれば
+<a href="https://github.com/taku910/mecab/blob/6b392e3960a4f5562e18742cb390ae1e22353d2a/mecab/src/tagger.cpp#L769-L775">メモリ管理をMeCabに任せることができる</a>ということがわかりました。
+これはTaggerを作るときの引数から指定でき、<code>-C</code>もしくは<code>--allocate-sentence</code>というオプションがこのフラグに対応します。
+これを有効にすれば解決だ！と思ったのですが、実は各種言語バインディングからMeCabを利用する場合は<a href="https://github.com/taku910/mecab/blob/6b392e3960a4f5562e18742cb390ae1e22353d2a/mecab/swig/MeCab.i#L102">デフォルトで有効になっています</a>。</p>
+
+<p>何故だ・・・とさらにコードを追ってみると<code>parseToNode</code>の実装が<a href="https://github.com/taku910/mecab/blob/6b392e3960a4f5562e18742cb390ae1e22353d2a/mecab/src/tagger.cpp#L602-L611">以下のようになっていること</a>がわかりました。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="k">const</span> <span class="n">Node</span> <span class="o">*</span><span class="n">TaggerImpl</span><span class="o">::</span><span class="n">parseToNode</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">str</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">len</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">Lattice</span> <span class="o">*</span><span class="n">lattice</span> <span class="o">=</span> <span class="n">mutable_lattice</span><span class="p">();</span>
+</span><span class='line'>  <span class="n">lattice</span><span class="o">-&gt;</span><span class="n">set_sentence</span><span class="p">(</span><span class="n">str</span><span class="p">,</span> <span class="n">len</span><span class="p">);</span> <span class="c1">// このなかでMECAB_ALLOCATE_SENTENCEフラグが立ってるか確認している</span>
+</span><span class='line'>  <span class="n">initRequestType</span><span class="p">();</span>               <span class="c1">// このなかでMECAB_ALLOCATE_SENTENCEフラグを立ててる</span>
+</span><span class='line'>  <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">parse</span><span class="p">(</span><span class="n">lattice</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">set_what</span><span class="p">(</span><span class="n">lattice</span><span class="o">-&gt;</span><span class="n">what</span><span class="p">());</span>
+</span><span class='line'>    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">return</span> <span class="n">lattice</span><span class="o">-&gt;</span><span class="n">bos_node</span><span class="p">();</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>MECAB_ALLOCATE_SENTENCEフラグを立てる前に、立っているかを確認しています。</strong></p>
+
+<p>解析対象の文字列を渡す前に<code>initRequestType()</code>を呼んで<code>MECAB_ALLOCATE_SENTENCE</code>フラグを立てれば良いのですが、
+残念ながら<code>initRequestType()</code>も<code>mutable_lattice()</code>もprivateなメソッドなのでPythonから直接呼ぶことはできません。
+そこで<code>parse()</code>を使って<code>initRequestType()</code>を間接的に呼び出せば問題解決というわけです。</p>
+
+<h2>別解</h2>
+
+<p><code>mutable_lattice()</code>は触れなくても、自分で作ったlatticeなら自由にいじれるので、
+以下のようにlatticeをPython側で作るのも手ですね。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="n">lattice</span> <span class="o">=</span> <span class="n">MeCab</span><span class="o">.</span><span class="n">Lattice</span><span class="p">()</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">MeCab</span>
+</span><span class='line'><span class="n">tagger</span> <span class="o">=</span> <span class="n">MeCab</span><span class="o">.</span><span class="n">Tagger</span><span class="p">(</span><span class="s">&#39;&#39;</span><span class="p">)</span>
+</span><span class='line'><span class="n">lattice</span> <span class="o">=</span> <span class="n">MeCab</span><span class="o">.</span><span class="n">Lattice</span><span class="p">()</span>
+</span><span class='line'><span class="n">text</span> <span class="o">=</span> <span class="s">u&#39;MeCabで遊んでみよう!&#39;</span>
+</span><span class='line'><span class="n">lattice</span><span class="o">.</span><span class="n">set_sentence</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+</span><span class='line'><span class="n">tagger</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">lattice</span><span class="p">)</span>
+</span><span class='line'><span class="n">node</span> <span class="o">=</span> <span class="n">lattice</span><span class="o">.</span><span class="n">bos_node</span><span class="p">()</span>
+</span><span class='line'><span class="k">while</span> <span class="n">node</span><span class="p">:</span>
+</span><span class='line'>    <span class="k">print</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">surface</span><span class="o">+</span><span class="s">&quot;</span><span class="se">\t</span><span class="s">&quot;</span><span class="o">+</span><span class="n">node</span><span class="o">.</span><span class="n">feature</span><span class="p">)</span>
+</span><span class='line'>    <span class="n">node</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">next</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>いずれの方法でもnodeからlatticeやtaggerへの参照がない(実際はあるけどPythonはそのことを知らない)ので、
+解析結果を読んでいる最中にlatticeやtaggerがGCで回収されないよう注意しましょう。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[PerlのDBIx::Class利用上の注意点]]></title>
@@ -4308,388 +4493,6 @@ Server::Starterの管理下で実行されるようになります。</p>
 Server::Starterから起動されなかった場合のフォールバックが正しく機能しません。
 現状では自前で<code>SERVER_STARTER_PORT</code>環境変数が定義されているのを確認するしかなさそうです。
 handlename先輩が<a href="https://github.com/lestrrat/go-server-starter/pull/3">PR</a>を出しているので、これがマージされたら状況が変わるかも。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Go言語で画像の減色を行う]]></title>
-    <link href="http://shogo82148.github.io/blog/2015/04/25/quantize-image-in-golang/"/>
-    <updated>2015-04-25T21:49:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2015/04/25/quantize-image-in-golang</id>
-    <content type="html"><![CDATA[<p>ちょっとGIFアニメを作りたくなって、最近Go触ってるしGoでやってみよう！とやってみたメモ。
-ImageMagikでいいじゃん説もあるけど、最終的にツールとして配布したいなってことでGoです。</p>
-
-<p>主に減色まわりについて。</p>
-
-<!-- More -->
-
-
-<h2>何はともあれ実装してみる</h2>
-
-<p>以前、「<a href="http://d.hatena.ne.jp/sugyan/20140719/1405729672">ターミナル操作の記録(ttyrec)からGIFアニメを生成するツールを作った</a>」という記事を見たので、
-これを参考に実装してみる。</p>
-
-<figure class='code'><figcaption><span>naive.go</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-<span class='line-number'>37</span>
-<span class='line-number'>38</span>
-<span class='line-number'>39</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
-</span><span class='line'>
-</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
-</span><span class='line'>  <span class="s">&quot;image&quot;</span>
-</span><span class='line'>  <span class="s">&quot;image/color/palette&quot;</span>
-</span><span class='line'>  <span class="s">&quot;image/gif&quot;</span>
-</span><span class='line'>  <span class="nx">_</span> <span class="s">&quot;image/png&quot;</span>
-</span><span class='line'>  <span class="s">&quot;os&quot;</span>
-</span><span class='line'><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">reader</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Open</span><span class="p">(</span><span class="s">&quot;Lenna.png&quot;</span><span class="p">)</span>
-</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-</span><span class='line'>      <span class="k">return</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>  <span class="k">defer</span> <span class="nx">reader</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="nx">img</span><span class="p">,</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nx">Decode</span><span class="p">(</span><span class="nx">reader</span><span class="p">)</span>
-</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-</span><span class='line'>      <span class="k">return</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="nx">paletted</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nx">NewPaletted</span><span class="p">(</span><span class="nx">img</span><span class="p">.</span><span class="nx">Bounds</span><span class="p">(),</span> <span class="nx">palette</span><span class="p">.</span><span class="nx">WebSafe</span><span class="p">)</span>
-</span><span class='line'>  <span class="k">for</span> <span class="nx">y</span> <span class="o">:=</span> <span class="nx">img</span><span class="p">.</span><span class="nx">Bounds</span><span class="p">().</span><span class="nx">Min</span><span class="p">.</span><span class="nx">Y</span><span class="p">;</span> <span class="nx">y</span> <span class="p">&lt;</span> <span class="nx">img</span><span class="p">.</span><span class="nx">Bounds</span><span class="p">().</span><span class="nx">Max</span><span class="p">.</span><span class="nx">Y</span><span class="p">;</span> <span class="nx">y</span><span class="o">++</span> <span class="p">{</span>
-</span><span class='line'>      <span class="k">for</span> <span class="nx">x</span> <span class="o">:=</span> <span class="nx">img</span><span class="p">.</span><span class="nx">Bounds</span><span class="p">().</span><span class="nx">Min</span><span class="p">.</span><span class="nx">X</span><span class="p">;</span> <span class="nx">x</span> <span class="p">&lt;</span> <span class="nx">img</span><span class="p">.</span><span class="nx">Bounds</span><span class="p">().</span><span class="nx">Max</span><span class="p">.</span><span class="nx">X</span><span class="p">;</span> <span class="nx">x</span><span class="o">++</span> <span class="p">{</span>
-</span><span class='line'>          <span class="nx">paletted</span><span class="p">.</span><span class="nx">Set</span><span class="p">(</span><span class="nx">x</span><span class="p">,</span> <span class="nx">y</span><span class="p">,</span> <span class="nx">img</span><span class="p">.</span><span class="nx">At</span><span class="p">(</span><span class="nx">x</span><span class="p">,</span> <span class="nx">y</span><span class="p">))</span>
-</span><span class='line'>      <span class="p">}</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="nx">f</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Create</span><span class="p">(</span><span class="s">&quot;naive.gif&quot;</span><span class="p">)</span>
-</span><span class='line'>  <span class="k">defer</span> <span class="nx">f</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="nx">opts</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">gif</span><span class="p">.</span><span class="nx">GIF</span><span class="p">{</span>
-</span><span class='line'>      <span class="nx">Image</span><span class="p">:</span>     <span class="p">[]</span><span class="o">*</span><span class="nx">image</span><span class="p">.</span><span class="nx">Paletted</span><span class="p">{</span><span class="nx">paletted</span><span class="p">},</span>
-</span><span class='line'>      <span class="nx">Delay</span><span class="p">:</span>     <span class="p">[]</span><span class="kt">int</span><span class="p">{</span><span class="mi">0</span><span class="p">},</span>
-</span><span class='line'>      <span class="nx">LoopCount</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>  <span class="nx">gif</span><span class="p">.</span><span class="nx">EncodeAll</span><span class="p">(</span><span class="nx">f</span><span class="p">,</span> <span class="nx">opts</span><span class="p">)</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>画像用意するの面倒だったので静止画になちゃったけど、
-<code>gif.GIF.Image</code> に複数枚画像を渡すとアニメーションGIFになります。
-みんなだいすきLenaさんをGIFに変換してみます。</p>
-
-<p>元画像:
-<img src="http://upload.wikimedia.org/wikipedia/en/2/24/Lenna.png" alt="Lena" /></p>
-
-<p>変換後:
-<img src="http://shogo82148.github.io/images/2015-04-25-naive.gif" alt="naive.gif" /></p>
-
-<p>あれ、なんか肌の色とか全然違う・・・</p>
-
-<h2>誤差拡散法でディザリングする</h2>
-
-<p>皆さんご存知の通りGIFはインデックスカラー方式で色を指定するので、一枚の画像で256色までしか扱えません。
-少ない色数でより多い色数を表現するためにディザリングがよく行われます。
-Goの標準ライブラリのimage/drawに<a href="http://ja.wikipedia.org/wiki/%E3%83%95%E3%83%AD%E3%82%A4%E3%83%89-%E3%82%B9%E3%82%BF%E3%82%A4%E3%83%B3%E3%83%90%E3%83%BC%E3%82%B0%E3%83%BB%E3%83%87%E3%82%A3%E3%82%B6%E3%83%AA%E3%83%B3%E3%82%B0">フロイド-スタインバーグ・ディザリング</a>を実装してものがあるので、
-それを使ってみます。</p>
-
-<p><code>gif.Encode</code> を使って静止画GIFを作るときにデフォルトでこの方法が使われるみたいですが、
-アニメーションGIFを作るときにはディザリング処理の呼び出しを自分でやらないといけないようです。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
-</span><span class='line'>
-</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
-</span><span class='line'>  <span class="s">&quot;image&quot;</span>
-</span><span class='line'>  <span class="s">&quot;image/color/palette&quot;</span>
-</span><span class='line'>  <span class="s">&quot;image/draw&quot;</span>
-</span><span class='line'>  <span class="s">&quot;image/gif&quot;</span>
-</span><span class='line'>  <span class="nx">_</span> <span class="s">&quot;image/png&quot;</span>
-</span><span class='line'>  <span class="s">&quot;os&quot;</span>
-</span><span class='line'><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">reader</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Open</span><span class="p">(</span><span class="s">&quot;Lenna.png&quot;</span><span class="p">)</span>
-</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-</span><span class='line'>      <span class="k">return</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>  <span class="k">defer</span> <span class="nx">reader</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="nx">img</span><span class="p">,</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nx">Decode</span><span class="p">(</span><span class="nx">reader</span><span class="p">)</span>
-</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-</span><span class='line'>      <span class="k">return</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="nx">paletted</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nx">NewPaletted</span><span class="p">(</span><span class="nx">img</span><span class="p">.</span><span class="nx">Bounds</span><span class="p">(),</span> <span class="nx">palette</span><span class="p">.</span><span class="nx">WebSafe</span><span class="p">)</span>
-</span><span class='line'>  <span class="nx">draw</span><span class="p">.</span><span class="nx">FloydSteinberg</span><span class="p">.</span><span class="nx">Draw</span><span class="p">(</span><span class="nx">paletted</span><span class="p">,</span> <span class="nx">img</span><span class="p">.</span><span class="nx">Bounds</span><span class="p">(),</span> <span class="nx">img</span><span class="p">,</span> <span class="nx">image</span><span class="p">.</span><span class="nx">ZP</span><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="nx">f</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Create</span><span class="p">(</span><span class="s">&quot;floyd_steinberg.gif&quot;</span><span class="p">)</span>
-</span><span class='line'>  <span class="k">defer</span> <span class="nx">f</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="nx">opts</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">gif</span><span class="p">.</span><span class="nx">GIF</span><span class="p">{</span>
-</span><span class='line'>      <span class="nx">Image</span><span class="p">:</span>     <span class="p">[]</span><span class="o">*</span><span class="nx">image</span><span class="p">.</span><span class="nx">Paletted</span><span class="p">{</span><span class="nx">paletted</span><span class="p">},</span>
-</span><span class='line'>      <span class="nx">Delay</span><span class="p">:</span>     <span class="p">[]</span><span class="kt">int</span><span class="p">{</span><span class="mi">0</span><span class="p">},</span>
-</span><span class='line'>      <span class="nx">LoopCount</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>  <span class="nx">gif</span><span class="p">.</span><span class="nx">EncodeAll</span><span class="p">(</span><span class="nx">f</span><span class="p">,</span> <span class="nx">opts</span><span class="p">)</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>結果:
-<img src="http://shogo82148.github.io/images/2015-04-25-floyd_steinberg.gif" alt="floyd_steinberg.gif" /></p>
-
-<p>最初よりはかなり良くなったものの、なんだかざらついた感じがします。
-昔はこんな感じの画像よく見ましたね・・・すごく20世紀な感じがします。</p>
-
-<h2>メディアンカットで減色してみる</h2>
-
-<p>20世紀感の原因は<a href="http://www.htmq.com/color/websafe216.shtml">Webセーフカラー</a>(この言葉ってもはや死語なのでは)を使ってるからです。
-21世紀の現在においてはWebセーフカラーでない色を使っても、色が変わることはほとんど無いので、
-24bitカラーで表現可能な1677万色の中から自由に256色を選択できます。</p>
-
-<p>で、問題はその256色をどうやって選択するかなんですが、
-Goの標準ライブラリにはインターフェースは定義されているものの実装が存在しない(？)みたいです。
-いろいろ探しまわって<a href="https://github.com/soniakeys/quant">soniakeys/quant</a>というパッケージを見つけたのでこれを使ってみます。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
-</span><span class='line'>
-</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
-</span><span class='line'>  <span class="s">&quot;github.com/soniakeys/quant/median&quot;</span>
-</span><span class='line'>  <span class="s">&quot;image&quot;</span>
-</span><span class='line'>  <span class="s">&quot;image/gif&quot;</span>
-</span><span class='line'>  <span class="nx">_</span> <span class="s">&quot;image/png&quot;</span>
-</span><span class='line'>  <span class="s">&quot;os&quot;</span>
-</span><span class='line'><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">reader</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Open</span><span class="p">(</span><span class="s">&quot;Lenna.png&quot;</span><span class="p">)</span>
-</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-</span><span class='line'>      <span class="k">return</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>  <span class="k">defer</span> <span class="nx">reader</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="nx">img</span><span class="p">,</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nx">Decode</span><span class="p">(</span><span class="nx">reader</span><span class="p">)</span>
-</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-</span><span class='line'>      <span class="k">return</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="nx">q</span> <span class="o">:=</span> <span class="nx">median</span><span class="p">.</span><span class="nx">Quantizer</span><span class="p">(</span><span class="mi">256</span><span class="p">)</span>
-</span><span class='line'>  <span class="nx">paletted</span> <span class="o">:=</span> <span class="nx">q</span><span class="p">.</span><span class="nx">Image</span><span class="p">(</span><span class="nx">img</span><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="nx">f</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Create</span><span class="p">(</span><span class="s">&quot;median.gif&quot;</span><span class="p">)</span>
-</span><span class='line'>  <span class="k">defer</span> <span class="nx">f</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="nx">opts</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">gif</span><span class="p">.</span><span class="nx">GIF</span><span class="p">{</span>
-</span><span class='line'>      <span class="nx">Image</span><span class="p">:</span>     <span class="p">[]</span><span class="o">*</span><span class="nx">image</span><span class="p">.</span><span class="nx">Paletted</span><span class="p">{</span><span class="nx">paletted</span><span class="p">},</span>
-</span><span class='line'>      <span class="nx">Delay</span><span class="p">:</span>     <span class="p">[]</span><span class="kt">int</span><span class="p">{</span><span class="mi">0</span><span class="p">},</span>
-</span><span class='line'>      <span class="nx">LoopCount</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>  <span class="nx">gif</span><span class="p">.</span><span class="nx">EncodeAll</span><span class="p">(</span><span class="nx">f</span><span class="p">,</span> <span class="nx">opts</span><span class="p">)</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p><img src="http://shogo82148.github.io/images/2015-04-25-median.gif" alt="median.gif" /></p>
-
-<h2>メディアンカットで減色してディザリングもやってみる</h2>
-
-<p>減色前の画像を渡すと減色したあとの画像を返してくれる<a href="https://github.com/soniakeys/quant">soniakeys/quant</a>の便利メソッドを
-使って実装してみましたが、
-ディザリングをしてくれないのでグラデーション部分があまりキレイではありません。</p>
-
-<p><a href="https://github.com/soniakeys/quant">soniakeys/quant</a>を使うのはパレットの作成だけにして、
-draw.FloydSteinbergでディザリングを行ってみます。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-<span class='line-number'>37</span>
-<span class='line-number'>38</span>
-<span class='line-number'>39</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
-</span><span class='line'>
-</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
-</span><span class='line'>  <span class="s">&quot;github.com/soniakeys/quant/median&quot;</span>
-</span><span class='line'>  <span class="s">&quot;image&quot;</span>
-</span><span class='line'>  <span class="s">&quot;image/color&quot;</span>
-</span><span class='line'>  <span class="s">&quot;image/draw&quot;</span>
-</span><span class='line'>  <span class="s">&quot;image/gif&quot;</span>
-</span><span class='line'>  <span class="nx">_</span> <span class="s">&quot;image/png&quot;</span>
-</span><span class='line'>  <span class="s">&quot;os&quot;</span>
-</span><span class='line'><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">reader</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Open</span><span class="p">(</span><span class="s">&quot;Lenna.png&quot;</span><span class="p">)</span>
-</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-</span><span class='line'>      <span class="k">return</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>  <span class="k">defer</span> <span class="nx">reader</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="nx">img</span><span class="p">,</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nx">Decode</span><span class="p">(</span><span class="nx">reader</span><span class="p">)</span>
-</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-</span><span class='line'>      <span class="k">return</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="nx">q</span> <span class="o">:=</span> <span class="nx">median</span><span class="p">.</span><span class="nx">Quantizer</span><span class="p">(</span><span class="mi">256</span><span class="p">)</span>
-</span><span class='line'>  <span class="nx">p</span> <span class="o">:=</span> <span class="nx">q</span><span class="p">.</span><span class="nx">Quantize</span><span class="p">(</span><span class="nb">make</span><span class="p">(</span><span class="nx">color</span><span class="p">.</span><span class="nx">Palette</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">256</span><span class="p">),</span> <span class="nx">img</span><span class="p">)</span>
-</span><span class='line'>  <span class="nx">paletted</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nx">NewPaletted</span><span class="p">(</span><span class="nx">img</span><span class="p">.</span><span class="nx">Bounds</span><span class="p">(),</span> <span class="nx">p</span><span class="p">)</span>
-</span><span class='line'>  <span class="nx">draw</span><span class="p">.</span><span class="nx">FloydSteinberg</span><span class="p">.</span><span class="nx">Draw</span><span class="p">(</span><span class="nx">paletted</span><span class="p">,</span> <span class="nx">img</span><span class="p">.</span><span class="nx">Bounds</span><span class="p">(),</span> <span class="nx">img</span><span class="p">,</span> <span class="nx">image</span><span class="p">.</span><span class="nx">ZP</span><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="nx">f</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Create</span><span class="p">(</span><span class="s">&quot;median-floyd-steinberg.gif&quot;</span><span class="p">)</span>
-</span><span class='line'>  <span class="k">defer</span> <span class="nx">f</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="nx">opts</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">gif</span><span class="p">.</span><span class="nx">GIF</span><span class="p">{</span>
-</span><span class='line'>      <span class="nx">Image</span><span class="p">:</span>     <span class="p">[]</span><span class="o">*</span><span class="nx">image</span><span class="p">.</span><span class="nx">Paletted</span><span class="p">{</span><span class="nx">paletted</span><span class="p">},</span>
-</span><span class='line'>      <span class="nx">Delay</span><span class="p">:</span>     <span class="p">[]</span><span class="kt">int</span><span class="p">{</span><span class="mi">0</span><span class="p">},</span>
-</span><span class='line'>      <span class="nx">LoopCount</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>  <span class="nx">gif</span><span class="p">.</span><span class="nx">EncodeAll</span><span class="p">(</span><span class="nx">f</span><span class="p">,</span> <span class="nx">opts</span><span class="p">)</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>結果:
-<img src="http://shogo82148.github.io/images/2015-04-25-median-floyd-steinberg.gif" alt="median-floyd-steinberg.gif" /></p>
 ]]></content>
   </entry>
   
