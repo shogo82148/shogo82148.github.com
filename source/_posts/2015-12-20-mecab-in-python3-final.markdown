@@ -130,3 +130,11 @@ while node:
 
 いずれの方法でもnodeからlatticeやtaggerへの参照がない(実際はあるけどPythonはそのことを知らない)ので、
 解析結果を読んでいる最中にlatticeやtaggerがGCで回収されないよう注意しましょう。
+
+
+## 追記(2015-12-20)
+
+MeCab自体の問題っぽいので、MeCabにpullreq送って直してもらおうとソースいじってたけど、[すでにpatchあった](https://github.com/taku910/mecab/issues/5)。
+[patchを取り込んだブランチを用意した](https://github.com/taku910/mecab/compare/master...shogo82148:request-type)ので、
+GCされて困っている方はgit cloneしてお試し下さい。
+
