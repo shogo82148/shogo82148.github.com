@@ -20,7 +20,7 @@ gitで差分をみれるようにしてみました。
 gitのいろんなファイル形式の差分を見やすくする方法は
 [Git Diffでcsvの差分を見やすく表示する](http://shogo82148.github.io/blog/2015/03/24/git-diff-csv/)を参照。
 
-csvのときと同じ要領で、まずはfntファイルをdiffを取りやすい形式に変換するスクリプト(fnt2txt)を容易し
+csvのときと同じ要領で、まずはfntファイルをdiffを取りやすい形式に変換するスクリプト(fnt2txt)を用意し
 
 ``` bash fnt2txt
 #!/bin/bash
