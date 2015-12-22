@@ -4,7 +4,7 @@
   <title><![CDATA[Category: git | Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/blog/categories/git/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2015-12-20T08:45:36+09:00</updated>
+  <updated>2015-12-22T19:25:42+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,72 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[UnityのBitmapフォントの収録文字のdiffを取る]]></title>
+    <link href="http://shogo82148.github.io/blog/2015/12/22/diff-of-unity-bitmap-font/"/>
+    <updated>2015-12-22T19:04:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2015/12/22/diff-of-unity-bitmap-font</id>
+    <content type="html"><![CDATA[<p>Unityで文字を描画するには
+「<a href="http://d.hatena.ne.jp/nakamura001/20120910/1347241168">BMFont(Bitmap Font Generator)でビットマップフォントを作る方法</a>」等にあるように
+ビットマップフォントを自分で作ってあげないといけないらしいです。
+(ダイナミックフォントというものもあるらしいけど、まだ安定性が検証ができていないので使ってない。)</p>
+
+<p>フォントに入っている全部の文字を収録するとでかくなりすぎるので、一部の文字だけ収録するのが一般的だと思います。
+入れる文字は自分で選ぶわけですが、フォントファイルを更新する際に、以前は使えた文字が入っていなくてつらい思いをしたので、
+gitで差分をみれるようにしてみました。</p>
+
+<!-- More -->
+
+
+<p>gitのいろんなファイル形式の差分を見やすくする方法は
+<a href="http://shogo82148.github.io/blog/2015/03/24/git-diff-csv/">Git Diffでcsvの差分を見やすく表示する</a>を参照。</p>
+
+<p>csvのときと同じ要領で、まずはfntファイルをdiffを取りやすい形式に変換するスクリプト(fnt2txt)を容易し</p>
+
+<p>``` bash fnt2txt</p>
+
+<h1>!/bin/bash</h1>
+
+<p>grep 'char id=' $1 | cut -d' ' -f2 | cut -d= -f2 | perl -MEncode -ne 'printf "%04x: %s\n", $<em>, encode_utf8 chr($</em>) if $_ >= 32'
+```</p>
+
+<p>fnt2txtを使う設定を<code>.git/config</code>に設定します。</p>
+
+<p>``` plain .git/config
+[diff "fnt"]</p>
+
+<pre><code>    textconv = fnt2txt
+</code></pre>
+
+<p>```</p>
+
+<p>最後に拡張子.fntに対してだけこの設定が反映されるようにすればOKです。</p>
+
+<p><code>plain .gitatrribute
+*.fnt diff=fnt
+</code></p>
+
+<p>こんな感じでdiffが見れます。</p>
+
+<p><code>diff git-diff
+diff --git a/foo.fnt b/foo.fnt
+index 79391c0..e262b2d 100755
+--- a/foo.fnt
++++ b/foo.fnt
+@@ -93,6 +93,7 @@
+ 007c: |
+ 007d: }
+ 007e: ~
++00a0:  
+ 00a1: ¡
+ 00a2: ¢
+ 00a3: £
+</code></p>
+
+<p>事故防止に是非ご利用ください。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[git-mergeの挙動をカスタマイズする]]></title>
@@ -445,119 +511,6 @@ git branch | sed -e 's/^[\* ]*//g' | xargs -n1 -I% sh -c 'git archive --prefix=%
 <p>.gitconfig とかでエイリアスを設定しておくといいんじゃないでしょうか</p>
 
 <p>以上</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Gitで作業ディレクトリの変更を破棄したのに差分が出続けて困った話その2]]></title>
-    <link href="http://shogo82148.github.io/blog/2014/10/21/git-case-sensitivity/"/>
-    <updated>2014-10-21T00:56:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2014/10/21/git-case-sensitivity</id>
-    <content type="html"><![CDATA[<p>先日「<a href="http://shogo82148.github.io/blog/2014/10/04/gitattribute-eol-equals-crlf/">Gitで作業ディレクトリの変更を破棄したのに差分が出続けて困った話</a>」と
-いうのを書きましたが、より強力な敵が現われました。
-このときは文字コードが原因で <code>git checkout -- &lt;file&gt;</code> しても差分が残り続けるというもので、<code>git add</code> してコミットし直すことで回避出来ました。
-しかし、今度の敵は <code>git checkout -- &lt;file&gt;</code> しても <code>git add &lt;file&gt;</code>しても差分が残り続けます。</p>
-
-<p>なんだ・・・このボスを倒したら新たなラスボスが現れた感・・・</p>
-
-<p>acidlemon先生の手助けにより事無きを得たのですが、
-ちょっと不明な点もあったので、その点もあわせてメモを残しておきます。</p>
-
-<!-- More -->
-
-
-<h2>症状</h2>
-
-<p><code>git checkout -- &lt;file&gt;</code> しても、<code>git add &lt;file&gt;</code> しても、<code>git reset --hard HEAD</code> しても、
-何をしても差分が出続ける・・・なんだこいつ・・・</p>
-
-<p>``` plain
-$ git checkout -- AwesomeFeature
-$ git add .
-$ git status
-On branch master
-Changes not staged for commit:
-  (use "git add <file>..." to update what will be committed)</p>
-
-<pre><code>(use "git checkout -- &lt;file&gt;..." to discard changes in working directory)
-
-modified:   AwesomeFeature/HogeHoge.txt
-
-no changes added to commit (use "git add" and/or "git commit -a")
-</code></pre>
-
-<p>```</p>
-
-<p>操作は全てMac上で行いました。</p>
-
-<h2>原因</h2>
-
-<p>原因はファイル名の大文字小文字でした。
-<code>git ls-files</code> でgitに管理されているファイルの一覧を表示します。</p>
-
-<p><code>
-$ git ls-files
-AwesomeFeature/HogeHoge.txt
-AwesomeFeature/hogehoge.txt
-README.txt
-</code></p>
-
-<p>大文字小文字だけが違う「HogeHoge.txt」と「hogehoge.txt」が管理されています。</p>
-
-<p>しかしワーキングディレクトリにあるのは「HogeHoge.txt」のみです。</p>
-
-<p><code>
-$ ls AwesomeFeature/
-HogeHoge.txt
-</code></p>
-
-<p>Macのファイルシステムは大文字小文字を区別しないので、
-ワーキングディレクトリ上で「HogeHoge.txt」と「hogehoge.txt」を同時に扱えません。
-しかしgitは両者を区別するので、よくわからない差分が生まれてしまったわけです。</p>
-
-<p>両方同時に扱えないので、どちらか片方を消して解決します。
-<code>git diff</code>で「HogeHoge.txt」と「hogehoge.txt」の差分が見れるのでどっちを残すが選択、
-<code>git checkout -- &lt;file&gt;</code>で必要なほうをワーキングディレクトリに反映後、
-<code>git rm --cached &lt;file&gt;</code>で不要なファイルをレポジトリから削除です。
-「hogehoge.txt」を残す場合は以下のような感じです。全てファイル名を明示してるのがポイントです(症状のところではディレクトリ名指定だった)。</p>
-
-<p><code>
-$ # 差分確認
-$ # 今はHogeHoge.txtの方がワーキングディレクトリに反映されているので、hogehoge.txtに変更があるように見える
-$ git diff
-diff --git a/AwesomeFeature/hogehoge.txt b/AwesomeFeature/hogehoge.txt
-index 3488202..1150100 100644
---- a/AwesomeFeature/hogehoge.txt
-+++ b/AwesomeFeature/hogehoge.txt
-@@ -1 +1 @@
--this is hogehoge.txt
-+this is HogeHoge.txt
-$
-$ # hogehoge.txt の内容をワーキングディレクトリに反映
-$ git checkout -- AwesomeFeature/hogehoge.txt
-$
-$ # 今度はHogeHoge.txtに変更があるように見える
-$ git diff
-diff --git a/AwesomeFeature/HogeHoge.txt b/AwesomeFeature/HogeHoge.txt
-index 1150100..3488202 100644
---- a/AwesomeFeature/HogeHoge.txt
-+++ b/AwesomeFeature/HogeHoge.txt
-@@ -1 +1 @@
--this is HogeHoge.txt
-+this is hogehoge.txt
-$
-$ # HogeHoge.txtの方はgitから削除
-$ git rm AwesomeFeature/HogeHoge.txt
-rm 'AwesomeFeature/HogeHoge.txt'
-$ git commit -m 'rm AwesomeFeature/HogeHoge.txt'
-</code></p>
-
-<p>「HogeHoge.txt」があるブランチと「hogehoge.txt」があるブランチをマージするとこうなるようです。
-gitの扱いに慣れてない人が触っているレポジトリなのでトラブルが絶えない・・・それにしたってなんでこう見事に地雷を踏抜いて行くんだ・・・(ヽ´ω`)</p>
-
-<h2>まとめ</h2>
-
-<p>大文字小文字を区別しないファイルシステムなんか滅んでしまえ。</p>
 ]]></content>
   </entry>
   
