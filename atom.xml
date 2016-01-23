@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2015-12-22T19:29:50+09:00</updated>
+  <updated>2016-01-23T16:43:23+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,41 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Redis::Fast 0.17 をリリースしました]]></title>
+    <link href="http://shogo82148.github.io/blog/2016/01/23/redis-fast-0-dot-17-released/"/>
+    <updated>2016-01-23T16:20:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2016/01/23/redis-fast-0-dot-17-released</id>
+    <content type="html"><![CDATA[<p><a href="https://metacpan.org/release/SHOGO/Redis-Fast-0.17">Redis::Fast 0.17</a> をリリースしました。
+主な変更点は以下のとおりです。</p>
+
+<ul>
+<li>I/Oの待ち合わせに使うシステムコールをselect(2)からpoll(2)に変更</li>
+<li>hiredisをv0.13.3にアップデート</li>
+</ul>
+
+
+<!-- More -->
+
+
+<p>macでテストが終わらない問題がありましたが、この変更によって修正されています。</p>
+
+<p>hiredisは<a href="https://linuxjm.osdn.jp/html/LDP_man-pages/man2/connect.2.html">connect(2)</a>をnonblokingモードで呼び出しています。
+nonblockingなので接続が未完了であってもすぐに制御を返し、errnoにEINPROGRESSが設定されます。
+この場合、manにあるようにselect(2)で書き込み可能になるのを待つことで、接続完了を検知できます。</p>
+
+<blockquote><p>select(2) で書き込み可能になった後に、 getsockopt(2) を使って SOL_SOCKET レベルで SO_ERROR オプションを読み出すこ とにより、 connect() が成功したか、失敗したかを判断できる。</p></blockquote>
+
+<p>linuxの場合はこれで上手く動くのですが、macだと何故かselect(2)が永遠に制御を返さない場合があるようです。
+接続先が存在しない場合に起こるのですが、制御を返す場合もあるので謎です。</p>
+
+<p>いろいろ調べてはみたのですがselect(2)だとどうやっても上手く動かなかったので、poll(2)に変更しました。
+poll(2)変更版でテストしてみると、接続先が存在しない場合にPOLLOUTを返すケースとPOLLHUPを返すケースがあるようです。
+どうやらPOLLHUPにあたるイベントが来た時の挙動がlinuxとmacとで違うらしい？
+謎です。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[UnityのBitmapフォントの収録文字のdiffを取る]]></title>
@@ -3691,318 +3726,6 @@ Python3.x(+SWIG)ではエンコードが自動的に行われてしまうので 
 
 <p>こういう情報を知りたい場合どうするのがいいんだろうね。
 この前作った<a href="http://shogo82148.github.io/blog/2015/05/09/go-txmanager/">txmanger</a>のレベルでプロキシを作ったほうがいいのかなあ。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Goのトランザクションマネージャ作った]]></title>
-    <link href="http://shogo82148.github.io/blog/2015/05/09/go-txmanager/"/>
-    <updated>2015-05-09T15:17:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2015/05/09/go-txmanager</id>
-    <content type="html"><![CDATA[<p>Golangの<code>database/sql</code>はBeginとCommitでトランザクションの制御を行うことができます。
-クエリの実行が確実に成功するのであれば難しくは無いのですが、
-トランザクション内でエラーが発生場合、確実にトランザクションを終了させるのは少し面倒です。
-また、ネストができないので、「トランザクションの中から呼び出しても外から呼び出しても、関数の中はトランザクション内」みたいなことができません。
-Perlには<a href="https://metacpan.org/release/DBIx-TransactionManager">DBIx-TransactionManager</a>というものがあるのですが、
-このGolang版が欲しくなったので作ってみました。</p>
-
-<ul>
-<li><a href="https://github.com/shogo82148/txmanager">txmanager</a></li>
-</ul>
-
-
-<!-- More -->
-
-
-<h2>簡単な使い方</h2>
-
-<p><code>sql.DB</code> をラップした <code>txmanager.DB</code> を使います。
-<code>Begin</code>, <code>Commit</code> する代わりに <code>TxBegin</code>, <code>TxCommit</code> を使ってトランザクションを開始・終了すると
-txmanagerの管理下になります。
-確実にトランザクションが終了させるために、トランザクションを開始したら<code>defer tx.TxFinish()</code>を忘れないように。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">import</span> <span class="p">(</span>
-</span><span class='line'>  <span class="s">&quot;database/sql&quot;</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="s">&quot;github.com/shogo82148/txmanager&quot;</span>
-</span><span class='line'><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">func</span> <span class="nx">Example</span><span class="p">(</span><span class="nx">db</span> <span class="o">*</span><span class="nx">sql</span><span class="p">.</span><span class="nx">DB</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">dbm</span> <span class="o">:=</span> <span class="nx">txmanager</span><span class="p">.</span><span class="nx">NewDB</span><span class="p">(</span><span class="nx">db</span><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="c1">// トランザクション開始</span>
-</span><span class='line'>  <span class="nx">tx</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">dbm</span><span class="p">.</span><span class="nx">TxBegin</span><span class="p">()</span>
-</span><span class='line'>  <span class="k">defer</span> <span class="nx">tx</span><span class="p">.</span><span class="nx">TxFinish</span><span class="p">()</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="c1">// INSERTはトランザクションの中で実行される</span>
-</span><span class='line'>  <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">tx</span><span class="p">.</span><span class="nx">Exec</span><span class="p">(</span><span class="s">&quot;INSERT INTO t1 (id) VALUES(1)&quot;</span><span class="p">)</span>
-</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-</span><span class='line'>      <span class="nx">tx</span><span class="p">.</span><span class="nx">TxRollback</span><span class="p">()</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>  <span class="nx">tx</span><span class="p">.</span><span class="nx">TxCommit</span><span class="p">()</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>実際にはこれに加えてエラー処理も必要です。
-<code>txmanager.Do</code> を使うと、トランザクションの開始処理・終了をtxmangerがやってくれるので少し楽になります。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">import</span> <span class="p">(</span>
-</span><span class='line'>  <span class="s">&quot;database/sql&quot;</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="s">&quot;github.com/shogo82148/txmanager&quot;</span>
-</span><span class='line'><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">func</span> <span class="nx">Example</span><span class="p">(</span><span class="nx">db</span> <span class="o">*</span><span class="nx">sql</span><span class="p">.</span><span class="nx">DB</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">dbm</span> <span class="o">:=</span> <span class="nx">txmanager</span><span class="p">.</span><span class="nx">NewDB</span><span class="p">(</span><span class="nx">db</span><span class="p">)</span>
-</span><span class='line'>  <span class="k">return</span> <span class="nx">txmanager</span><span class="p">.</span><span class="nx">Do</span><span class="p">(</span><span class="nx">dbm</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">tx</span> <span class="nx">txmanager</span><span class="p">.</span><span class="nx">Tx</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
-</span><span class='line'>      <span class="c1">// INSERTはトランザクションの中で実行される</span>
-</span><span class='line'>      <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">tx</span><span class="p">.</span><span class="nx">Exec</span><span class="p">(</span><span class="s">&quot;INSERT INTO t1 (id) VALUES(1)&quot;</span><span class="p">)</span>
-</span><span class='line'>      <span class="k">return</span> <span class="nx">err</span>
-</span><span class='line'>  <span class="p">})</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>トランザクションをネストする</h2>
-
-<p>以下のようにトランザクションをネストすることができます。
-ネストした内側のトランザクションは<code>TxCommit</code>しても特に何もしません。
-一番外側のトランザクションで<code>TxCommit</code>が実行されたときにコミットが行われます。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">import</span> <span class="p">(</span>
-</span><span class='line'>  <span class="s">&quot;database/sql&quot;</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="s">&quot;github.com/shogo82148/txmanager&quot;</span>
-</span><span class='line'><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">//トランザクションの外からでも中からでもFooを呼び出すことができる</span>
-</span><span class='line'><span class="kd">func</span> <span class="nx">Example</span><span class="p">(</span><span class="nx">db</span> <span class="o">*</span><span class="nx">sql</span><span class="p">.</span><span class="nx">DB</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">dbm</span> <span class="o">:=</span> <span class="nx">txmanager</span><span class="p">.</span><span class="nx">NewDB</span><span class="p">(</span><span class="nx">db</span><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="nx">txmanager</span><span class="p">.</span><span class="nx">Do</span><span class="p">(</span><span class="nx">dbm</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">tx</span> <span class="nx">txmanager</span><span class="p">.</span><span class="nx">Tx</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
-</span><span class='line'>      <span class="nx">txmanager</span><span class="p">.</span><span class="nx">Do</span><span class="p">(</span><span class="nx">tx</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">tx</span> <span class="nx">txmanager</span><span class="p">.</span><span class="nx">Tx</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
-</span><span class='line'>          <span class="c1">// INSERTはトランザクションの中で実行される</span>
-</span><span class='line'>          <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">tx</span><span class="p">.</span><span class="nx">Exec</span><span class="p">(</span><span class="s">&quot;INSERT INTO t1 (id) VALUES(1)&quot;</span><span class="p">)</span>
-</span><span class='line'>          <span class="k">return</span> <span class="nx">err</span>
-</span><span class='line'>      <span class="p">})</span>
-</span><span class='line'>      <span class="c1">// この時点ではまだコミットされていない</span>
-</span><span class='line'>      <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">tx</span><span class="p">.</span><span class="nx">Exec</span><span class="p">(</span><span class="s">&quot;INSERT INTO t1 (id) VALUES(2)&quot;</span><span class="p">)</span>
-</span><span class='line'>      <span class="k">return</span> <span class="nx">err</span>
-</span><span class='line'>  <span class="p">})</span>
-</span><span class='line'>  <span class="c1">// 全部のトランザクションが終了した時点ではじめてコミットされる</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>トランザクションの中で実行するべき処理を、関数に切り出すときなどに便利ですね。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">import</span> <span class="p">(</span>
-</span><span class='line'>  <span class="s">&quot;database/sql&quot;</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="s">&quot;github.com/shogo82148/txmanager&quot;</span>
-</span><span class='line'><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">func</span> <span class="nx">Foo</span><span class="p">(</span><span class="nx">dbm</span> <span class="o">*</span><span class="nx">txmanager</span><span class="p">.</span><span class="nx">DB</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
-</span><span class='line'>  <span class="c1">// この時点ではトランザクションの中にいるのか、外にいるのか分からない</span>
-</span><span class='line'>  <span class="k">return</span> <span class="nx">txmanager</span><span class="p">.</span><span class="nx">Do</span><span class="p">(</span><span class="nx">dbm</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">tx</span> <span class="nx">txmanager</span><span class="p">.</span><span class="nx">Tx</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
-</span><span class='line'>      <span class="c1">// INSERTを確実にトランザクションの中で実行する</span>
-</span><span class='line'>      <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">tx</span><span class="p">.</span><span class="nx">Exec</span><span class="p">(</span><span class="s">&quot;INSERT INTO t1 (id) VALUES(1)&quot;</span><span class="p">)</span>
-</span><span class='line'>      <span class="k">return</span> <span class="nx">err</span>
-</span><span class='line'>  <span class="p">})</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">//トランザクションの外からでも中からでもFooを呼び出すことができる</span>
-</span><span class='line'><span class="kd">func</span> <span class="nx">Example</span><span class="p">(</span><span class="nx">db</span> <span class="o">*</span><span class="nx">sql</span><span class="p">.</span><span class="nx">DB</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">dbm</span> <span class="o">:=</span> <span class="nx">txmanager</span><span class="p">.</span><span class="nx">NewDB</span><span class="p">(</span><span class="nx">db</span><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="nx">Foo</span><span class="p">(</span><span class="nx">dbm</span><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="nx">txmanager</span><span class="p">.</span><span class="nx">Do</span><span class="p">(</span><span class="nx">dbm</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">tx</span> <span class="nx">txmanager</span><span class="p">.</span><span class="nx">Tx</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
-</span><span class='line'>      <span class="k">return</span> <span class="nx">Foo</span><span class="p">(</span><span class="nx">tx</span><span class="p">)</span>
-</span><span class='line'>  <span class="p">})</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>コミットしたら何かする</h2>
-
-<p><a href="https://github.com/soh335/DBIx-TransactionManager-EndHook">DBIx::TransactionManager::EndHook</a>相当の機能も追加してみました。</p>
-
-<p>トランザクションはネスト可能なため、<code>TxCommit</code>でコミットを行ったからと言って、その場でコミットが行われるとは限りません。
-後からROLLBACKされてしまう可能性があります。
-例えば、以下のコードではINSERTした行はロールバックされたにもかかわらず「INSERTに成功したよ！！」というログが流れてしまいます。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">import</span> <span class="p">(</span>
-</span><span class='line'>  <span class="s">&quot;database/sql&quot;</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="s">&quot;github.com/shogo82148/txmanager&quot;</span>
-</span><span class='line'><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">func</span> <span class="nx">Foo</span><span class="p">(</span><span class="nx">dbm</span> <span class="o">*</span><span class="nx">txmanager</span><span class="p">.</span><span class="nx">DB</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">err</span> <span class="o">:=</span> <span class="nx">txmanager</span><span class="p">.</span><span class="nx">Do</span><span class="p">(</span><span class="nx">dbm</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">tx</span> <span class="nx">txmanager</span><span class="p">.</span><span class="nx">Tx</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
-</span><span class='line'>      <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">tx</span><span class="p">.</span><span class="nx">Exec</span><span class="p">(</span><span class="s">&quot;INSERT INTO t1 (id) VALUES(1)&quot;</span><span class="p">)</span>
-</span><span class='line'>      <span class="k">return</span> <span class="kc">nil</span>
-</span><span class='line'>  <span class="p">})</span>
-</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-</span><span class='line'>      <span class="k">return</span> <span class="nx">err</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>  <span class="nx">log</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;INSERTに成功したよ！！&quot;</span><span class="p">)</span>
-</span><span class='line'>  <span class="k">return</span> <span class="kc">nil</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">func</span> <span class="nx">Example</span><span class="p">(</span><span class="nx">db</span> <span class="o">*</span><span class="nx">sql</span><span class="p">.</span><span class="nx">DB</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">dbm</span> <span class="o">:=</span> <span class="nx">txmanager</span><span class="p">.</span><span class="nx">NewDB</span><span class="p">(</span><span class="nx">db</span><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="nx">txmanager</span><span class="p">.</span><span class="nx">Do</span><span class="p">(</span><span class="nx">dbm</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">tx</span> <span class="nx">txmanager</span><span class="p">.</span><span class="nx">Tx</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
-</span><span class='line'>      <span class="nx">Foo</span><span class="p">(</span><span class="nx">tx</span><span class="p">)</span>
-</span><span class='line'>      <span class="c1">// ...その他トランザクション内で実行しないといけない処理...</span>
-</span><span class='line'>      <span class="c1">// エラーが発生するとロールバックされる</span>
-</span><span class='line'>      <span class="k">return</span> <span class="nx">errors</span><span class="p">.</span><span class="nx">New</span><span class="p">(</span><span class="s">&quot;何かのエラー！&quot;</span><span class="p">)</span>
-</span><span class='line'>  <span class="p">})</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p><code>TxAddEndHook</code>を使うと全てのトランザクションが正常に終了した場合にのみ処理を実行することができます。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kd">func</span> <span class="nx">Foo</span><span class="p">(</span><span class="nx">dbm</span> <span class="o">*</span><span class="nx">txmanager</span><span class="p">.</span><span class="nx">DB</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
-</span><span class='line'>  <span class="k">return</span> <span class="nx">txmanager</span><span class="p">.</span><span class="nx">Do</span><span class="p">(</span><span class="nx">dbm</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">tx</span> <span class="nx">txmanager</span><span class="p">.</span><span class="nx">Tx</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
-</span><span class='line'>      <span class="k">if</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">tx</span><span class="p">.</span><span class="nx">Exec</span><span class="p">(</span><span class="s">&quot;INSERT INTO t1 (id) VALUES(1)&quot;</span><span class="p">);</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-</span><span class='line'>          <span class="k">return</span> <span class="nx">err</span>
-</span><span class='line'>      <span class="p">}</span>
-</span><span class='line'>      <span class="nx">tx</span><span class="p">.</span><span class="nx">TxAddEndHook</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="kt">error</span> <span class="p">{</span>
-</span><span class='line'>          <span class="c1">// 全てのトランザクションが正常に終了した場合にのみ呼ばれる</span>
-</span><span class='line'>          <span class="nx">log</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;INSERTに成功したよ！！&quot;</span><span class="p">)</span>
-</span><span class='line'>          <span class="k">return</span> <span class="kc">nil</span>
-</span><span class='line'>      <span class="p">})</span>
-</span><span class='line'>      <span class="k">return</span> <span class="kc">nil</span>
-</span><span class='line'>  <span class="p">})</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
 ]]></content>
   </entry>
   
