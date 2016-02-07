@@ -138,3 +138,11 @@ MeCab自体の問題っぽいので、MeCabにpullreq送って直してもらお
 [patchを取り込んだブランチを用意した](https://github.com/taku910/mecab/compare/master...shogo82148:request-type)ので、
 GCされて困っている方はgit cloneしてお試し下さい。
 
+
+## 追記その2(2016-02-08)
+
+なんとか取り込んでもらおうと[Pull Request](https://github.com/taku910/mecab/pull/24)にしてマージしてもらいました。
+まだリリースはされていませんが、2016-02-08現在のmasterブランチをビルドすれば、ガーベージコレクションの問題はなくなるはずです。
+[Twitterで作者に聞いてくれた](https://twitter.com/chezou/status/696306806394474496)人がいたみたいで、僕のpulllreq以外もたくさんマージされたようです。
+よかったよかった。リリースを心待ちにしています。
+(が、[Python3対応のpullreq](https://github.com/taku910/mecab/pull/16)はマージされていない・・・一応試してみてから+1しておこうかな)
