@@ -74,7 +74,6 @@ import MeCab
 # prepare Tagger
 dicdir = os.path.join(os.getcwd(), 'local', 'lib', 'mecab', 'dic', 'ipadic')
 rcfile = os.path.join(os.getcwd(), 'local', 'etc', 'mecabrc')
-print "-d{} -r{}".format(dicdir, rcfile)
 default_tagger = MeCab.Tagger("-d{} -r{}".format(dicdir, rcfile))
 unk_tagger = MeCab.Tagger("-d{} -r{} --unk-feature 未知語,*,*,*,*,*,*,*,*".format(dicdir, rcfile))
 
