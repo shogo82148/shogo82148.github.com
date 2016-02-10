@@ -122,7 +122,7 @@ def get_base_form(feature):
 まずは元記事にあったオリジナルのコードから。
 
 | Duration | Billing Duration | Memory Size | Max Memory Used |
-|---|---|---|---|
+|:---:|:---:|:---:|:---:|
 | 280.76 ms | 300 ms | 128 MB | 29 MB |
 | 310.00 ms | 400 ms | 128 MB | 29 MB |
 | 205.99 ms | 300 ms | 128 MB | 30 MB |
@@ -132,7 +132,7 @@ def get_base_form(feature):
 外部プロセスを起動しないように修正したバージョンです。
 
 | Duration | Billing Duration | Memory Size | Max Memory Used |
-|---|---|---|---|
+|:---:|:---|:---:|:---:|
 | 0.74 ms | 100 ms | 128 MB | 11 MB |
 | 0.74 ms | 100 ms | 128 MB | 11 MB |
 | 0.70 ms | 100 ms | 128 MB | 11 MB |
