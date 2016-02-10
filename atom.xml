@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2016-02-08T02:19:45+09:00</updated>
+  <updated>2016-02-10T16:04:21+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,319 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[AWS Lambda で MeCab を動かす(改)]]></title>
+    <link href="http://shogo82148.github.io/blog/2016/02/10/mecab-in-lambda/"/>
+    <updated>2016-02-10T14:52:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2016/02/10/mecab-in-lambda</id>
+    <content type="html"><![CDATA[<p>MeCabのPythonバインディングをいじってた関係で、MeCabについてインターネットをさまよっていたら、
+<a href="http://dev.classmethod.jp/cloud/aws-lambda-with-mecab/">AWS Lambda で MeCab を動かす</a>という記事を見つけました。
+Lambdaの計算リソースで形態素解析できるのは楽しいですねー。
+ただ実装にまだまだ改善できそうな部分があったので修正してみました。</p>
+
+<!-- More -->
+
+
+<h2>問題点</h2>
+
+<p>第一に<strong>「外部プロセスを起動しているので遅い」</strong>という点です。
+外部プロセスの起動は非常に重くて数百msかかります。
+MeCabは非常に高速で数msもあれば解析が終わるのに、もったいないですよね。</p>
+
+<p>第二に<strong>「OSコマンドインジェクションの危険性がある」</strong>という点です。
+解析対象の文字列をコマンドライン引数として渡しており、この際シェルを経由しています。
+そのため、<code>{"sentence": "\</code>ls`&#8221;}`のような文字列を渡すと、シェルがコマンドとして実行してしまいます。
+API Gatewayなどで外部に公開した場合、第三者が何でもし放題な状態になってしまいます。</p>
+
+<h2>頑張ってMeCabをライブラリとして呼ぶ</h2>
+
+<p>全ての元凶は外部プロセス起動にあるので、頑張ってMeCabをライブラリとして呼んでみましょう。
+そもそもなんで外部プロセス起動をしていたかというと、
+<code>LD_LIBRARY_PATH</code>が正しく設定されていないため<code>import MeCab</code>時に<code>libmecab.so</code>を発見できないからです。
+なんとかならないものかと探したところ、Stack Overflowにそれっぽい記事がありました。</p>
+
+<ul>
+<li><a href="http://stackoverflow.com/questions/6543847/setting-ld-library-path-from-inside-python">Setting LD_LIBRARY_PATH from inside Python</a></li>
+</ul>
+
+
+<p>「環境変数を設定してから自分自身をexecし直す方法」と「<code>ctypes</code>を使って絶対パス指定で読み込む方法」が紹介されています。
+前者の方がvoteは多いですがLambdaでこれをやるのは大変そうなので、後者で試してみます。</p>
+
+<figure class='code'><figcaption><span>lambda_function.py</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="c"># preload libmecab</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">os</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">ctypes</span>
+</span><span class='line'><span class="n">libdir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">(),</span> <span class="s">&#39;local&#39;</span><span class="p">,</span> <span class="s">&#39;lib&#39;</span><span class="p">)</span>
+</span><span class='line'><span class="n">libmecab</span> <span class="o">=</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">cdll</span><span class="o">.</span><span class="n">LoadLibrary</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">libdir</span><span class="p">,</span> <span class="s">&#39;libmecab.so&#39;</span><span class="p">))</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>一度読み込んでしまったライブラリは再利用されるため、
+<code>import MeCab</code>はここで読み込んだライブラリにリンクされます(importの順番が重要なの闇な感じがする)。
+<code>LD_LIBRARY_PATH</code>が正しく設定されている必要はありません。</p>
+
+<p>さて、これで<code>lambda_function.py</code>と<code>tokenizer.py</code>が分かれている必要がなくなったので、二つを合体してみましょう。</p>
+
+<figure class='code'><figcaption><span>lambda_function.py</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+<span class='line-number'>61</span>
+<span class='line-number'>62</span>
+<span class='line-number'>63</span>
+<span class='line-number'>64</span>
+</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="c"># coding=utf-8</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">os</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">json</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">collections</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="nn">settings</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="nn">logging</span>
+</span><span class='line'><span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__name__</span><span class="p">)</span>
+</span><span class='line'><span class="n">logger</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">LOG_LEVEL</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="c"># preload libmecab</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">ctypes</span>
+</span><span class='line'><span class="n">libdir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">(),</span> <span class="s">&#39;local&#39;</span><span class="p">,</span> <span class="s">&#39;lib&#39;</span><span class="p">)</span>
+</span><span class='line'><span class="n">libmecab</span> <span class="o">=</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">cdll</span><span class="o">.</span><span class="n">LoadLibrary</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">libdir</span><span class="p">,</span> <span class="s">&#39;libmecab.so&#39;</span><span class="p">))</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="nn">MeCab</span>
+</span><span class='line'>
+</span><span class='line'><span class="c"># prepare Tagger</span>
+</span><span class='line'><span class="n">dicdir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">(),</span> <span class="s">&#39;local&#39;</span><span class="p">,</span> <span class="s">&#39;lib&#39;</span><span class="p">,</span> <span class="s">&#39;mecab&#39;</span><span class="p">,</span> <span class="s">&#39;dic&#39;</span><span class="p">,</span> <span class="s">&#39;ipadic&#39;</span><span class="p">)</span>
+</span><span class='line'><span class="n">rcfile</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">(),</span> <span class="s">&#39;local&#39;</span><span class="p">,</span> <span class="s">&#39;etc&#39;</span><span class="p">,</span> <span class="s">&#39;mecabrc&#39;</span><span class="p">)</span>
+</span><span class='line'><span class="k">print</span> <span class="s">&quot;-d{} -r{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">dicdir</span><span class="p">,</span> <span class="n">rcfile</span><span class="p">)</span>
+</span><span class='line'><span class="n">default_tagger</span> <span class="o">=</span> <span class="n">MeCab</span><span class="o">.</span><span class="n">Tagger</span><span class="p">(</span><span class="s">&quot;-d{} -r{}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">dicdir</span><span class="p">,</span> <span class="n">rcfile</span><span class="p">))</span>
+</span><span class='line'><span class="n">unk_tagger</span> <span class="o">=</span> <span class="n">MeCab</span><span class="o">.</span><span class="n">Tagger</span><span class="p">(</span><span class="s">&quot;-d{} -r{} --unk-feature 未知語,*,*,*,*,*,*,*,*&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">dicdir</span><span class="p">,</span> <span class="n">rcfile</span><span class="p">))</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">DEFAULT_STOPTAGS</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;BOS/EOS&#39;</span><span class="p">]</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">def</span> <span class="nf">lambda_handler</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+</span><span class='line'>    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="n">ensure_ascii</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">))</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">sentence</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;sentence&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s">&#39;utf-8&#39;</span><span class="p">)</span>
+</span><span class='line'>    <span class="n">stoptags</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;stoptags&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s">&#39;utf-8&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;,&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="n">DEFAULT_STOPTAGS</span>
+</span><span class='line'>    <span class="n">unk_feature</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;unk_feature&#39;</span><span class="p">,</span> <span class="bp">False</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">tokens</span> <span class="o">=</span> <span class="p">[]</span>
+</span><span class='line'>    <span class="n">tagger</span> <span class="o">=</span> <span class="n">unk_tagger</span> <span class="k">if</span> <span class="n">unk_feature</span> <span class="k">else</span> <span class="n">default_tagger</span>
+</span><span class='line'>    <span class="n">node</span> <span class="o">=</span> <span class="n">tagger</span><span class="o">.</span><span class="n">parseToNode</span><span class="p">(</span><span class="n">sentence</span><span class="p">)</span>
+</span><span class='line'>    <span class="k">while</span> <span class="n">node</span><span class="p">:</span>
+</span><span class='line'>        <span class="n">feature</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">feature</span> <span class="o">+</span> <span class="s">&#39;,*,*&#39;</span>
+</span><span class='line'>        <span class="n">part_of_speech</span> <span class="o">=</span> <span class="n">get_part_of_speech</span><span class="p">(</span><span class="n">feature</span><span class="p">)</span>
+</span><span class='line'>        <span class="n">reading</span> <span class="o">=</span> <span class="n">get_reading</span><span class="p">(</span><span class="n">feature</span><span class="p">)</span>
+</span><span class='line'>        <span class="n">base_form</span> <span class="o">=</span> <span class="n">get_base_form</span><span class="p">(</span><span class="n">feature</span><span class="p">)</span>
+</span><span class='line'>        <span class="n">token</span> <span class="o">=</span> <span class="p">{</span>
+</span><span class='line'>            <span class="s">&quot;surface&quot;</span><span class="p">:</span> <span class="n">node</span><span class="o">.</span><span class="n">surface</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s">&#39;utf-8&#39;</span><span class="p">),</span>
+</span><span class='line'>            <span class="s">&quot;feature&quot;</span><span class="p">:</span> <span class="n">node</span><span class="o">.</span><span class="n">feature</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s">&#39;utf-8&#39;</span><span class="p">),</span>
+</span><span class='line'>            <span class="s">&quot;pos&quot;</span><span class="p">:</span> <span class="n">part_of_speech</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s">&#39;utf-8&#39;</span><span class="p">),</span>
+</span><span class='line'>            <span class="s">&quot;reading&quot;</span><span class="p">:</span> <span class="n">reading</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s">&#39;utf-8&#39;</span><span class="p">),</span>
+</span><span class='line'>            <span class="s">&quot;baseform&quot;</span><span class="p">:</span> <span class="n">base_form</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s">&#39;utf-8&#39;</span><span class="p">),</span>
+</span><span class='line'>            <span class="s">&quot;stat&quot;</span><span class="p">:</span> <span class="n">node</span><span class="o">.</span><span class="n">stat</span><span class="p">,</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="k">if</span> <span class="n">part_of_speech</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">stoptags</span><span class="p">:</span>
+</span><span class='line'>            <span class="n">tokens</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">token</span><span class="p">)</span>
+</span><span class='line'>        <span class="n">node</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">next</span>
+</span><span class='line'>    <span class="k">return</span> <span class="p">{</span><span class="s">&quot;tokens&quot;</span><span class="p">:</span> <span class="n">tokens</span><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">def</span> <span class="nf">get_part_of_speech</span><span class="p">(</span><span class="n">feature</span><span class="p">):</span>
+</span><span class='line'>    <span class="k">return</span> <span class="s">&#39;-&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">v</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">feature</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;,&#39;</span><span class="p">)[:</span><span class="mi">4</span><span class="p">]</span> <span class="k">if</span> <span class="n">v</span> <span class="o">!=</span> <span class="s">&#39;*&#39;</span><span class="p">])</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">def</span> <span class="nf">get_reading</span><span class="p">(</span><span class="n">feature</span><span class="p">):</span>
+</span><span class='line'>    <span class="k">return</span> <span class="n">feature</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;,&#39;</span><span class="p">)[</span><span class="mi">7</span><span class="p">]</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">def</span> <span class="nf">get_base_form</span><span class="p">(</span><span class="n">feature</span><span class="p">):</span>
+</span><span class='line'>    <span class="k">return</span> <span class="n">feature</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;,&#39;</span><span class="p">)[</span><span class="mi">6</span><span class="p">]</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>試してみる</h2>
+
+<p><a href="https://github.com/shogo82148/aws-lambda-ja-tokenizer">forkして上記の修正をいれたレポジトリ</a>を用意したので、READMEにしたがってzipファイルを作り、Lambdaに登録しましょう。
+雑なテストですが、Testボタンを5回押しみてログを見てみました。</p>
+
+<p>まずは元記事にあったオリジナルのコードから。</p>
+
+<table>
+<thead>
+<tr>
+<th></th>
+<th> Duration </th>
+<th> Billing Duration </th>
+<th> Memory Size </th>
+<th> Max Memory Used </th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td></td>
+<td> 280.76 ms </td>
+<td> 300 ms </td>
+<td> 128 MB </td>
+<td> 29 MB |</td>
+</tr>
+<tr>
+<td></td>
+<td> 310.00 ms </td>
+<td> 400 ms </td>
+<td> 128 MB </td>
+<td> 29 MB |</td>
+</tr>
+<tr>
+<td></td>
+<td> 205.99 ms </td>
+<td> 300 ms </td>
+<td> 128 MB </td>
+<td> 30 MB |</td>
+</tr>
+<tr>
+<td></td>
+<td> 205.74 ms </td>
+<td> 300 ms </td>
+<td> 128 MB </td>
+<td> 30 MB |</td>
+</tr>
+<tr>
+<td></td>
+<td> 213.96 ms </td>
+<td> 300 ms </td>
+<td> 128 MB </td>
+<td> 30 MB |</td>
+</tr>
+</tbody>
+</table>
+
+
+<p>外部プロセスを起動しないように修正したバージョンです。</p>
+
+<table>
+<thead>
+<tr>
+<th></th>
+<th> Duration </th>
+<th> Billing Duration </th>
+<th> Memory Size </th>
+<th> Max Memory Used </th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td></td>
+<td> 0.74 ms </td>
+<td> 100 ms </td>
+<td> 128 MB </td>
+<td> 11 MB |</td>
+</tr>
+<tr>
+<td></td>
+<td> 0.74 ms </td>
+<td> 100 ms </td>
+<td> 128 MB </td>
+<td> 11 MB |</td>
+</tr>
+<tr>
+<td></td>
+<td> 0.70 ms </td>
+<td> 100 ms </td>
+<td> 128 MB </td>
+<td> 11 MB |</td>
+</tr>
+<tr>
+<td></td>
+<td> 0.69 ms </td>
+<td> 100 ms </td>
+<td> 128 MB </td>
+<td> 11 MB |</td>
+</tr>
+<tr>
+<td></td>
+<td> 0.73 ms </td>
+<td> 100 ms </td>
+<td> 128 MB </td>
+<td> 11 MB |</td>
+</tr>
+</tbody>
+</table>
+
+
+<p>速くなった！！！</p>
+
+<h2>まとめ</h2>
+
+<ul>
+<li>AWS Lambdaでは外部プロセス起動は案外重たいのでなるべく避ける</li>
+<li>深遠な理由により外部プロセス起動する場合でもシェルは使わない方が無難</li>
+<li><code>LD_LIBRARY_PATH</code>の設定が必要なときは、<code>ctypes.cdll.LoadLibrary</code>を使って直接読みこめばなんとかなる</li>
+</ul>
+
+
+<p>外部ライブラリを読み込めるのは、いろいろ遊べそうですね・・・</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Redisでスコアを複数設定できるランキングを作ってみた]]></title>
@@ -3761,47 +4074,6 @@ Python3.x(+SWIG)ではエンコードが自動的に行われてしまうので 
 <li><a href="http://shogo82148.github.io/blog/2012/12/15/mecab-python/">MeCabをPythonから使う注意点とか</a></li>
 <li><a href="http://www.trifields.jp/how-to-use-mecab-in-ubuntu-14-04-and-python-3-1196">Ubuntu14.04とPython3でMeCabを使う方法</a></li>
 <li><a href="http://samurait.hatenablog.com/entry/Mecab-python3">python3対応 Mecabの紹介</a></li>
-</ul>
-
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[各ブランチの最後にコミットした人を知る]]></title>
-    <link href="http://shogo82148.github.io/blog/2015/05/21/branch-committer/"/>
-    <updated>2015-05-21T00:50:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2015/05/21/branch-committer</id>
-    <content type="html"><![CDATA[<p>ブランチが大量にあるので整理したい、けど大人数で開発しているから誰がどのブランチいじってるか分からない、
-ということがあったので、出し方のメモ。</p>
-
-<!-- More -->
-
-
-<p>githubのbranch一覧も見ればいいじゃん！っていう意見もあると思うんだけど、
-「自分のbranch一覧」は見れるんですが「特定のだれかのbranch一覧」が見れない・・・。</p>
-
-<p>git-for-each-refを使うと各ブランチに対していろいろ操作できるようです。
-各ブランチの最後にコミットした人一覧を出すには以下のコマンド。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>git <span class="k">for</span>-each-ref --format<span class="o">=</span><span class="s1">&#39;%(authordate:short) %(authorname) %(refname)&#39;</span> --sort<span class="o">=</span>-committerdate refs/remotes/origin/
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>formatは自由にいじれるのでいろいろ遊べます。
-例えば、ブランチをたくさん抱え込んでいる人の一覧を表示する例。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>git <span class="k">for</span>-each-ref --format<span class="o">=</span><span class="s2">&quot;%(authorname)&quot;</span> refs/remotes/origin/ | sort | uniq -c | sort -nr
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>参考</h2>
-
-<ul>
-<li><a href="http://git-scm.com/docs/git-for-each-ref">git-for-each-ref - Output information on each ref</a></li>
-<li><a href="http://d.hatena.ne.jp/syohex/20131225/1387948682">リモートブランチも含め更新日時が新しい順番にソートする</a></li>
-<li><a href="http://shuzo-kino.hateblo.jp/entry/2014/07/03/232310">ブランチ一覧を更新時刻つきで表示したい場合、gitのfor-each-refが使える。</a></li>
 </ul>
 
 ]]></content>
