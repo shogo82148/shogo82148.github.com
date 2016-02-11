@@ -105,7 +105,7 @@ for ; node != (mecab.Node{}); node = node.Next() {
 以前紹介した[MeCabをPython3から使う(続報)](http://shogo82148.github.io/blog/2015/12/20/mecab-in-python3-final/)の件、
 実はPythonに限ったことではなく、公式で提供されている全ての言語バインディングで発生します。
 (例えばRubyでも発生するっぽい: [Ruby + MeCab で Segmentation fault が発生した場合の対処](http://qiita.com/Salinger/items/3448d481b5b1e6cd2efb))
-Pythonが参照カウント方式のGCを採用しているので、たまたま発見されるのが速かったというだけですね(Rubyだとメモリを圧迫するまで落ちないらしい)。
+Pythonが参照カウント方式のGCを採用しているので、たまたま発見されるのが早かったというだけですね(Rubyだとメモリを圧迫するまで落ちないらしい)。
 
 そして、公式で提供されているバインディングを参考に書いたので、今回のGo版でも発生します。
 [MeCab側で対応してもらった](https://github.com/taku910/mecab/pull/24)のでわざわざバインディング側で対応することもないだろうとの考えから、go-mecabでは特に対策をとっていません。
@@ -178,7 +178,7 @@ cstring := *(**C.char)(unsafe.Pointer(&gostring))
 C.some_useful_function2(cstring, len(gostring))
 ```
 
-通常C言語の文字列は末尾に`'\\0'`が番兵としてついており、`C.CString`はそこら辺の事情を考慮してくれます。
+通常C言語の文字列は末尾に`'\0'`が番兵としてついており、`C.CString`はそこら辺の事情を考慮してくれます。
 しかし、この方法は番兵がいないため、文字列の長さを別途渡してあげる必要があります。
 幸いMeCabは文字列長さを明示するインターフェースを備えているので、そちらを使えばOKでした。
 
