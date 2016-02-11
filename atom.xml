@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2016-02-10T16:17:19+09:00</updated>
+  <updated>2016-02-11T21:38:32+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,288 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[MeCabのGolangバインディングを書いてみた]]></title>
+    <link href="http://shogo82148.github.io/blog/2016/02/11/golang-mecab-binding/"/>
+    <updated>2016-02-11T19:32:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2016/02/11/golang-mecab-binding</id>
+    <content type="html"><![CDATA[<p>Golangから<a href="http://taku910.github.io/mecab/">MeCab</a>を呼び出すライブラリ探せばあるにはあるのですが、
+なんだかどれもメモリ管理がちょっと怪しいんですよね・・・。</p>
+
+<ul>
+<li><a href="http://yukihir0.hatenablog.jp/entry/2015/01/18/164446">GolangでMeCabを使う。</a>
+
+<ul>
+<li><a href="https://github.com/yukihir0/mecab-go">yukihir0/mecab-go</a></li>
+</ul>
+</li>
+<li><a href="http://qiita.com/rerofumi/items/2bb1e49b20f2175ecaac">Go言語から mecab を使う - Qiita</a>
+
+<ul>
+<li><a href="https://bitbucket.org/rerofumi/mecab">rerofumi/mecab</a></li>
+</ul>
+</li>
+<li><a href="http://d.hatena.ne.jp/gtaka555/20091116/p2">Go で Mecab を使ってみた</a></li>
+</ul>
+
+
+<p>メモリ管理は<a href="https://github.com/bluele/mecab-golang">bluele/mecab-golang</a>が一番しっかりしているっぽいですが、
+libmecabの一番高機能だけど面倒な使い方しか対応していなくて、ちょっとカジュアルに遊ぶにはつらい。</p>
+
+<p>というわけで、カジュアルな用途から高度な使い方まで対応したWrapperを書いてみました。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/go-mecab">shogo82148/go-mecab</a></li>
+</ul>
+
+
+<!-- More -->
+
+
+<h2>使い方</h2>
+
+<p>READMEと<a href="https://godoc.org/github.com/shogo82148/go-mecab#pkg-examples">godocのexamples</a>からのコピペになってしまいますが、
+簡単に使い方の紹介です。</p>
+
+<h3>インストール</h3>
+
+<p><code>go get</code>で取ってくることはできますが、事前にlibmecabとリンクするための設定が必要です。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span><span class="nb">export </span><span class="nv">CGO_LDFLAGS</span><span class="o">=</span><span class="s2">&quot;-L/path/to/lib -lmecab -lstdc++&quot;</span>
+</span><span class='line'><span class="nv">$ </span><span class="nb">export </span><span class="nv">CGO_CFLAGS</span><span class="o">=</span><span class="s2">&quot;-I/path/to/include&quot;</span>
+</span><span class='line'><span class="nv">$ </span>go get github.com/shogo82148/go-mecab
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>mecab</code>コマンドと一緒に<code>mecab-config</code>がインストールされているはずなので、
+それを使うのが楽でしょう。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span><span class="nb">export </span><span class="nv">CGO_LDFLAGS</span><span class="o">=</span><span class="s2">&quot;`mecab-config --libs`&quot;</span>
+</span><span class='line'><span class="nv">$ </span><span class="nb">export </span><span class="nv">CGO_FLAGS</span><span class="o">=</span><span class="s2">&quot;`mecab-config --inc-dir`&quot;</span>
+</span><span class='line'><span class="nv">$ </span>go get github.com/shogo82148/go-mecab
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>MeCabはデフォルトで<code>/usr/local/</code>以下に入るので、他の実装では決め打ちしている例が多いですが、
+100%とは言い切れないので面倒ですが都度指定にしてあります。
+cgoはpkg-configに対応しているで、MeCab側が対応してくれると環境変数の設定が不要になってもっと楽なんですけどね。</p>
+
+<h3>カジュアルに使う</h3>
+
+<p><code>Parse</code>を使うと<code>mecab</code>コマンドと同等の結果を文字列として受け取れます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="nx">tagger</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">mecab</span><span class="p">.</span><span class="nx">New</span><span class="p">(</span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">string</span><span class="p">{})</span>
+</span><span class='line'><span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="k">defer</span> <span class="nx">tagger</span><span class="p">.</span><span class="nx">Destroy</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">result</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">tagger</span><span class="p">.</span><span class="nx">Parse</span><span class="p">(</span><span class="s">&quot;こんにちは世界&quot;</span><span class="p">)</span>
+</span><span class='line'><span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="nx">result</span><span class="p">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>オプションの渡し方ですが、いろいろ考えた結果<code>map</code>で渡すようにしてみました。
+(Perlの<a href="https://metacpan.org/release/Text-MeCab">Text::MeCab</a>からのインスパイア)
+例えば、<code>mecab.New(map[string]string{"output-format-type": "wakati"})</code>のようにすると、分かち書きで出力されます。</p>
+
+<h3>ノードの詳細情報にアクセスする</h3>
+
+<p><code>ParseToNode</code>を使うと表層表現と品詞が最初から分かれた形で取得できます。
+生起コストのようなより詳細な情報も取れます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="nx">tagger</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">mecab</span><span class="p">.</span><span class="nx">New</span><span class="p">(</span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">string</span><span class="p">{})</span>
+</span><span class='line'><span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="k">defer</span> <span class="nx">tagger</span><span class="p">.</span><span class="nx">Destroy</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// XXX: avoid GC problem with MeCab 0.996 (see https://github.com/taku910/mecab/pull/24)</span>
+</span><span class='line'><span class="nx">tagger</span><span class="p">.</span><span class="nx">Parse</span><span class="p">(</span><span class="s">&quot;&quot;</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">node</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">tagger</span><span class="p">.</span><span class="nx">ParseToNode</span><span class="p">(</span><span class="s">&quot;こんにちは世界&quot;</span><span class="p">)</span>
+</span><span class='line'><span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">for</span> <span class="p">;</span> <span class="nx">node</span> <span class="o">!=</span> <span class="p">(</span><span class="nx">mecab</span><span class="p">.</span><span class="nx">Node</span><span class="p">{});</span> <span class="nx">node</span> <span class="p">=</span> <span class="nx">node</span><span class="p">.</span><span class="nx">Next</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nx">fmt</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&quot;%s\t%s\n&quot;</span><span class="p">,</span> <span class="nx">node</span><span class="p">.</span><span class="nx">Surface</span><span class="p">(),</span> <span class="nx">node</span><span class="p">.</span><span class="nx">Feature</span><span class="p">())</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>以前紹介した<a href="http://shogo82148.github.io/blog/2015/12/20/mecab-in-python3-final/">MeCabをPython3から使う(続報)</a>の件、
+実はPythonに限ったことではなく、公式で提供されている全ての言語バインディングで発生します。
+(例えばRubyでも発生するっぽい: <a href="http://qiita.com/Salinger/items/3448d481b5b1e6cd2efb">Ruby + MeCab で Segmentation fault が発生した場合の対処</a>)
+Pythonが参照カウント方式のGCを採用しているので、たまたま発見されるのが速かったというだけですね(Rubyだとメモリを圧迫するまで落ちないらしい)。</p>
+
+<p>そして、公式で提供されているバインディングを参考に書いたので、今回のGo版でも発生します。
+<a href="https://github.com/taku910/mecab/pull/24">MeCab側で対応してもらった</a>のでわざわざバインディング側で対応することもないだろうとの考えから、go-mecabでは特に対策をとっていません。
+MeCab 0.996以下を使っている方は注意してください。(残念ながら0.996がまだ最新リリースだけど・・・)</p>
+
+<h3>Modelを共有する</h3>
+
+<p><a href="http://taku910.github.io/mecab/libmecab.html">MeCab ライブラリ</a>で紹介されている、マルチスレッド環境の場合での使い方にも対応しています。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="nx">model</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">mecab</span><span class="p">.</span><span class="nx">NewModel</span><span class="p">(</span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">string</span><span class="p">{})</span>
+</span><span class='line'><span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="k">defer</span> <span class="nx">model</span><span class="p">.</span><span class="nx">Destroy</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">tagger</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">model</span><span class="p">.</span><span class="nx">NewMeCab</span><span class="p">()</span>
+</span><span class='line'><span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="k">defer</span> <span class="nx">tagger</span><span class="p">.</span><span class="nx">Destroy</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">lattice</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">mecab</span><span class="p">.</span><span class="nx">NewLattice</span><span class="p">()</span>
+</span><span class='line'><span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="k">defer</span> <span class="nx">lattice</span><span class="p">.</span><span class="nx">Destroy</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">lattice</span><span class="p">.</span><span class="nx">SetSentence</span><span class="p">(</span><span class="s">&quot;こんにちは世界&quot;</span><span class="p">)</span>
+</span><span class='line'><span class="nx">err</span> <span class="p">=</span> <span class="nx">tagger</span><span class="p">.</span><span class="nx">ParseLattice</span><span class="p">(</span><span class="nx">lattice</span><span class="p">)</span>
+</span><span class='line'><span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="nx">lattice</span><span class="p">.</span><span class="nx">String</span><span class="p">())</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>複数のゴルーチンから<code>model</code>や<code>tagger</code>を共有できると思います。<code>lattice</code>だけはゴルーチン毎に生成してください。
+(へいれつへーこーしょりとかよくわかってないですが、スレッドセーフならゴルーチンセーフという認識であってますよね？)
+メモリ効率もいいのでは(未検証なので誰か確かめて・・・)。</p>
+
+<h2>GoからCへ文字列を渡す方法について</h2>
+
+<h3>一般的な方法</h3>
+
+<p>GoからCへ文字列を渡すには、Goの文字列を<code>C.CString</code>を使ってCの文字列に変換する必要があります。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="nx">cstring</span> <span class="o">:=</span> <span class="nx">C</span><span class="p">.</span><span class="nx">CString</span><span class="p">(</span><span class="nx">gostring</span><span class="p">)</span>
+</span><span class='line'><span class="k">defer</span> <span class="nx">C</span><span class="p">.</span><span class="nx">free</span><span class="p">(</span><span class="nx">unsafe</span><span class="p">.</span><span class="nx">Pointer</span><span class="p">(</span><span class="nx">cstring</span><span class="p">))</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">C</span><span class="p">.</span><span class="nx">some_useful_function</span><span class="p">(</span><span class="nx">cstring</span><span class="p">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>ここで注意が必要なのは<code>C.CString</code>の戻り値はGoのガーベージコレクションの対象から外れるということです。
+C側での使用状況をGoのランタイムが把握しきれないからですね。
+<code>C.free</code>を使って明示的に開放してあげないとメモリーリークになります。
+巷にあふれているMeCabバインディングはここがちょっと甘いものがほとんどでした。</p>
+
+<h3>黒魔術を使う</h3>
+
+<p>別に<code>C.CString</code>でも十分だとは思ったのですが、
+<a href="http://qiita.com/mattn/items/176459728ff4f854b165">golang で string を []byte にキャストしてもメモリコピーが走らない方法を考えてみる</a>を見て、つい魔が差してしまいました。
+Goの<code>string</code>をメモリーコピーを避けて<code>[]byte</code>にできるのなら、Cの文字列型(<code>*C.char</code>)でも同じことができるはず・・・！</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="nx">cstring</span> <span class="o">:=</span> <span class="o">*</span><span class="p">(</span><span class="o">**</span><span class="nx">C</span><span class="p">.</span><span class="nx">char</span><span class="p">)(</span><span class="nx">unsafe</span><span class="p">.</span><span class="nx">Pointer</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">gostring</span><span class="p">))</span>
+</span><span class='line'><span class="nx">C</span><span class="p">.</span><span class="nx">some_useful_function2</span><span class="p">(</span><span class="nx">cstring</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="nx">gostring</span><span class="p">))</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>通常C言語の文字列は末尾に<code>'\\0'</code>が番兵としてついており、<code>C.CString</code>はそこら辺の事情を考慮してくれます。
+しかし、この方法は番兵がいないため、文字列の長さを別途渡してあげる必要があります。
+幸いMeCabは文字列長さを明示するインターフェースを備えているので、そちらを使えばOKでした。</p>
+
+<p>Goの<code>string</code>はもちろんGCの対象なので、GCには要注意です。
+関数内で閉じた状態にするのが無難ですね。
+また、空文字が渡されるとヌルポで死んでしまうようなので、そこにも注意しましょう。</p>
+
+<h2>まとめ</h2>
+
+<ul>
+<li>カジュアルな用途から高度な使い方まで対応したMeCabのWrapperを書いてみました
+
+<ul>
+<li><a href="https://github.com/shogo82148/go-mecab">shogo82148/go-mecab</a></li>
+</ul>
+</li>
+<li>MeCab 0.996 と一緒に使う場合はGCに注意しましょう</li>
+<li>GoからCへの文字列の渡し方を紹介しました
+
+<ul>
+<li><code>C.CString</code>を使った方法</li>
+<li><code>unsafe.Ponter</code>を使った方法</li>
+</ul>
+</li>
+</ul>
+
+
+<p>ピンポーン <strong>unsafe をご使用になる時は、用法・用量を守り正しくお使い下さい。</strong></p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[AWS Lambda で MeCab を動かす(改)]]></title>
@@ -3904,166 +4186,6 @@ App::Prove::Plugin::MySQLPoolに取り込んでもらうか別のモジュール
 <h2>まとめ</h2>
 
 <p>プロセス一覧にmysqldが24個並ぶの楽しい</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[MeCabをPython3から使う(中間報告)]]></title>
-    <link href="http://shogo82148.github.io/blog/2015/06/02/mecab-in-python3/"/>
-    <updated>2015-06-02T23:12:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2015/06/02/mecab-in-python3</id>
-    <content type="html"><![CDATA[<p>先日このようなツイートを見かけて、
-「Python3になってGCの挙動変わったのかな？」と疑問に思ったので調査してみました。</p>
-
-<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">MeCabをPythonから使う注意点とか - Shogo&#39;s Blog <a href="http://t.co/vJnOqZfUd7">http://t.co/vJnOqZfUd7</a> <a href="https://twitter.com/shogo82148">@shogo82148</a>さんから python3だと変数に代入しなくても動くのだけど2.xでは留意しないといけない</p>&mdash; NOKUBI Takatsugu野首貴嗣 (@knok) <a href="https://twitter.com/knok/status/605197292086263808">June 1, 2015</a></blockquote>
-
-
-<script async src="http://shogo82148.github.io//platform.twitter.com/widgets.js" charset="utf-8"></script>
-
-
-
-
-<!-- More -->
-
-
-<h2>Python3へのMeCabインストール</h2>
-
-<p>手元のPython3.4.3にMeCab Bindingをインストールします。
-MeCabの公式(Google Codeサービス停止にともない<a href="https://taku910.github.io/mecab/">github pageへ移行している模様</a>)から落とせる
-Python BindingはPython2.x向けのため、setup.pyがそのままでは動きません。
-Python3.xでは非互換な文法の変更が入ったので以下のように書き換える必要があります。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-</pre></td><td class='code'><pre><code class='diff'><span class='line'><span class="gh">diff --git a/setup.py.org b/setup.py</span>
-</span><span class='line'><span class="gh">index 4486cbb..657945a 100644</span>
-</span><span class='line'><span class="gd">--- a/setup.py.org</span>
-</span><span class='line'><span class="gi">+++ b/setup.py</span>
-</span><span class='line'><span class="gu">@@ -7,7 +7,7 @@ def cmd1(str):</span>
-</span><span class='line'>     return os.popen(str).readlines()[0][:-1]
-</span><span class='line'>
-</span><span class='line'> def cmd2(str):
-</span><span class='line'><span class="gd">-    return string.split (cmd1(str))</span>
-</span><span class='line'><span class="gi">+    return cmd1(str).split()</span>
-</span><span class='line'>
-</span><span class='line'> setup(name = &quot;mecab-python&quot;,
-</span><span class='line'>        version = cmd1(&quot;mecab-config --version&quot;),
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>あとは <code>python setup.py install</code> で入ります。</p>
-
-<h2>動かしてみる</h2>
-
-<p>以前書いた「<a href="http://shogo82148.github.io/blog/2012/12/15/mecab-python/">MeCabをPythonから使う注意点とか</a>」を見返しながら、
-GCされて上手く動かない例 をPython3.4.3で動かしてみます。
-文字列の扱いが変わったり、print文の扱いが変わったりしているので、その部分だけ書き換えが必要です。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="kn">import</span> <span class="nn">MeCab</span>
-</span><span class='line'><span class="n">tagger</span> <span class="o">=</span> <span class="n">MeCab</span><span class="o">.</span><span class="n">tagger</span><span class="p">(</span><span class="s">&#39;&#39;</span><span class="p">)</span>
-</span><span class='line'><span class="n">text</span> <span class="o">=</span> <span class="s">u&#39;MeCabで遊んでみよう！&#39;</span>
-</span><span class='line'>
-</span><span class='line'><span class="n">node</span> <span class="o">=</span> <span class="n">tagger</span><span class="o">.</span><span class="n">parseToNode</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
-</span><span class='line'><span class="c"># Python2.x ではencode必須だったのが要らなくなった！</span>
-</span><span class='line'><span class="c"># node = tagger.parseToNode(text.encode(&#39;utf-8&#39;))</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">while</span> <span class="n">node</span><span class="p">:</span>
-</span><span class='line'>    <span class="k">print</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">surface</span> <span class="o">+</span> <span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span> <span class="o">+</span> <span class="n">node</span><span class="o">.</span><span class="n">feature</span><span class="p">)</span>
-</span><span class='line'>  <span class="c"># printは文ではなくなったのでカッコで囲う必要がある</span>
-</span><span class='line'>  <span class="n">node</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">next</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>さて、動かしてみましょう。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>BOS/EOS,*,*,*,*,*,*,*,*
-</span><span class='line'>名詞,一般,*,*,*,*,*
-</span><span class='line'>助詞,格助詞,一般,*,*,*,で,デ,デ
-</span><span class='line'>動詞,自立,*,*,五段・バ行,連用タ接続,遊ぶ,アソン,アソン
-</span><span class='line'>助詞,接続助詞,*,*,*,*,で,デ,デ
-</span><span class='line'>Traceback (most recent call last):
-</span><span class='line'>  File "m.py", line 10, in &lt;module&gt;
-</span><span class='line'>print( node.surface + '\t' + node.feature )
-</span><span class='line'>UnicodeDecodeError: 'utf-8' codec can't decode byte 0xa3 in position 1: invalid start byt</span></code></pre></td></tr></table></div></figure>
-
-
-<p>surfaceが全く読み取れていない・・・。
-最後にはutf-8のデコードができず死んでしまっています。
-全然変わってないじゃないか！</p>
-
-<p>変わってないどころか、状況はさらに悪くなっています。
-解決方法は以前の記事の通り「エンコード済みtext」を変数に保存・・・なのですが、
-Python3.x(+SWIG)ではエンコードが自動的に行われてしまうので <strong>ユーザが「エンコード済みtext」にアクセスすることができません！ </strong></p>
-
-<p><a href="http://samurait.hatenablog.com/entry/Mecab-python3">python3対応 Mecabの紹介</a>や
-<a href="https://github.com/taku910/mecab/pull/16">SWIG 3.0.5で作りなおしたPR</a>等を試してみましたが、
-同様の症状でした。</p>
-
-<h2>まとめ</h2>
-
-<ul>
-<li>Python3.xでもPython2.xと同様で、元テキストがGCで回収されてしまう</li>
-<li>Python3.xになって回避策が無くなった</li>
-</ul>
-
-
-<p>ぱっと思いつく回避策は以下のような感じでしょうか・・・。</p>
-
-<ul>
-<li>諦めて <code>parseToNode</code> を使わず、<code>parse</code>の結果を頑張って解析する</li>
-<li>SWIGの設定やC++側の書き方で頑張る(具体策は未調査)</li>
-</ul>
-
-
-<p>インターフェースを変えずに後者の方法で何とかならないか、
-引き続きいじってみようと思います。</p>
-
-<h2>追記(2015-12-20)</h2>
-
-<p><a href="http://shogo82148.github.io/blog/2015/12/20/mecab-in-python3-final/">続報</a>を書きました。</p>
-
-<h2>参考</h2>
-
-<ul>
-<li><a href="https://github.com/taku910/mecab">taku910/MeCab</a></li>
-<li><a href="https://taku910.github.io/mecab/">MeCab</a></li>
-<li><a href="http://shogo82148.github.io/blog/2012/12/15/mecab-python/">MeCabをPythonから使う注意点とか</a></li>
-<li><a href="http://www.trifields.jp/how-to-use-mecab-in-ubuntu-14-04-and-python-3-1196">Ubuntu14.04とPython3でMeCabを使う方法</a></li>
-<li><a href="http://samurait.hatenablog.com/entry/Mecab-python3">python3対応 Mecabの紹介</a></li>
-</ul>
-
 ]]></content>
   </entry>
   
