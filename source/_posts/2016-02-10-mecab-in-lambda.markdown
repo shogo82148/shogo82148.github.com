@@ -149,3 +149,10 @@ def get_base_form(feature):
 - `LD_LIBRARY_PATH`の設定が必要なときは、`ctypes.cdll.LoadLibrary`を使って直接読みこめばなんとかなる
 
 外部ライブラリを読み込めるのは、いろいろ遊べそうですね・・・
+
+
+## 追記(2016-02-15)
+
+[pullreq送って](https://github.com/KunihikoKido/aws-lambda-ja-tokenizer/pull/1)取り込んでもらいました。
+
+- [【改】AWS Lambda で MeCab を動かす](http://dev.classmethod.jp/cloud/improved-aws-lambda-with-mecab/)
