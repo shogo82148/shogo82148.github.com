@@ -5,12 +5,13 @@
 <!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
 <head>
   <meta charset="utf-8">
-  <title>CやC++でのincludeの優先順位 - Shogo's Blog</title>
+  <title>nginx-omniauth-adapterのGolangポート作った - Shogo's Blog</title>
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="description" content="こんにちは、gccのオプションを十個も言えない、非人のshogoです。 工藤氏作のTinySVMで遊ぼうとしていたところ、
-ヘッダファイルの読み込み順序ではまったのでメモ。 2つのinclude文 皆さんご存知の通り、Cプリプロセッサの#include文ではファイルの指定方法が2種類あります &hellip;">
+  <meta name="description" content="「nginx で omniauth を利用してアクセス制御を行う」という記事で、
+ngx_http_auth_request_moduleの存在を知ったので、
+Golangでnginx_omniauth_adapterと似たようなものを作ってみました。 shogo82148/go-nginx- &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -19,7 +20,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   
-  <link rel="canonical" href="http://shogo82148.github.io/blog/2012/06/26/c-include/">
+  <link rel="canonical" href="http://shogo82148.github.io/blog/2016/03/10/go-nginx-oauth2-adapter/">
   <link href="/favicon.png" rel="icon">
   <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
   <script src="/javascripts/modernizr-2.0.js"></script>
@@ -100,7 +101,7 @@ Hatena.Star.SiteConfig = {
   
   <header>
     
-      <h1 class="entry-title">CやC++でのincludeの優先順位</h1>
+      <h1 class="entry-title">nginx-omniauth-adapterのGolangポート作った</h1>
     
     
       <p class="meta">
@@ -116,112 +117,97 @@ Hatena.Star.SiteConfig = {
   
 
 
-<time datetime="2012-06-26T11:13:00+09:00" pubdate data-updated="true">Jun 26<span>th</span>, 2012</time>
+<time datetime="2016-03-10T12:51:00+09:00" pubdate data-updated="true">Mar 10<span>th</span>, 2016</time>
         
       </p>
     
   </header>
 
 
-<div class="entry-content"><p>こんにちは、gccのオプションを十個も言えない、非人のshogoです。</p>
+<div class="entry-content"><p>「<a href="http://techlife.cookpad.com/entry/2015/10/16/080000">nginx で omniauth を利用してアクセス制御を行う</a>」という記事で、
+<a href="http://nginx.org/en/docs/http/ngx_http_auth_request_module.html">ngx_http_auth_request_module</a>の存在を知ったので、
+Golangで<a href="https://github.com/sorah/nginx_omniauth_adapter">nginx_omniauth_adapter</a>と似たようなものを作ってみました。</p>
 
-<p>工藤氏作の<a href="http://chasen.org/~taku/software/TinySVM/">TinySVM</a>で遊ぼうとしていたところ、
-ヘッダファイルの読み込み順序ではまったのでメモ。</p>
-
-<!-- more -->
-
-
-<h2>2つのinclude文</h2>
-
-<p>皆さんご存知の通り、Cプリプロセッサの#include文ではファイルの指定方法が2種類あります。</p>
-
-<ol>
-<li>&#035;include &lt;somefile&gt; // システムにインストールされたライブラリを使う場合</li>
-<li>&#035;include &quot;somefile&quot; // 自作のヘッダファイルなどを読み込む場合</li>
-</ol>
+<ul>
+<li><a href="https://github.com/shogo82148/go-nginx-oauth2-adapter">shogo82148/go-nginx-oauth2-adapter</a></li>
+</ul>
 
 
-<p>大抵はコメントで書いたような使い分けをするんじゃないかと思います。
-両者の違いはファイルの検索対象となるディレクトリの違いにあります。
-前者はコンパイラが知っているディレクトリのみを検索するのに対して、
-後者はカレントディレクトリを検索したのち、&lt;>と同じディレクトリを検索します。</p>
-
-<p>コンパイラが知っているディレクトリは具体的に書くと次のようになっています。</p>
-
-<ol>
-<li>-I オプションで指定されたディレクトリ</li>
-<li>環境変数 C&#095;INCLUDE&#095;PATH や CPLUS&#095;INCLUDE&#095;PATH で指定されたディレクトリ</li>
-<li>システムによって予め決められたディレクトリ(/usr/local/includeとか)</li>
-</ol>
+<!-- More -->
 
 
-<p>上にあるものほど優先順位高く、同名のファイルがあった場合、優先順位の高いディレクトリにあるものが読み込まれます。</p>
+<h2>背景</h2>
 
-<h2>標準のヘッダを使いたい</h2>
+<p><a href="https://github.com/typester/gate">typester/gate</a>は単体でも動くようになっていますが、
+例えばIP制限などちょっと高度なことをしたい場合には結局nginxを前段に置く必要があります。
+nginxとgateの設定を同時にいじる必要があって煩雑だと感じていました。</p>
 
-<p>次のようなCのプログラムを考えてみます。</p>
+<p>そんな中「<a href="http://techlife.cookpad.com/entry/2015/10/16/080000">nginx で omniauth を利用してアクセス制御を行う</a>」という記事で、
+<a href="http://nginx.org/en/docs/http/ngx_http_auth_request_module.html">ngx_http_auth_request_module</a>の存在を知りました。
+gateが認証＋Proxyをやってしまうのに対して、認証だけRubyのomniauthモジュールで行いProxyはnginxに任せるという方法です。</p>
+
+<p>以前から記事の存在は知っていたのですが、Rubyの実行環境をそろえるのが億劫で手を出せずにいました。
+小さなアプリなので自分の慣れた言語で実装しても大したことないのではと思い、Goで実装してみることにしました。</p>
+
+<h2>使い方</h2>
+
+<p><code>go get</code>で落として来れます。
+最低限client_idとclient_secretの指定が必要です。
+nginx_omniauth_adapterと同じ環境変数名で設定できるほか、YAML形式の設定ファイルを読みこませることができます。
+YAMLの形式はREADMEを参照してください。</p>
 
 <figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cm">/* sample.c */</span>
-</span><span class='line'><span class="cp">#include &lt;stdio.h&gt; </span><span class="c1">// 標準ヘッダのstdio.hを取り込んでほしい！</span>
-</span><span class='line'><span class="cp">#include &quot;stdio.h&quot; </span><span class="c1">// ../userheaderディレクトリ内のstdio.hを取り込んでほしい！</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>go get github.com/shogo82148/go-nginx-oauth2-adapter/cli/go-nginx-oauth2-adapter
+</span><span class='line'><span class="nv">$ </span>extern <span class="nv">NGX_OMNIAUTH_GOOGLE_KEY</span><span class="o">=</span>YOUR_CLIENT_ID
+</span><span class='line'><span class="nv">$ </span>extern <span class="nv">NGX_OMNIAUTH_GOOGLE_SECRET</span><span class="o">=</span>YOUR_CLIENT_SECRET
+</span><span class='line'><span class="nv">$ </span>go-nginx-oauth2-adapter
+</span><span class='line'><span class="nv">$ </span>go-nginx-oauth2-adapter -c conf.yaml <span class="c"># 設定ファイルでの指定も可能</span>
 </span></code></pre></td></tr></table></div></figure>
 
 
-<p>最初のincludeではシステムに用意された標準ヘッダのstdio.hを、
-2つ目のincludeでは自前で用意したstdio.hを読み込もうとしています。
-しかし、自前で用意したstdio.hはuserheaderという別ディレクトリにあるので
-このままでは参照できません。</p>
-
-<p>別ディレクトリにあるヘッダファイルを参照する場合、一般的には-Iオプションを使って次のようにコンパイルすると思います。</p>
+<p>PerlでHTTPサーバ書いているひとにはおなじみのServer::Starterにも対応しているので、
+それ経由で立ち上げておくと設定の更新・プログラム自身の更新等が楽になると思います。</p>
 
 <figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>gcc -I../userheader sample.c
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>start_server --port 18081 -- go-nginx-oauth2-adapter -c conf.yaml
 </span></code></pre></td></tr></table></div></figure>
 
 
-<p>しかしこの例の場合はこの方法は上手く行きません。
-&lt;>で囲った場合も&#8221;&#8220;で囲った場合も、カレントディレクトリにはstdio.hは見つからないので、
-先の優先順位に従って次のような順番で検索を行います。</p>
+<p>nginx側の設定は<a href="https://github.com/shogo82148/go-nginx-oauth2-adapter/blob/master/examples/nginx/nginx-site.conf">examples</a>ディレクトリを参照してください。
+ヘッダ名・パス名等を合わせてあるので、nginx_omniauth_adapterと同じ設定で動くはずです。</p>
 
-<ol>
-<li>userheader</li>
-<li>標準ヘッダstdio.hが入ったディレクトリ</li>
-</ol>
+<p>また、<a href="https://h2o.examp1e.net/">h2o</a>の設定はプログラマブルだからh2oでもちゃんと設定ファイルを書けば動くのではと考え、
+<a href="https://github.com/shogo82148/go-nginx-oauth2-adapter/blob/master/examples/h2o/oauth.rb">h2oの設定</a>も書いてみました。
+mrubyからproxyに渡るリクエストを書き換える方法がない(？)っぽいので、アプリ側で認証情報をとることはできないですが、一応制限はできます。
+basic認証の実装を見る限りremote-userヘッダだけは渡せるようなので、これを使えばなんとかなるかもしれないですが、未確認です。
+(Ruby慣れてないからってGoで実装したけど、結局Rubyを書いていて面白い)</p>
 
+<h2>nginx_omniauth_adapterとの違い</h2>
 
-<p>どちらの書き方でもuserheader内のstdio.hを先に発見してしまうので、
-標準ヘッダのstdio.hにはどう頑張ってもアクセスすることができません。</p>
+<p>厳密に同じ挙動を実装するのが面倒だったため、挙動に若干の違いがあります。
+一番大きなものは認証後のリダイレクト先です。</p>
 
-<h2>解決策</h2>
+<p>nginx_omniauth_adapterは認証後、一度adapterのURLにリダイレクトしてから、アプリサーバの<code>/_auth/callback</code>にリダイレクトします。
+それに対してgo-nginx-oauth2-adapterは認証後、アプリサーバの<code>/_auth/callback</code>に直接リダイレクトします。
+この違いのため、Google Developers Consoleの「承認済みのリダイレクト URI」に設定するべきURIが異なることに注意してください。
+nginx_omniauth_adapterはadapter自身のURI、go-nginx-oauth2-adapterはアプリサーバの<code>/_auth/callbak</code>を指定します。</p>
 
-<p>iquoteオプションを使うと、&quot;&quot;で囲った場合のみuserheaderを見に行くようになります。</p>
+<p>この挙動のため、go-nginx-oauth2-adapterはアプリの追加のたびにnginxの設定に加え「承認済みのリダイレクト URI」に正しいURIを追加する必要があります。
+もちろん設定箇所がGoogle Developers Consoleではないだけで、nginx_omniauth_adapterもリダイレクト先の設定は必要です。
+GoogleでもFacebookでも認証できるようにしたいという場合、nginx_omniauth_adapterは設定を一緒変えればOKですが、go-nginx-oauth2-adapterは各サービスに登録し直す必要があります。
+現状、認証に使うサービスをユーザが選ぶ仕組みがないので、そのまま放置してあります。</p>
 
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>gcc -iquote../userheader sample.c
-</span></code></pre></td></tr></table></div></figure>
+<h2>まとめ</h2>
 
+<p><a href="https://github.com/sorah/nginx_omniauth_adapter">nginx_omniauth_adapter</a>のGolangポート
+<a href="https://github.com/shogo82148/go-nginx-oauth2-adapter">shogo82148/go-nginx-oauth2-adapter</a>を紹介しました。</p>
 
-<h2>TinySVMの場合</h2>
-
-<p>TinySVM0.09(現時点での最新版)は一部環境でgetoptの違うというエラーが発生するようです。
-これは-Iオプションを使ってしまったため、標準ヘッダのgetopt.hと、自前で用意したgetopt.hの使い分けができていないのが原因です。</p>
-
-<p>TinySVMに同梱されたgetopt関数の引数を書き換えることで対処している例がほとんど
-(<a href="http://d.hatena.ne.jp/himorogi/20090621/1245536366">himorogiの日記</a>, <a href="http://rmecab.jp/wiki/index.php?%CF%C2%C9%DB%C9%F3%C2%BE%A5%A4%A5%F3%A5%B9%A5%C8%A1%BC%A5%EB">RとLinuxと&#8230;</a>,etc)
-ですが、大抵の環境にgetoptはあると思うのでgetopt.hを削除してしまったほうがいいかもしれません。
-(TinySVM最近更新されていないのでgetoptが古いし)</p>
-
-<h2>参考</h2>
-
-<ul>
-<li><a href="http://ameblo.jp/mofu-mofu-alpaca/entry-10868656211.html">C言語のヘッダ読み込み順について</a></li>
-<li><a href="http://gcc.gnu.org/onlinedocs/gcc-4.7.1/gcc/Directory-Options.html">Directory Options - Using the GNU Compiler Collection (GCC)</a></li>
-<li><a href="http://gcc.gnu.org/onlinedocs/gcc-4.7.1/cpp.pdf">The C Preprocessor</a> pp.66-67</li>
-</ul>
-
+<p>adapter自身の公開設定をしなくて良い分簡単にセットアップできます。
+nginx_omniauth_adapter互換ですぐに乗り換えもできるので、ぜひお気軽にお試し下さい。</p>
 </div>
 
 
@@ -244,12 +230,12 @@ Hatena.Star.SiteConfig = {
   
 
 
-<time datetime="2012-06-26T11:13:00+09:00" pubdate data-updated="true">Jun 26<span>th</span>, 2012</time>
+<time datetime="2016-03-10T12:51:00+09:00" pubdate data-updated="true">Mar 10<span>th</span>, 2016</time>
       
 
 <span class="categories">
   
-    <a class='category' href='/blog/categories/c/'>C</a>, <a class='category' href='/blog/categories/c-/'>C++</a>
+    <a class='category' href='/blog/categories/go/'>go</a>
   
 </span>
 
@@ -258,10 +244,10 @@ Hatena.Star.SiteConfig = {
     
       <div class="sharing">
   
-  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.io/blog/2012/06/26/c-include/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.io/blog/2016/03/10/go-nginx-oauth2-adapter/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
   
   
-  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.io/blog/2012/06/26/c-include/" data-via="shogo82148" data-counturl="http://shogo82148.github.io/blog/2012/06/26/c-include/" >Tweet</a>
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.io/blog/2016/03/10/go-nginx-oauth2-adapter/" data-via="shogo82148" data-counturl="http://shogo82148.github.io/blog/2016/03/10/go-nginx-oauth2-adapter/" >Tweet</a>
   
   
   <div class="g-plusone" data-size="medium"></div>
@@ -274,10 +260,8 @@ Hatena.Star.SiteConfig = {
     
     <p class="meta">
       
-        <a class="basic-alignment left" href="/blog/2012/04/20/semantic-knowledge/" title="Previous Post: 第1回 意味知識勉強会">&laquo; 第1回 意味知識勉強会</a>
+        <a class="basic-alignment left" href="/blog/2016/03/08/join-fuller/" title="Previous Post: 転職して一週間がたちました">&laquo; 転職して一週間がたちました</a>
       
-      
-        <a class="basic-alignment right" href="/blog/2012/07/29/nds27/" title="Next Post: NDS27に参加してきた">NDS27に参加してきた &raquo;</a>
       
     </p>
   </footer>
@@ -389,8 +373,8 @@ Hatena.Star.SiteConfig = {
       
         
         // var disqus_developer = 1;
-        var disqus_identifier = 'http://shogo82148.github.io/blog/2012/06/26/c-include/';
-        var disqus_url = 'http://shogo82148.github.io/blog/2012/06/26/c-include/';
+        var disqus_identifier = 'http://shogo82148.github.io/blog/2016/03/10/go-nginx-oauth2-adapter/';
+        var disqus_url = 'http://shogo82148.github.io/blog/2016/03/10/go-nginx-oauth2-adapter/';
         var disqus_script = 'embed.js';
       
     (function () {

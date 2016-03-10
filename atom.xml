@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2016-03-08T18:18:27+09:00</updated>
+  <updated>2016-03-10T12:53:23+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,98 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[nginx-omniauth-adapterのGolangポート作った]]></title>
+    <link href="http://shogo82148.github.io/blog/2016/03/10/go-nginx-oauth2-adapter/"/>
+    <updated>2016-03-10T12:51:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2016/03/10/go-nginx-oauth2-adapter</id>
+    <content type="html"><![CDATA[<p>「<a href="http://techlife.cookpad.com/entry/2015/10/16/080000">nginx で omniauth を利用してアクセス制御を行う</a>」という記事で、
+<a href="http://nginx.org/en/docs/http/ngx_http_auth_request_module.html">ngx_http_auth_request_module</a>の存在を知ったので、
+Golangで<a href="https://github.com/sorah/nginx_omniauth_adapter">nginx_omniauth_adapter</a>と似たようなものを作ってみました。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/go-nginx-oauth2-adapter">shogo82148/go-nginx-oauth2-adapter</a></li>
+</ul>
+
+
+<!-- More -->
+
+
+<h2>背景</h2>
+
+<p><a href="https://github.com/typester/gate">typester/gate</a>は単体でも動くようになっていますが、
+例えばIP制限などちょっと高度なことをしたい場合には結局nginxを前段に置く必要があります。
+nginxとgateの設定を同時にいじる必要があって煩雑だと感じていました。</p>
+
+<p>そんな中「<a href="http://techlife.cookpad.com/entry/2015/10/16/080000">nginx で omniauth を利用してアクセス制御を行う</a>」という記事で、
+<a href="http://nginx.org/en/docs/http/ngx_http_auth_request_module.html">ngx_http_auth_request_module</a>の存在を知りました。
+gateが認証＋Proxyをやってしまうのに対して、認証だけRubyのomniauthモジュールで行いProxyはnginxに任せるという方法です。</p>
+
+<p>以前から記事の存在は知っていたのですが、Rubyの実行環境をそろえるのが億劫で手を出せずにいました。
+小さなアプリなので自分の慣れた言語で実装しても大したことないのではと思い、Goで実装してみることにしました。</p>
+
+<h2>使い方</h2>
+
+<p><code>go get</code>で落として来れます。
+最低限client_idとclient_secretの指定が必要です。
+nginx_omniauth_adapterと同じ環境変数名で設定できるほか、YAML形式の設定ファイルを読みこませることができます。
+YAMLの形式はREADMEを参照してください。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>go get github.com/shogo82148/go-nginx-oauth2-adapter/cli/go-nginx-oauth2-adapter
+</span><span class='line'><span class="nv">$ </span>extern <span class="nv">NGX_OMNIAUTH_GOOGLE_KEY</span><span class="o">=</span>YOUR_CLIENT_ID
+</span><span class='line'><span class="nv">$ </span>extern <span class="nv">NGX_OMNIAUTH_GOOGLE_SECRET</span><span class="o">=</span>YOUR_CLIENT_SECRET
+</span><span class='line'><span class="nv">$ </span>go-nginx-oauth2-adapter
+</span><span class='line'><span class="nv">$ </span>go-nginx-oauth2-adapter -c conf.yaml <span class="c"># 設定ファイルでの指定も可能</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>PerlでHTTPサーバ書いているひとにはおなじみのServer::Starterにも対応しているので、
+それ経由で立ち上げておくと設定の更新・プログラム自身の更新等が楽になると思います。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>start_server --port 18081 -- go-nginx-oauth2-adapter -c conf.yaml
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>nginx側の設定は<a href="https://github.com/shogo82148/go-nginx-oauth2-adapter/blob/master/examples/nginx/nginx-site.conf">examples</a>ディレクトリを参照してください。
+ヘッダ名・パス名等を合わせてあるので、nginx_omniauth_adapterと同じ設定で動くはずです。</p>
+
+<p>また、<a href="https://h2o.examp1e.net/">h2o</a>の設定はプログラマブルだからh2oでもちゃんと設定ファイルを書けば動くのではと考え、
+<a href="https://github.com/shogo82148/go-nginx-oauth2-adapter/blob/master/examples/h2o/oauth.rb">h2oの設定</a>も書いてみました。
+mrubyからproxyに渡るリクエストを書き換える方法がない(？)っぽいので、アプリ側で認証情報をとることはできないですが、一応制限はできます。
+basic認証の実装を見る限りremote-userヘッダだけは渡せるようなので、これを使えばなんとかなるかもしれないですが、未確認です。
+(Ruby慣れてないからってGoで実装したけど、結局Rubyを書いていて面白い)</p>
+
+<h2>nginx_omniauth_adapterとの違い</h2>
+
+<p>厳密に同じ挙動を実装するのが面倒だったため、挙動に若干の違いがあります。
+一番大きなものは認証後のリダイレクト先です。</p>
+
+<p>nginx_omniauth_adapterは認証後、一度adapterのURLにリダイレクトしてから、アプリサーバの<code>/_auth/callback</code>にリダイレクトします。
+それに対してgo-nginx-oauth2-adapterは認証後、アプリサーバの<code>/_auth/callback</code>に直接リダイレクトします。
+この違いのため、Google Developers Consoleの「承認済みのリダイレクト URI」に設定するべきURIが異なることに注意してください。
+nginx_omniauth_adapterはadapter自身のURI、go-nginx-oauth2-adapterはアプリサーバの<code>/_auth/callbak</code>を指定します。</p>
+
+<p>この挙動のため、go-nginx-oauth2-adapterはアプリの追加のたびにnginxの設定に加え「承認済みのリダイレクト URI」に正しいURIを追加する必要があります。
+もちろん設定箇所がGoogle Developers Consoleではないだけで、nginx_omniauth_adapterもリダイレクト先の設定は必要です。
+GoogleでもFacebookでも認証できるようにしたいという場合、nginx_omniauth_adapterは設定を一緒変えればOKですが、go-nginx-oauth2-adapterは各サービスに登録し直す必要があります。
+現状、認証に使うサービスをユーザが選ぶ仕組みがないので、そのまま放置してあります。</p>
+
+<h2>まとめ</h2>
+
+<p><a href="https://github.com/sorah/nginx_omniauth_adapter">nginx_omniauth_adapter</a>のGolangポート
+<a href="https://github.com/shogo82148/go-nginx-oauth2-adapter">shogo82148/go-nginx-oauth2-adapter</a>を紹介しました。</p>
+
+<p>adapter自身の公開設定をしなくて良い分簡単にセットアップできます。
+nginx_omniauth_adapter互換ですぐに乗り換えもできるので、ぜひお気軽にお試し下さい。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[転職して一週間がたちました]]></title>
@@ -4218,98 +4310,6 @@ go2xsを使うとそこら辺が簡単になります。
 <p>GoのShared Libraryまだまだ出たばかりで、複数回読み込めなかったりと問題はありますが、
 Goの機能を他の言語から呼び出せるのは便利ですね。
 今後に期待です。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[YAPC::Asia2015へ行ってきた]]></title>
-    <link href="http://shogo82148.github.io/blog/2015/08/23/yapc-asia-2015/"/>
-    <updated>2015-08-23T00:48:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2015/08/23/yapc-asia-2015</id>
-    <content type="html"><![CDATA[<p><a href="http://yapcasia.org/2015/">YAPC::Asia2015</a>へ行ってきましました。
-Blogを書くまでがYAPCらしいので、簡単に</p>
-
-<!-- More -->
-
-
-<p>今年の会場は<a href="http://www.bigsight.jp/">東京ビッグサイト</a>です。
-▼▼みたいになってるところの中にはじめて潜入してきました。
-あの中って会議室なんですね。</p>
-
-<p>去年は毎回立ち見ですごく大変だったけど、今年はかなり会場が広くなったおかけで、
-大体席を確保できて楽にトークを聴けました。
-しかし会場が東京ビッグサイトであっても、人気トークは立ち見になってしまうのがYAPCのすごいところ・・・。
-それでも、前の人の頭でスライドが全く見えないみたいなことはなかったので、広い会場は便利です。</p>
-
-<p>以下、今年見たトークです。</p>
-
-<ul>
-<li><a href="http://yapcasia.org/2015/talk/show/b355fa20-122e-11e5-8ba5-d9f87d574c3a">言語開発の現場</a></li>
-<li><a href="http://yapcasia.org/2015/talk/show/f5aa5054-12fd-11e5-b4c9-d9f87d574c3a">はてなブックマークのトピックページの裏側</a></li>
-<li><a href="http://yapcasia.org/2015/talk/show/7d62caf8-12f4-11e5-881c-d9f87d574c3a">技術ブログを書くことについて語るときに僕の語ること</a>
-
-<ul>
-<li>タイトルが9割</li>
-</ul>
-</li>
-<li><a href="http://yapcasia.org/2015/talk/show/9ec2791c-05e5-11e5-81fa-79c97d574c3a">世界展開する大規模ウェブサービスのデプロイを支える技術</a>
-
-<ul>
-<li>全サーバで一斉にgit pullするつらい話だった</li>
-<li>と、思ったら途中から<a href="https://github.com/fujiwara/stretcher">stretcher</a>の話になった</li>
-</ul>
-</li>
-<li><a href="http://yapcasia.org/2015/talk/show/dead6890-09b7-11e5-998a-67dc7d574c3a">HTTP/2時代のウェブサイト設計</a>
-
-<ul>
-<li>CSSスプライトみたいなファイルを一つにまとめてリクエストを減らす技術はHTTP/2ではオワコンになる</li>
-<li>何よりもデータ量を減らすことが大事</li>
-</ul>
-</li>
-<li><a href="http://yapcasia.org/2015/talk/show/e14c5ae0-12f7-11e5-a909-d9f87d574c3a">【sponsored contents】若手エンジニア達の生存戦略</a></li>
-<li><a href="http://yapcasia.org/2015/talk/show/c5ea5428-fac9-11e4-88c1-8ab37d574c3a">Google Cloud Platformの謎テクノロジーを掘り下げる</a>
-
-<ul>
-<li>朝寝坊して途中からの参加でした(=_=)</li>
-<li>Googleのコンテナ技術BorgやGoogleのネットワークについての話</li>
-</ul>
-</li>
-<li><a href="http://yapcasia.org/2015/talk/show/f2816038-10ec-11e5-89bf-d7f07d574c3a">我々はどのように冗長化を失敗したのか</a></li>
-<li><a href="http://yapcasia.org/2015/talk/show/0af26fe4-0b7b-11e5-a29c-67dc7d574c3a">MySQLで2億件のシリアルデータと格闘したチューニングの話</a></li>
-<li><a href="http://yapcasia.org/2015/talk/show/dd8ce20e-fad2-11e4-b6e7-8ab37d574c3a">データ分析基盤を支える技術</a>
-
-<ul>
-<li>いろいろなツールの比較についてのお話でした</li>
-<li>なんか色々なオープンソースのソフトウェアを紹介していたけど、「自分で構築しようとするな」とのこと</li>
-<li>D言語みんな使ってね</li>
-</ul>
-</li>
-<li><a href="http://yapcasia.org/2015/talk/show/22f59fb8-0fad-11e5-98ef-43ec7d574c3a">Parallelism, Concurrency, and Asynchrony in Perl 6</a>
-
-<ul>
-<li>Perl6では並列・並行・非同期処理が簡単に書けるらしいので、その紹介</li>
-<li>Promiseやawaitみたいな他の言語で取り入れられている概念がPerlでも使えるらしい</li>
-<li>来年Perl6でドローンが飛んでいるのを期待してます</li>
-</ul>
-</li>
-<li><a href="http://yapcasia.org/2015/talk/show/6bde6c69-187a-11e5-aca1-525412004261">Profiling &amp; Optimizing in Go</a>
-
-<ul>
-<li>Goのプロファイリングと最適化のデモでした</li>
-<li><code>sync.Pool</code> 存在は知っていたけど実際に使っているコード始めて見た気がする。<code>bytes.Buffer</code>の作成に使っていたんだけど、メモリアロケート程度なら同期コストの方が高いのでは〜って思っていた。</li>
-</ul>
-</li>
-</ul>
-
-
-<p>改めて見返してみるとPerlについての話がPerl6の並列・並行・非同期処理くらいしかないきがする。
-(YAPCのPとは一体)</p>
-
-<hr />
-
-<p>最後に、呪いを掛けられたのでMySQL5.7の罠についてリンクを貼っておきますね。
-http://yoku0825.blogspot.jp/2015/08/yapcasia-mysql-57lt.html
-Passwordの有効期限のデフォルトがいつの間にか360日になるのは話題になってたのを知っていたけど、他にも罠満載でした。</p>
 ]]></content>
   </entry>
   
