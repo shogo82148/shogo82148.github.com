@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2016-03-10T12:53:23+09:00</updated>
+  <updated>2016-03-15T13:27:39+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,283 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[ngrokみたいなHTTPプロキシを書いてみた]]></title>
+    <link href="http://shogo82148.github.io/blog/2016/03/14/http2-over-websocket/"/>
+    <updated>2016-03-14T22:59:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2016/03/14/http2-over-websocket</id>
+    <content type="html"><![CDATA[<p>開発中のWebアプリをみんなに試してほしいけど、
+サーバなんてなくて開発環境がローカルにしか無くて公開できないということは、
+開発初期段階だとよくあることだと思います。
+もちろん本格的にやるならテスト用にサーバを建てるべきですが、
+小さなものなら<a href="https://ngrok.com/">ngrok</a>を使うと簡単です。
+<a href="https://ngrok.com/">ngrok</a>の公開サーバへのHTTPリクエストをローカルにリレーして、
+ローカルのサーバをお手がるに公開できるサービスです。</p>
+
+<p>びっくりするほど簡単に公開できて便利ですが、
+一応oAuthで制限とかかけたいなーとかカスタマイズしてみたくなってきたので、
+似たようなものを自作できないかといろいろ遊んでみました。</p>
+
+<p>その結果、HTTP2 over Websocketみたいな謎なものが出来上がってしまったというお話です。</p>
+
+<!-- More -->
+
+
+<h2>HTTP2 over Websocketというアイデア</h2>
+
+<p><a href="https://ngrok.com/">ngrok</a>っぽいものを実現するためには、
+サーバが受け取ったHTTPリクエストをローカルの環境に転送する必要があります。
+ご存知のとおり通常のHTTPではサーバ側からのプッシュ配信が難しいので、Websocketを使うのが良さそうです。
+しかし、複数のコネクションで並列にやってくるHTTPリクエストを、一本のWebsocketに束ねる必要があり、
+上手く制御するのは大変そうです。</p>
+
+<p>さて、HTTP2は一つのTCPコネクションで複数のリクエストを並行処理する仕様があります。
+「複数のリクエストを一本に束ねる」という点ではなんか似ているので、なんだか流用できそうな気がしてきました。
+Golangならきっと上手いこと<code>interface</code>を実装すれば、なんとかできるのではとやってみました。</p>
+
+<h2>実装</h2>
+
+<p>HTTP2は暗号化や複雑なフロー制御を行っていますが、
+外から見れば<code>net.Conn</code>インターフェースに読み書きしている何かに過ぎません。
+そして、<code>websocket.Conn</code>も<code>net.Conn</code>を実装しているので、そのままHTTP2のライブラリに渡せるはずです。</p>
+
+<p>そうしてできたのが以下のサーバです。</p>
+
+<figure class='code'><figcaption><span>server.go</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+<span class='line-number'>61</span>
+<span class='line-number'>62</span>
+<span class='line-number'>63</span>
+<span class='line-number'>64</span>
+<span class='line-number'>65</span>
+<span class='line-number'>66</span>
+<span class='line-number'>67</span>
+<span class='line-number'>68</span>
+<span class='line-number'>69</span>
+<span class='line-number'>70</span>
+<span class='line-number'>71</span>
+<span class='line-number'>72</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;errors&quot;</span>
+</span><span class='line'>  <span class="s">&quot;log&quot;</span>
+</span><span class='line'>  <span class="s">&quot;net/http&quot;</span>
+</span><span class='line'>  <span class="s">&quot;net/http/httputil&quot;</span>
+</span><span class='line'>  <span class="s">&quot;sync&quot;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="s">&quot;golang.org/x/net/http2&quot;</span>
+</span><span class='line'>  <span class="s">&quot;golang.org/x/net/websocket&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">type</span> <span class="nx">transport</span> <span class="kd">struct</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">m</span>      <span class="nx">sync</span><span class="p">.</span><span class="nx">Mutex</span>
+</span><span class='line'>  <span class="nx">t</span>      <span class="nx">http</span><span class="p">.</span><span class="nx">RoundTripper</span>
+</span><span class='line'>  <span class="nx">closed</span> <span class="kd">chan</span> <span class="kd">struct</span><span class="p">{}</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">var</span> <span class="nx">t</span> <span class="o">*</span><span class="nx">transport</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">t</span> <span class="p">=</span> <span class="o">&amp;</span><span class="nx">transport</span><span class="p">{}</span>
+</span><span class='line'>  <span class="nx">s</span> <span class="o">:=</span> <span class="nx">websocket</span><span class="p">.</span><span class="nx">Server</span><span class="p">{</span><span class="nx">Handler</span><span class="p">:</span> <span class="nx">websocket</span><span class="p">.</span><span class="nx">Handler</span><span class="p">(</span><span class="nx">Handler</span><span class="p">)}</span>
+</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">Handle</span><span class="p">(</span><span class="s">&quot;/&quot;</span><span class="p">,</span> <span class="nx">s</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">go</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">&quot;:3000&quot;</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
+</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">&quot;:3001&quot;</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">httputil</span><span class="p">.</span><span class="nx">ReverseProxy</span><span class="p">{</span>
+</span><span class='line'>      <span class="nx">Transport</span><span class="p">:</span> <span class="nx">t</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Director</span><span class="p">:</span> <span class="kd">func</span><span class="p">(</span><span class="nx">req</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="p">},</span>
+</span><span class='line'>  <span class="p">})</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">Handler</span><span class="p">(</span><span class="nx">ws</span> <span class="o">*</span><span class="nx">websocket</span><span class="p">.</span><span class="nx">Conn</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">log</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;start new connection&quot;</span><span class="p">)</span>
+</span><span class='line'>  <span class="nx">t2</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http2</span><span class="p">.</span><span class="nx">Transport</span><span class="p">{}</span>
+</span><span class='line'>  <span class="nx">conn</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">t2</span><span class="p">.</span><span class="nx">NewClientConn</span><span class="p">(</span><span class="nx">ws</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">log</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span><span class='line'>      <span class="k">return</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">t</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">Lock</span><span class="p">()</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">t</span><span class="p">.</span><span class="nx">t</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">t</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">Unlock</span><span class="p">()</span>
+</span><span class='line'>      <span class="nx">log</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;already connected.&quot;</span><span class="p">)</span>
+</span><span class='line'>      <span class="k">return</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="nx">t</span><span class="p">.</span><span class="nx">t</span> <span class="p">=</span> <span class="nx">conn</span>
+</span><span class='line'>  <span class="nx">t</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">Unlock</span><span class="p">()</span>
+</span><span class='line'>  <span class="o">&lt;-</span><span class="nx">t</span><span class="p">.</span><span class="nx">closed</span>
+</span><span class='line'>  <span class="nx">log</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;close connection&quot;</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">transport</span><span class="p">)</span> <span class="nx">RoundTrip</span><span class="p">(</span><span class="nx">req</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">(</span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Response</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">t</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">Lock</span><span class="p">()</span>
+</span><span class='line'>  <span class="nx">t2</span> <span class="o">:=</span> <span class="nx">t</span><span class="p">.</span><span class="nx">t</span>
+</span><span class='line'>  <span class="nx">t</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">Unlock</span><span class="p">()</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">t2</span> <span class="o">==</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">errors</span><span class="p">.</span><span class="nx">New</span><span class="p">(</span><span class="s">&quot;connection not found&quot;</span><span class="p">)</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="nx">res</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">t2</span><span class="p">.</span><span class="nx">RoundTrip</span><span class="p">(</span><span class="nx">req</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">log</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span><span class='line'>      <span class="nx">t</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">Lock</span><span class="p">()</span>
+</span><span class='line'>      <span class="nx">t</span><span class="p">.</span><span class="nx">t</span> <span class="p">=</span> <span class="kc">nil</span>
+</span><span class='line'>      <span class="nx">t</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">Unlock</span><span class="p">()</span>
+</span><span class='line'>      <span class="nx">t</span><span class="p">.</span><span class="nx">closed</span> <span class="o">&lt;-</span> <span class="kd">struct</span><span class="p">{}{}</span>
+</span><span class='line'>      <span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">err</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">return</span> <span class="nx">res</span><span class="p">,</span> <span class="kc">nil</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>複数Websocketのコネクションが張られた場合の処理が少し煩雑ですが、思いのほか短くかけました。
+3001番ポートに来たリクエストをWebsocket経由で転送します。
+Websocketは3000番ポートで待ち受けです。</p>
+
+<p>これにアクセスするためのクライアントがこちら。</p>
+
+<figure class='code'><figcaption><span>client.go</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;log&quot;</span>
+</span><span class='line'>  <span class="s">&quot;net/http/httputil&quot;</span>
+</span><span class='line'>  <span class="s">&quot;net/url&quot;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="s">&quot;golang.org/x/net/http2&quot;</span>
+</span><span class='line'>  <span class="s">&quot;golang.org/x/net/websocket&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">origin</span> <span class="o">:=</span> <span class="s">&quot;http://localhost:3000/&quot;</span>
+</span><span class='line'>  <span class="nx">u</span> <span class="o">:=</span> <span class="s">&quot;ws://localhost:3000/&quot;</span>
+</span><span class='line'>  <span class="nx">ws</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">websocket</span><span class="p">.</span><span class="nx">Dial</span><span class="p">(</span><span class="nx">u</span><span class="p">,</span> <span class="s">&quot;&quot;</span><span class="p">,</span> <span class="nx">origin</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">log</span><span class="p">.</span><span class="nx">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">target</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">url</span><span class="p">.</span><span class="nx">Parse</span><span class="p">(</span><span class="s">&quot;http://localhost:8000/&quot;</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">s</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http2</span><span class="p">.</span><span class="nx">Server</span><span class="p">{}</span>
+</span><span class='line'>  <span class="nx">s</span><span class="p">.</span><span class="nx">ServeConn</span><span class="p">(</span><span class="nx">ws</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">http2</span><span class="p">.</span><span class="nx">ServeConnOpts</span><span class="p">{</span>
+</span><span class='line'>      <span class="nx">Handler</span><span class="p">:</span> <span class="nx">httputil</span><span class="p">.</span><span class="nx">NewSingleHostReverseProxy</span><span class="p">(</span><span class="nx">target</span><span class="p">),</span>
+</span><span class='line'>  <span class="p">})</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Websocket経由でリクエストを受け付け、それを8000番ポートに転送します。
+こちらも非常に短くかけました。
+サーバーとクライアントを立ち上げて<code>http://localhost:3001/</code>にアクセスすると、
+<code>http://localhost:8000/</code>の内容が見れるはずです。</p>
+
+<h2>ngrok1.xについて</h2>
+
+<p>ところでngrokの旧バージョンはソースコードが公開されているから、こっちを使ったほうが早い？
+でも、開発中止って書かれてて不安になる。</p>
+
+<ul>
+<li><a href="https://github.com/inconshreveable/ngrok">ngrok1.x</a></li>
+</ul>
+
+
+<h2>まとめ</h2>
+
+<p>ローカルのサーバをお手軽に公開するためのngrokというサービスを紹介しました。
+自作のためのアイデアとして、http2 over websocketを試してみました。</p>
+
+<p>設定の読み込みとかエラー処理とかセキュリティ周りとかいろいろ足りてない部分はありますが、
+たったあれだけのコードで、ヘッダの圧縮転送、リクエストの並行処理等のHTTP2の機能が使えるのは面白いですね。</p>
+
+<p>もうちょっと手を加えて多少は使えるものにしてみたいですね。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[nginx-omniauth-adapterのGolangポート作った]]></title>
@@ -3860,456 +4137,6 @@ CPUの使用率も100%近くになって、有効活用できているようで�
 
 <p>早くはなるものの、既存のテストコードに手を加える必要があってちょっと怖いかなと思ったので、プロジェクトへの組み込みはやってません。
 まあ本番環境で走るものではないので、ある程度動くことが確認できたら置き換えてみたいですね。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[PerlからGolangを呼び出す]]></title>
-    <link href="http://shogo82148.github.io/blog/2015/08/30/golang-to-perl-xs-converter/"/>
-    <updated>2015-08-30T22:52:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2015/08/30/golang-to-perl-xs-converter</id>
-    <content type="html"><![CDATA[<p>GoのコードをPerlから呼び出せるようにする<a href="https://github.com/shogo82148/go2xs">go2xs</a>を書いてみました。</p>
-
-<!-- More -->
-
-
-<h2>使い方</h2>
-
-<p>Perlから使いたい関数に以下のようにgo2xsで始まるコメントを付けておきます。</p>
-
-<figure class='code'><figcaption><span>hoge</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">//go2xs hello</span>
-</span><span class='line'><span class="kd">func</span> <span class="nx">hello</span><span class="p">(</span><span class="nx">str</span> <span class="kt">string</span><span class="p">)</span> <span class="kt">string</span> <span class="p">{</span>
-</span><span class='line'>  <span class="k">return</span> <span class="s">&quot;Hello &quot;</span> <span class="o">+</span> <span class="nx">str</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p><a href="https://github.com/shogo82148/go2xs">go2xs</a>をgo getして、xsのグルーコードを作成。
-その後通常のPerlモジュールと同じ手順でコンパイルします。
-Go 1.5から入ったShared Libraryの機能を使っているのでGo 1.5が必要です。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>go get https://github.com/shogo82148/go2xs/cli/go2xs
-</span><span class='line'>go2xs -name hoge hoge.go
-</span><span class='line'>perl Makefile.PL
-</span><span class='line'>make
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>あとは普通に呼び出すだけ。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>perl -Mblib -Mhoge -e <span class="s1">&#39;print hoge::hello(&quot;World&quot;)&#39;</span>
-</span><span class='line'>Hello World
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>制限事項</h2>
-
-<p>今はまだ、整数・浮動小数点型・文字列しか扱えません。</p>
-
-<p>あとGoのShared Libraryを複数回読み込むことができないっぽい？ (ref. https://github.com/golang/go/issues/11100 )
-ので、go2xsを使ったコードを二つ以上useすると死にます。</p>
-
-<h2>FFI::Rawを使う方法</h2>
-
-<p>go2xsはGoをShared Libraryとしてコンパイルしているだけなので、go2xsを使わなくても頑張れば呼び出すことができます。
-<a href="http://qiita.com/yanolab/items/1e0dd7fd27f19f697285">Golang で Shared Library を出力する。</a>で紹介されているこちらのコードで試してみます。</p>
-
-<figure class='code'><figcaption><span>libgofib.go</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
-</span><span class='line'>
-</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
-</span><span class='line'>  <span class="s">&quot;C&quot;</span>
-</span><span class='line'>  <span class="s">&quot;log&quot;</span>
-</span><span class='line'><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">//export fib</span>
-</span><span class='line'><span class="kd">func</span> <span class="nx">fib</span><span class="p">(</span><span class="nx">n</span> <span class="kt">int</span><span class="p">)</span> <span class="kt">int</span> <span class="p">{</span>
-</span><span class='line'>  <span class="k">if</span> <span class="p">(</span><span class="nx">n</span> <span class="p">&lt;</span> <span class="mi">2</span><span class="p">)</span> <span class="p">{</span> <span class="k">return</span> <span class="nx">n</span> <span class="p">}</span>
-</span><span class='line'>  <span class="k">return</span> <span class="nx">fib</span><span class="p">(</span><span class="nx">n</span> <span class="o">-</span> <span class="mi">2</span><span class="p">)</span> <span class="o">+</span> <span class="nx">fib</span><span class="p">(</span><span class="nx">n</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">func</span> <span class="nx">init</span><span class="p">()</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">log</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;Loaded!!&quot;</span><span class="p">)</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>ビルドしてShared Libraryを作ってみます。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>build -buildmode<span class="o">=</span>c-shared -o libgofib.so libgofib.go
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>PerlからShared Libraryを呼び出すには<a href="https://metacpan.org/pod/FFI::Raw">FFI::Raw</a>を使うのがお手軽のようです。</p>
-
-<figure class='code'><figcaption><span>test.pl</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="nn">FFI::</span><span class="n">Raw</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">my</span> <span class="nv">$fib</span> <span class="o">=</span> <span class="nn">FFI::</span><span class="n">Raw</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span>
-</span><span class='line'>    <span class="s">&#39;libfib.so&#39;</span><span class="p">,</span> <span class="s">&#39;fib&#39;</span><span class="p">,</span>
-</span><span class='line'>    <span class="nn">FFI::Raw::</span><span class="n">int</span><span class="p">,</span> <span class="c1"># 戻り値</span>
-</span><span class='line'>  <span class="nn">FFI::Raw::</span><span class="n">int</span><span class="p">,</span> <span class="c1"># 引数</span>
-</span><span class='line'><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">print</span> <span class="nv">$format</span><span class="o">-&gt;</span><span class="n">call</span><span class="p">(</span><span class="mi">32</span><span class="p">);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>文字列の受け渡しをしてみる</h2>
-
-<p>FFI::Rawを使った方法はお手軽ですが、文字列の受け渡しをしようとすると色々と面倒です。</p>
-
-<h3>素朴に実装してみる</h3>
-
-<p>Golangの<code>string</code>はPerlでそのまま扱えないので、<code>C.GoString</code>と<code>C.CString</code>を使い一度C言語の文字列形式を経由してから相互変換する必要があります。</p>
-
-<figure class='code'><figcaption><span>libgofmt.go</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">import</span> <span class="s">&quot;C&quot;</span>
-</span><span class='line'>
-</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
-</span><span class='line'>  <span class="nx">f</span> <span class="s">&quot;go/format&quot;</span>
-</span><span class='line'><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">//export format</span>
-</span><span class='line'><span class="kd">func</span> <span class="nx">format</span><span class="p">(</span><span class="nx">src</span> <span class="o">*</span><span class="nx">C</span><span class="p">.</span><span class="nx">char</span><span class="p">)</span> <span class="o">*</span><span class="nx">C</span><span class="p">.</span><span class="nx">char</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">gosrc</span> <span class="o">:=</span> <span class="nx">C</span><span class="p">.</span><span class="nx">GoString</span><span class="p">(</span><span class="nx">src</span><span class="p">)</span>
-</span><span class='line'>  <span class="nx">dst</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">f</span><span class="p">.</span><span class="nx">Source</span><span class="p">([]</span><span class="nb">byte</span><span class="p">(</span><span class="nx">gosrc</span><span class="p">))</span>
-</span><span class='line'>  <span class="k">return</span> <span class="nx">C</span><span class="p">.</span><span class="nx">CString</span><span class="p">(</span><span class="nb">string</span><span class="p">(</span><span class="nx">dst</span><span class="p">))</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-
-
-<figure class='code'><figcaption><span>test.pl</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="nn">FFI::</span><span class="n">Raw</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">my</span> <span class="nv">$format</span> <span class="o">=</span> <span class="nn">FFI::</span><span class="n">Raw</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span>
-</span><span class='line'>    <span class="s">&#39;libgofmt.so&#39;</span><span class="p">,</span> <span class="s">&#39;format&#39;</span><span class="p">,</span>
-</span><span class='line'>  <span class="nn">FFI::Raw::</span><span class="n">str</span><span class="p">,</span> <span class="c1"># 戻り値</span>
-</span><span class='line'>  <span class="nn">FFI::Raw::</span><span class="n">str</span><span class="p">,</span>  <span class="c1"># 引数1</span>
-</span><span class='line'><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">print</span> <span class="nv">$format</span><span class="o">-&gt;</span><span class="n">call</span><span class="p">(</span><span class="o">&lt;&lt;</span><span class="s">&quot;EOF&quot;</span><span class="p">);</span>
-</span><span class='line'><span class="nb">package</span> <span class="n">main</span>
-</span><span class='line'><span class="nb">import</span>   <span class="s">&quot;fmt&quot;</span>
-</span><span class='line'><span class="n">func</span> <span class="n">main</span><span class="p">(</span>   <span class="p">)</span>   <span class="p">{</span>
-</span><span class='line'><span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="s">&quot;hogehoge&quot;</span><span class="p">)</span> <span class="p">}</span>
-</span><span class='line'><span class="n">EOF</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>なんとなく動いてよさ気な感じがしますが、
-実はこのコード、メモリーリークしてます。
-<code>C.CString</code>で作ったC言語の文字列はGolangの管理から外れるのでGCで回収されません。
-そのため、どこかで<code>free</code>を実行して開放する必要があります。</p>
-
-<h3>strcpyで頑張る</h3>
-
-<p>Golang側でバッファを確保するとPerlに戻った時にバッファ開放ができないので、
-Perl側で結果を格納するバッファを確保してみます。</p>
-
-<figure class='code'><figcaption><span>libgofmt.go</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
-</span><span class='line'>
-</span><span class='line'><span class="cm">/*</span>
-</span><span class='line'><span class="cm">#include &lt;stdlib.h&gt;</span>
-</span><span class='line'><span class="cm">#include &lt;string.h&gt;</span>
-</span><span class='line'><span class="cm">*/</span>
-</span><span class='line'><span class="kn">import</span> <span class="s">&quot;C&quot;</span>
-</span><span class='line'>
-</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
-</span><span class='line'>  <span class="nx">f</span> <span class="s">&quot;go/format&quot;</span>
-</span><span class='line'>  <span class="s">&quot;unsafe&quot;</span>
-</span><span class='line'><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">//export format</span>
-</span><span class='line'><span class="kd">func</span> <span class="nx">format</span><span class="p">(</span><span class="nx">dst</span> <span class="o">*</span><span class="nx">C</span><span class="p">.</span><span class="nx">char</span><span class="p">,</span> <span class="nx">src</span> <span class="o">*</span><span class="nx">C</span><span class="p">.</span><span class="nx">char</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">gosrc</span> <span class="o">:=</span> <span class="nx">C</span><span class="p">.</span><span class="nx">GoString</span><span class="p">(</span><span class="nx">src</span><span class="p">)</span>
-</span><span class='line'>  <span class="nx">godst</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">f</span><span class="p">.</span><span class="nx">Source</span><span class="p">([]</span><span class="nb">byte</span><span class="p">(</span><span class="nx">gosrc</span><span class="p">))</span>
-</span><span class='line'>  <span class="nx">cs</span> <span class="o">:=</span> <span class="nx">C</span><span class="p">.</span><span class="nx">CString</span><span class="p">(</span><span class="nb">string</span><span class="p">(</span><span class="nx">godst</span><span class="p">))</span>
-</span><span class='line'>  <span class="k">defer</span> <span class="nx">C</span><span class="p">.</span><span class="nx">free</span><span class="p">(</span><span class="nx">unsafe</span><span class="p">.</span><span class="nx">Pointer</span><span class="p">(</span><span class="nx">cs</span><span class="p">))</span>
-</span><span class='line'>  <span class="nx">C</span><span class="p">.</span><span class="nx">strcpy</span><span class="p">(</span><span class="nx">dst</span><span class="p">,</span> <span class="nx">cs</span><span class="p">)</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-
-
-<figure class='code'><figcaption><span>test.pl</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="nn">FFI::</span><span class="n">Raw</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">my</span> <span class="nv">$format</span> <span class="o">=</span> <span class="nn">FFI::</span><span class="n">Raw</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span>
-</span><span class='line'>  <span class="s">&#39;libgofmt.so&#39;</span><span class="p">,</span> <span class="s">&#39;format&#39;</span><span class="p">,</span>
-</span><span class='line'>  <span class="nn">FFI::Raw::</span><span class="n">void</span><span class="p">,</span> <span class="c1"># 戻り値</span>
-</span><span class='line'>  <span class="nn">FFI::Raw::</span><span class="n">str</span><span class="p">,</span>
-</span><span class='line'>  <span class="nn">FFI::Raw::</span><span class="n">ptr</span><span class="p">,</span>
-</span><span class='line'><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">while</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="k">my</span> <span class="nv">$hoge</span><span class="p">;</span>
-</span><span class='line'>  <span class="k">my</span> <span class="nv">$coderef</span> <span class="o">=</span> <span class="k">sub </span><span class="p">{</span> <span class="nv">$hoge</span> <span class="o">=</span> <span class="nb">shift</span> <span class="p">};</span>
-</span><span class='line'>  <span class="k">my</span> <span class="nv">$callback</span> <span class="o">=</span> <span class="nn">FFI::Raw::</span><span class="n">callback</span><span class="p">(</span><span class="nv">$coderef</span><span class="p">,</span> <span class="nn">FFI::Raw::</span><span class="n">void</span><span class="p">,</span> <span class="nn">FFI::Raw::</span><span class="n">str</span><span class="p">);</span>
-</span><span class='line'>  <span class="nv">$format</span><span class="o">-&gt;</span><span class="n">call</span><span class="p">(</span><span class="o">&lt;&lt;</span><span class="s">&quot;EOF&quot;</span><span class="p">,</span> <span class="nv">$callback</span><span class="p">);</span>
-</span><span class='line'><span class="nb">package</span> <span class="n">main</span>
-</span><span class='line'><span class="nb">import</span>   <span class="s">&quot;fmt&quot;</span>
-</span><span class='line'><span class="n">func</span> <span class="n">main</span><span class="p">(</span>   <span class="p">)</span>   <span class="p">{</span>
-</span><span class='line'><span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="s">&quot;hogehoge&quot;</span><span class="p">)</span> <span class="p">}</span>
-</span><span class='line'><span class="n">EOF</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>この方式なら作ったShared Libraryを他の言語からも呼びやすいので無難かも？
-ただし、まだまだ実装が不十分で、このコードはバッファオーバーランの危険があります。
-しっかり実装するなら、最初の一回でバッファのサイズだけ計算、次の呼び出しで結果取得・・・のようなフローを踏む必要があります。</p>
-
-<h3>コールバック</h3>
-
-<p>結果の保存をコールバック関数の呼び出しで行えば、Golang側でfreeを実行するタイミングが分かるので、メモリーリークを防ぐことができます。
-ただし、Goからは関数ポインタを呼び出すことはできないので、gcoでグルーコードを書いてあげる必要があります。</p>
-
-<figure class='code'><figcaption><span>libgofmt.go</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
-</span><span class='line'>
-</span><span class='line'><span class="cm">/*</span>
-</span><span class='line'><span class="cm">#include &lt;stdlib.h&gt;</span>
-</span><span class='line'><span class="cm">typedef void (*callbackFunc) (const char*);</span>
-</span><span class='line'>
-</span><span class='line'><span class="cm">void bridge_callback(callbackFunc f, const char* str);</span>
-</span><span class='line'><span class="cm">*/</span>
-</span><span class='line'><span class="kn">import</span> <span class="s">&quot;C&quot;</span>
-</span><span class='line'>
-</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
-</span><span class='line'>  <span class="nx">f</span> <span class="s">&quot;go/format&quot;</span>
-</span><span class='line'>  <span class="s">&quot;unsafe&quot;</span>
-</span><span class='line'>  <span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">//export format</span>
-</span><span class='line'><span class="kd">func</span> <span class="nx">format</span><span class="p">(</span><span class="nx">src</span> <span class="o">*</span><span class="nx">C</span><span class="p">.</span><span class="nx">char</span><span class="p">,</span> <span class="nx">dstCallback</span> <span class="nx">unsafe</span><span class="p">.</span><span class="nx">Pointer</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">gosrc</span> <span class="o">:=</span> <span class="nx">C</span><span class="p">.</span><span class="nx">GoString</span><span class="p">(</span><span class="nx">src</span><span class="p">)</span>
-</span><span class='line'>  <span class="nx">godst</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">f</span><span class="p">.</span><span class="nx">Source</span><span class="p">([]</span><span class="nb">byte</span><span class="p">(</span><span class="nx">gosrc</span><span class="p">))</span>
-</span><span class='line'>  <span class="nx">cs</span> <span class="o">:=</span> <span class="nx">C</span><span class="p">.</span><span class="nx">CString</span><span class="p">(</span><span class="nb">string</span><span class="p">(</span><span class="nx">godst</span><span class="p">))</span>
-</span><span class='line'>  <span class="k">defer</span> <span class="nx">C</span><span class="p">.</span><span class="nx">free</span><span class="p">(</span><span class="nx">unsafe</span><span class="p">.</span><span class="nx">Pointer</span><span class="p">(</span><span class="nx">cs</span><span class="p">))</span>
-</span><span class='line'>  <span class="nx">C</span><span class="p">.</span><span class="nx">bridge_callback</span><span class="p">(</span><span class="nx">C</span><span class="p">.</span><span class="nx">callbackFunc</span><span class="p">(</span><span class="nx">dstCallback</span><span class="p">),</span> <span class="nx">cs</span><span class="p">)</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-
-
-<figure class='code'><figcaption><span>libgofmt.c</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="k">typedef</span> <span class="nf">void</span> <span class="p">(</span><span class="o">*</span><span class="n">callbackFunc</span><span class="p">)</span> <span class="p">(</span><span class="k">const</span> <span class="kt">char</span><span class="o">*</span><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'><span class="kt">void</span> <span class="nf">bridge_callback</span><span class="p">(</span><span class="n">callbackFunc</span> <span class="n">f</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="n">str</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>    <span class="n">f</span><span class="p">(</span><span class="n">str</span><span class="p">);</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-
-
-<figure class='code'><figcaption><span>test.pl</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="nn">FFI::</span><span class="n">Raw</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">my</span> <span class="nv">$format</span> <span class="o">=</span> <span class="nn">FFI::</span><span class="n">Raw</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span>
-</span><span class='line'>    <span class="s">&#39;libgofmt.so&#39;</span><span class="p">,</span> <span class="s">&#39;format&#39;</span><span class="p">,</span>
-</span><span class='line'>    <span class="nn">FFI::Raw::</span><span class="n">void</span><span class="p">,</span> <span class="c1"># 戻り値</span>
-</span><span class='line'>  <span class="nn">FFI::Raw::</span><span class="n">str</span><span class="p">,</span> <span class="nn">FFI::Raw::</span><span class="n">ptr</span><span class="p">,</span>
-</span><span class='line'><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">while</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>    <span class="k">my</span> <span class="nv">$hoge</span><span class="p">;</span>
-</span><span class='line'>  <span class="k">my</span> <span class="nv">$coderef</span> <span class="o">=</span> <span class="k">sub </span><span class="p">{</span> <span class="nv">$hoge</span> <span class="o">=</span> <span class="nb">shift</span> <span class="p">};</span>
-</span><span class='line'>  <span class="k">my</span> <span class="nv">$callback</span> <span class="o">=</span> <span class="nn">FFI::Raw::</span><span class="n">callback</span><span class="p">(</span><span class="nv">$coderef</span><span class="p">,</span> <span class="nn">FFI::Raw::</span><span class="n">void</span><span class="p">,</span> <span class="nn">FFI::Raw::</span><span class="n">str</span><span class="p">);</span>
-</span><span class='line'>  <span class="nv">$format</span><span class="o">-&gt;</span><span class="n">call</span><span class="p">(</span><span class="o">&lt;&lt;</span><span class="s">&quot;EOF&quot;</span><span class="p">,</span> <span class="nv">$callback</span><span class="p">);</span>
-</span><span class='line'><span class="nb">package</span> <span class="n">main</span>
-</span><span class='line'><span class="nb">import</span>   <span class="s">&quot;fmt&quot;</span>
-</span><span class='line'><span class="n">func</span> <span class="n">main</span><span class="p">(</span>   <span class="p">)</span>   <span class="p">{</span>
-</span><span class='line'><span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="s">&quot;hogehoge&quot;</span><span class="p">)</span> <span class="p">}</span>
-</span><span class='line'><span class="n">EOF</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>まとめ</h2>
-
-<p>GoのShared Libraryの呼び出しは数値型だけを相手にしていれば比較的簡単ですが、文字列を扱おうとすると少し面倒です。
-go2xsを使うとそこら辺が簡単になります。
-あんましライブラリ作ったことないですが、文字列の受け渡しをするときには、一般的にはどんな感じのインターフェースにするべきなんですかね？</p>
-
-<p>GoのShared Libraryまだまだ出たばかりで、複数回読み込めなかったりと問題はありますが、
-Goの機能を他の言語から呼び出せるのは便利ですね。
-今後に期待です。</p>
 ]]></content>
   </entry>
   

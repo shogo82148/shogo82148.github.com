@@ -4,7 +4,7 @@
   <title><![CDATA[Category: go | Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/blog/categories/go/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2016-03-10T12:53:23+09:00</updated>
+  <updated>2016-03-15T13:27:39+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,206 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[ngrokみたいなHTTPプロキシを書いてみた]]></title>
+    <link href="http://shogo82148.github.io/blog/2016/03/14/http2-over-websocket/"/>
+    <updated>2016-03-14T22:59:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2016/03/14/http2-over-websocket</id>
+    <content type="html"><![CDATA[<p>開発中のWebアプリをみんなに試してほしいけど、
+サーバなんてなくて開発環境がローカルにしか無くて公開できないということは、
+開発初期段階だとよくあることだと思います。
+もちろん本格的にやるならテスト用にサーバを建てるべきですが、
+小さなものなら<a href="https://ngrok.com/">ngrok</a>を使うと簡単です。
+<a href="https://ngrok.com/">ngrok</a>の公開サーバへのHTTPリクエストをローカルにリレーして、
+ローカルのサーバをお手がるに公開できるサービスです。</p>
+
+<p>びっくりするほど簡単に公開できて便利ですが、
+一応oAuthで制限とかかけたいなーとかカスタマイズしてみたくなってきたので、
+似たようなものを自作できないかといろいろ遊んでみました。</p>
+
+<p>その結果、HTTP2 over Websocketみたいな謎なものが出来上がってしまったというお話です。</p>
+
+<!-- More -->
+
+
+<h2>HTTP2 over Websocketというアイデア</h2>
+
+<p><a href="https://ngrok.com/">ngrok</a>っぽいものを実現するためには、
+サーバが受け取ったHTTPリクエストをローカルの環境に転送する必要があります。
+ご存知のとおり通常のHTTPではサーバ側からのプッシュ配信が難しいので、Websocketを使うのが良さそうです。
+しかし、複数のコネクションで並列にやってくるHTTPリクエストを、一本のWebsocketに束ねる必要があり、
+上手く制御するのは大変そうです。</p>
+
+<p>さて、HTTP2は一つのTCPコネクションで複数のリクエストを並行処理する仕様があります。
+「複数のリクエストを一本に束ねる」という点ではなんか似ているので、なんだか流用できそうな気がしてきました。
+Golangならきっと上手いこと<code>interface</code>を実装すれば、なんとかできるのではとやってみました。</p>
+
+<h2>実装</h2>
+
+<p>HTTP2は暗号化や複雑なフロー制御を行っていますが、
+外から見れば<code>net.Conn</code>インターフェースに読み書きしている何かに過ぎません。
+そして、<code>websocket.Conn</code>も<code>net.Conn</code>を実装しているので、そのままHTTP2のライブラリに渡せるはずです。</p>
+
+<p>そうしてできたのが以下のサーバです。</p>
+
+<p>``` go server.go
+package main</p>
+
+<p>import (</p>
+
+<pre><code>"errors"
+"log"
+"net/http"
+"net/http/httputil"
+"sync"
+
+"golang.org/x/net/http2"
+"golang.org/x/net/websocket"
+</code></pre>
+
+<p>)</p>
+
+<p>type transport struct {</p>
+
+<pre><code>m      sync.Mutex
+t      http.RoundTripper
+closed chan struct{}
+</code></pre>
+
+<p>}</p>
+
+<p>var t *transport</p>
+
+<p>func main() {</p>
+
+<pre><code>t = &amp;transport{}
+s := websocket.Server{Handler: websocket.Handler(Handler)}
+http.Handle("/", s)
+go http.ListenAndServe(":3000", nil)
+http.ListenAndServe(":3001", &amp;httputil.ReverseProxy{
+    Transport: t,
+    Director: func(req *http.Request) {
+    },
+})
+</code></pre>
+
+<p>}</p>
+
+<p>func Handler(ws *websocket.Conn) {</p>
+
+<pre><code>log.Println("start new connection")
+t2 := &amp;http2.Transport{}
+conn, err := t2.NewClientConn(ws)
+if err != nil {
+    log.Println(err)
+    return
+}
+
+t.m.Lock()
+if t.t != nil {
+    t.m.Unlock()
+    log.Println("already connected.")
+    return
+}
+t.t = conn
+t.m.Unlock()
+&lt;-t.closed
+log.Println("close connection")
+</code></pre>
+
+<p>}</p>
+
+<p>func (t <em>transport) RoundTrip(req </em>http.Request) (*http.Response, error) {</p>
+
+<pre><code>t.m.Lock()
+t2 := t.t
+t.m.Unlock()
+if t2 == nil {
+    return nil, errors.New("connection not found")
+}
+res, err := t2.RoundTrip(req)
+if err != nil {
+    log.Println(err)
+    t.m.Lock()
+    t.t = nil
+    t.m.Unlock()
+    t.closed &lt;- struct{}{}
+    return nil, err
+}
+return res, nil
+</code></pre>
+
+<p>}
+```</p>
+
+<p>複数Websocketのコネクションが張られた場合の処理が少し煩雑ですが、思いのほか短くかけました。
+3001番ポートに来たリクエストをWebsocket経由で転送します。
+Websocketは3000番ポートで待ち受けです。</p>
+
+<p>これにアクセスするためのクライアントがこちら。</p>
+
+<p>``` go client.go
+package main</p>
+
+<p>import (</p>
+
+<pre><code>"log"
+"net/http/httputil"
+"net/url"
+
+"golang.org/x/net/http2"
+"golang.org/x/net/websocket"
+</code></pre>
+
+<p>)</p>
+
+<p>func main() {</p>
+
+<pre><code>origin := "http://localhost:3000/"
+u := "ws://localhost:3000/"
+ws, err := websocket.Dial(u, "", origin)
+if err != nil {
+    log.Fatal(err)
+}
+
+target, _ := url.Parse("http://localhost:8000/")
+
+s := &amp;http2.Server{}
+s.ServeConn(ws, &amp;http2.ServeConnOpts{
+    Handler: httputil.NewSingleHostReverseProxy(target),
+})
+</code></pre>
+
+<p>}
+```</p>
+
+<p>Websocket経由でリクエストを受け付け、それを8000番ポートに転送します。
+こちらも非常に短くかけました。
+サーバーとクライアントを立ち上げて<code>http://localhost:3001/</code>にアクセスすると、
+<code>http://localhost:8000/</code>の内容が見れるはずです。</p>
+
+<h2>ngrok1.xについて</h2>
+
+<p>ところでngrokの旧バージョンはソースコードが公開されているから、こっちを使ったほうが早い？
+でも、開発中止って書かれてて不安になる。</p>
+
+<ul>
+<li><a href="https://github.com/inconshreveable/ngrok">ngrok1.x</a></li>
+</ul>
+
+
+<h2>まとめ</h2>
+
+<p>ローカルのサーバをお手軽に公開するためのngrokというサービスを紹介しました。
+自作のためのアイデアとして、http2 over websocketを試してみました。</p>
+
+<p>設定の読み込みとかエラー処理とかセキュリティ周りとかいろいろ足りてない部分はありますが、
+たったあれだけのコードで、ヘッダの圧縮転送、リクエストの並行処理等のHTTP2の機能が使えるのは面白いですね。</p>
+
+<p>もうちょっと手を加えて多少は使えるものにしてみたいですね。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[nginx-omniauth-adapterのGolangポート作った]]></title>
@@ -474,62 +674,6 @@ CPUの使用率も100%近くになって、有効活用できているようで�
 
 <p>早くはなるものの、既存のテストコードに手を加える必要があってちょっと怖いかなと思ったので、プロジェクトへの組み込みはやってません。
 まあ本番環境で走るものではないので、ある程度動くことが確認できたら置き換えてみたいですね。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[go-webtailってのを書いた]]></title>
-    <link href="http://shogo82148.github.io/blog/2015/06/21/go-webtail/"/>
-    <updated>2015-06-21T23:28:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2015/06/21/go-webtail</id>
-    <content type="html"><![CDATA[<p>Rubyで書かれた<a href="https://github.com/r7kamura/webtail">webtail</a>のGo移植を書いてみました。</p>
-
-<ul>
-<li><a href="https://github.com/shogo82148/go-webtail">go-webtail</a></li>
-</ul>
-
-
-<!-- More -->
-
-
-<p>オリジナルのwebtailはRubyなので、Rubyistではない僕が使おうとするとまずRubyの実行環境からそろえないといけなくてつらい。
-ワンバイナリでダウンロードするだけで使えるやつが欲しいなあと常々思っていたのでGolangです。
-htmlやjavasctiptの部分もバイナリに含まれているので、インストールも簡単です。</p>
-
-<p>引数無しで実行すると8080ポートで待ち受けて、標準入力から読み込んだ結果をWebsocketで読めるようにしてくれます。</p>
-
-<p><code>bash
-go get github.com/shogo82148/go-webtail/cmd/webtail # インストール
-echo hogehoge | webtail
-</code></p>
-
-<p>ファイルもtailできます。</p>
-
-<p><code>bash
-webtail hoge.log fuga.log
-</code></p>
-
-<p>それぞれ、<code>http://localhost:8080/hoge.log</code>と<code>http://localhost:8080/fuga.log</code>で見れるようになります。</p>
-
-<h1>mirageと一緒につかう</h1>
-
-<p><a href="https://github.com/acidlemon/mirage">mirage</a>は待ち受けポートを複数設定できます。
-(SEE ALSO <a href="http://tech.kayac.com/archive/mirage_for_docker.html">Dockerで非エンジニアでも開発環境を上げ下げできる、mirageというツールを作りました</a>)
-その一つをwebtailに割り当てて以下のようにDockerfileに書いておけば、非(サーバサイド)エンジニアでも開発環境のログが見れるようになります。
-(見れても理解できるのか？って疑問もあるけど、まあ、全く見れないよりは・・・)</p>
-
-<p>```
-ADD webtail /
-CMD ./docker_run.sh 2>&amp;1 | /webtail --prefix webtail</p>
-
-<h1>ブラウザで見れる代わりにdocker logsで見れなくなるのでこっちのほうがいいかも</h1>
-
-<p>CMD ./docker_run.sh 2>&amp;1 | tee hoge.log | /webtail --prefix webtail
-```</p>
-
-<p>残念ながらwebsocket対応はしていないので、<a href="https://github.com/shogo82148/mirage/tree/feature/websocket">websoket対応にしたmirage</a>が必要です。
-<code>httputil.NewSingleHostReverseProxy</code>互換の<a href="github.com/methane/rproxy">rproxy</a>ってのを使ったら簡単にwebsocket対応ができて素晴らしいですね。
-(mirage自身に手を加える必要があるなら、mirageにこういう機能をつけるべきだったのでは説はある)</p>
 ]]></content>
   </entry>
   

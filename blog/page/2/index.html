@@ -9,10 +9,9 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="description" content="最近gitのコンフリクト解消職人みたいになっていてすごくつらいです。
-普通のプログラムであれば順番が重要なので手動でのコンフリクト解消は避けられないのですが、
-僕が相手にしているのは最終的にMySQLに食わせるデータなのでそこまで順番は重要ではありません。
-順番に挿入したところで、 &hellip;">
+  <meta name="description" content="この記事は、Perl 5 Advent Calendarの17日目の記事です。 Redis::Fast の reconnect についての中で
+DBIx::Classのreconnectについても触れています。
+DBIx::Classの安全にreconnectionが行えるように考慮されていますが &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -99,6 +98,833 @@ Hatena.Star.SiteConfig = {
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/12/17/dbix-class/">PerlのDBIx::Class利用上の注意点</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-12-17T18:35:00+09:00" pubdate data-updated="true">Dec 17<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>この記事は、<a href="http://qiita.com/advent-calendar/2015/perl5">Perl 5 Advent Calendar</a>の17日目の記事です。</p>
+
+<p><a href="http://tech.kayac.com/archive/reconnect_redisfast.html">Redis::Fast の reconnect について</a>の中で
+<a href="https://metacpan.org/release/DBIx-Class">DBIx::Class</a>のreconnectについても触れています。
+DBIx::Classの安全にreconnectionが行えるように考慮されていますが、色々と注意点があります。
+reconnection周りで調べてみたので、Advent Calendarの枠を借りてまとめたいと思います。</p>
+
+<h2>DBIx::Classとは</h2>
+
+<p><a href="https://metacpan.org/release/DBIx-Class">DBIx::Class</a>はPerlのO/Rマッピングモジュールです。
+テーブル間のリレーションを定義でき、JOIN句の入ったクエリもサポートする等、かなり高機能なモジュールです。
+もう僕はJOIN句をDBIx::Class以外で書ける気がしません。
+詳しくはtypester先生の解説記事をどうぞ。</p>
+
+<ul>
+<li><a href="http://gihyo.jp/dev/serial/01/perl-hackers-hub">Perl Hackers Hub</a>
+
+<ul>
+<li><a href="http://gihyo.jp/dev/serial/01/perl-hackers-hub/000301">第3回　DBIx::Classでデータベース操作（1）</a></li>
+<li><a href="http://gihyo.jp/dev/serial/01/perl-hackers-hub/000302">第3回　DBIx::Classでデータベース操作（2）</a></li>
+<li><a href="http://gihyo.jp/dev/serial/01/perl-hackers-hub/000303">第3回　DBIx::Classでデータベース操作（3）</a></li>
+</ul>
+</li>
+</ul>
+
+
+<h2>サンプル</h2>
+
+<p>サンプルとしてユーザの所持金を管理する簡単なアプリを作ってみます。
+Webアプリとか作るの面倒だったので、コンソールアプリです。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+<span class='line-number'>61</span>
+<span class='line-number'>62</span>
+<span class='line-number'>63</span>
+<span class='line-number'>64</span>
+<span class='line-number'>65</span>
+<span class='line-number'>66</span>
+<span class='line-number'>67</span>
+<span class='line-number'>68</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="nb">package</span> <span class="nn">My::Schema::</span><span class="n">User</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">use</span> <span class="n">base</span> <span class="s">&#39;DBIx::Class::Core&#39;</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">__PACKAGE__</span><span class="o">-&gt;</span><span class="n">table</span><span class="p">(</span><span class="s">&#39;user&#39;</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">__PACKAGE__</span><span class="o">-&gt;</span><span class="n">add_columns</span><span class="p">(</span>
+</span><span class='line'>        <span class="n">id</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span><span class='line'>            <span class="n">data_type</span>         <span class="o">=&gt;</span> <span class="s">&#39;INTEGER&#39;</span><span class="p">,</span>
+</span><span class='line'>            <span class="n">is_nullable</span>       <span class="o">=&gt;</span> <span class="mi">0</span><span class="p">,</span>
+</span><span class='line'>            <span class="n">is_auto_increment</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span>
+</span><span class='line'>        <span class="p">},</span>
+</span><span class='line'>        <span class="n">username</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span><span class='line'>            <span class="n">data_type</span>   <span class="o">=&gt;</span> <span class="s">&#39;VARCHAR&#39;</span><span class="p">,</span>
+</span><span class='line'>            <span class="n">size</span>        <span class="o">=&gt;</span> <span class="mi">255</span><span class="p">,</span>
+</span><span class='line'>            <span class="n">is_nullable</span> <span class="o">=&gt;</span> <span class="mi">0</span><span class="p">,</span>
+</span><span class='line'>        <span class="p">},</span>
+</span><span class='line'>    <span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">__PACKAGE__</span><span class="o">-&gt;</span><span class="n">set_primary_key</span><span class="p">(</span><span class="s">&#39;id&#39;</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1"># userとmoneyは1対1の関係で、userに対応するmoneyが必ず存在しなければならない</span>
+</span><span class='line'>    <span class="n">__PACKAGE__</span><span class="o">-&gt;</span><span class="n">has_one</span><span class="p">(</span>
+</span><span class='line'>        <span class="s">&#39;money&#39;</span> <span class="o">=&gt;</span> <span class="s">&#39;My::Schema::Money&#39;</span><span class="p">,</span>
+</span><span class='line'>        <span class="p">{</span> <span class="s">&#39;foreign.user_id&#39;</span> <span class="o">=&gt;</span> <span class="s">&#39;self.id&#39;</span> <span class="p">},</span>
+</span><span class='line'>    <span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="mi">1</span><span class="p">;</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'>
+</span><span class='line'><span class="nb">package</span> <span class="nn">My::Schema::</span><span class="n">Money</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">use</span> <span class="n">base</span> <span class="s">&#39;DBIx::Class::Core&#39;</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">__PACKAGE__</span><span class="o">-&gt;</span><span class="n">table</span><span class="p">(</span><span class="s">&#39;money&#39;</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">__PACKAGE__</span><span class="o">-&gt;</span><span class="n">add_columns</span><span class="p">(</span>
+</span><span class='line'>        <span class="n">user_id</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span><span class='line'>            <span class="n">data_type</span>   <span class="o">=&gt;</span> <span class="s">&#39;INTEGER&#39;</span><span class="p">,</span>
+</span><span class='line'>            <span class="n">is_nullable</span> <span class="o">=&gt;</span> <span class="mi">0</span><span class="p">,</span>
+</span><span class='line'>        <span class="p">},</span>
+</span><span class='line'>        <span class="n">yen</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span><span class='line'>            <span class="n">data_type</span>   <span class="o">=&gt;</span> <span class="s">&#39;INTEGER&#39;</span><span class="p">,</span>
+</span><span class='line'>            <span class="n">is_nullable</span> <span class="o">=&gt;</span> <span class="mi">0</span><span class="p">,</span>
+</span><span class='line'>        <span class="p">},</span>
+</span><span class='line'>    <span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">__PACKAGE__</span><span class="o">-&gt;</span><span class="n">set_primary_key</span><span class="p">(</span><span class="s">&#39;user_id&#39;</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">__PACKAGE__</span><span class="o">-&gt;</span><span class="n">belongs_to</span><span class="p">(</span>
+</span><span class='line'>        <span class="s">&#39;user&#39;</span> <span class="o">=&gt;</span> <span class="s">&#39;My::Schema::User&#39;</span><span class="p">,</span>
+</span><span class='line'>        <span class="p">{</span> <span class="s">&#39;foreign.id&#39;</span> <span class="o">=&gt;</span> <span class="s">&#39;self.user_id&#39;</span> <span class="p">},</span>
+</span><span class='line'>    <span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="mi">1</span><span class="p">;</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'>
+</span><span class='line'><span class="nb">package</span> <span class="nn">My::</span><span class="n">Schema</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">use</span> <span class="n">base</span> <span class="s">&#39;DBIx::Class::Schema&#39;</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">__PACKAGE__</span><span class="o">-&gt;</span><span class="n">load_classes</span><span class="p">(</span><span class="sx">qw/User Money/</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="mi">1</span><span class="p">;</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">use</span> <span class="n">feature</span> <span class="s">&#39;say&#39;</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$schema</span> <span class="o">=</span> <span class="nn">My::</span><span class="n">Schema</span><span class="o">-&gt;</span><span class="nb">connect</span><span class="p">(</span><span class="s">&#39;dbi:mysql:host=127.0.0.1;port=3306;database=test;mysql_write_timeout=1;mysql_read_timeout=1&#39;</span><span class="p">,</span> <span class="s">&#39;root&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">);</span>
+</span><span class='line'><span class="nv">$schema</span><span class="o">-&gt;</span><span class="n">storage</span><span class="o">-&gt;</span><span class="n">dbh</span><span class="o">-&gt;</span><span class="k">do</span><span class="p">(</span><span class="s">&#39;DROP TABLE IF EXISTS money, user&#39;</span><span class="p">);</span>
+</span><span class='line'><span class="nv">$schema</span><span class="o">-&gt;</span><span class="n">deploy</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>実行するとMySQLのデータベースに以下のようなテーブルが作成されます。
+userテーブルはユーザの名前を管理するテーブル、moneyはユーザの所持金を管理するテーブルです。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="n">mysql</span><span class="o">&gt;</span> <span class="n">desc</span> <span class="n">user</span><span class="p">;</span>
+</span><span class='line'><span class="o">+----------+--------------+------+-----+---------+----------------+</span>
+</span><span class='line'><span class="o">|</span> <span class="n">Field</span>    <span class="o">|</span> <span class="n">Type</span>         <span class="o">|</span> <span class="n">Null</span> <span class="o">|</span> <span class="n">Key</span> <span class="o">|</span> <span class="n">Default</span> <span class="o">|</span> <span class="n">Extra</span>          <span class="o">|</span>
+</span><span class='line'><span class="o">+----------+--------------+------+-----+---------+----------------+</span>
+</span><span class='line'><span class="o">|</span> <span class="n">id</span>       <span class="o">|</span> <span class="nb">int</span><span class="p">(</span><span class="mi">11</span><span class="p">)</span>      <span class="o">|</span> <span class="n">NO</span>   <span class="o">|</span> <span class="n">PRI</span> <span class="o">|</span> <span class="n">NULL</span>    <span class="o">|</span> <span class="n">auto_increment</span> <span class="o">|</span>
+</span><span class='line'><span class="o">|</span> <span class="n">username</span> <span class="o">|</span> <span class="n">varchar</span><span class="p">(</span><span class="mi">255</span><span class="p">)</span> <span class="o">|</span> <span class="n">NO</span>   <span class="o">|</span>     <span class="o">|</span> <span class="n">NULL</span>    <span class="o">|</span>                <span class="o">|</span>
+</span><span class='line'><span class="o">+----------+--------------+------+-----+---------+----------------+</span>
+</span><span class='line'><span class="mi">2</span> <span class="n">rows</span> <span class="n">in</span> <span class="n">set</span> <span class="p">(</span><span class="mf">0.00</span> <span class="n">sec</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">mysql</span><span class="o">&gt;</span> <span class="n">desc</span> <span class="n">money</span><span class="p">;</span>
+</span><span class='line'><span class="o">+---------+---------+------+-----+---------+-------+</span>
+</span><span class='line'><span class="o">|</span> <span class="n">Field</span>   <span class="o">|</span> <span class="n">Type</span>    <span class="o">|</span> <span class="n">Null</span> <span class="o">|</span> <span class="n">Key</span> <span class="o">|</span> <span class="n">Default</span> <span class="o">|</span> <span class="n">Extra</span> <span class="o">|</span>
+</span><span class='line'><span class="o">+---------+---------+------+-----+---------+-------+</span>
+</span><span class='line'><span class="o">|</span> <span class="n">user_id</span> <span class="o">|</span> <span class="nb">int</span><span class="p">(</span><span class="mi">11</span><span class="p">)</span> <span class="o">|</span> <span class="n">NO</span>   <span class="o">|</span> <span class="n">PRI</span> <span class="o">|</span> <span class="n">NULL</span>    <span class="o">|</span>       <span class="o">|</span>
+</span><span class='line'><span class="o">|</span> <span class="n">yen</span>     <span class="o">|</span> <span class="nb">int</span><span class="p">(</span><span class="mi">11</span><span class="p">)</span> <span class="o">|</span> <span class="n">NO</span>   <span class="o">|</span>     <span class="o">|</span> <span class="n">NULL</span>    <span class="o">|</span>       <span class="o">|</span>
+</span><span class='line'><span class="o">+---------+---------+------+-----+---------+-------+</span>
+</span><span class='line'><span class="mi">2</span> <span class="n">rows</span> <span class="n">in</span> <span class="n">set</span> <span class="p">(</span><span class="mf">0.00</span> <span class="n">sec</span><span class="p">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>タイムアウトとロールバックの微妙な関係</h2>
+
+<h3>ユーザの初期化プログラムを実装してみる</h3>
+
+<p>テーブル作っただけではつまらないので、データを入れてみます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="c1"># スキーマ定義等略</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1"># ユーザ作成</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$user_rs</span> <span class="o">=</span> <span class="nv">$schema</span><span class="o">-&gt;</span><span class="n">resultset</span><span class="p">(</span><span class="s">&#39;User&#39;</span><span class="p">);</span>
+</span><span class='line'><span class="nb">eval</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$user</span> <span class="o">=</span> <span class="nv">$user_rs</span><span class="o">-&gt;</span><span class="n">create</span><span class="p">({</span>
+</span><span class='line'>        <span class="n">id</span>       <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span>
+</span><span class='line'>        <span class="n">username</span> <span class="o">=&gt;</span> <span class="s">&#39;ok_macopy&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="p">});</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1"># ユーザを初期化するためクエリ(ちょっと時間がかかる)</span>
+</span><span class='line'>    <span class="nv">$user_rs</span><span class="o">-&gt;</span><span class="n">search</span><span class="p">({},</span> <span class="p">{</span><span class="nb">select</span> <span class="o">=&gt;</span> <span class="o">\</span><span class="s">&#39;SLEEP(1)&#39;</span><span class="p">})</span><span class="o">-&gt;</span><span class="n">all</span><span class="p">;</span>
+</span><span class='line'>    <span class="nv">$user</span><span class="o">-&gt;</span><span class="n">create_related</span><span class="p">(</span><span class="n">money</span> <span class="o">=&gt;</span> <span class="p">{</span> <span class="n">yen</span> <span class="o">=&gt;</span> <span class="mi">1000</span> <span class="p">});</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'><span class="k">if</span> <span class="p">(</span><span class="k">my</span> <span class="nv">$err</span> <span class="o">=</span> <span class="vg">$@</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nb">warn</span> <span class="nv">$err</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$user</span> <span class="o">=</span> <span class="nv">$user_rs</span><span class="o">-&gt;</span><span class="n">search</span><span class="p">({</span> <span class="n">id</span> <span class="o">=&gt;</span> <span class="mi">1</span> <span class="p">})</span><span class="o">-&gt;</span><span class="n">single</span><span class="p">;</span>
+</span><span class='line'><span class="k">if</span> <span class="p">(</span><span class="nv">$user</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">say</span> <span class="s">&quot;名前: &quot;</span><span class="p">,</span> <span class="nv">$user</span><span class="o">-&gt;</span><span class="n">username</span><span class="p">;</span>
+</span><span class='line'>    <span class="n">say</span> <span class="s">&quot;所持金: &quot;</span><span class="p">,</span> <span class="nv">$user</span><span class="o">-&gt;</span><span class="n">money</span><span class="o">-&gt;</span><span class="n">yen</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">say</span> <span class="s">&quot;ユーザが見つかりませんでした&quot;</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>実行してみると、1000円持ったユーザが作成されます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ perl dbic-test.pl
+</span><span class='line'>名前: ok_macopy
+</span><span class='line'>所持金: 1000</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>タイムアウトと戦う</h3>
+
+<p>一件上手く動いていそうに見えますが、上記コードを何回か実行すると、ときたま以下のように失敗します。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ perl dbic-test.pl
+</span><span class='line'>DBIx::Class::Storage::DBI::_dbh_execute(): DBI Exception: DBD::mysql::st execute failed: Lost connection to MySQL server during query [for Statement "SELECT SLEEP(1) FROM user me"] at dbic-test.pl line 80
+</span><span class='line'>名前: ok_macopy
+</span><span class='line'>所持金: 0</span></code></pre></td></tr></table></div></figure>
+
+
+<p>所持金が0円になってしまいました。
+<code>SELECT SLEEP(1) FROM user me</code> という時間のかかるクエリを投げたので、コネクションがタイムアウトしてしまったようです。
+データベースの状態を確認すると、userに行はあるけど、moneyは空っぽの状態です。
+「userに対応するmoneyが必ず存在しなければならない」とスキーマで定義したのに、その条件を満たしていませんね。
+たとえタイムアウトしたとしても、このような状態にはならないで欲しいです。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>mysql&gt; SELECT * FROM user;
+</span><span class='line'>+----+-----------+
+</span><span class='line'>| id | username  |
+</span><span class='line'>+----+-----------+
+</span><span class='line'>|  1 | ok_macopy |
+</span><span class='line'>+----+-----------+
+</span><span class='line'>1 row in set (0.00 sec)
+</span><span class='line'>
+</span><span class='line'>mysql&gt; SELECT * FROM money;
+</span><span class='line'>Empty set (0.00 sec)</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>トランザクションを使ってみる</h3>
+
+<p>リレーショナルデータベースにはこれを実現するためにトランザクションという便利なものがあります。
+DBIx::Classから扱うにはいくつか方法がありますが、例えばガードオブジェクトを使って以下のように書けます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="c1"># ユーザ作成</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$user_rs</span> <span class="o">=</span> <span class="nv">$schema</span><span class="o">-&gt;</span><span class="n">resultset</span><span class="p">(</span><span class="s">&#39;User&#39;</span><span class="p">);</span>
+</span><span class='line'><span class="nb">eval</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$txn</span> <span class="o">=</span> <span class="nv">$schema</span><span class="o">-&gt;</span><span class="n">txn_scope_guard</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$user</span> <span class="o">=</span> <span class="nv">$user_rs</span><span class="o">-&gt;</span><span class="n">create</span><span class="p">({</span>
+</span><span class='line'>        <span class="n">id</span>       <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span>
+</span><span class='line'>        <span class="n">username</span> <span class="o">=&gt;</span> <span class="s">&#39;ok_macopy&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="p">});</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1"># ユーザを初期化するためクエリ(ちょっと時間がかかる)</span>
+</span><span class='line'>    <span class="nv">$user_rs</span><span class="o">-&gt;</span><span class="n">search</span><span class="p">({},</span> <span class="p">{</span><span class="nb">select</span> <span class="o">=&gt;</span> <span class="o">\</span><span class="s">&#39;SLEEP(1)&#39;</span><span class="p">})</span><span class="o">-&gt;</span><span class="n">all</span><span class="p">;</span>
+</span><span class='line'>    <span class="nv">$user</span><span class="o">-&gt;</span><span class="n">create_related</span><span class="p">(</span><span class="n">money</span> <span class="o">=&gt;</span> <span class="p">{</span> <span class="n">yen</span> <span class="o">=&gt;</span> <span class="mi">1000</span> <span class="p">});</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="nv">$txn</span><span class="o">-&gt;</span><span class="n">commit</span><span class="p">;</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'><span class="k">if</span> <span class="p">(</span><span class="k">my</span> <span class="nv">$err</span> <span class="o">=</span> <span class="vg">$@</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nb">warn</span> <span class="nv">$err</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$user</span> <span class="o">=</span> <span class="nv">$user_rs</span><span class="o">-&gt;</span><span class="n">search</span><span class="p">({</span> <span class="n">id</span> <span class="o">=&gt;</span> <span class="mi">1</span> <span class="p">})</span><span class="o">-&gt;</span><span class="n">single</span><span class="p">;</span>
+</span><span class='line'><span class="k">if</span> <span class="p">(</span><span class="nv">$user</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">say</span> <span class="s">&quot;名前: &quot;</span><span class="p">,</span> <span class="nv">$user</span><span class="o">-&gt;</span><span class="n">username</span><span class="p">;</span>
+</span><span class='line'>    <span class="n">say</span> <span class="s">&quot;所持金: &quot;</span><span class="p">,</span> <span class="nv">$user</span><span class="o">-&gt;</span><span class="n">money</span> <span class="p">?</span> <span class="nv">$user</span><span class="o">-&gt;</span><span class="n">money</span><span class="o">-&gt;</span><span class="n">yen</span> <span class="p">:</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">say</span> <span class="s">&quot;ユーザが見つかりませんでした&quot;</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>これで片一方だけ更新されるのが防げるはず！
+ところが、片一方だけ更新自体は防げはするのですが、
+今度は所持金を表示するところでコケてしまいます。
+トランザクションを使っていないときは正常に表示できていたし、
+表示部分は一切いじってないのに不思議ですね。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ perl dbic-test.pl
+</span><span class='line'>Transaction aborted: DBIx::Class::Storage::DBI::_dbh_execute(): DBI Exception: DBD::mysql::st execute failed: Lost connection to MySQL server during query [for Statement "SELECT SLEEP(1) FROM user me"] at dbic-test.pl line 80
+</span><span class='line'> Rollback failed: DBIx::Class::Storage::DBI::_exec_txn_rollback(): DBI Exception: DBD::mysql::db rollback failed: Turning on AutoCommit failed at dbic-test.pl line 72
+</span><span class='line'>DBIx::Class::Storage::DBI::_dbh_execute(): DBI Exception: DBD::mysql::st execute failed: MySQL server has gone away [for Statement "SELECT me.id, me.username FROM user me WHERE ( id = ? )" with ParamValues: 0=1] at dbic-test.pl line 89
+</span><span class='line'># ※「ユーザが見つかりませんでした」と表示されて欲しいがされない</span></code></pre></td></tr></table></div></figure>
+
+
+<p>実はコネクションがタイムアウトしたとはMySQLとの再接続をする必要があるのですが、
+DBIx::Classが裏で再接続処理を自動的にやってくれるので、普段は意識する必要はありません。
+ただし例外があって、 <strong>トランザクションの中では再接続処理を行ってくれません</strong> 。</p>
+
+<p>トランザクション内で勝手に再接続が行われると逆に困るので、この挙動自体は正しいのですが、
+これにロールバックが絡むと少し不思議なことが起こります。
+<strong>ロールバックしてトランザクションを抜けても、DBIx::Classはトランザクションの中にいると判断してしまうのです。</strong>
+このことは<code>transaction_depth</code>を見ることで確認できます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="c1"># ユーザ作成</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$user_rs</span> <span class="o">=</span> <span class="nv">$schema</span><span class="o">-&gt;</span><span class="n">resultset</span><span class="p">(</span><span class="s">&#39;User&#39;</span><span class="p">);</span>
+</span><span class='line'><span class="n">say</span> <span class="s">&#39;transaction_depth = &#39;</span><span class="p">,</span> <span class="nv">$schema</span><span class="o">-&gt;</span><span class="n">storage</span><span class="o">-&gt;</span><span class="p">{</span><span class="n">transaction_depth</span><span class="p">};</span>
+</span><span class='line'><span class="nb">eval</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$txn</span> <span class="o">=</span> <span class="nv">$schema</span><span class="o">-&gt;</span><span class="n">txn_scope_guard</span><span class="p">;</span>
+</span><span class='line'>    <span class="n">say</span> <span class="s">&#39;transaction_depth = &#39;</span><span class="p">,</span> <span class="nv">$schema</span><span class="o">-&gt;</span><span class="n">storage</span><span class="o">-&gt;</span><span class="p">{</span><span class="n">transaction_depth</span><span class="p">};</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$user</span> <span class="o">=</span> <span class="nv">$user_rs</span><span class="o">-&gt;</span><span class="n">create</span><span class="p">({</span>
+</span><span class='line'>        <span class="n">id</span>       <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span>
+</span><span class='line'>        <span class="n">username</span> <span class="o">=&gt;</span> <span class="s">&#39;ok_macopy&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="p">});</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1"># ユーザを初期化するためクエリ(ちょっと時間がかかる)</span>
+</span><span class='line'>    <span class="nv">$user_rs</span><span class="o">-&gt;</span><span class="n">search</span><span class="p">({},</span> <span class="p">{</span><span class="nb">select</span> <span class="o">=&gt;</span> <span class="o">\</span><span class="s">&#39;SLEEP(1)&#39;</span><span class="p">})</span><span class="o">-&gt;</span><span class="n">all</span><span class="p">;</span>
+</span><span class='line'>    <span class="nv">$user</span><span class="o">-&gt;</span><span class="n">create_related</span><span class="p">(</span><span class="n">money</span> <span class="o">=&gt;</span> <span class="p">{</span> <span class="n">yen</span> <span class="o">=&gt;</span> <span class="mi">1000</span> <span class="p">});</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="nv">$txn</span><span class="o">-&gt;</span><span class="n">commit</span><span class="p">;</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'><span class="k">if</span> <span class="p">(</span><span class="k">my</span> <span class="nv">$err</span> <span class="o">=</span> <span class="vg">$@</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nb">warn</span> <span class="nv">$err</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="n">say</span> <span class="s">&#39;transaction_depth = &#39;</span><span class="p">,</span> <span class="nv">$schema</span><span class="o">-&gt;</span><span class="n">storage</span><span class="o">-&gt;</span><span class="p">{</span><span class="n">transaction_depth</span><span class="p">};</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$user</span> <span class="o">=</span> <span class="nv">$user_rs</span><span class="o">-&gt;</span><span class="n">search</span><span class="p">({</span> <span class="n">id</span> <span class="o">=&gt;</span> <span class="mi">1</span> <span class="p">})</span><span class="o">-&gt;</span><span class="n">single</span><span class="p">;</span>
+</span><span class='line'><span class="k">if</span> <span class="p">(</span><span class="nv">$user</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">say</span> <span class="s">&quot;名前: &quot;</span><span class="p">,</span> <span class="nv">$user</span><span class="o">-&gt;</span><span class="n">username</span><span class="p">;</span>
+</span><span class='line'>    <span class="n">say</span> <span class="s">&quot;所持金: &quot;</span><span class="p">,</span> <span class="nv">$user</span><span class="o">-&gt;</span><span class="n">money</span> <span class="p">?</span> <span class="nv">$user</span><span class="o">-&gt;</span><span class="n">money</span><span class="o">-&gt;</span><span class="n">yen</span> <span class="p">:</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">say</span> <span class="s">&quot;ユーザが見つかりませんでした&quot;</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ perl dbic-test.pl
+</span><span class='line'>transaction_depth = 0
+</span><span class='line'>transaction_depth = 1
+</span><span class='line'>Transaction aborted: DBIx::Class::Storage::DBI::_dbh_execute(): DBI Exception: DBD::mysql::st execute failed: Lost connection to MySQL server during query [for Statement "SELECT SLEEP(1) FROM user me"] at dbic-test.pl line 82
+</span><span class='line'> Rollback failed: DBIx::Class::Storage::DBI::_exec_txn_rollback(): DBI Exception: DBD::mysql::db rollback failed: Turning on AutoCommit failed at dbic-test.pl line 73
+</span><span class='line'>transaction_depth = 1 # ※トランザクションの外なのに1になってる
+</span><span class='line'>DBIx::Class::Storage::DBI::_dbh_execute(): DBI Exception: DBD::mysql::st execute failed: MySQL server has gone away [for Statement "SELECT me.id, me.username FROM user me WHERE ( id = ? )" with ParamValues: 0=1] at dbic-test.pl line 92</span></code></pre></td></tr></table></div></figure>
+
+
+<p>この状態になるといつまで経っても再接続は行われません。
+都度接続なら大きな問題にはならないのですが、Webアプリでコネクションの永続化を行っている場合は深刻です。
+一度タイムアウトすると以後のリクエストがすべて失敗してしまいます。</p>
+
+<h3>確実に再接続を行う</h3>
+
+<p>これを防ぐには確実に再接続をおこなって欲しいところで <code>$schema-&gt;storage-&gt;ensure_connected;</code> を実行します。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="c1"># ユーザ作成</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$user_rs</span> <span class="o">=</span> <span class="nv">$schema</span><span class="o">-&gt;</span><span class="n">resultset</span><span class="p">(</span><span class="s">&#39;User&#39;</span><span class="p">);</span>
+</span><span class='line'><span class="nb">eval</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$txn</span> <span class="o">=</span> <span class="nv">$schema</span><span class="o">-&gt;</span><span class="n">txn_scope_guard</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$user</span> <span class="o">=</span> <span class="nv">$user_rs</span><span class="o">-&gt;</span><span class="n">create</span><span class="p">({</span>
+</span><span class='line'>        <span class="n">id</span>       <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span>
+</span><span class='line'>        <span class="n">username</span> <span class="o">=&gt;</span> <span class="s">&#39;ok_macopy&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="p">});</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1"># ユーザを初期化するためクエリ(ちょっと時間がかかる)</span>
+</span><span class='line'>    <span class="nv">$user_rs</span><span class="o">-&gt;</span><span class="n">search</span><span class="p">({},</span> <span class="p">{</span><span class="nb">select</span> <span class="o">=&gt;</span> <span class="o">\</span><span class="s">&#39;SLEEP(1)&#39;</span><span class="p">})</span><span class="o">-&gt;</span><span class="n">all</span><span class="p">;</span>
+</span><span class='line'>    <span class="nv">$user</span><span class="o">-&gt;</span><span class="n">create_related</span><span class="p">(</span><span class="n">money</span> <span class="o">=&gt;</span> <span class="p">{</span> <span class="n">yen</span> <span class="o">=&gt;</span> <span class="mi">1000</span> <span class="p">});</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="nv">$txn</span><span class="o">-&gt;</span><span class="n">commit</span><span class="p">;</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'><span class="k">if</span> <span class="p">(</span><span class="k">my</span> <span class="nv">$err</span> <span class="o">=</span> <span class="vg">$@</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nb">warn</span> <span class="nv">$err</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="nv">$schema</span><span class="o">-&gt;</span><span class="n">storage</span><span class="o">-&gt;</span><span class="n">ensure_connected</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$user</span> <span class="o">=</span> <span class="nv">$user_rs</span><span class="o">-&gt;</span><span class="n">search</span><span class="p">({</span> <span class="n">id</span> <span class="o">=&gt;</span> <span class="mi">1</span> <span class="p">})</span><span class="o">-&gt;</span><span class="n">single</span><span class="p">;</span>
+</span><span class='line'><span class="k">if</span> <span class="p">(</span><span class="nv">$user</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">say</span> <span class="s">&quot;名前: &quot;</span><span class="p">,</span> <span class="nv">$user</span><span class="o">-&gt;</span><span class="n">username</span><span class="p">;</span>
+</span><span class='line'>    <span class="n">say</span> <span class="s">&quot;所持金: &quot;</span><span class="p">,</span> <span class="nv">$user</span><span class="o">-&gt;</span><span class="n">money</span> <span class="p">?</span> <span class="nv">$user</span><span class="o">-&gt;</span><span class="n">money</span><span class="o">-&gt;</span><span class="n">yen</span> <span class="p">:</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">say</span> <span class="s">&quot;ユーザが見つかりませんでした&quot;</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>こうすることで、何度実行しても「所持金1000のユーザが作られる」or「ユーザが見つかりませんでした」の状態になり、
+中途半端な状態のユーザが作られたり、再接続に失敗したりということはなくなります。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ perl dbic-test.pl
+</span><span class='line'>Transaction aborted: DBIx::Class::Storage::DBI::_dbh_execute(): DBI Exception: DBD::mysql::st execute failed: Lost connection to MySQL server during query [for Statement "SELECT SLEEP(1) FROM user me"] at dbic-test.pl line 80
+</span><span class='line'> Rollback failed: DBIx::Class::Storage::DBI::_exec_txn_rollback(): DBI Exception: DBD::mysql::db rollback failed: Turning on AutoCommit failed at dbic-test.pl line 72
+</span><span class='line'>        (in cleanup) {UNKNOWN}: DBI Exception: DBD::mysql::db DESTROY failed: MySQL server has gone away  at /home/ichinose/.plenv/versions/5.20.2/lib/perl5/site_perl/5.20.2/DBIx/Class/Schema.pm line 1077.
+</span><span class='line'>        DBIx::Class::Schema::throw_exception(My::Schema=HASH(0x118d088), "DBI Exception: DBD::mysql::db DESTROY failed: MySQL server ha"...) called at /home/ichinose/.plenv/versions/5.20.2/lib/perl5/site_perl/5.20.2/DBIx/Class/Storage.pm line 113
+</span><span class='line'>        DBIx::Class::Storage::throw_exception(DBIx::Class::Storage::DBI::mysql=HASH(0x118d718), "DBI Exception: DBD::mysql::db DESTROY failed: MySQL server ha"...) called at /home/ichinose/.plenv/versions/5.20.2/lib/perl5/site_perl/5.20.2/DBIx/Class/Storage/DBI.pm line 1473
+</span><span class='line'>        DBIx::Class::Storage::DBI::__ANON__("DBD::mysql::db DESTROY failed: MySQL server has gone away", DBI::db=HASH(0x16efbb8), undef) called at dbic-test.pl line 91
+</span><span class='line'>        eval {...} called at dbic-test.pl line 91
+</span><span class='line'>
+</span><span class='line'>ユーザが見つかりませんでした</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>ネストしたトランザクションとロールバックの微妙な関係</h2>
+
+<h3>トランザクションをネストする</h3>
+
+<p>キャンペーン期間中なので通常1000円のところ2000円で初期化してあげることになりました。
+<strong>2000円への更新処理の途中で何かエラーが起こった場合は1000円で初期化して欲しい</strong> ので、
+以下のようにトランザクションをネストしてみました。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="nb">eval</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$txn</span> <span class="o">=</span> <span class="nv">$schema</span><span class="o">-&gt;</span><span class="n">txn_scope_guard</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$user</span> <span class="o">=</span> <span class="nv">$user_rs</span><span class="o">-&gt;</span><span class="n">create</span><span class="p">({</span>
+</span><span class='line'>        <span class="n">id</span>       <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span>
+</span><span class='line'>        <span class="n">username</span> <span class="o">=&gt;</span> <span class="s">&#39;ok_macopy&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="p">});</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1"># ユーザを初期化するためクエリ</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$money</span> <span class="o">=</span> <span class="nv">$user</span><span class="o">-&gt;</span><span class="n">create_related</span><span class="p">(</span><span class="n">money</span> <span class="o">=&gt;</span> <span class="p">{</span> <span class="n">yen</span> <span class="o">=&gt;</span> <span class="mi">1000</span> <span class="p">});</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1"># キャンペーン期間中なので2000円で初期化してげよう</span>
+</span><span class='line'>    <span class="p">{</span>
+</span><span class='line'>        <span class="k">my</span> <span class="nv">$txn2</span> <span class="o">=</span> <span class="nv">$schema</span><span class="o">-&gt;</span><span class="n">txn_scope_guard</span><span class="p">;</span>
+</span><span class='line'>        <span class="nv">$money</span><span class="o">-&gt;</span><span class="n">update</span><span class="p">({</span><span class="n">yen</span> <span class="o">=&gt;</span> <span class="mi">2000</span><span class="p">});</span>
+</span><span class='line'>        <span class="nb">undef</span> <span class="nv">$txn2</span><span class="p">;</span> <span class="c1"># エラーが起こったのでロールバックして欲しい！1000円にもどって!!</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="nv">$txn</span><span class="o">-&gt;</span><span class="n">commit</span><span class="p">;</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'><span class="k">if</span> <span class="p">(</span><span class="k">my</span> <span class="nv">$err</span> <span class="o">=</span> <span class="vg">$@</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nb">warn</span> <span class="nv">$err</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="nv">$schema</span><span class="o">-&gt;</span><span class="n">storage</span><span class="o">-&gt;</span><span class="n">ensure_connected</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$user</span> <span class="o">=</span> <span class="nv">$user_rs</span><span class="o">-&gt;</span><span class="n">search</span><span class="p">({</span> <span class="n">id</span> <span class="o">=&gt;</span> <span class="mi">1</span> <span class="p">})</span><span class="o">-&gt;</span><span class="n">single</span><span class="p">;</span>
+</span><span class='line'><span class="k">if</span> <span class="p">(</span><span class="nv">$user</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">say</span> <span class="s">&quot;名前: &quot;</span><span class="p">,</span> <span class="nv">$user</span><span class="o">-&gt;</span><span class="n">username</span><span class="p">;</span>
+</span><span class='line'>    <span class="n">say</span> <span class="s">&quot;所持金: &quot;</span><span class="p">,</span> <span class="nv">$user</span><span class="o">-&gt;</span><span class="n">money</span><span class="o">-&gt;</span><span class="n">yen</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">say</span> <span class="s">&quot;ユーザが見つかりませんでした&quot;</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>わざとエラーが起こるようにして実行してみましょう。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ perl dbic-test.pl
+</span><span class='line'>DBIx::Class::Storage::TxnScopeGuard::DESTROY(): A DBIx::Class::Storage::TxnScopeGuard went out of scope without explicit commit or error. Rolling back. at dbic-test.pl line 88
+</span><span class='line'>名前: ok_macopy
+</span><span class='line'>所持金: 2000</span></code></pre></td></tr></table></div></figure>
+
+
+<p>2000円！</p>
+
+<p><strong>「Rolling back」って出てるのに全然ロールバックされてない！</strong></p>
+
+<h3>SAVE POINTを使う</h3>
+
+<p>接続時に<code>auto_savepoint</code>オプションを有効にすると、<code>SAVE POINT</code>を使った部分的なロールバックが使用可能になります。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">my</span> <span class="nv">$schema</span> <span class="o">=</span> <span class="nn">My::</span><span class="n">Schema</span><span class="o">-&gt;</span><span class="nb">connect</span><span class="p">(</span><span class="s">&#39;dbi:mysql:host=127.0.0.1;port=3306;database=test;mysql_write_timeout=1;mysql_read_timeout=1&#39;</span><span class="p">,</span> <span class="s">&#39;root&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">auto_savepoint</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span>
+</span><span class='line'><span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ perl dbic-test.pl
+</span><span class='line'>DBIx::Class::Storage::TxnScopeGuard::DESTROY(): A DBIx::Class::Storage::TxnScopeGuard went out of scope without explicit commit or error. Rolling back. at dbic-test.pl line 90
+</span><span class='line'>名前: ok_macopy
+</span><span class='line'>所持金: 1000</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>大人しく全部ロールバックする</h3>
+
+<p>MySQLにはSAVE POINTという便利機能があるとはいえ、どこまでロールバックするべきかを管理するのはすごく大変です。
+現実的には ALL or NOTHING、失敗したら全部ロールバックで十分なのではと思ってます。
+このサンプルではdieしてしまえばいいですね。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="nb">eval</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$txn</span> <span class="o">=</span> <span class="nv">$schema</span><span class="o">-&gt;</span><span class="n">txn_scope_guard</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$user</span> <span class="o">=</span> <span class="nv">$user_rs</span><span class="o">-&gt;</span><span class="n">create</span><span class="p">({</span>
+</span><span class='line'>        <span class="n">id</span>       <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span>
+</span><span class='line'>        <span class="n">username</span> <span class="o">=&gt;</span> <span class="s">&#39;ok_macopy&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="p">});</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1"># ユーザを初期化するためクエリ</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$money</span> <span class="o">=</span> <span class="nv">$user</span><span class="o">-&gt;</span><span class="n">create_related</span><span class="p">(</span><span class="n">money</span> <span class="o">=&gt;</span> <span class="p">{</span> <span class="n">yen</span> <span class="o">=&gt;</span> <span class="mi">1000</span> <span class="p">});</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1"># キャンペーン期間中なので2000円で初期化してげよう</span>
+</span><span class='line'>    <span class="p">{</span>
+</span><span class='line'>        <span class="k">my</span> <span class="nv">$txn2</span> <span class="o">=</span> <span class="nv">$schema</span><span class="o">-&gt;</span><span class="n">txn_scope_guard</span><span class="p">;</span>
+</span><span class='line'>        <span class="nv">$money</span><span class="o">-&gt;</span><span class="n">update</span><span class="p">({</span><span class="n">yen</span> <span class="o">=&gt;</span> <span class="mi">2000</span><span class="p">});</span>
+</span><span class='line'>        <span class="nb">die</span> <span class="s">&#39;something error!&#39;</span><span class="p">;</span> <span class="c1"># エラーが起こったのでロールバックして欲しい！1000円にもどって!!</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="nv">$txn</span><span class="o">-&gt;</span><span class="n">commit</span><span class="p">;</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'><span class="k">if</span> <span class="p">(</span><span class="k">my</span> <span class="nv">$err</span> <span class="o">=</span> <span class="vg">$@</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nb">warn</span> <span class="nv">$err</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="nv">$schema</span><span class="o">-&gt;</span><span class="n">storage</span><span class="o">-&gt;</span><span class="n">ensure_connected</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$user</span> <span class="o">=</span> <span class="nv">$user_rs</span><span class="o">-&gt;</span><span class="n">search</span><span class="p">({</span> <span class="n">id</span> <span class="o">=&gt;</span> <span class="mi">1</span> <span class="p">})</span><span class="o">-&gt;</span><span class="n">single</span><span class="p">;</span>
+</span><span class='line'><span class="k">if</span> <span class="p">(</span><span class="nv">$user</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">say</span> <span class="s">&quot;名前: &quot;</span><span class="p">,</span> <span class="nv">$user</span><span class="o">-&gt;</span><span class="n">username</span><span class="p">;</span>
+</span><span class='line'>    <span class="n">say</span> <span class="s">&quot;所持金: &quot;</span><span class="p">,</span> <span class="nv">$user</span><span class="o">-&gt;</span><span class="n">money</span><span class="o">-&gt;</span><span class="n">yen</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">say</span> <span class="s">&quot;ユーザが見つかりませんでした&quot;</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>something error! at dbic-test.pl line 85.
+</span><span class='line'>ユーザが見つかりませんでした</span></code></pre></td></tr></table></div></figure>
+
+
+<p>途中で<code>eval</code>して例外キャッチしているとロールバックしたのにコミットされる現象が起こる
+(その場合警告すら出ないっぽいので更に怖い)ので、例外握り潰していたら要注意です。</p>
+
+<p>部分的なロールバックができない場合は、
+「子トランザクションがロールバックされていたら親トランザクションのコミットが失敗する」
+が安全だと思うんですが、なぜこんな挙動になっているんでしょうね。
+誰か経緯についてご存知のかたは教えていただきたいです。</p>
+
+<h2>まとめ</h2>
+
+<ul>
+<li>トランザクション外では自動的に再接続してくれるが、トランザクション内では行われない</li>
+<li>必ず再接続して欲しいところで <code>$schema-&gt;storage-&gt;ensure_connected;</code></li>
+<li>部分的なロールバックはやらないのが吉</li>
+</ul>
+
+</div>
+  
+  
+
+
+    </article>
   
   
     <article>
@@ -639,47 +1465,6 @@ CPUの使用率も100%近くになって、有効活用できているようで�
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2015/08/30/golang-to-perl-xs-converter/">PerlからGolangを呼び出す</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2015-08-30T22:52:00+09:00" pubdate data-updated="true">Aug 30<span>th</span>, 2015</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>GoのコードをPerlから呼び出せるようにする<a href="https://github.com/shogo82148/go2xs">go2xs</a>を書いてみました。</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2015/08/30/golang-to-perl-xs-converter/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/3/">&larr; Older</a>
@@ -697,6 +1482,10 @@ CPUの使用率も100%近くになって、有効活用できているようで�
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2016/03/14/http2-over-websocket/">ngrokみたいなHTTPプロキシを書いてみた</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2016/03/10/go-nginx-oauth2-adapter/">nginx-omniauth-adapterのGolangポート作った</a>
       </li>
     
@@ -710,10 +1499,6 @@ CPUの使用率も100%近くになって、有効活用できているようで�
     
       <li class="post">
         <a href="/blog/2016/02/11/golang-mecab-binding/">MeCabのGolangバインディングを書いてみた</a>
-      </li>
-    
-      <li class="post">
-        <a href="/blog/2016/02/10/mecab-in-lambda/">AWS Lambda で MeCab を動かす(改)</a>
       </li>
     
   </ul>
