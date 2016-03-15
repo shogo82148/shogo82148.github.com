@@ -37,8 +37,8 @@ YAMLの形式はREADMEを参照してください。
 
 ``` bash
 $ go get github.com/shogo82148/go-nginx-oauth2-adapter/cli/go-nginx-oauth2-adapter
-$ extern NGX_OMNIAUTH_GOOGLE_KEY=YOUR_CLIENT_ID
-$ extern NGX_OMNIAUTH_GOOGLE_SECRET=YOUR_CLIENT_SECRET
+$ export NGX_OMNIAUTH_GOOGLE_KEY=YOUR_CLIENT_ID
+$ export NGX_OMNIAUTH_GOOGLE_SECRET=YOUR_CLIENT_SECRET
 $ go-nginx-oauth2-adapter
 $ go-nginx-oauth2-adapter -c conf.yaml # 設定ファイルでの指定も可能
 ```
