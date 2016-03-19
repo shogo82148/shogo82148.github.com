@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2016-03-15T14:17:31+09:00</updated>
+  <updated>2016-03-19T10:29:42+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,208 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Redisのトランザクション・スクリプト・ランキングを扱うPerlモジュールを公開しました]]></title>
+    <link href="http://shogo82148.github.io/blog/2016/03/18/releaes-redis-modules/"/>
+    <updated>2016-03-18T22:16:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2016/03/18/releaes-redis-modules</id>
+    <content type="html"><![CDATA[<p>以前<a href="http://shogo82148.github.io/blog/2016/02/06/redis-leader-board-multi/">Redisでスコアを複数設定できるランキングを作ってみた</a>けど、
+Githubの肥やしになっていてもあれなので、CPANizeしました。
+あわせて、この実装のために作ったユーティリティモジュールも別モジュールとして公開しました。</p>
+
+<ul>
+<li><a href="https://metacpan.org/pod/Redis::LeaderBoardMulti">Redis::LeaderBoardMulti</a></li>
+<li><a href="https://metacpan.org/pod/Redis::Script">Redis::Script</a></li>
+<li><a href="https://metacpan.org/pod/Redis::Transaction">Redis::Transaction</a></li>
+</ul>
+
+
+<!-- More -->
+
+
+<h2>Redis::LeaderBoardMulti</h2>
+
+<p>最初の基準で順位を決められなかった場合の第二基準が欲しいというときに使うモジュールです。
+インターフェースがRedis::LeaderBoard互換になるように調整したので、
+前回とインターフェースがちょっと変わっています。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="n">se</span> <span class="n">Redis</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="nn">Redis::</span><span class="n">LeaderBoard</span><span class="p">;</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$redis</span> <span class="o">=</span> <span class="n">Redis</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">;</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$lb</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">LeaderBoardMulti</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span>
+</span><span class='line'>    <span class="n">redis</span> <span class="o">=&gt;</span> <span class="nv">$redis</span><span class="p">,</span>
+</span><span class='line'>    <span class="n">key</span>   <span class="o">=&gt;</span> <span class="s">&#39;leader_board:1&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="n">order</span> <span class="o">=&gt;</span> <span class="p">[</span><span class="s">&#39;asc&#39;</span><span class="p">,</span> <span class="s">&#39;desc&#39;</span><span class="p">],</span> <span class="c1"># asc/desc, desc as default</span>
+</span><span class='line'><span class="p">);</span>
+</span><span class='line'><span class="c1"># Redis::LeaderBoardに合わせて複数指定できるようになりました</span>
+</span><span class='line'><span class="nv">$lb</span><span class="o">-&gt;</span><span class="n">set_score</span><span class="p">(</span>
+</span><span class='line'>    <span class="s">&#39;one&#39;</span> <span class="o">=&gt;</span> <span class="p">[</span><span class="mi">100</span><span class="p">,</span> <span class="nb">time</span><span class="p">],</span>
+</span><span class='line'>    <span class="s">&#39;two&#39;</span> <span class="o">=&gt;</span> <span class="p">[</span> <span class="mi">50</span><span class="p">,</span> <span class="nb">time</span><span class="p">],</span>
+</span><span class='line'><span class="p">);</span>
+</span><span class='line'><span class="k">my</span> <span class="p">(</span><span class="nv">$rank</span><span class="p">,</span> <span class="nv">$score</span><span class="p">,</span> <span class="nv">$time</span><span class="p">)</span> <span class="o">=</span> <span class="nv">$lb</span><span class="o">-&gt;</span><span class="n">get_rank_with_score</span><span class="p">(</span><span class="s">&#39;one&#39;</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Redis::LeaderBoard互換なのでそのまま入れ替えられるはずですが、以下のような実装上の制限があります。</p>
+
+<ul>
+<li>スコアはすべて64bit符号付き整数
+
+<ul>
+<li>Redis::LeaderBoardのスコアは倍精度浮動小数点型なので小数も扱えるが、Redis::LeaderBoardMultiは整数だけ</li>
+</ul>
+</li>
+<li>Redis 2.8.9以降のみで動きます</li>
+<li>同順の場合の出現順
+
+<ul>
+<li>Redis::LeaderBoard は ZRANK, ZREVRANK を使い分けているので、orderパラメータによって昇順/降順が変わります</li>
+<li>Redis::LaederBoardMulti は ZRANK しか使わないので、必ず昇順になります</li>
+</ul>
+</li>
+</ul>
+
+
+<p>一応 Lua Script を使わないオプションもそのまま残してありますが、特に理由がない限りデフォルト(Lua Script を使う)で使うといいと思います。
+どうしてもロックの範囲が広くなってしまう場合があり、楽観的ロックでは効率が悪いケースがあるためです。</p>
+
+<h2>Redis::Script</h2>
+
+<p>EVALSHAを簡単に使うためのモジュールです。
+EVALコマンドを使うとLua Scriptの実装ができますが、毎回毎回実行するスクリプト全体を送る必要があります。
+EVALSHAコマンドはその代わりにスクリプトのSHA1ハッシュを送ることで、帯域の節約ができるというコマンドです。
+しかしEVALSHAはSHA1ハッシュを事前に登録する必要があり、どのタイミングで登録を行うかが問題になってきます。</p>
+
+<p><a href="http://redis.io/commands/eval">EVALコマンドのドキュメント</a>によると、
+「EVALSHAで実行してみて <code>NOSCRIPT No matching script</code> で失敗したらEVALでやり直す」というのがおすすめらしいです。
+EVALコマンドはSHA1ハッシュの登録も行ってくれるので、初回 <code>NOSCRIPT</code> になっても次回からはEVALSHAが成功します。</p>
+
+<p>そんなに複雑なことではないのですが、毎回書くのも大変なのでモジュールとして切り出したのが Redis::Script です。
+以下のようにスクリプトオブジェクトを作っておいて、パラメータを渡して実行します。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">Redis</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="nn">Redis::</span><span class="n">Script</span><span class="p">;</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$script</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">Script</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span><span class="n">script</span> <span class="o">=&gt;</span> <span class="s">&quot;return {KEYS[1],KEYS[2],ARGV[1],ARGV[2]}&quot;</span><span class="p">);</span>
+</span><span class='line'><span class="k">my</span> <span class="p">(</span><span class="nv">$key1</span><span class="p">,</span> <span class="nv">$key2</span><span class="p">,</span> <span class="nv">$arg1</span><span class="p">,</span> <span class="nv">$arg2</span><span class="p">)</span> <span class="o">=</span> <span class="nv">$script</span><span class="o">-&gt;</span><span class="nb">eval</span><span class="p">(</span><span class="n">Redis</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">,</span> <span class="p">[</span><span class="s">&#39;key1&#39;</span><span class="p">,</span> <span class="s">&#39;key2&#39;</span><span class="p">],</span> <span class="p">[</span><span class="s">&#39;arg1&#39;</span><span class="p">,</span> <span class="s">&#39;arg2&#39;</span><span class="p">]);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>$script</code> が計算済みのSHA1ハッシュを保存しておいてくれるので、計算リソースの節約にもなるはずです。
+(ベンチとってみたところ、スクリプトのサイズが1kBから10kBくらいにならないと効果なさそうでしたが・・・)</p>
+
+<h2>Redis::Transaction</h2>
+
+<p>Redisのトランザクションを簡単に行うためのモジュールです。</p>
+
+<p>MULTI-EXECは単に実行するだけなら、MULTIとEXECで囲うだけでよいので簡単です。
+例えば、 <code>foo</code> と <code>bar</code> を同時にインクリメントしたい場合、以下のようにすると実現できます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">multi</span><span class="p">;</span>
+</span><span class='line'><span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">incr</span><span class="p">(</span><span class="s">&#39;foo&#39;</span><span class="p">);</span>
+</span><span class='line'><span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">incr</span><span class="p">(</span><span class="s">&#39;bar&#39;</span><span class="p">);</span>
+</span><span class='line'><span class="nv">$redis</span><span class="o">-&gt;</span><span class="nb">exec</span><span class="p">;</span> <span class="c1"># 他のクライアントからはfooとbarが全く同時にインクリメントされたように見える</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>ただ、このような素朴な実装だと、途中でネットワークが不調になった場合などに再接続処理が止まったままになる可能性があります。
+例えば以下のようにトランザクションの中で例外が発生すると、以後そのコネクションを使おうとしたときにエラーになります。
+コネクションの永続化をしている場合はしばらくエラーが出続けることになり問題です。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="nb">eval</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">multi</span><span class="p">;</span> <span class="c1"># トランザクション開始</span>
+</span><span class='line'>    <span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">incr</span><span class="p">(</span><span class="s">&#39;foo&#39;</span><span class="p">);</span>
+</span><span class='line'>    <span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">incr</span><span class="p">(</span><span class="s">&#39;bar&#39;</span><span class="p">);</span>
+</span><span class='line'>    <span class="nb">die</span> <span class="s">&quot;ネットワークトラブル！&quot;</span>
+</span><span class='line'>    <span class="nv">$redis</span><span class="o">-&gt;</span><span class="nb">exec</span><span class="p">;</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'><span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">ping</span><span class="p">;</span> <span class="c1"># 繋がらなくなる</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Redis::Transaction はこのような問題を防ぐためのモジュールです。
+トランザクションが失敗したときの後始末をよしなにやってくれるので、万が一エラーになっても安心です。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="n">multi_exec</span> <span class="n">Redis</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="k">sub </span><span class="p">{</span> <span class="c1"># 1は失敗したときのリトライ回数</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$redis</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
+</span><span class='line'>    <span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">incr</span><span class="p">(</span><span class="s">&#39;foo&#39;</span><span class="p">);</span>
+</span><span class='line'>    <span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">incr</span><span class="p">(</span><span class="s">&#39;bar&#39;</span><span class="p">);</span>
+</span><span class='line'>    <span class="nb">die</span> <span class="s">&quot;ネットワークトラブル！&quot;</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'><span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">ping</span><span class="p">;</span> <span class="c1"># 繋がる！</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>WATCH-MULTI-EXECを使った楽観的ロックも扱えます。
+Redisのトランザクションは楽観的ロックなので、
+処理中に他のクライアントが書き換えを行った場合に失敗する可能性があります。
+その場合でもリトライを行ってくれて便利です。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="c1"># $redis-&gt;incr(&#39;mykey&#39;) をトランザクションを使って実現する</span>
+</span><span class='line'><span class="n">watch_multi_exec</span> <span class="n">Redis</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">,</span> <span class="p">[</span><span class="s">&#39;mykey&#39;</span><span class="p">],</span> <span class="mi">10</span><span class="p">,</span> <span class="k">sub </span><span class="p">{</span>
+</span><span class='line'>    <span class="k">my</span> <span class="nv">$redis</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">return</span> <span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;mykey&#39;</span><span class="p">);</span>
+</span><span class='line'><span class="p">},</span> <span class="k">sub </span><span class="p">{</span>
+</span><span class='line'>    <span class="k">my</span> <span class="p">(</span><span class="nv">$redis</span><span class="p">,</span> <span class="nv">$value</span><span class="p">)</span> <span class="o">=</span> <span class="nv">@_</span><span class="p">;</span>
+</span><span class='line'>    <span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;mykey&#39;</span><span class="p">,</span> <span class="nv">$value</span> <span class="o">+</span> <span class="mi">1</span><span class="p">);</span>
+</span><span class='line'><span class="p">};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>まとめ</h2>
+
+<p>Redisのトランザクション・スクリプト・ランキングを扱うPerlモジュールを紹介しました。
+それぞれは小さなモジュールですが、
+トラブル発生時にも問題にならないようちゃんとした実装しようとすると、
+意外と考えることが多く面倒なものです(特にトランザクション周りとか)。
+適当に実装してしまったこころ当たりのある人は、ぜひ試してみてください。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[ngrokみたいなHTTPプロキシを書いてみた]]></title>
@@ -4027,116 +4229,6 @@ perlのコードにユーザ情報を埋め込んでループクエリを削除�
 
 
 <p><code>:ok_macopy:</code></p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Go言語でPerlのテストを早くする]]></title>
-    <link href="http://shogo82148.github.io/blog/2015/09/19/faster-perl-test-with-go-lang/"/>
-    <updated>2015-09-19T21:49:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2015/09/19/faster-perl-test-with-go-lang</id>
-    <content type="html"><![CDATA[<p><a href="http://shogo82148.github.io/blog/2015/06/20/test-mysqld-multi/">Test::mysqld::Multiというモジュールを書いてみた</a>みたいな涙ぐましい努力により5分で終わるようになったテストですが、
-プロジェクトのコードも増えて人も増えた影響で、
-テスト時間が約7分まで伸び、テストのキューに10個近く並んで順番待ちさせられるという状況になってしまいした。</p>
-
-<p>この状況を解決すべく <a href="https://github.com/shogo82148/go-prove">go-prove</a> というものを書いてみたので、そのご紹介です。</p>
-
-<h2>proveが遅い理由</h2>
-
-<p>proveがテストの結果を読むところがブロッキングI/Oになっているらしく、そのせいで遅くなっているらしいです。</p>
-
-<ul>
-<li><a href="https://github.com/Perl-Toolchain-Gang/Test-Harness/issues/30">Perl-Toolchain-Gang/Test-Harness#30</a></li>
-</ul>
-
-
-<p>実際に<a href="https://github.com/Perl-Toolchain-Gang/Test-Harness/blob/a278e504794c649c61f2c362841eec1a9735a3d0/lib/TAP/Parser/Iterator/Process.pm#L245">結果読んでいるところ</a>はこの辺ですかね。
-selectとか使っていてなるべくブロッキングしないような作りにはなっていそうですが、どこかでブロッキングしてしまっているようです。
-今のプロジェクトだと32コアのCPUで32並列で動かしてもCPUを100%使い切ることができませんでした。</p>
-
-<h2>Shunme</h2>
-
-<p>ググるとShunmeというプロジェクトでproveの問題を解決しようという試みが行われているようです。</p>
-
-<ul>
-<li><a href="http://code-stylistics.net/archives/shunme.html">Shunmeというperl用のテストハーネスモジュールを書き始めました</a></li>
-<li><a href="https://github.com/magnolia-k/p5-Shunme">magnolia-k/p5-Shunme</a></li>
-</ul>
-
-
-<p>しかし残念ながらproveのプラグイン機構はサポートしておらず、Formatterの指定オプションもないようです。
-今のプロジェクトではプラグインでMySQLを立てたり、JUnitでテスト結果をフォーマットしたりということをしているので、そのままは使えなさそう。
-ちょっと改造するにはソースコードの理解が大変そうなので断念。
-「(逆に遅くなるときも有ります)」というところも気になりますね・・・。</p>
-
-<h2>go-prove</h2>
-
-<p>いろいろテストの実行方法を調べてはみましたが、どの方法も並行処理に苦労している模様。
-テストファイル自体はただのPerlのスクリプトなので、実行して集計する部分は別にPerlにこだわる必要ないのでは？
-並行処理といえば今ならGolangでしょ！ってことでproveのGo実装を書いてみました。</p>
-
-<ul>
-<li><a href="https://github.com/shogo82148/go-prove">go-prove</a></li>
-</ul>
-
-
-<p>例えば以下のようなテストをかいて、</p>
-
-<figure class='code'><figcaption><span>t/macopy.t</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="nn">Test::</span><span class="n">More</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="n">ok</span> <span class="s">&quot;macopy&quot;</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="n">done_testing</span><span class="p">;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>go-proveコマンドと実行すると、JUnit形式でテスト結果が出力されます。</p>
-
-<figure class='code'><figcaption><span>t/macopy.t</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="nv">$</span> <span class="nv">go</span><span class="o">-</span><span class="n">prove</span>
-</span><span class='line'><span class="mi">2015</span><span class="sr">/09/</span><span class="mi">19</span> <span class="mi">21</span><span class="p">:</span><span class="mi">45</span><span class="p">:</span><span class="mi">44</span> <span class="n">start</span> <span class="n">t</span><span class="o">/</span><span class="n">macopy</span><span class="o">.</span><span class="n">t</span>
-</span><span class='line'><span class="mi">2015</span><span class="sr">/09/</span><span class="mi">19</span> <span class="mi">21</span><span class="p">:</span><span class="mi">45</span><span class="p">:</span><span class="mi">44</span> <span class="n">finish</span> <span class="n">t</span><span class="o">/</span><span class="n">macopy</span><span class="o">.</span><span class="n">t</span>
-</span><span class='line'><span class="sr">&lt;testsuites&gt;</span>
-</span><span class='line'>        <span class="o">&lt;</span><span class="n">testsuite</span> <span class="n">tests</span><span class="o">=</span><span class="s">&quot;1&quot;</span> <span class="n">failures</span><span class="o">=</span><span class="s">&quot;0&quot;</span> <span class="nb">time</span><span class="o">=</span><span class="s">&quot;0.225&quot;</span> <span class="n">name</span><span class="o">=</span><span class="s">&quot;t_macopy_t&quot;</span><span class="o">&gt;</span>
-</span><span class='line'>              <span class="sr">&lt;properties&gt;&lt;/properties&gt;</span>
-</span><span class='line'>              <span class="o">&lt;</span><span class="n">testcase</span> <span class="n">classname</span><span class="o">=</span><span class="s">&quot;t_macopy_t&quot;</span> <span class="n">name</span><span class="o">=</span><span class="s">&quot;&quot;</span> <span class="nb">time</span><span class="o">=</span><span class="s">&quot;0.225&quot;</span><span class="o">&gt;</span><span class="sr">&lt;/testcase&gt;</span>
-</span><span class='line'>      <span class="sr">&lt;/testsuite&gt;</span>
-</span><span class='line'><span class="sr">&lt;/testsuites&gt;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p><code>go-prove -j 32</code>とするとgoroutineを32個生成して、32並列でテストを実行してくれます。
-I/Oの処理をGolangのランタイムがよしなにやってくれるので、楽ちんです。</p>
-
-<p>また、今のプロジェクトではApp::Prove::Plugin::MySQLPoolを使っているので、それ相当の機能を<code>go-prove -plugin mysqld</code>で使えるようにしました。
-プラグインを有効にするとMySQLサーバを立ち上げて、その接続先情報を<code>GO_PROVE_MYSQLD</code>環境変数に設定してくれます。</p>
-
-<p>実際にプロジェクトのコードで試してみたところ7分かかっていたテストが4分を切るようになりました。
-CPUの使用率も100%近くになって、有効活用できているようです。</p>
-
-<h2>まとめ</h2>
-
-<ul>
-<li>Perl製のproveは並列実行に弱い</li>
-<li>Goで書きなおしてCPUをフル活用できるようになった</li>
-</ul>
-
-
-<p>早くはなるものの、既存のテストコードに手を加える必要があってちょっと怖いかなと思ったので、プロジェクトへの組み込みはやってません。
-まあ本番環境で走るものではないので、ある程度動くことが確認できたら置き換えてみたいですね。</p>
 ]]></content>
   </entry>
   
