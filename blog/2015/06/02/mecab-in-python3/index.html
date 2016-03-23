@@ -1,0 +1,494 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>MeCabをPython3から使う(中間報告) - Shogo's Blog</title>
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="description" content="先日このようなツイートを見かけて、
+「Python3になってGCの挙動変わったのかな？」と疑問に思ったので調査してみました。 MeCabをPythonから使う注意点とか - Shogo&#39;s Blog http://t.co/vJnOqZfUd7 @shogo82148さんから &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://shogo82148.github.io/blog/2015/06/02/mecab-in-python3/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  <link href="/atom.xml" rel="alternate" title="Shogo's Blog" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-4526627-4']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+  <script type="text/javascript" src="http://s.hatena.ne.jp/js/HatenaStar.js"></script>
+<script type="text/javascript">
+Hatena.Star.Token = '0da43945db72b59fd47eb24198fc7a0293c0191f';
+Hatena.Star.SiteConfig = {
+  entryNodes: {
+    'article': {
+      uri: 'h1 a',
+      title: 'h1',
+      container: 'h1'
+    },
+    'article.hentry': {
+      uri: 'window.location',
+      title: 'h1.entry-title',
+      container: 'h1.entry-title'
+    }
+  }
+};
+</script>
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Shogo's Blog</a></h1>
+  
+    <h2>たぶんプログラミングとかについて書いていくブログ</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:shogo82148.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/blog/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">MeCabをPython3から使う(中間報告)</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-06-02T23:12:00+09:00" pubdate data-updated="true">Jun 2<span>nd</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>先日このようなツイートを見かけて、
+「Python3になってGCの挙動変わったのかな？」と疑問に思ったので調査してみました。</p>
+
+<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">MeCabをPythonから使う注意点とか - Shogo&#39;s Blog <a href="http://t.co/vJnOqZfUd7">http://t.co/vJnOqZfUd7</a> <a href="https://twitter.com/shogo82148">@shogo82148</a>さんから python3だと変数に代入しなくても動くのだけど2.xでは留意しないといけない</p>&mdash; NOKUBI Takatsugu野首貴嗣 (@knok) <a href="https://twitter.com/knok/status/605197292086263808">June 1, 2015</a></blockquote>
+
+
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+
+
+
+<!-- More -->
+
+
+<h2>Python3へのMeCabインストール</h2>
+
+<p>手元のPython3.4.3にMeCab Bindingをインストールします。
+MeCabの公式(Google Codeサービス停止にともない<a href="https://taku910.github.io/mecab/">github pageへ移行している模様</a>)から落とせる
+Python BindingはPython2.x向けのため、setup.pyがそのままでは動きません。
+Python3.xでは非互換な文法の変更が入ったので以下のように書き換える必要があります。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class='diff'><span class='line'><span class="gh">diff --git a/setup.py.org b/setup.py</span>
+</span><span class='line'><span class="gh">index 4486cbb..657945a 100644</span>
+</span><span class='line'><span class="gd">--- a/setup.py.org</span>
+</span><span class='line'><span class="gi">+++ b/setup.py</span>
+</span><span class='line'><span class="gu">@@ -7,7 +7,7 @@ def cmd1(str):</span>
+</span><span class='line'>     return os.popen(str).readlines()[0][:-1]
+</span><span class='line'>
+</span><span class='line'> def cmd2(str):
+</span><span class='line'><span class="gd">-    return string.split (cmd1(str))</span>
+</span><span class='line'><span class="gi">+    return cmd1(str).split()</span>
+</span><span class='line'>
+</span><span class='line'> setup(name = &quot;mecab-python&quot;,
+</span><span class='line'>        version = cmd1(&quot;mecab-config --version&quot;),
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>あとは <code>python setup.py install</code> で入ります。</p>
+
+<h2>動かしてみる</h2>
+
+<p>以前書いた「<a href="http://shogo82148.github.io/blog/2012/12/15/mecab-python/">MeCabをPythonから使う注意点とか</a>」を見返しながら、
+GCされて上手く動かない例 をPython3.4.3で動かしてみます。
+文字列の扱いが変わったり、print文の扱いが変わったりしているので、その部分だけ書き換えが必要です。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="kn">import</span> <span class="nn">MeCab</span>
+</span><span class='line'><span class="n">tagger</span> <span class="o">=</span> <span class="n">MeCab</span><span class="o">.</span><span class="n">tagger</span><span class="p">(</span><span class="s">&#39;&#39;</span><span class="p">)</span>
+</span><span class='line'><span class="n">text</span> <span class="o">=</span> <span class="s">u&#39;MeCabで遊んでみよう！&#39;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">node</span> <span class="o">=</span> <span class="n">tagger</span><span class="o">.</span><span class="n">parseToNode</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+</span><span class='line'><span class="c"># Python2.x ではencode必須だったのが要らなくなった！</span>
+</span><span class='line'><span class="c"># node = tagger.parseToNode(text.encode(&#39;utf-8&#39;))</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">while</span> <span class="n">node</span><span class="p">:</span>
+</span><span class='line'>    <span class="k">print</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">surface</span> <span class="o">+</span> <span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span> <span class="o">+</span> <span class="n">node</span><span class="o">.</span><span class="n">feature</span><span class="p">)</span>
+</span><span class='line'>  <span class="c"># printは文ではなくなったのでカッコで囲う必要がある</span>
+</span><span class='line'>  <span class="n">node</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">next</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>さて、動かしてみましょう。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>BOS/EOS,*,*,*,*,*,*,*,*
+</span><span class='line'>名詞,一般,*,*,*,*,*
+</span><span class='line'>助詞,格助詞,一般,*,*,*,で,デ,デ
+</span><span class='line'>動詞,自立,*,*,五段・バ行,連用タ接続,遊ぶ,アソン,アソン
+</span><span class='line'>助詞,接続助詞,*,*,*,*,で,デ,デ
+</span><span class='line'>Traceback (most recent call last):
+</span><span class='line'>  File "m.py", line 10, in &lt;module&gt;
+</span><span class='line'>print( node.surface + '\t' + node.feature )
+</span><span class='line'>UnicodeDecodeError: 'utf-8' codec can't decode byte 0xa3 in position 1: invalid start byt</span></code></pre></td></tr></table></div></figure>
+
+
+<p>surfaceが全く読み取れていない・・・。
+最後にはutf-8のデコードができず死んでしまっています。
+全然変わってないじゃないか！</p>
+
+<p>変わってないどころか、状況はさらに悪くなっています。
+解決方法は以前の記事の通り「エンコード済みtext」を変数に保存・・・なのですが、
+Python3.x(+SWIG)ではエンコードが自動的に行われてしまうので <strong>ユーザが「エンコード済みtext」にアクセスすることができません！ </strong></p>
+
+<p><a href="http://samurait.hatenablog.com/entry/Mecab-python3">python3対応 Mecabの紹介</a>や
+<a href="https://github.com/taku910/mecab/pull/16">SWIG 3.0.5で作りなおしたPR</a>等を試してみましたが、
+同様の症状でした。</p>
+
+<h2>まとめ</h2>
+
+<ul>
+<li>Python3.xでもPython2.xと同様で、元テキストがGCで回収されてしまう</li>
+<li>Python3.xになって回避策が無くなった</li>
+</ul>
+
+
+<p>ぱっと思いつく回避策は以下のような感じでしょうか・・・。</p>
+
+<ul>
+<li>諦めて <code>parseToNode</code> を使わず、<code>parse</code>の結果を頑張って解析する</li>
+<li>SWIGの設定やC++側の書き方で頑張る(具体策は未調査)</li>
+</ul>
+
+
+<p>インターフェースを変えずに後者の方法で何とかならないか、
+引き続きいじってみようと思います。</p>
+
+<h2>追記(2015-12-20)</h2>
+
+<p><a href="http://shogo82148.github.io/blog/2015/12/20/mecab-in-python3-final/">続報</a>を書きました。</p>
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="https://github.com/taku910/mecab">taku910/MeCab</a></li>
+<li><a href="https://taku910.github.io/mecab/">MeCab</a></li>
+<li><a href="http://shogo82148.github.io/blog/2012/12/15/mecab-python/">MeCabをPythonから使う注意点とか</a></li>
+<li><a href="http://www.trifields.jp/how-to-use-mecab-in-ubuntu-14-04-and-python-3-1196">Ubuntu14.04とPython3でMeCabを使う方法</a></li>
+<li><a href="http://samurait.hatenablog.com/entry/Mecab-python3">python3対応 Mecabの紹介</a></li>
+</ul>
+
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-06-02T23:12:00+09:00" pubdate data-updated="true">Jun 2<span>nd</span>, 2015</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/mecab/'>mecab</a>, <a class='category' href='/blog/categories/python3/'>python3</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.io/blog/2015/06/02/mecab-in-python3/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.io/blog/2015/06/02/mecab-in-python3/" data-via="shogo82148" data-counturl="http://shogo82148.github.io/blog/2015/06/02/mecab-in-python3/" >Tweet</a>
+  
+  
+  <div class="g-plusone" data-size="medium"></div>
+  
+  
+    <div class="fb-like" data-send="true" data-width="450" data-show-faces="false"></div>
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2015/05/21/branch-committer/" title="Previous Post: 各ブランチの最後にコミットした人を知る">&laquo; 各ブランチの最後にコミットした人を知る</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2015/06/20/test-mysqld-multi/" title="Next Post: Test::mysqld::Multiというモジュールを書いてみた">Test::mysqld::Multiというモジュールを書いてみた &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2016/03/23/go-weaktyping/">数値と文字列がごちゃ混ぜになっているJSONをよしなにParseするやつ作った</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/03/18/releaes-redis-modules/">Redisのトランザクション・スクリプト・ランキングを扱うPerlモジュールを公開しました</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/03/14/http2-over-websocket/">ngrokみたいなHTTPプロキシを書いてみた</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/03/10/go-nginx-oauth2-adapter/">nginx-omniauth-adapterのGolangポート作った</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/03/08/join-fuller/">転職して一週間がたちました</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>GitHub Repos</h1>
+  <ul id="gh_repos">
+    <li class="loading">Status updating...</li>
+  </ul>
+  
+  <a href="https://github.com/shogo82148">@shogo82148</a> on GitHub
+  
+  <script type="text/javascript">
+    $.domReady(function(){
+        if (!window.jXHR){
+            var jxhr = document.createElement('script');
+            jxhr.type = 'text/javascript';
+            jxhr.src = '/javascripts/libs/jXHR.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(jxhr, s);
+        }
+
+        github.showRepos({
+            user: 'shogo82148',
+            count: 0,
+            skip_forks: true,
+            target: '#gh_repos'
+        });
+    });
+  </script>
+  <script src="/javascripts/github.js" type="text/javascript"> </script>
+</section>
+
+
+<section>
+  <h1>Latest Tweets</h1>
+  <ul id="tweets">
+    <li class="loading">Status updating...</li>
+  </ul>
+  <script type="text/javascript">
+    $.domReady(function(){
+      getTwitterFeed("shogo82148", 4, false);
+    });
+  </script>
+  <script src="/javascripts/twitter.js" type="text/javascript"> </script>
+  
+    <a href="http://twitter.com/shogo82148" class="twitter-follow-button" data-show-count="false">Follow @shogo82148</a>
+  
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2016 - Shogo Ichinose -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'shogosblog';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://shogo82148.github.io/blog/2015/06/02/mecab-in-python3/';
+        var disqus_url = 'http://shogo82148.github.io/blog/2015/06/02/mecab-in-python3/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) {return;}
+  js = d.createElement(s); js.id = id;
+  js.src = "//connect.facebook.net/en_US/all.js#appId=212934732101925&xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var script = document.createElement('script'); script.type = 'text/javascript'; script.async = true;
+      script.src = 'https://apis.google.com/js/plusone.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(script, s);
+    })();
+  </script>
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

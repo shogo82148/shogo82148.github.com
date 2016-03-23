@@ -1,0 +1,675 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Perl の DateTime 利用上の注意点 - Shogo's Blog</title>
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="description" content="この投稿は Perl 5 Advent Calendar 2015 の 9日目の記事です。 Perl の Time::Piece 利用上の注意点
+という記事の最後にDateTimeへの言及があったのですが、
+DateTimeはDateTimeでいろいろとハマりどころがあるんですよね・・・。 &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://shogo82148.github.io/blog/2015/12/09/perl-datetime/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  <link href="/atom.xml" rel="alternate" title="Shogo's Blog" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-4526627-4']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+  <script type="text/javascript" src="http://s.hatena.ne.jp/js/HatenaStar.js"></script>
+<script type="text/javascript">
+Hatena.Star.Token = '0da43945db72b59fd47eb24198fc7a0293c0191f';
+Hatena.Star.SiteConfig = {
+  entryNodes: {
+    'article': {
+      uri: 'h1 a',
+      title: 'h1',
+      container: 'h1'
+    },
+    'article.hentry': {
+      uri: 'window.location',
+      title: 'h1.entry-title',
+      container: 'h1.entry-title'
+    }
+  }
+};
+</script>
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Shogo's Blog</a></h1>
+  
+    <h2>たぶんプログラミングとかについて書いていくブログ</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:shogo82148.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/blog/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Perl の DateTime 利用上の注意点</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-12-09T00:00:00+09:00" pubdate data-updated="true">Dec 9<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>この投稿は <a href="http://qiita.com/advent-calendar/2015/perl5">Perl 5 Advent Calendar 2015</a> の 9日目の記事です。</p>
+
+<p><a href="http://developer.hatenastaff.com/entry/2015/12/02/050000">Perl の Time::Piece 利用上の注意点</a>
+という記事の最後に<a href="https://metacpan.org/release/DateTime">DateTime</a>への言及があったのですが、
+DateTimeはDateTimeでいろいろとハマりどころがあるんですよね・・・。
+僕も今年いくつか罠にハマりました。ちょうどアドベントカレンダーの季節ですし、この機会にハマりどころをまとめてみることにします。</p>
+
+<!-- More -->
+
+
+<h2>遅い</h2>
+
+<p>いろんなところで言われていることですが <strong>遅い</strong> です。
+試しに代表的な日付を扱うモジュールでベンチをとってみました。
+(比較のために時間をとるためのPerlの組み込み関数も入れてあります)</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="c1"># いろんな形式で今の時間を取得する</span>
+</span><span class='line'><span class="k">use</span> <span class="n">Benchmark</span> <span class="sx">qw/ cmpthese /</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="nn">Time::</span><span class="n">HiRes</span> <span class="p">();</span>
+</span><span class='line'><span class="k">use</span> <span class="nn">Time::</span><span class="n">Moment</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="nn">Time::</span><span class="n">Piece</span> <span class="p">();</span>
+</span><span class='line'><span class="k">use</span> <span class="n">DateTime</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">cmpthese</span> <span class="mi">0</span><span class="p">,</span> <span class="p">{</span>
+</span><span class='line'>    <span class="s">&#39;time&#39;</span>         <span class="o">=&gt;</span> <span class="k">sub </span><span class="p">{</span> <span class="nb">time</span> <span class="p">},</span>
+</span><span class='line'>  <span class="s">&#39;Time::HiRes&#39;</span>  <span class="o">=&gt;</span> <span class="k">sub </span><span class="p">{</span> <span class="nn">Time::HiRes::</span><span class="n">time</span> <span class="p">},</span>
+</span><span class='line'>    <span class="s">&#39;localtime&#39;</span>    <span class="o">=&gt;</span> <span class="k">sub </span><span class="p">{</span> <span class="p">()</span> <span class="o">=</span> <span class="nb">localtime</span> <span class="p">},</span>
+</span><span class='line'>    <span class="s">&#39;Time::Moment&#39;</span> <span class="o">=&gt;</span> <span class="k">sub </span><span class="p">{</span> <span class="nn">Time::</span><span class="n">Moment</span><span class="o">-&gt;</span><span class="n">now</span> <span class="p">},</span>
+</span><span class='line'>    <span class="s">&#39;Time::Piece&#39;</span>  <span class="o">=&gt;</span> <span class="k">sub </span><span class="p">{</span> <span class="nn">Time::</span><span class="n">Piece</span><span class="o">-&gt;</span><span class="nb">localtime</span> <span class="p">},</span>
+</span><span class='line'>    <span class="s">&#39;DateTime&#39;</span>     <span class="o">=&gt;</span> <span class="k">sub </span><span class="p">{</span> <span class="n">DateTime</span><span class="o">-&gt;</span><span class="n">now</span><span class="p">(</span> <span class="n">time_zone</span><span class="o">=&gt;</span><span class="s">&#39;Asia/Tokyo&#39;</span> <span class="p">)</span> <span class="p">},</span>
+</span><span class='line'><span class="p">};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="n">Rate</span> <span class="n">DateTime</span> <span class="nn">Time::</span><span class="n">Piece</span> <span class="nn">Time::</span><span class="n">Moment</span> <span class="nb">localtime</span> <span class="nn">Time::</span><span class="n">HiRes</span>  <span class="nb">time</span>
+</span><span class='line'><span class="n">DateTime</span>         <span class="mi">5303</span><span class="o">/</span><span class="n">s</span>       <span class="o">--</span>        <span class="o">-</span><span class="mi">95</span><span class="nv">%</span>         <span class="err">-</span><span class="nv">98%</span>      <span class="err">-</span><span class="nv">99%</span>       <span class="err">-</span><span class="nv">100%</span> <span class="err">-</span><span class="nv">100%</span>
+</span><span class='line'><span class="nn">Time::</span><span class="nv">Piece</span>    <span class="mi">103765</span><span class="o">/</span><span class="n">s</span>    <span class="mi">1857</span><span class="nv">%</span>          <span class="err">--</span>         <span class="err">-</span><span class="nv">67%</span>      <span class="err">-</span><span class="nv">71%</span>        <span class="err">-</span><span class="nv">98%</span>  <span class="err">-</span><span class="nv">99%</span>
+</span><span class='line'><span class="nn">Time::</span><span class="nv">Moment</span>   <span class="mi">313599</span><span class="o">/</span><span class="n">s</span>    <span class="mi">5814</span><span class="nv">%</span>        <span class="nv">202%</span>           <span class="err">--</span>      <span class="err">-</span><span class="nv">11%</span>        <span class="err">-</span><span class="nv">93%</span>  <span class="err">-</span><span class="nv">98%</span>
+</span><span class='line'><span class="nv">localtime</span>      <span class="mi">354215</span><span class="o">/</span><span class="n">s</span>    <span class="mi">6580</span><span class="nv">%</span>        <span class="nv">241%</span>          <span class="nv">13%</span>        <span class="err">--</span>        <span class="err">-</span><span class="nv">92%</span>  <span class="err">-</span><span class="nv">98%</span>
+</span><span class='line'><span class="nn">Time::</span><span class="nv">HiRes</span>   <span class="mi">4706723</span><span class="o">/</span><span class="n">s</span>   <span class="mi">88658</span><span class="nv">%</span>       <span class="nv">4436%</span>        <span class="nv">1401%</span>     <span class="nv">1229%</span>          <span class="err">--</span>  <span class="err">-</span><span class="nv">72%</span>
+</span><span class='line'><span class="nv">time</span>         <span class="mi">16536995</span><span class="o">/</span><span class="n">s</span>  <span class="mi">311751</span><span class="nv">%</span>      <span class="nv">15837%</span>        <span class="nv">5173%</span>     <span class="nv">4569%</span>        <span class="nv">251%</span>    <span class="err">--</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>それにしてもTime::Moment速いですね。組み込みのlocaltimeと互角とは。</p>
+
+<h2>演算は破壊的</h2>
+
+<p>add, subtract等の演算を行うメソッドは破壊的です。
+例えば、一時間後の日時を求めたい場合に以下のように書くと、
+もとの日時が失われてしまいます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="c1"># 1時間後の日時を求める間違った例</span>
+</span><span class='line'><span class="k">use</span> <span class="n">feature</span> <span class="s">&#39;say&#39;</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">DateTime</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$dt</span> <span class="o">=</span> <span class="n">DateTime</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span><span class="n">year</span> <span class="o">=&gt;</span> <span class="mi">2015</span><span class="p">,</span> <span class="n">month</span> <span class="o">=&gt;</span> <span class="mi">12</span><span class="p">,</span> <span class="n">day</span> <span class="o">=&gt;</span> <span class="mi">9</span><span class="p">);</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$after_an_hour</span> <span class="o">=</span> <span class="nv">$dt</span><span class="o">-&gt;</span><span class="n">add</span><span class="p">(</span><span class="n">hours</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">say</span> <span class="nv">$dt</span><span class="p">;</span> <span class="c1"># 2015-12-09T01:00:00</span>
+</span><span class='line'><span class="n">say</span> <span class="nv">$after_an_hour</span><span class="p">;</span> <span class="c1"># 2015-12-09T01:00:00</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>以下のようにcloneしてから演算することで防ぐことができます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="c1"># 1時間後の日時を求める間違った例</span>
+</span><span class='line'><span class="k">use</span> <span class="n">feature</span> <span class="s">&#39;say&#39;</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">DateTime</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$dt</span> <span class="o">=</span> <span class="n">DateTime</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span><span class="n">year</span> <span class="o">=&gt;</span> <span class="mi">2015</span><span class="p">,</span> <span class="n">month</span> <span class="o">=&gt;</span> <span class="mi">12</span><span class="p">,</span> <span class="n">day</span> <span class="o">=&gt;</span> <span class="mi">9</span><span class="p">);</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$after_an_hour</span> <span class="o">=</span> <span class="nv">$dt</span><span class="o">-&gt;</span><span class="n">clone</span><span class="o">-&gt;</span><span class="n">add</span><span class="p">(</span><span class="n">hours</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">say</span> <span class="nv">$dt</span><span class="p">;</span> <span class="c1"># 2015-12-09T00:00:00</span>
+</span><span class='line'><span class="n">say</span> <span class="nv">$after_an_hour</span><span class="p">;</span> <span class="c1"># 2015-12-09T01:00:00</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>うるう秒の存在</h2>
+
+<p>さて問題です。
+「日本時間2015年7月1日午前9時の1秒前は何時何分何秒でしょう？」</p>
+
+<p>簡単そうな問題ですが、一応DateTimeに計算してもらって確かめてもらいましょう。</p>
+
+<figure class='code'><figcaption><span>datetime.pl</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">feature</span> <span class="sx">qw(say)</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="n">DateTime</span><span class="p">;</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$dt</span> <span class="o">=</span> <span class="n">DateTime</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span> <span class="n">year</span> <span class="o">=&gt;</span> <span class="mi">2015</span><span class="p">,</span> <span class="n">month</span> <span class="o">=&gt;</span> <span class="mi">7</span><span class="p">,</span> <span class="n">day</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span> <span class="n">hour</span> <span class="o">=&gt;</span> <span class="mi">9</span><span class="p">,</span> <span class="n">time_zone</span> <span class="o">=&gt;</span> <span class="s">&#39;Asia/Tokyo&#39;</span> <span class="p">);</span>
+</span><span class='line'><span class="n">say</span> <span class="nv">$dt</span><span class="o">-&gt;</span><span class="n">subtract</span><span class="p">(</span><span class="n">seconds</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>これを現時点での最新バージョンであるDateTime-1.21を使って実行してみます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>perl datetime.pl
+</span><span class='line'>2015-07-01T08:59:60
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>はい、正解は <strong>「8時59分60秒」</strong> です。
+「60秒はおかしい。8時59分59秒では？？？」という声が聞こえてきそうですが、60秒が正解です。
+今年の7月1日は<a href="http://gigazine.net/news/20150701-leap-second-insert/">3年ぶりにうるう秒が挿入された日</a>でした。
+そのため <strong>通常は存在しない60秒がこの日だけ存在します。</strong>
+うるう秒についてはWikipediaの<a href="https://ja.wikipedia.org/wiki/%E9%96%8F%E7%A7%92">閏秒</a>の項目どうぞ。
+インフラを担当されているかたは対応に苦労したかたも多いのではないでしょうか。</p>
+
+<p>うるう秒は存在だけでも厄介ですが、さらに厄介なことに <strong>うるう秒調整のタイミングは実施される半年前になるまでわかりません</strong> 。
+次調整が入るとすれば2016年7月1日ですが、2015年の現時点では調整が入るのか入らないのか確かなことは言えません(今までの傾向からないとは思いますが)。
+事前に分からないものに対してDateTimeがどう対処しているかというと、<strong>うるう秒の調整が行われることがわかった時点でバージョンアップして対応</strong> しています。
+そのため、2015年7月1日のうるう秒の存在を知らないバージョン(具体的には1.17以前)で先ほどのコードを実行すると、
+最新版とは異なった結果が帰ってきます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>cpanm DateTime@1.17
+</span><span class='line'><span class="nv">$ </span>perl datetime.pl
+</span><span class='line'>2015-07-01T08:59:59
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>さて、うるう秒を正確に扱いたい場合は便利な機能ですが、
+DateTimeモジュール以外のプログラムがうるう秒を正しく扱えるとは限らないので無視したいケースも多いと思います。
+パッと思いつくのは以下のような対応でしょうか・・・。</p>
+
+<ul>
+<li>タイムゾーンに <code>floating</code> を指定する
+
+<ul>
+<li>「タイムゾーン情報を持っていない」ことを表す特殊なタイムゾーンです</li>
+<li>うるう秒の調整のようなタイムゾーン情報が必要な機能はすべて無効になります</li>
+<li>タイムゾーンを扱えるのがDateTimeの利点だったのに・・・</li>
+</ul>
+</li>
+<li>うるう秒に関する定義を削除した自前ビルドを用意する
+
+<ul>
+<li>DateTimeのレポジトリに<a href="https://github.com/autarch/DateTime.pm/blob/master/leaptab.txt">うるう秒の挿入タイミング一覧</a>が定義されているので、これを削除した自前ビルドを用意する方法</li>
+<li>なお、この一覧はビルド時にXSのコードの一部として組み込まれるようなので、ランタイムに何とかすることはできない模様</li>
+</ul>
+</li>
+<li>一度DateTimeをインストールしたら絶対にバージョンアップを行わない。インストールした日時よりも半年以上未来の日時だけ扱う
+
+<ul>
+<li>通常半年前にうるう秒の調整は決定されるので、DateTimeはリリース後半年以上未来のうるう秒は知りません</li>
+<li>そのため、半年以上未来の日時を扱う限りはうるう秒とは無縁でいられます</li>
+</ul>
+</li>
+</ul>
+
+
+<p>どれもBK臭溢れる対応なので、もっとスマートな対応方法をご存知のかたはご教授いただけると幸いです。</p>
+
+<h2>ある日からある日までの日数を知りたい</h2>
+
+<p>DateTimeは演算子オーバーロードされているため、通常の数値を同じように引き算が可能です。
+引き算を使ったほうが手軽にできるからと以下のように書いてしまうとハマります。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="c1"># 日数計算の間違った例</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$dt1</span> <span class="o">=</span> <span class="n">DateTime</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span> <span class="n">year</span> <span class="o">=&gt;</span> <span class="mi">2015</span><span class="p">,</span> <span class="n">month</span> <span class="o">=&gt;</span> <span class="mi">12</span><span class="p">,</span> <span class="n">day</span> <span class="o">=&gt;</span> <span class="mi">25</span><span class="p">,</span> <span class="n">time_zone</span> <span class="o">=&gt;</span> <span class="s">&#39;Asia/Tokyo&#39;</span> <span class="p">);</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$dt2</span> <span class="o">=</span> <span class="n">DateTime</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span> <span class="n">year</span> <span class="o">=&gt;</span> <span class="mi">2015</span><span class="p">,</span> <span class="n">month</span> <span class="o">=&gt;</span> <span class="mi">12</span><span class="p">,</span> <span class="n">day</span> <span class="o">=&gt;</span> <span class="mi">9</span><span class="p">,</span> <span class="n">time_zone</span> <span class="o">=&gt;</span> <span class="s">&#39;Asia/Tokyo&#39;</span> <span class="p">);</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$dur</span> <span class="o">=</span> <span class="nv">$dt1</span> <span class="o">-</span> <span class="nv">$dt2</span><span class="p">;</span>
+</span><span class='line'><span class="n">say</span> <span class="nv">$dur</span><span class="o">-&gt;</span><span class="n">in_units</span><span class="p">(</span><span class="s">&#39;days&#39;</span><span class="p">);</span> <span class="c1"># 16</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>一見動いているように見えますが、期間が一ヶ月を超えるような場合に間違った結果を返します。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="c1"># 日数計算の間違った例</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$dt1</span> <span class="o">=</span> <span class="n">DateTime</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span> <span class="n">year</span> <span class="o">=&gt;</span> <span class="mi">2015</span><span class="p">,</span> <span class="n">month</span> <span class="o">=&gt;</span> <span class="mi">12</span><span class="p">,</span> <span class="n">day</span> <span class="o">=&gt;</span> <span class="mi">25</span><span class="p">,</span> <span class="n">time_zone</span> <span class="o">=&gt;</span> <span class="s">&#39;Asia/Tokyo&#39;</span> <span class="p">);</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$dt2</span> <span class="o">=</span> <span class="n">DateTime</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span> <span class="n">year</span> <span class="o">=&gt;</span> <span class="mi">2015</span><span class="p">,</span> <span class="n">month</span> <span class="o">=&gt;</span> <span class="mi">11</span><span class="p">,</span> <span class="n">day</span> <span class="o">=&gt;</span> <span class="mi">9</span><span class="p">,</span> <span class="n">time_zone</span> <span class="o">=&gt;</span> <span class="s">&#39;Asia/Tokyo&#39;</span> <span class="p">);</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$dur</span> <span class="o">=</span> <span class="nv">$dt1</span> <span class="o">-</span> <span class="nv">$dt2</span><span class="p">;</span>
+</span><span class='line'><span class="n">say</span> <span class="nv">$dur</span><span class="o">-&gt;</span><span class="n">in_units</span><span class="p">(</span><span class="s">&#39;days&#39;</span><span class="p">);</span> <span class="c1"># 16</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>引き算で帰ってくるDateTime::Durationオブジェクトは「1ヶ月と16日」という情報を持っているのですが、
+「1ヶ月」の日数が月によってことなるため計算ができないのです。
+以下のように差分を求める時点で日数を計算するように伝えるのが正しいやり方です。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="c1"># 正しいやりかた</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$dt1</span> <span class="o">=</span> <span class="n">DateTime</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span> <span class="n">year</span> <span class="o">=&gt;</span> <span class="mi">2015</span><span class="p">,</span> <span class="n">month</span> <span class="o">=&gt;</span> <span class="mi">12</span><span class="p">,</span> <span class="n">day</span> <span class="o">=&gt;</span> <span class="mi">25</span><span class="p">,</span> <span class="n">time_zone</span> <span class="o">=&gt;</span> <span class="s">&#39;Asia/Tokyo&#39;</span> <span class="p">);</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$dt2</span> <span class="o">=</span> <span class="n">DateTime</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span> <span class="n">year</span> <span class="o">=&gt;</span> <span class="mi">2015</span><span class="p">,</span> <span class="n">month</span> <span class="o">=&gt;</span> <span class="mi">11</span><span class="p">,</span> <span class="n">day</span> <span class="o">=&gt;</span> <span class="mi">9</span><span class="p">,</span> <span class="n">time_zone</span> <span class="o">=&gt;</span> <span class="s">&#39;Asia/Tokyo&#39;</span> <span class="p">);</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$dur</span> <span class="o">=</span> <span class="nv">$dt1</span><span class="o">-&gt;</span><span class="n">delta_days</span><span class="p">(</span><span class="nv">$dt2</span><span class="p">);</span>
+</span><span class='line'><span class="n">say</span> <span class="nv">$dur</span><span class="o">-&gt;</span><span class="n">in_units</span><span class="p">(</span><span class="s">&#39;days&#39;</span><span class="p">);</span> <span class="c1"># 46</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>ある日時からある日時までの秒数を知りたい</h2>
+
+<p>日数がわかったところで、次は秒数を求めてみましょう。
+これも演算子オーバーロードを使うとハマります。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="c1"># 秒数計算の間違った例</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$dt1</span> <span class="o">=</span> <span class="n">DateTime</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span> <span class="n">year</span> <span class="o">=&gt;</span> <span class="mi">2015</span><span class="p">,</span> <span class="n">month</span> <span class="o">=&gt;</span> <span class="mi">12</span><span class="p">,</span> <span class="n">day</span> <span class="o">=&gt;</span> <span class="mi">10</span><span class="p">,</span> <span class="n">time_zone</span> <span class="o">=&gt;</span> <span class="s">&#39;Asia/Tokyo&#39;</span> <span class="p">);</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$dt2</span> <span class="o">=</span> <span class="n">DateTime</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span> <span class="n">year</span> <span class="o">=&gt;</span> <span class="mi">2015</span><span class="p">,</span> <span class="n">month</span> <span class="o">=&gt;</span> <span class="mi">12</span><span class="p">,</span> <span class="n">day</span> <span class="o">=&gt;</span>  <span class="mi">9</span><span class="p">,</span> <span class="n">time_zone</span> <span class="o">=&gt;</span> <span class="s">&#39;Asia/Tokyo&#39;</span> <span class="p">);</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$dur</span> <span class="o">=</span> <span class="nv">$dt1</span><span class="o">-</span><span class="nv">$dt2</span><span class="p">;</span>
+</span><span class='line'><span class="n">say</span> <span class="nv">$dur</span><span class="o">-&gt;</span><span class="n">in_units</span><span class="p">(</span><span class="s">&#39;seconds&#39;</span><span class="p">);</span> <span class="c1"># 0</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>$durには「1日」という情報が入っているはずなので、普通に考えるとこれから秒数は求められそうです。
+1分は60秒で、1時間は60分で、1日は24時間なので、「1日=60×60×24秒」ですよね。
+なぜ求められないのでしょう？</p>
+
+<p>・・・そう、<strong>うるう秒</strong> です。
+うるう秒が存在するため、1分は59秒の場合もあれば、61秒の場合もあります。
+日数を求めるときと同じように、差分を求める時点で秒数の計算を行うように伝えるとうまくいきます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="c1"># 正しいやりかた</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$dt1</span> <span class="o">=</span> <span class="n">DateTime</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span> <span class="n">year</span> <span class="o">=&gt;</span> <span class="mi">2015</span><span class="p">,</span> <span class="n">month</span> <span class="o">=&gt;</span> <span class="mi">12</span><span class="p">,</span> <span class="n">day</span> <span class="o">=&gt;</span> <span class="mi">10</span><span class="p">,</span> <span class="n">time_zone</span> <span class="o">=&gt;</span> <span class="s">&#39;Asia/Tokyo&#39;</span> <span class="p">);</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$dt2</span> <span class="o">=</span> <span class="n">DateTime</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span> <span class="n">year</span> <span class="o">=&gt;</span> <span class="mi">2015</span><span class="p">,</span> <span class="n">month</span> <span class="o">=&gt;</span> <span class="mi">12</span><span class="p">,</span> <span class="n">day</span> <span class="o">=&gt;</span>  <span class="mi">9</span><span class="p">,</span> <span class="n">time_zone</span> <span class="o">=&gt;</span> <span class="s">&#39;Asia/Tokyo&#39;</span> <span class="p">);</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$dur</span> <span class="o">=</span> <span class="nv">$dt1</span><span class="o">-&gt;</span><span class="n">subtract_datetime_absolute</span><span class="p">(</span><span class="nv">$dt2</span><span class="p">);</span>
+</span><span class='line'><span class="n">say</span> <span class="nv">$dur</span><span class="o">-&gt;</span><span class="n">in_units</span><span class="p">(</span><span class="s">&#39;seconds&#39;</span><span class="p">);</span> <span class="c1"># 86400</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>ちなみに今年はうるう秒の挿入があったので、 <strong>DateTimeの最新版で今年の秒数を計算すると 365×24×60×60秒よりも1秒だけ長くなります</strong> 。
+そして今年のうるう秒の挿入を知らない <strong>DateTime1.17では365×24×60×60秒</strong>が帰ってきます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">my</span> <span class="nv">$dt1</span> <span class="o">=</span> <span class="n">DateTime</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span> <span class="n">year</span> <span class="o">=&gt;</span> <span class="mi">2016</span><span class="p">,</span> <span class="n">month</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span> <span class="n">day</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span> <span class="n">time_zone</span> <span class="o">=&gt;</span> <span class="s">&#39;Asia/Tokyo&#39;</span> <span class="p">);</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$dt2</span> <span class="o">=</span> <span class="n">DateTime</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span> <span class="n">year</span> <span class="o">=&gt;</span> <span class="mi">2015</span><span class="p">,</span> <span class="n">month</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span> <span class="n">day</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span> <span class="n">time_zone</span> <span class="o">=&gt;</span> <span class="s">&#39;Asia/Tokyo&#39;</span> <span class="p">);</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$dur</span> <span class="o">=</span> <span class="nv">$dt1</span><span class="o">-&gt;</span><span class="n">subtract_datetime_absolute</span><span class="p">(</span><span class="nv">$dt2</span><span class="p">);</span>
+</span><span class='line'><span class="n">say</span> <span class="nv">$dur</span><span class="o">-&gt;</span><span class="n">in_units</span><span class="p">(</span><span class="s">&#39;seconds&#39;</span><span class="p">);</span> <span class="c1"># 31536001 or 31536000 (DateTimeのバージョンによって異なります)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>epoch</code>は1970年1月1日午前0時(UTC)からの経過秒数を返すメソッドですが、
+これは実際の経過時間ではなく形式的な経過秒数(つまりうるう秒を考慮しない)を返します。
+そのため、以下のように秒数を求めるとどのバージョンでも同じ結果が帰ってくるはずです。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">my</span> <span class="nv">$dt1</span> <span class="o">=</span> <span class="n">DateTime</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span> <span class="n">year</span> <span class="o">=&gt;</span> <span class="mi">2016</span><span class="p">,</span> <span class="n">month</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span> <span class="n">day</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span> <span class="n">time_zone</span> <span class="o">=&gt;</span> <span class="s">&#39;Asia/Tokyo&#39;</span> <span class="p">);</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$dt2</span> <span class="o">=</span> <span class="n">DateTime</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span> <span class="n">year</span> <span class="o">=&gt;</span> <span class="mi">2015</span><span class="p">,</span> <span class="n">month</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span> <span class="n">day</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span> <span class="n">time_zone</span> <span class="o">=&gt;</span> <span class="s">&#39;Asia/Tokyo&#39;</span> <span class="p">);</span>
+</span><span class='line'><span class="n">say</span> <span class="nv">$dt1</span><span class="o">-&gt;</span><span class="n">epoch</span><span class="p">()</span> <span class="o">-</span> <span class="nv">$dt2</span><span class="o">-&gt;</span><span class="n">epoch</span><span class="p">();</span> <span class="c1"># 31536000</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>もうDateTimeなんか使うのやめて<code>epoch</code>使おうぜ！！
+(もちろん実際の経過時間はうるう秒の+1があるのが正しいので、ケースバイケースですが)</p>
+
+<h2>まとめ</h2>
+
+<p>DateTimeは日時をしっかり扱ってくれる素晴らしいモジュールです。
+きっと <strong>あなたが思っている以上に日時を正確に厳密に扱ってくれます</strong> 。
+そこまで厳密にやるか・・・というところまでしっかり扱ってくれるので、
+日時計算に潜んだ様々な闇に触れることになるでしょう。
+使う側もそれらのことについてしっかりと理解しておく必要があります。</p>
+
+<p>まあ、具体的に言うと <strong>うるう秒</strong> とか <strong>うるう秒</strong> とかですね！
+廃止論とかありましたけど、<a href="http://internet.watch.impress.co.jp/docs/news/20151120_731707.html">とりあえず2023年までは調整がはいる</a>そうです・・・。</p>
+
+<p>他にもいろいろ罠がありそう・・・知っているかたがいれば教えて下さい。</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-12-09T00:00:00+09:00" pubdate data-updated="true">Dec 9<span>th</span>, 2015</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/perl/'>perl</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.io/blog/2015/12/09/perl-datetime/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.io/blog/2015/12/09/perl-datetime/" data-via="shogo82148" data-counturl="http://shogo82148.github.io/blog/2015/12/09/perl-datetime/" >Tweet</a>
+  
+  
+  <div class="g-plusone" data-size="medium"></div>
+  
+  
+    <div class="fb-like" data-send="true" data-width="450" data-show-faces="false"></div>
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2015/11/23/golang-graceful-restart-2nd/" title="Previous Post: Go言語でGraceful Restartをするときに取りこぼしを少なくする">&laquo; Go言語でGraceful Restartをするときに取りこぼしを少なくする</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2015/12/13/go-deploy-shrine/" title="Next Post: Goでデプロイ神社書いてみた">Goでデプロイ神社書いてみた &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2016/03/23/go-weaktyping/">数値と文字列がごちゃ混ぜになっているJSONをよしなにParseするやつ作った</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/03/18/releaes-redis-modules/">Redisのトランザクション・スクリプト・ランキングを扱うPerlモジュールを公開しました</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/03/14/http2-over-websocket/">ngrokみたいなHTTPプロキシを書いてみた</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/03/10/go-nginx-oauth2-adapter/">nginx-omniauth-adapterのGolangポート作った</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/03/08/join-fuller/">転職して一週間がたちました</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>GitHub Repos</h1>
+  <ul id="gh_repos">
+    <li class="loading">Status updating...</li>
+  </ul>
+  
+  <a href="https://github.com/shogo82148">@shogo82148</a> on GitHub
+  
+  <script type="text/javascript">
+    $.domReady(function(){
+        if (!window.jXHR){
+            var jxhr = document.createElement('script');
+            jxhr.type = 'text/javascript';
+            jxhr.src = '/javascripts/libs/jXHR.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(jxhr, s);
+        }
+
+        github.showRepos({
+            user: 'shogo82148',
+            count: 0,
+            skip_forks: true,
+            target: '#gh_repos'
+        });
+    });
+  </script>
+  <script src="/javascripts/github.js" type="text/javascript"> </script>
+</section>
+
+
+<section>
+  <h1>Latest Tweets</h1>
+  <ul id="tweets">
+    <li class="loading">Status updating...</li>
+  </ul>
+  <script type="text/javascript">
+    $.domReady(function(){
+      getTwitterFeed("shogo82148", 4, false);
+    });
+  </script>
+  <script src="/javascripts/twitter.js" type="text/javascript"> </script>
+  
+    <a href="http://twitter.com/shogo82148" class="twitter-follow-button" data-show-count="false">Follow @shogo82148</a>
+  
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2016 - Shogo Ichinose -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'shogosblog';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://shogo82148.github.io/blog/2015/12/09/perl-datetime/';
+        var disqus_url = 'http://shogo82148.github.io/blog/2015/12/09/perl-datetime/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) {return;}
+  js = d.createElement(s); js.id = id;
+  js.src = "//connect.facebook.net/en_US/all.js#appId=212934732101925&xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var script = document.createElement('script'); script.type = 'text/javascript'; script.async = true;
+      script.src = 'https://apis.google.com/js/plusone.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(script, s);
+    })();
+  </script>
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

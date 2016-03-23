@@ -1,0 +1,466 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>数値と文字列がごちゃ混ぜになっているJSONをよしなにParseするやつ作った - Shogo's Blog</title>
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="description" content="Goは数値と文字列を厳格に区別しますが、他の言語もそうとは限りません。
+例えばPerlは数値と文字列を自動変換してくれるので、気をつけていないといつの間にか数値が文字列になっていたりします。
+その言語の中に閉じていいれば問題ないのですが、Goとやり取りしようとすると困ります。 &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://shogo82148.github.io/blog/2016/03/23/go-weaktyping/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  <link href="/atom.xml" rel="alternate" title="Shogo's Blog" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-4526627-4']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+  <script type="text/javascript" src="http://s.hatena.ne.jp/js/HatenaStar.js"></script>
+<script type="text/javascript">
+Hatena.Star.Token = '0da43945db72b59fd47eb24198fc7a0293c0191f';
+Hatena.Star.SiteConfig = {
+  entryNodes: {
+    'article': {
+      uri: 'h1 a',
+      title: 'h1',
+      container: 'h1'
+    },
+    'article.hentry': {
+      uri: 'window.location',
+      title: 'h1.entry-title',
+      container: 'h1.entry-title'
+    }
+  }
+};
+</script>
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Shogo's Blog</a></h1>
+  
+    <h2>たぶんプログラミングとかについて書いていくブログ</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:shogo82148.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/blog/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">数値と文字列がごちゃ混ぜになっているJSONをよしなにParseするやつ作った</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2016-03-23T20:44:00+09:00" pubdate data-updated="true">Mar 23<span>rd</span>, 2016</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>Goは数値と文字列を厳格に区別しますが、他の言語もそうとは限りません。
+例えばPerlは数値と文字列を自動変換してくれるので、気をつけていないといつの間にか数値が文字列になっていたりします。
+その言語の中に閉じていいれば問題ないのですが、Goとやり取りしようとすると困ります。
+そんなときに使えるライブラリを書いてみました。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/go-weaktyping">shogo82148/go-weaktyping</a></li>
+</ul>
+
+
+<!-- More -->
+
+
+<h2>背景</h2>
+
+<p><code>map[string][]*string</code>を返してくるライブラリがあって、
+そのままだと扱いにくいのでなんとか構造体にできないかと頭を悩ませていました。
+JSONに一旦変換すれば楽かなーとも思ったのですが、一部フィールドを数値に変換する必要がありました。
+JSONの数値と文字列を区別するため、JSONの文字列をGoの数値型に変換するのは厄介です。
+タグに<code>\</code>json:&#8221;,string&#8221;&#8220;と指定すると変換可能になりますが、逆にJSONの数値を受け付けなくなりますし、
+JSONに変換すると文字列になってしまいます。
+変換先の構造体は普通のJSONの操作にも使いたかったので、これでは困ります。
+「数値も文字列もUnmarshalできて、Marshalするときには数値になる」ようなJSONライブラリが必要でした。</p>
+
+<p><code>"encoding/json"</code>に代わる新しいJSONライブラリを・・・とも考えたのですが、
+よく考えるとUnmarshal時の挙動は<code>"encoding/json".Unmarshaler</code>インターフェースを実装することでカスタマイズ可能です。
+こうして作ったのが go-weaktyping です。</p>
+
+<h2>使い方</h2>
+
+<p>builtinの型の先頭を大文字にしたものを用意しているので、
+適当にUnmarshalして欲しいところでbuiltinの型の代わりに指定するだけです。
+以下は整数型をUnmarshalする例です。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;encoding/json&quot;</span>
+</span><span class='line'>  <span class="s">&quot;fmt&quot;</span>
+</span><span class='line'>  <span class="s">&quot;log&quot;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="s">&quot;github.com/shogo82148/go-weaktyping&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">ptr</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="kd">struct</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">Foo</span> <span class="nx">weaktyping</span><span class="p">.</span><span class="nx">Int</span> <span class="s">`json:&quot;foo&quot;`</span>
+</span><span class='line'>  <span class="p">}{}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nx">Unmarshal</span><span class="p">([]</span><span class="nb">byte</span><span class="p">(</span><span class="s">`{&quot;foo&quot;:123}`</span><span class="p">),</span> <span class="nx">ptr</span><span class="p">);</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">log</span><span class="p">.</span><span class="nx">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;Foo:&quot;</span><span class="p">,</span> <span class="nx">ptr</span><span class="p">.</span><span class="nx">Foo</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nx">Unmarshal</span><span class="p">([]</span><span class="nb">byte</span><span class="p">(</span><span class="s">`{&quot;foo&quot;:&quot;456&quot;}`</span><span class="p">),</span> <span class="nx">ptr</span><span class="p">);</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">log</span><span class="p">.</span><span class="nx">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;Foo:&quot;</span><span class="p">,</span> <span class="nx">ptr</span><span class="p">.</span><span class="nx">Foo</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>{"foo":123}</code>が正常にUnmarshalできるのはもちろん、
+通常はエラーになってしまう<code>{"foo":"456"}</code>のUnmarshalも問題なく行えます。
+Marshal時は通常のint型と同様に振る舞います。</p>
+
+<p>数値型だけでなく<code>weaktyping.String</code>も用意されていて、
+通常はエラーになってしまう <code>{"foo":123}</code> も <code>struct { Foo weaktyping.String }{"123"}</code>にUnmarshal可能です。</p>
+
+<p>その他使える型は <a href="https://godoc.org/github.com/shogo82148/go-weaktyping">godoc</a> をどうぞ。</p>
+
+<h2>各種Boolたち</h2>
+
+<p>builtinの<code>bool</code>に対応する<code>weaktyping.Bool</code>も実装してみたのですが、
+何を持って真偽を判断するか難しい・・・。
+例えば空のARRAYは真とみなすべきか、偽とみなすべきか。
+普段触っている言語によって意見が分かれるのではないでしょうか。
+(そもそも型が違うからエラーという人もいるだろうけど、そういうときは普通に<code>bool</code>を使いましょう)</p>
+
+<p>JSONはもともとJavaScriptから派生した形式なので、JavaScriptに合わせるのが妥当かなと思い、
+<code>weaktyping.Bool</code>の挙動はJavaScriptに合わせてあります。
+「<a href="http://blog.mirakui.com/entry/20090604/truefalse">各言語におけるtrue/falseまとめ</a>」を参考に言語別のBoolも用意しています。</p>
+
+<ul>
+<li><code>Bool</code>/<code>JavaScriptBool</code>: <code>false</code>, <code>0</code>, <code>0.0</code>, <code>""</code>, <code>null</code> は偽、それ以外は真</li>
+<li><code>RubyBool</code>: <code>false</code>, <code>null</code> は偽、それ以外は真</li>
+<li><code>PHPBool</code>: <code>false</code>, <code>0</code>, <code>0.0</code>, <code>""</code>, <code>null</code>, <code>"0"</code>, <code>[]</code> は偽、それ以外は真</li>
+<li><code>PerlBool</code>: <code>false</code>, <code>0</code>, <code>0.0</code>, <code>""</code>, <code>null</code>, <code>"0"</code> は偽、それ以外は真</li>
+<li><code>PythonBool</code>: <code>false</code>, <code>0</code>, <code>0.0</code>, <code>""</code>, <code>null</code>, <code>[]</code>, <code>{}</code> は偽、それ以外は真</li>
+</ul>
+
+
+<p>ややこしい・・・なるべく使わない方がいいと思います。</p>
+
+<h2>最後に</h2>
+
+<p>これを作るきっかけになった問題ですが、reflectで解決しました。reflect最強。
+go-weaktypingを使うとすべてのUnmarshal時に有効になってしまって怖いなと考えたためです。</p>
+
+<p>今後もなるべく go-weaktyping を使わずに済むよう祈ってます。</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2016-03-23T20:44:00+09:00" pubdate data-updated="true">Mar 23<span>rd</span>, 2016</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/go/'>go</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://b.hatena.ne.jp/entry/http://shogo82148.github.io/blog/2016/03/23/go-weaktyping/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="http://b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="http://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://shogo82148.github.io/blog/2016/03/23/go-weaktyping/" data-via="shogo82148" data-counturl="http://shogo82148.github.io/blog/2016/03/23/go-weaktyping/" >Tweet</a>
+  
+  
+  <div class="g-plusone" data-size="medium"></div>
+  
+  
+    <div class="fb-like" data-send="true" data-width="450" data-show-faces="false"></div>
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2016/03/18/releaes-redis-modules/" title="Previous Post: Redisのトランザクション・スクリプト・ランキングを扱うPerlモジュールを公開しました">&laquo; Redisのトランザクション・スクリプト・ランキングを扱うPerlモジュールを公開しました</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2016/03/23/go-weaktyping/">数値と文字列がごちゃ混ぜになっているJSONをよしなにParseするやつ作った</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/03/18/releaes-redis-modules/">Redisのトランザクション・スクリプト・ランキングを扱うPerlモジュールを公開しました</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/03/14/http2-over-websocket/">ngrokみたいなHTTPプロキシを書いてみた</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/03/10/go-nginx-oauth2-adapter/">nginx-omniauth-adapterのGolangポート作った</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/03/08/join-fuller/">転職して一週間がたちました</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>GitHub Repos</h1>
+  <ul id="gh_repos">
+    <li class="loading">Status updating...</li>
+  </ul>
+  
+  <a href="https://github.com/shogo82148">@shogo82148</a> on GitHub
+  
+  <script type="text/javascript">
+    $.domReady(function(){
+        if (!window.jXHR){
+            var jxhr = document.createElement('script');
+            jxhr.type = 'text/javascript';
+            jxhr.src = '/javascripts/libs/jXHR.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(jxhr, s);
+        }
+
+        github.showRepos({
+            user: 'shogo82148',
+            count: 0,
+            skip_forks: true,
+            target: '#gh_repos'
+        });
+    });
+  </script>
+  <script src="/javascripts/github.js" type="text/javascript"> </script>
+</section>
+
+
+<section>
+  <h1>Latest Tweets</h1>
+  <ul id="tweets">
+    <li class="loading">Status updating...</li>
+  </ul>
+  <script type="text/javascript">
+    $.domReady(function(){
+      getTwitterFeed("shogo82148", 4, false);
+    });
+  </script>
+  <script src="/javascripts/twitter.js" type="text/javascript"> </script>
+  
+    <a href="http://twitter.com/shogo82148" class="twitter-follow-button" data-show-count="false">Follow @shogo82148</a>
+  
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2016 - Shogo Ichinose -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'shogosblog';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://shogo82148.github.io/blog/2016/03/23/go-weaktyping/';
+        var disqus_url = 'http://shogo82148.github.io/blog/2016/03/23/go-weaktyping/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) {return;}
+  js = d.createElement(s); js.id = id;
+  js.src = "//connect.facebook.net/en_US/all.js#appId=212934732101925&xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var script = document.createElement('script'); script.type = 'text/javascript'; script.async = true;
+      script.src = 'https://apis.google.com/js/plusone.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(script, s);
+    })();
+  </script>
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

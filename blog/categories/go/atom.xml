@@ -4,7 +4,7 @@
   <title><![CDATA[Category: go | Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/blog/categories/go/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2015-05-13T08:39:46+09:00</updated>
+  <updated>2016-03-23T22:43:44+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -14,475 +14,681 @@
 
   
   <entry>
-    <title type="html"><![CDATA[map[string]Hoge or map[string]*Hoge ?]]></title>
-    <link href="http://shogo82148.github.io/blog/2015/02/22/should-i-use-a-pointer-in-go/"/>
-    <updated>2015-02-22T02:14:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2015/02/22/should-i-use-a-pointer-in-go</id>
-    <content type="html"><![CDATA[<p>Go言語でポインタを使うべきか使わないべきか問題。
-「ケース・バイ・ケースなので、状況に応じて使い分けましょう！」という結論が出るのは目に見えているので、
-具体例について検証してみた結果を書いておきます。</p>
+    <title type="html"><![CDATA[数値と文字列がごちゃ混ぜになっているJSONをよしなにParseするやつ作った]]></title>
+    <link href="http://shogo82148.github.io/blog/2016/03/23/go-weaktyping/"/>
+    <updated>2016-03-23T20:44:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2016/03/23/go-weaktyping</id>
+    <content type="html"><![CDATA[<p>Goは数値と文字列を厳格に区別しますが、他の言語もそうとは限りません。
+例えばPerlは数値と文字列を自動変換してくれるので、気をつけていないといつの間にか数値が文字列になっていたりします。
+その言語の中に閉じていいれば問題ないのですが、Goとやり取りしようとすると困ります。
+そんなときに使えるライブラリを書いてみました。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/go-weaktyping">shogo82148/go-weaktyping</a></li>
+</ul>
+
 
 <!-- More -->
 
 
 <h2>背景</h2>
 
-<p>他の人のコードレビューを見ていたら、
-レビュアーが「コピーをしないで済むのでstructの受け渡しにはポインタ使ったほうがいいと思います！」とコメントしていて、
-そうなのか？と思ったのですがあんまり自信がなかったので検証してみました。
-コメントがついていたのは以下のようなコード。</p>
+<p><code>map[string][]*string</code>を返してくるライブラリがあって、
+そのままだと扱いにくいのでなんとか構造体にできないかと頭を悩ませていました。
+JSONに一旦変換すれば楽かなーとも思ったのですが、一部フィールドを数値に変換する必要がありました。
+JSONの数値と文字列を区別するため、JSONの文字列をGoの数値型に変換するのは厄介です。
+タグに<code>\</code>json:",string"``と指定すると変換可能になりますが、逆にJSONの数値を受け付けなくなりますし、
+JSONに変換すると文字列になってしまいます。
+変換先の構造体は普通のJSONの操作にも使いたかったので、これでは困ります。
+「数値も文字列もUnmarshalできて、Marshalするときには数値になる」ようなJSONライブラリが必要でした。</p>
 
-<p>``` go
-package hoge</p>
-
-<p>import (</p>
-
-<pre><code>"strconv"
-</code></pre>
-
-<p>)</p>
-
-<p>type Hoge struct {</p>
-
-<pre><code>A int
-B int
-C int
-</code></pre>
-
-<p>}</p>
-
-<p>func NewHogeMapStruct() map[string]Hoge {</p>
-
-<pre><code>m := make(map[string]Hoge)
-for i := 0; i &lt; 10000; i++ {
-    m[strconv.Itoa(i)] = Hoge{i, i, i}
-}
-return m
-</code></pre>
-
-<p>}
-```</p>
-
-<p>ポイントは以下の点です。</p>
-
-<ul>
-<li>受け渡すstructはintが3つ程度の小さなもの</li>
-<li>mapに入れて返す</li>
-</ul>
-
-
-<h2>benchmarkを使って検証する</h2>
-
-<p>ポインタを使わない版と使う版を両方作ってベンチマークをとってみます。</p>
-
-<p>``` go
-package hoge</p>
-
-<p>import (</p>
-
-<pre><code>"strconv"
-</code></pre>
-
-<p>)</p>
-
-<p>type Hoge struct {</p>
-
-<pre><code>A int
-B int
-C int
-</code></pre>
-
-<p>}</p>
-
-<p>// ポインタ使わない版
-func NewHogeMapStruct() map[string]Hoge {</p>
-
-<pre><code>m := make(map[string]Hoge)
-for i := 0; i &lt; 10000; i++ {
-    m[strconv.Itoa(i)] = Hoge{i, i, i}
-}
-return m
-</code></pre>
-
-<p>}</p>
-
-<p>// ポインタ使う版
-func NewHogeMapPointer() map[string]*Hoge {</p>
-
-<pre><code>m := make(map[string]*Hoge)
-for i := 0; i &lt; 10000; i++ {
-    m[strconv.Itoa(i)] = &amp;Hoge{i, i, i}
-}
-return m
-</code></pre>
-
-<p>}
-```</p>
-
-<p>ベンチマークはこれらの関数をただ呼び出すだけのシンプルなもの。</p>
-
-<p>``` go
-package hoge</p>
-
-<p>import (</p>
-
-<pre><code>"strconv"
-"testing"
-</code></pre>
-
-<p>)</p>
-
-<p>func BenchmarkStruct(b *testing.B) {</p>
-
-<pre><code>for i := 0; i &lt; b.N; i++ {
-    NewHogeMapStruct()
-}
-</code></pre>
-
-<p>}</p>
-
-<p>func BenchmarkPointer(b *testing.B) {</p>
-
-<pre><code>for i := 0; i &lt; b.N; i++ {
-    NewHogeMapPointer()
-}
-</code></pre>
-
-<p>}
-```</p>
-
-<p><code>go test -benchmem -bench .</code> すると以下のような結果が得られました。</p>
-
-<p><code>plain
-PASS
-BenchmarkStruct      500       3238732 ns/op     1662087 B/op      10615 allocs/op
-BenchmarkPointer     500       3485712 ns/op     1372074 B/op      20593 allocs/op
-ok      github.com/shogo82148/pointer-test  4.067s
-</code></p>
-
-<p>ポインタを使わないほうが若干速いですね。
-メモリのアロケーション回数はポインタ使う版の半分です。</p>
-
-<p>ポインタ使わない版は速度・メモリアロケーション回数は減ったものの、
-必要なバイト数は増えています。
-おそらく、これから値が入る予定のメモリ領域を予め確保しており、
-その分のメモリを多めに食っているのでしょう。
-ポインタ使う版では構造体の中身を入れる分は必要になったときにnewするので、
-使用するメモリは最小限で済みます。</p>
-
-<h2>アセンブリを見てみてみる</h2>
-
-<p>go tool を使うとアセンブリが見れるらしい。
-<code>go tool 6g -S hoge.go</code> を実行してアセンブリも眺めてみます。</p>
-
-<p><code>plain
---- prog list "NewHogeMapStruct" ---
-0000 (hoge.go:13) TEXT    NewHogeMapStruct+0(SB),$72-8
-0001 (hoge.go:13) FUNCDATA $0,gcargs·0+0(SB)
-0002 (hoge.go:13) FUNCDATA $1,gclocals·0+0(SB)
-0003 (hoge.go:13) TYPE    ~anon0+0(FP){map[string]"".Hoge},$8
-0004 (hoge.go:13) TYPE    m+-8(SP){map[string]"".Hoge},$8
-0005 (hoge.go:13) TYPE    i+-16(SP){int},$8
-0006 (hoge.go:14) MOVQ    $type.map[string]"".Hoge+0(SB),(SP)
-0007 (hoge.go:14) MOVQ    $0,8(SP)
-0008 (hoge.go:14) PCDATA  $0,$24
-0009 (hoge.go:14) CALL    ,runtime.makemap+0(SB)
-0010 (hoge.go:14) PCDATA  $0,$-1
-0011 (hoge.go:14) MOVQ    16(SP),BX
-0012 (hoge.go:14) MOVQ    BX,m+-8(SP)
-0013 (hoge.go:15) MOVQ    $0,AX
-0014 (hoge.go:15) JMP     ,16
-0015 (hoge.go:15) INCQ    ,AX
-0016 (hoge.go:15) CMPQ    AX,$10000
-0017 (hoge.go:15) JGE     $0,40
-0018 (hoge.go:16) MOVQ    AX,i+-16(SP)
-0019 (hoge.go:16) MOVQ    AX,(SP)
-0020 (hoge.go:16) CALL    ,strconv.Itoa+0(SB)
-0021 (hoge.go:16) MOVQ    i+-16(SP),DX
-0022 (hoge.go:16) MOVQ    8(SP),SI
-0023 (hoge.go:16) MOVQ    16(SP),BP
-0024 (hoge.go:16) MOVQ    statictmp_0002+0(SB),BX
-0025 (hoge.go:16) MOVQ    statictmp_0002+8(SB),BX
-0026 (hoge.go:16) MOVQ    statictmp_0002+16(SB),BX
-0027 (hoge.go:16) MOVQ    $type.map[string]"".Hoge+0(SB),(SP)
-0028 (hoge.go:16) MOVQ    m+-8(SP),BX
-0029 (hoge.go:16) MOVQ    BX,8(SP)
-0030 (hoge.go:16) MOVQ    SI,16(SP)
-0031 (hoge.go:16) MOVQ    BP,24(SP)
-0032 (hoge.go:16) MOVQ    DX,32(SP)
-0033 (hoge.go:16) MOVQ    DX,40(SP)
-0034 (hoge.go:16) MOVQ    DX,48(SP)
-0035 (hoge.go:16) PCDATA  $0,$56
-0036 (hoge.go:16) CALL    ,runtime.mapassign1+0(SB)
-0037 (hoge.go:16) MOVQ    i+-16(SP),AX
-0038 (hoge.go:16) PCDATA  $0,$-1
-0039 (hoge.go:15) JMP     ,15
-0040 (hoge.go:18) MOVQ    m+-8(SP),BX
-0041 (hoge.go:18) MOVQ    BX,~anon0+0(FP)
-0042 (hoge.go:18) RET     ,
-</code></p>
-
-<p><code>plain
---- prog list "NewHogeMapPointer" ---
-0043 (hoge.go:21) TEXT    NewHogeMapPointer+0(SB),$72-8
-0044 (hoge.go:21) FUNCDATA $0,gcargs·1+0(SB)
-0045 (hoge.go:21) FUNCDATA $1,gclocals·1+0(SB)
-0046 (hoge.go:21) TYPE    ~anon0+0(FP){map[string]*"".Hoge},$8
-0047 (hoge.go:21) TYPE    m+-24(SP){map[string]*"".Hoge},$8
-0048 (hoge.go:21) TYPE    i+-32(SP){int},$8
-0049 (hoge.go:21) TYPE    autotmp_0003+-16(SP){string},$16
-0050 (hoge.go:22) MOVQ    $type.map[string]*"".Hoge+0(SB),(SP)
-0051 (hoge.go:22) MOVQ    $0,8(SP)
-0052 (hoge.go:22) PCDATA  $0,$24
-0053 (hoge.go:22) CALL    ,runtime.makemap+0(SB)
-0054 (hoge.go:22) PCDATA  $0,$-1
-0055 (hoge.go:22) MOVQ    16(SP),BX
-0056 (hoge.go:22) MOVQ    BX,m+-24(SP)
-0057 (hoge.go:23) MOVQ    $0,AX
-0058 (hoge.go:23) JMP     ,60
-0059 (hoge.go:23) INCQ    ,AX
-0060 (hoge.go:23) CMPQ    AX,$10000
-0061 (hoge.go:23) JGE     $0,94
-0062 (hoge.go:24) MOVQ    AX,i+-32(SP)
-0063 (hoge.go:24) MOVQ    AX,(SP)
-0064 (hoge.go:24) CALL    ,strconv.Itoa+0(SB)
-0065 (hoge.go:24) MOVQ    8(SP),BX
-0066 (hoge.go:24) MOVQ    BX,autotmp_0003+-16(SP)
-0067 (hoge.go:24) MOVQ    16(SP),BX
-0068 (hoge.go:24) MOVQ    BX,autotmp_0003+-8(SP)
-0069 (hoge.go:24) MOVQ    $type."".Hoge+0(SB),(SP)
-0070 (hoge.go:24) PCDATA  $0,$16
-0071 (hoge.go:24) CALL    ,runtime.new+0(SB)
-0072 (hoge.go:24) MOVQ    i+-32(SP),CX
-0073 (hoge.go:24) PCDATA  $0,$-1
-0074 (hoge.go:24) MOVQ    8(SP),AX
-0075 (hoge.go:24) NOP     ,
-0076 (hoge.go:24) MOVQ    CX,(AX)
-0077 (hoge.go:24) NOP     ,
-0078 (hoge.go:24) MOVQ    CX,8(AX)
-0079 (hoge.go:24) NOP     ,
-0080 (hoge.go:24) MOVQ    CX,16(AX)
-0081 (hoge.go:24) MOVQ    $type.map[string]*"".Hoge+0(SB),(SP)
-0082 (hoge.go:24) MOVQ    m+-24(SP),BX
-0083 (hoge.go:24) MOVQ    BX,8(SP)
-0084 (hoge.go:24) MOVQ    autotmp_0003+-16(SP),BX
-0085 (hoge.go:24) MOVQ    BX,16(SP)
-0086 (hoge.go:24) MOVQ    autotmp_0003+-8(SP),BX
-0087 (hoge.go:24) MOVQ    BX,24(SP)
-0088 (hoge.go:24) MOVQ    AX,32(SP)
-0089 (hoge.go:24) PCDATA  $0,$40
-0090 (hoge.go:24) CALL    ,runtime.mapassign1+0(SB)
-0091 (hoge.go:24) MOVQ    i+-32(SP),AX
-0092 (hoge.go:24) PCDATA  $0,$-1
-0093 (hoge.go:23) JMP     ,59
-0094 (hoge.go:26) MOVQ    m+-24(SP),BX
-0095 (hoge.go:26) MOVQ    BX,~anon0+0(FP)
-0096 (hoge.go:26) RET     ,
-</code></p>
-
-<p>メモリアロケーションが起きているのはおそらく <code>runtime.new</code> と <code>strconv.Itoa</code> を呼び出している部分でしょう。
-ポインタ使う版では両方とも呼び出していますが、ポインタ使わない版では<code>strconv.Itoa</code>の呼び出しだけです。
-ポインタ使う版ではmapのkeyとvalueのメモリ領域をそれぞれ確保が必要なのに対して、
-ポインタ使わない版ではvalueのためのメモリ領域を<code>new(map[string]Hoge)</code>の時点で一括確保するので、
-メモリアロケーションが少なくて済むということですね。</p>
-
-<h2>結論</h2>
-
-<p>今回の場合構造体のサイズが小さいく、コピーのコスト&lt;アロケーションのコストであったため、
-速度的にはポインタを使わない方が有利でした。
-しかし、<code>map</code>は値の入っていない要素分を予め確保するので、
-メモリ使用量的にはポインタを使う方が有利でした。
-結局は速度とメモリ使用量のトレードオフということです。</p>
-
-<p>実際のコードでは、キーの個数は60個程度で呼び出される頻度もそんなに多くなく、
-速度もメモリも十分に足りるので、正直どっちでも良かった気がします。
-ポインタを使わないほうがタイプ数がちょっと減ってコード書くときに少し嬉しいくらいですかね。</p>
-
-<h2>結論の結論</h2>
-
-<p>ケース・バイ・ケースなので、状況に応じて使い分けましょう！</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Androidのバイナリファイルを解析するgoのライブラリ]]></title>
-    <link href="http://shogo82148.github.io/blog/2014/05/07/androidbinary/"/>
-    <updated>2014-05-07T13:29:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2014/05/07/androidbinary</id>
-    <content type="html"><![CDATA[<p>Androidのアプリの実態はzipファイルなのでunzipすれば簡単に中身を見ることができるわけですが、
-開いてもバイナリファイルが入っているだけでよくわかりません。
-AndroidSDKに付属しているaaptというツールを使えば読めるんだけどインストールが大変で苦しんでいる人がいたので、
-お手軽に解析できるgolangのライブラリを書いてみました。</p>
-
-<!-- More -->
-
+<p><code>"encoding/json"</code>に代わる新しいJSONライブラリを・・・とも考えたのですが、
+よく考えるとUnmarshal時の挙動は<code>"encoding/json".Unmarshaler</code>インターフェースを実装することでカスタマイズ可能です。
+こうして作ったのが go-weaktyping です。</p>
 
 <h2>使い方</h2>
 
-<h3>go getしてくる</h3>
-
-<p><a href="https://github.com/shogo82148/androidbinary">githubのレポジトリ</a> からダウンロードしてきます。</p>
-
-<p><code>bash
-go get github.com/shogo82148/androidbinary
-</code></p>
-
-<h3>AndroidManifest.xmlを解析する</h3>
-
-<p><code>io.ReaderAt</code>インターフェースを満たすオブジェクトを<code>androidbinary.NewXMLFile</code>に渡すと解析してくれます。</p>
-
-<p><code>go
-f, _ := os.Open("AndroidManifest.xml")
-xmlFile, _ := androidbinary.NewXMLFile(f)
-reader := xmlFile.Reader()
-// reader を読むと普通のXMLファイルとして読める
-</code></p>
-
-<h3>resources.arscを解析する</h3>
-
-<p>アプリ名などの設定はAndroidManifest.xmlには直接書かれておらず、
-リソースファイルに書いてあることがほとんどです(開発者がよほどものぐさでなければ)。
-リソースの情報はapk内のresources.arscに書かれているので、
-このファイルを読む機能もついてます。</p>
-
-<p>``` go
-f, _ := os.Open("resources.arsc")
-tableFile, _ := androidbinary.NewTableFile(f)</p>
-
-<p>// ID 0x7F040000 に対応するリソースを読む
-config := &amp;androidbinary.ResTableConfig{}
-val, _ := tableFile.GetResource(androidbinary.ResId(0x7f040000), config)
-```</p>
-
-<p>アプリ名はロケールによって変わったりするので、
-<code>config</code>で設定できます。
-例えば日本語の名前を取得したい場合はこんな感じ。</p>
-
-<p><code>go
-// ID 0x7F040000 に対応するリソース(日本語)を読む
-config := &amp;androidbinary.ResTableConfig{}
-config.Language[0] = 'j'
-config.Language[1] = 'a'
-val, _ := tableFile.GetResource(androidbinary.ResId(0x7f040000), config)
-</code></p>
-
-<h3>サンプルコード</h3>
-
-<p>apkを解析してアプリの日本語名を取得する例。</p>
+<p>builtinの型の先頭を大文字にしたものを用意しているので、
+適当にUnmarshalして欲しいところでbuiltinの型の代わりに指定するだけです。
+以下は整数型をUnmarshalする例です。</p>
 
 <p>``` go
 package main</p>
 
 <p>import (</p>
 
-<pre><code>"archive/zip"
-"bytes"
-"encoding/xml"
+<pre><code>"encoding/json"
 "fmt"
-"github.com/shogo82148/androidbinary"
-"io/ioutil"
-"strconv"
+"log"
+
+"github.com/shogo82148/go-weaktyping"
 </code></pre>
 
 <p>)</p>
 
-<p>type XMLManifest struct {</p>
-
-<pre><code>XMLName      xml.Name          `xml:"manifest"`
-Applications []*XMLApplication `xml:"application"`
-</code></pre>
-
-<p>}</p>
-
-<p>type XMLApplication struct {</p>
-
-<pre><code>XMLName xml.Name `xml:"application"`
-Label   string   `xml:"http://schemas.android.com/apk/res/android label,attr"`
-</code></pre>
-
-<p>}</p>
-
 <p>func main() {</p>
 
-<pre><code>r, _ := zip.OpenReader("sample.apk")
-defer r.Close()
+<pre><code>ptr := &amp;struct {
+    Foo weaktyping.Int `json:"foo"`
+}{}
 
-// read manifest and resource
-var xmlFile *androidbinary.XMLFile
-var tableFile *androidbinary.TableFile
-for _, f := range r.File {
-    switch f.Name {
-    case "AndroidManifest.xml":
-        rc, _ := f.Open()
-        buf, _ := ioutil.ReadAll(rc)
-        xmlFile, _ = androidbinary.NewXMLFile(bytes.NewReader(buf))
-        rc.Close()
-    case "resources.arsc":
-        rc, _ := f.Open()
-        buf, _ := ioutil.ReadAll(rc)
-        tableFile, _ = androidbinary.NewTableFile(bytes.NewReader(buf))
-        rc.Close()
-    }
+if err := json.Unmarshal([]byte(`{"foo":123}`), ptr); err != nil {
+    log.Fatal(err)
 }
+fmt.Println("Foo:", ptr.Foo)
 
-// parse xml
-decoder := xml.NewDecoder(xmlFile.Reader())
-xmlManifest := &amp;XMLManifest{}
-decoder.Decode(xmlManifest)
-
-// get application label
-labelId, _ := strconv.ParseInt(xmlManifest.Applications[0].Label[3:], 16, 32)
-config := &amp;androidbinary.ResTableConfig{}
-config.Language[0] = 'j'
-config.Language[1] = 'a'
-label, _ := tableFile.GetResource(androidbinary.ResId(labelId), config)
-fmt.Println("Application Name:", label)
+if err := json.Unmarshal([]byte(`{"foo":"456"}`), ptr); err != nil {
+    log.Fatal(err)
+}
+fmt.Println("Foo:", ptr.Foo)
 </code></pre>
 
 <p>}
 ```</p>
 
-<p>エラー処理とか完全に省いているので上手く補ってください。</p>
+<p><code>{"foo":123}</code>が正常にUnmarshalできるのはもちろん、
+通常はエラーになってしまう<code>{"foo":"456"}</code>のUnmarshalも問題なく行えます。
+Marshal時は通常のint型と同様に振る舞います。</p>
 
-<h2>制限事項</h2>
+<p>数値型だけでなく<code>weaktyping.String</code>も用意されていて、
+通常はエラーになってしまう <code>{"foo":123}</code> も <code>struct { Foo weaktyping.String }{"123"}</code>にUnmarshal可能です。</p>
 
-<p>GW中頑張ったけど途中で力尽きたので、今のところ以下のような制限があります。</p>
+<p>その他使える型は <a href="https://godoc.org/github.com/shogo82148/go-weaktyping">godoc</a> をどうぞ。</p>
 
-<ul>
-<li>リソース名を扱えない
+<h2>各種Boolたち</h2>
 
-<ul>
-<li>普通AndroidManifest.xmlにリソースを埋め込むときは<code>@string/app_name</code>みたいな名前を埋め込みますが、リソースファイルとの連携機能がないため<code>@0x7F04000000</code>のような数値を返します</li>
-<li>resources.arsc からリソース名を読み取ったり、リソース名からリソースを取得する機能はありません</li>
-</ul>
-</li>
-<li>configの設定が一部しか対応していない
+<p>builtinの<code>bool</code>に対応する<code>weaktyping.Bool</code>も実装してみたのですが、
+何を持って真偽を判断するか難しい・・・。
+例えば空のARRAYは真とみなすべきか、偽とみなすべきか。
+普段触っている言語によって意見が分かれるのではないでしょうか。
+(そもそも型が違うからエラーという人もいるだろうけど、そういうときは普通に<code>bool</code>を使いましょう)</p>
 
-<ul>
-<li>ロケール、画面サイズ、SDKバージョン等にしか対応してません</li>
-<li>IMEの設定や画面の細かいオプションとかも指定はできるけど、<code>GetResource</code>が解釈してくれないので誤った結果を返すかも</li>
-</ul>
-</li>
-<li>リソースタイプ
+<p>JSONはもともとJavaScriptから派生した形式なので、JavaScriptに合わせるのが妥当かなと思い、
+<code>weaktyping.Bool</code>の挙動はJavaScriptに合わせてあります。
+「<a href="http://blog.mirakui.com/entry/20090604/truefalse">各言語におけるtrue/falseまとめ</a>」を参考に言語別のBoolも用意しています。</p>
 
 <ul>
-<li>文字列、整数、ブーリアン値にしか対応してません</li>
-<li>string-array とかいうのとかあったりするけど、そんなの知らない</li>
+<li><code>Bool</code>/<code>JavaScriptBool</code>: <code>false</code>, <code>0</code>, <code>0.0</code>, <code>""</code>, <code>null</code> は偽、それ以外は真</li>
+<li><code>RubyBool</code>: <code>false</code>, <code>null</code> は偽、それ以外は真</li>
+<li><code>PHPBool</code>: <code>false</code>, <code>0</code>, <code>0.0</code>, <code>""</code>, <code>null</code>, <code>"0"</code>, <code>[]</code> は偽、それ以外は真</li>
+<li><code>PerlBool</code>: <code>false</code>, <code>0</code>, <code>0.0</code>, <code>""</code>, <code>null</code>, <code>"0"</code> は偽、それ以外は真</li>
+<li><code>PythonBool</code>: <code>false</code>, <code>0</code>, <code>0.0</code>, <code>""</code>, <code>null</code>, <code>[]</code>, <code>{}</code> は偽、それ以外は真</li>
 </ul>
-</li>
-</ul>
 
 
-<p>いろいろ制限はありますが、アプリ名を読み取ったり、パーミッションを解析するくらいはできるんじゃないですかね。
-golang初心者なのでイケてないところがあったら教えて下さい。</p>
+<p>ややこしい・・・なるべく使わない方がいいと思います。</p>
 
-<h2>参考</h2>
+<h2>最後に</h2>
+
+<p>これを作るきっかけになった問題ですが、reflectで解決しました。reflect最強。
+go-weaktypingを使うとすべてのUnmarshal時に有効になってしまって怖いなと考えたためです。</p>
+
+<p>今後もなるべく go-weaktyping を使わずに済むよう祈ってます。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[ngrokみたいなHTTPプロキシを書いてみた]]></title>
+    <link href="http://shogo82148.github.io/blog/2016/03/14/http2-over-websocket/"/>
+    <updated>2016-03-14T22:59:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2016/03/14/http2-over-websocket</id>
+    <content type="html"><![CDATA[<p>開発中のWebアプリをみんなに試してほしいけど、
+サーバなんてなくて開発環境がローカルにしか無くて公開できないということは、
+開発初期段階だとよくあることだと思います。
+もちろん本格的にやるならテスト用にサーバを建てるべきですが、
+小さなものなら<a href="https://ngrok.com/">ngrok</a>を使うと簡単です。
+<a href="https://ngrok.com/">ngrok</a>の公開サーバへのHTTPリクエストをローカルにリレーして、
+ローカルのサーバをお手がるに公開できるサービスです。</p>
+
+<p>びっくりするほど簡単に公開できて便利ですが、
+一応oAuthで制限とかかけたいなーとかカスタマイズしてみたくなってきたので、
+似たようなものを自作できないかといろいろ遊んでみました。</p>
+
+<p>その結果、HTTP2 over Websocketみたいな謎なものが出来上がってしまったというお話です。</p>
+
+<!-- More -->
+
+
+<h2>HTTP2 over Websocketというアイデア</h2>
+
+<p><a href="https://ngrok.com/">ngrok</a>っぽいものを実現するためには、
+サーバが受け取ったHTTPリクエストをローカルの環境に転送する必要があります。
+ご存知のとおり通常のHTTPではサーバ側からのプッシュ配信が難しいので、Websocketを使うのが良さそうです。
+しかし、複数のコネクションで並列にやってくるHTTPリクエストを、一本のWebsocketに束ねる必要があり、
+上手く制御するのは大変そうです。</p>
+
+<p>さて、HTTP2は一つのTCPコネクションで複数のリクエストを並行処理する仕様があります。
+「複数のリクエストを一本に束ねる」という点ではなんか似ているので、なんだか流用できそうな気がしてきました。
+Golangならきっと上手いこと<code>interface</code>を実装すれば、なんとかできるのではとやってみました。</p>
+
+<h2>実装</h2>
+
+<p>HTTP2は暗号化や複雑なフロー制御を行っていますが、
+外から見れば<code>net.Conn</code>インターフェースに読み書きしている何かに過ぎません。
+そして、<code>websocket.Conn</code>も<code>net.Conn</code>を実装しているので、そのままHTTP2のライブラリに渡せるはずです。</p>
+
+<p>そうしてできたのが以下のサーバです。</p>
+
+<p>``` go server.go
+package main</p>
+
+<p>import (</p>
+
+<pre><code>"errors"
+"log"
+"net/http"
+"net/http/httputil"
+"sync"
+
+"golang.org/x/net/http2"
+"golang.org/x/net/websocket"
+</code></pre>
+
+<p>)</p>
+
+<p>type transport struct {</p>
+
+<pre><code>m      sync.Mutex
+t      http.RoundTripper
+closed chan struct{}
+</code></pre>
+
+<p>}</p>
+
+<p>var t *transport</p>
+
+<p>func main() {</p>
+
+<pre><code>t = &amp;transport{}
+s := websocket.Server{Handler: websocket.Handler(Handler)}
+http.Handle("/", s)
+go http.ListenAndServe(":3000", nil)
+http.ListenAndServe(":3001", &amp;httputil.ReverseProxy{
+    Transport: t,
+    Director: func(req *http.Request) {
+    },
+})
+</code></pre>
+
+<p>}</p>
+
+<p>func Handler(ws *websocket.Conn) {</p>
+
+<pre><code>log.Println("start new connection")
+t2 := &amp;http2.Transport{}
+conn, err := t2.NewClientConn(ws)
+if err != nil {
+    log.Println(err)
+    return
+}
+
+t.m.Lock()
+if t.t != nil {
+    t.m.Unlock()
+    log.Println("already connected.")
+    return
+}
+t.t = conn
+t.m.Unlock()
+&lt;-t.closed
+log.Println("close connection")
+</code></pre>
+
+<p>}</p>
+
+<p>func (t <em>transport) RoundTrip(req </em>http.Request) (*http.Response, error) {</p>
+
+<pre><code>t.m.Lock()
+t2 := t.t
+t.m.Unlock()
+if t2 == nil {
+    return nil, errors.New("connection not found")
+}
+res, err := t2.RoundTrip(req)
+if err != nil {
+    log.Println(err)
+    t.m.Lock()
+    t.t = nil
+    t.m.Unlock()
+    t.closed &lt;- struct{}{}
+    return nil, err
+}
+return res, nil
+</code></pre>
+
+<p>}
+```</p>
+
+<p>複数Websocketのコネクションが張られた場合の処理が少し煩雑ですが、思いのほか短くかけました。
+3001番ポートに来たリクエストをWebsocket経由で転送します。
+Websocketは3000番ポートで待ち受けです。</p>
+
+<p>これにアクセスするためのクライアントがこちら。</p>
+
+<p>``` go client.go
+package main</p>
+
+<p>import (</p>
+
+<pre><code>"log"
+"net/http/httputil"
+"net/url"
+
+"golang.org/x/net/http2"
+"golang.org/x/net/websocket"
+</code></pre>
+
+<p>)</p>
+
+<p>func main() {</p>
+
+<pre><code>origin := "http://localhost:3000/"
+u := "ws://localhost:3000/"
+ws, err := websocket.Dial(u, "", origin)
+if err != nil {
+    log.Fatal(err)
+}
+
+target, _ := url.Parse("http://localhost:8000/")
+
+s := &amp;http2.Server{}
+s.ServeConn(ws, &amp;http2.ServeConnOpts{
+    Handler: httputil.NewSingleHostReverseProxy(target),
+})
+</code></pre>
+
+<p>}
+```</p>
+
+<p>Websocket経由でリクエストを受け付け、それを8000番ポートに転送します。
+こちらも非常に短くかけました。
+サーバーとクライアントを立ち上げて<code>http://localhost:3001/</code>にアクセスすると、
+<code>http://localhost:8000/</code>の内容が見れるはずです。</p>
+
+<h2>ngrok1.xについて</h2>
+
+<p>ところでngrokの旧バージョンはソースコードが公開されているから、こっちを使ったほうが早い？
+でも、開発中止って書かれてて不安になる。</p>
 
 <ul>
-<li><a href="http://dsas.blog.klab.org/archives/52011424.html">エンコードされた AndroidManifest.xml を読む</a></li>
-<li><a href="https://gist.github.com/cielavenir/4365521">ruby_apk Android::Resource can relate string pool (partially)</a></li>
+<li><a href="https://github.com/inconshreveable/ngrok">ngrok1.x</a></li>
 </ul>
 
+
+<h2>まとめ</h2>
+
+<p>ローカルのサーバをお手軽に公開するためのngrokというサービスを紹介しました。
+自作のためのアイデアとして、http2 over websocketを試してみました。</p>
+
+<p>設定の読み込みとかエラー処理とかセキュリティ周りとかいろいろ足りてない部分はありますが、
+たったあれだけのコードで、ヘッダの圧縮転送、リクエストの並行処理等のHTTP2の機能が使えるのは面白いですね。</p>
+
+<p>もうちょっと手を加えて多少は使えるものにしてみたいですね。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[nginx-omniauth-adapterのGolangポート作った]]></title>
+    <link href="http://shogo82148.github.io/blog/2016/03/10/go-nginx-oauth2-adapter/"/>
+    <updated>2016-03-10T12:51:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2016/03/10/go-nginx-oauth2-adapter</id>
+    <content type="html"><![CDATA[<p>「<a href="http://techlife.cookpad.com/entry/2015/10/16/080000">nginx で omniauth を利用してアクセス制御を行う</a>」という記事で、
+<a href="http://nginx.org/en/docs/http/ngx_http_auth_request_module.html">ngx_http_auth_request_module</a>の存在を知ったので、
+Golangで<a href="https://github.com/sorah/nginx_omniauth_adapter">nginx_omniauth_adapter</a>と似たようなものを作ってみました。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/go-nginx-oauth2-adapter">shogo82148/go-nginx-oauth2-adapter</a></li>
+</ul>
+
+
+<!-- More -->
+
+
+<h2>背景</h2>
+
+<p><a href="https://github.com/typester/gate">typester/gate</a>は単体でも動くようになっていますが、
+例えばIP制限などちょっと高度なことをしたい場合には結局nginxを前段に置く必要があります。
+nginxとgateの設定を同時にいじる必要があって煩雑だと感じていました。</p>
+
+<p>そんな中「<a href="http://techlife.cookpad.com/entry/2015/10/16/080000">nginx で omniauth を利用してアクセス制御を行う</a>」という記事で、
+<a href="http://nginx.org/en/docs/http/ngx_http_auth_request_module.html">ngx_http_auth_request_module</a>の存在を知りました。
+gateが認証＋Proxyをやってしまうのに対して、認証だけRubyのomniauthモジュールで行いProxyはnginxに任せるという方法です。</p>
+
+<p>以前から記事の存在は知っていたのですが、Rubyの実行環境をそろえるのが億劫で手を出せずにいました。
+小さなアプリなので自分の慣れた言語で実装しても大したことないのではと思い、Goで実装してみることにしました。</p>
+
+<h2>使い方</h2>
+
+<p><code>go get</code>で落として来れます。
+最低限client_idとclient_secretの指定が必要です。
+nginx_omniauth_adapterと同じ環境変数名で設定できるほか、YAML形式の設定ファイルを読みこませることができます。
+YAMLの形式はREADMEを参照してください。</p>
+
+<p><code>bash
+$ go get github.com/shogo82148/go-nginx-oauth2-adapter/cli/go-nginx-oauth2-adapter
+$ export NGX_OMNIAUTH_GOOGLE_KEY=YOUR_CLIENT_ID
+$ export NGX_OMNIAUTH_GOOGLE_SECRET=YOUR_CLIENT_SECRET
+$ go-nginx-oauth2-adapter
+$ go-nginx-oauth2-adapter -c conf.yaml # 設定ファイルでの指定も可能
+</code></p>
+
+<p>PerlでHTTPサーバ書いているひとにはおなじみのServer::Starterにも対応しているので、
+それ経由で立ち上げておくと設定の更新・プログラム自身の更新等が楽になると思います。</p>
+
+<p><code>bash
+start_server --port 18081 -- go-nginx-oauth2-adapter -c conf.yaml
+</code></p>
+
+<p>nginx側の設定は<a href="https://github.com/shogo82148/go-nginx-oauth2-adapter/blob/master/examples/nginx/nginx-site.conf">examples</a>ディレクトリを参照してください。
+ヘッダ名・パス名等を合わせてあるので、nginx_omniauth_adapterと同じ設定で動くはずです。</p>
+
+<p>また、<a href="https://h2o.examp1e.net/">h2o</a>の設定はプログラマブルだからh2oでもちゃんと設定ファイルを書けば動くのではと考え、
+<a href="https://github.com/shogo82148/go-nginx-oauth2-adapter/blob/master/examples/h2o/oauth.rb">h2oの設定</a>も書いてみました。
+mrubyからproxyに渡るリクエストを書き換える方法がない(？)っぽいので、アプリ側で認証情報をとることはできないですが、一応制限はできます。
+basic認証の実装を見る限りremote-userヘッダだけは渡せるようなので、これを使えばなんとかなるかもしれないですが、未確認です。
+(Ruby慣れてないからってGoで実装したけど、結局Rubyを書いていて面白い)</p>
+
+<h2>nginx_omniauth_adapterとの違い</h2>
+
+<p>厳密に同じ挙動を実装するのが面倒だったため、挙動に若干の違いがあります。
+一番大きなものは認証後のリダイレクト先です。</p>
+
+<p>nginx_omniauth_adapterは認証後、一度adapterのURLにリダイレクトしてから、アプリサーバの<code>/_auth/callback</code>にリダイレクトします。
+それに対してgo-nginx-oauth2-adapterは認証後、アプリサーバの<code>/_auth/callback</code>に直接リダイレクトします。
+この違いのため、Google Developers Consoleの「承認済みのリダイレクト URI」に設定するべきURIが異なることに注意してください。
+nginx_omniauth_adapterはadapter自身のURI、go-nginx-oauth2-adapterはアプリサーバの<code>/_auth/callbak</code>を指定します。</p>
+
+<p>この挙動のため、go-nginx-oauth2-adapterはアプリの追加のたびにnginxの設定に加え「承認済みのリダイレクト URI」に正しいURIを追加する必要があります。
+もちろん設定箇所がGoogle Developers Consoleではないだけで、nginx_omniauth_adapterもリダイレクト先の設定は必要です。
+GoogleでもFacebookでも認証できるようにしたいという場合、nginx_omniauth_adapterは設定を一箇所変えればOKですが、go-nginx-oauth2-adapterは各サービスに登録し直す必要があります。
+現状、認証に使うサービスをユーザが選ぶ仕組みがないので、そのまま放置してあります。</p>
+
+<h2>まとめ</h2>
+
+<p><a href="https://github.com/sorah/nginx_omniauth_adapter">nginx_omniauth_adapter</a>のGolangポート
+<a href="https://github.com/shogo82148/go-nginx-oauth2-adapter">shogo82148/go-nginx-oauth2-adapter</a>を紹介しました。</p>
+
+<p>adapter自身の公開設定をしなくて良い分簡単にセットアップできます。
+nginx_omniauth_adapter互換ですぐに乗り換えもできるので、ぜひお気軽にお試し下さい。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Goでデプロイ神社書いてみた]]></title>
+    <link href="http://shogo82148.github.io/blog/2015/12/13/go-deploy-shrine/"/>
+    <updated>2015-12-13T10:51:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2015/12/13/go-deploy-shrine</id>
+    <content type="html"><![CDATA[<p><a href="http://qiita.com/advent-calendar/2015/go2">Go その2 Advent Calendar 2015</a>の13日目の記事です。</p>
+
+<ul>
+<li><a href="http://qiita.com/advent-calendar/2015/go">その1</a></li>
+<li><a href="http://qiita.com/advent-calendar/2015/go2">その2</a></li>
+<li><a href="http://qiita.com/advent-calendar/2015/go3">その3</a></li>
+</ul>
+
+
+<p>六曜を知ることができる便利コマンドを作ってみたお話です。</p>
+
+<!-- More -->
+
+
+<h2>Deploy神社とは</h2>
+
+<p><a href="https://twitter.com/Maco_Tasu">Maco_Tasu</a>が作ったいつdeployしたら安全かを教えてくれる便利APIです。
+詳しくは作者ブログ記事をどうぞ。(<a href="http://macotasu.hatenablog.jp/entry/2014/11/13/214337">Deploy神社APIを作った- 眠すぎて明日が見えない</a>)</p>
+
+<p>便利APIなのですが、依存している外部APIが利用できなくなってしまったため、Deploy神社自体が利用できなくなっています。</p>
+
+<h2>作ってみた</h2>
+
+<p>デプロイする時間が分からないと不便なので、Go実装を作ってみました。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/go-deploy-shrine">shogo82148/go-deploy-shrine</a></li>
+</ul>
+
+
+<p><code>go get</code>してきてお祈りを捧げればデプロイするべき時間を教えてくれます。</p>
+
+<p><code>bash
+$ go get github.com/shogo82148/go-deploy-shrine/cli/pray
+$ pray
+今日は旧暦の11月3日(先勝)です。deployは午前中に済ませましょう。
+</code></p>
+
+<p><a href="http://www.weblio.jp/content/%E5%85%88%E5%8B%9D">先勝 - Weblio</a></p>
+
+<blockquote><p>六曜の一。急用や訴訟などによいとされ，早く事を行うのがよく，午前は吉，午後は凶という日。先勝日。せんかち。さきがち。</p></blockquote>
+
+<p>今日12月13日は先勝で午前中にデプロイするのが良いようです。便利ですね。</p>
+
+<h2>六曜とは</h2>
+
+<p>むかしのカレンダーには暦注と呼ばれる「今日の運勢」みたいなものが記載されていたらしいです。
+六曜はその暦注のひとつで、現在のカレンダーにも記載されることの多い影響力の大きなものです。</p>
+
+<p>詳しくはWikipediaで。</p>
+
+<ul>
+<li><a href="https://ja.wikipedia.org/wiki/%E5%85%AD%E6%9B%9C">六曜 - Wikipedia</a></li>
+</ul>
+
+
+<p>旧暦の(月＋日)を6で割った余りから簡単に求めることができます。</p>
+
+<ul>
+<li>0: 大安</li>
+<li>1: 赤口</li>
+<li>2: 先勝</li>
+<li>3: 友引</li>
+<li>4: 先負</li>
+<li>5: 仏滅</li>
+</ul>
+
+
+<h2>旧暦とは</h2>
+
+<p>旧暦の月日を求めることができれば六曜は簡単に出せるのですが、
+日本における旧暦である<a href="https://ja.wikipedia.org/wiki/%E5%A4%A9%E4%BF%9D%E6%9A%A6">天保暦</a>は月の満ち欠けと太陽の動きを元にした暦法であり、
+月と太陽の動きを正確に予測する必要があります。</p>
+
+<p>Go版デプロイ神社では「日の出・日の入りの計算―天体の出没時刻の求め方」で紹介されていた計算式を用いています</p>
+
+<iframe src="http://rcm-fe.amazon-adsystem.com/e/cm?lt1=_blank&bc1=000000&IS2=1&bg1=FFFFFF&fc1=000000&lc1=0000FF&t=shogo82148-22&o=9&p=8&l=as4&m=amazon&f=ifr&ref=ss_til&asins=4805206349" style="width:120px;height:240px;" scrolling="no" marginwidth="0" marginheight="0" frameborder="0"></iframe>
+
+
+<h2>2033年旧暦閏月問題</h2>
+
+<p>天保暦をそのまま当てはめると2033年に月を決定できない問題が知られています。
+日本カレンダー暦文化振興協会というところが「閏11月を推奨する」との見解を2015年8月に出しています。</p>
+
+<ul>
+<li><a href="http://www.rekibunkyo.or.jp/year2033problem.html">2033年旧暦閏月問題の見解</a></li>
+</ul>
+
+
+<p>Go版デプロイ神社では時憲暦方式を採用したつもりです。</p>
+
+<h2>せめてGoっぽい話題を</h2>
+
+<p>引数に日付を渡すとその日の六曜をかえしてくれます。
+いろんな形式に対応していて、以下はすべて2006年1月2日の六曜を返します。</p>
+
+<p><code>bash
+$ pray 20060102
+$ pray 1/2/2006
+$ pray 2-Jan-06
+$ pray 2-Jan-2006
+$ pray 2/Jan/2006
+$ pray 'Jan 2 2006'
+2006-01-02は旧暦の12月3日(友引)です。昼のdeployはさけましょう。するなら朝晩が吉です。
+</code></p>
+
+<p>引数の解析には <a href="https://github.com/tkuchiki/parsetime">tkuchiki/parsetime</a>を使っています。
+たいていの日時フォーマットなら解析してくれる便利ライブラリです。</p>
+
+<h2>最後に</h2>
+
+<p>暦法とか天文学とかよくわかってない人間が作ったプログラムなので、結果の保証はできません。
+今月の旧暦は<a href="http://keisan.casio.jp/exec/system/1186108192">六曜計算 - 高精度計算サイト</a>の計算結果と一致することは確認していますが、
+他の日でも正しい結果を返すかどうかは未検証です。</p>
+
+<p>Go版デプロイ神社を信じてのデプロイして事故っても、責任は負いかねますのでご了承ください。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[AnySan::Provider::Slackとape-slackを書いた]]></title>
+    <link href="http://shogo82148.github.io/blog/2015/09/28/anysan-provider-slack-and-ape-slack/"/>
+    <updated>2015-09-28T22:11:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2015/09/28/anysan-provider-slack-and-ape-slack</id>
+    <content type="html"><![CDATA[<p>先週、今のプロジェクトでのメインのコミュニケーションツールをIRCからSlack切り替えました。
+それにともないIRCに済んでいたボットたちもお引越しする必要があったので、
+ボットとSlackをつなぐためのライブラリを書きました。</p>
+
+<ul>
+<li><a href="https://metacpan.org/release/AnySan-Provider-Slack">AnySan::Provider::Slack</a></li>
+<li><a href="https://github.com/shogo82148/ape-slack">ape-slack</a></li>
+</ul>
+
+
+<p>Perlとgoのボットが住んでいるのでそれぞれの言語で実装してあります。</p>
+
+<!-- More -->
+
+
+<h2>AnySan::Provider::Slack</h2>
+
+<p>Perlの<a href="https://metacpan.org/pod/AnySan">AnySan</a>用のモジュールです。</p>
+
+<p>``` perl
+use AnySan;
+use AnySan::Provider::Slack;
+my $slack = slack</p>
+
+<pre><code>token =&gt; 'YOUR SLACK API TOKEN',
+channels =&gt; {
+    'general' =&gt; {},
+};
+</code></pre>
+
+<p>$slack->send_message('slack message', channel => 'C024BE91L');
+AnySan->run;
+```</p>
+
+<p>AnySanを使うだけでも便利なんですが、
+今のプロジェクトではAnySanを対話形式で使いやすくするように<a href="http://www.songmu.jp/riji/entry/2013-09-09-unazusan.html">UnazuSan</a>を使っています。
+UnazuSanはIRC前提で書かれていて、AnySan::Provider::Slackをインストールしてもそのままは使えません。</p>
+
+<p>UnazuSanを置き換えるもの面倒なので、イベントの名前を書き換えて投げ直すことで、
+SlackのメッセージをIRCに見せかける方法をとっています。
+また<a href="https://beatsync.net/main/log20150926.html">SlackのOutgoing Webhookで@つきのmentionを捕まえる</a>にもあるように、
+Slackのメンションは &lt;@U08DGJVJ7&gt;のような形式になってしまい、UnazuSanは自分へのメッセージとして扱ってくれません。
+これをUnazuSanが解釈できる形式に置き換えるのがポイントです。</p>
+
+<p>``` perl
+use 5.010;
+use warnings;
+use utf8;
+use Encode qw/encode_utf8/;
+use UnazuSan;
+use AnySan;
+use AnySan::Provider::Slack;</p>
+
+<p>my $unazu_san = UnazuSan->new(</p>
+
+<pre><code>host       =&gt; 'example.com',
+password   =&gt; 'xxxxxxxxxxx',
+enable_ssl =&gt; 1,
+join_channels =&gt; [qw/arcade/],
+respond_all   =&gt; 1,
+</code></pre>
+
+<p>);</p>
+
+<p>my $slack = slack(</p>
+
+<pre><code>token    =&gt; 'YOUR SLACK TOKEN',
+channels =&gt; {},
+as_user =&gt; 1,
+</code></pre>
+
+<p>);</p>
+
+<p>AnySan->register_listener(</p>
+
+<pre><code>slack =&gt; {
+    event =&gt; 'message',
+    cb =&gt; sub {
+        my $receive = shift;
+        # fake irc privmsg
+        $receive-&gt;{event} = 'privmsg';
+        $receive-&gt;{message} =~ s/&lt;\@xxxxx&gt;:/unazusan:/;
+        AnySan-&gt;broadcast_message($receive);
+    },
+}
+</code></pre>
+
+<p>);</p>
+
+<p>$unazu_san->on_command(</p>
+
+<pre><code>help =&gt; sub {
+    my ($receive, @args) = @_;
+    $receive-&gt;reply('help '. ($args[0] || ''));
+}
+</code></pre>
+
+<p>);</p>
+
+<p>$unazu_san->run;
+```</p>
+
+<h2>ape-slack</h2>
+
+<p><a href="https://github.com/m0t0k1ch1/ape">ape</a>のSlack対応版です。
+SlackRTM APIを使ってイベントを受け取ります。</p>
+
+<p>GoはWebSocketも比較的カンタンに使えるので、実はape-slackを使わなくても以下のようなコードだけでSlackRTM APIを使えてしまいます。</p>
+
+<p>``` go
+import (
+  "encoding/json"
+  "fmt"
+  "net/http"
+  "net/url"</p>
+
+<p>  "golang.org/x/net/websocket"
+)</p>
+
+<p>func main() {
+  resp, _ := http.PostForm("https://slack.com/api/rtm.start", url.Values{"token": {"YOUR SLACK TOKEN"}})
+  var r struct {</p>
+
+<pre><code>Url   string `json:"url"`
+</code></pre>
+
+<p>  }</p>
+
+<p>  json.NewDecoder(resp.Body).Decode(&amp;r)</p>
+
+<p>  ws := websocket.Dial(r.Url, "", "https://slack.com/")</p>
+
+<p>  for {</p>
+
+<pre><code>var data map[string]interface{}
+websocket.JSON.Receive(ws, &amp;data)
+fmt.Println(data)
+</code></pre>
+
+<p>  }
+}
+```</p>
+
+<p>Outgoing Webhookを使うとSlackから呼んでもらえるようセキュリティの設定が必要で面倒ですが、
+WebSocketならインターネッツに繋がった環境なら大抵そのままつながります。
+Outgoing WebhookならチャンネルにJOINしていなくてもイベントを受け取れたりして便利ですが、
+ちょっとしたボットならこちらの方がお手軽ですね。</p>
 ]]></content>
   </entry>
   

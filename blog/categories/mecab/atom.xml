@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
 
-  <title><![CDATA[Category: MeCab | Shogo's Blog]]></title>
+  <title><![CDATA[Category: mecab | Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/blog/categories/mecab/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2015-05-13T08:39:46+09:00</updated>
+  <updated>2016-03-23T22:43:44+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -14,165 +14,810 @@
 
   
   <entry>
-    <title type="html"><![CDATA[MeCabをPythonから使う注意点とか]]></title>
-    <link href="http://shogo82148.github.io/blog/2012/12/15/mecab-python/"/>
-    <updated>2012-12-15T17:38:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2012/12/15/mecab-python</id>
-    <content type="html"><![CDATA[<p>日本語の文章をコンピュータで色々いじるときに，
-必ずと言っていいほどよく使うのが形態素解析器．
-スペースなどの明示的な区切りの無い日本語を単語に分割してくれるツールです．
-中でもMeCabが非常に有名で，さまざまなところで使われています．</p>
-
-<p>MeCabはいろいろな言語から呼び出すことができます．
-自然言語処理の分野ではPythonが人気のようですね．僕も使っています．
-しかし，MeCabをPythonから使う場合，注意する点がいくつかあります．
-そこにハマっている後輩を見かけたので，文章として残しておくことにします．
-Python2系が対象です(3系はよくわからない)．
-注意するのは以下の二点です．</p>
+    <title type="html"><![CDATA[MeCabのGolangバインディングを書いてみた]]></title>
+    <link href="http://shogo82148.github.io/blog/2016/02/11/golang-mecab-binding/"/>
+    <updated>2016-02-11T19:32:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2016/02/11/golang-mecab-binding</id>
+    <content type="html"><![CDATA[<p>Golangから<a href="http://taku910.github.io/mecab/">MeCab</a>を呼び出すライブラリ探せばあるにはあるのですが、
+なんだかどれもメモリ管理がちょっと怪しいんですよね・・・。</p>
 
 <ul>
-<li>MeCabに渡す文字列はencode，戻ってきた文字列はdecodeする</li>
-<li>MeCabに渡した文字列は必ず変数に入れておく</li>
+<li><a href="http://yukihir0.hatenablog.jp/entry/2015/01/18/164446">GolangでMeCabを使う。</a>
+
+<ul>
+<li><a href="https://github.com/yukihir0/mecab-go">yukihir0/mecab-go</a></li>
+</ul>
+</li>
+<li><a href="http://qiita.com/rerofumi/items/2bb1e49b20f2175ecaac">Go言語から mecab を使う - Qiita</a>
+
+<ul>
+<li><a href="https://bitbucket.org/rerofumi/mecab">rerofumi/mecab</a></li>
+</ul>
+</li>
+<li><a href="http://d.hatena.ne.jp/gtaka555/20091116/p2">Go で Mecab を使ってみた</a></li>
+</ul>
+
+
+<p>メモリ管理は<a href="https://github.com/bluele/mecab-golang">bluele/mecab-golang</a>が一番しっかりしているっぽいですが、
+libmecabの一番高機能だけど面倒な使い方しか対応していなくて、ちょっとカジュアルに遊ぶにはつらい。</p>
+
+<p>というわけで、カジュアルな用途から高度な使い方まで対応したWrapperを書いてみました。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/go-mecab">shogo82148/go-mecab</a></li>
 </ul>
 
 
 <!-- More -->
 
 
-<h2>EncodeとDecode</h2>
+<h2>使い方</h2>
 
-<p>Python2系の文字列には，バイト列として扱われる文字列(str)と，Unicodeで表現された文字列(unicode)があります．
-日本語を扱う場合，strだといろいろ問題があるので，特に理由がなければunicodeを使うべきです．
-しかし，MeCabはstrしか受け付けません．
-そこでMeCabに渡す直前・直後でencode・decodeするようにします．</p>
+<p>READMEと<a href="https://godoc.org/github.com/shogo82148/go-mecab#pkg-examples">godocのexamples</a>からのコピペになってしまいますが、
+簡単に使い方の紹介です。</p>
 
-<p>```python
-import MeCab
-tagger = MeCab.tagger('-Owakati')
-text = u'MeCabで遊んでみよう！'</p>
+<h3>インストール</h3>
 
-<p>result = tagger.parse(text) # エラー！</p>
+<p><code>go get</code>で取ってくることはできますが、事前にlibmecabとリンクするための設定が必要です。</p>
 
-<p>encoded_text = text.encode('utf-8') # encodeが必要
-encoded_result = tagger.parse(text)
-result = result.decode('utf-8') # 必ずdecode
+<p><code>bash
+$ export CGO_LDFLAGS="-L/path/to/lib -lmecab -lstdc++"
+$ export CGO_CFLAGS="-I/path/to/include"
+$ go get github.com/shogo82148/go-mecab
+</code></p>
+
+<p><code>mecab</code>コマンドと一緒に<code>mecab-config</code>がインストールされているはずなので、
+それを使うのが楽でしょう。</p>
+
+<p><code>bash
+$ export CGO_LDFLAGS="`mecab-config --libs`"
+$ export CGO_FLAGS="`mecab-config --inc-dir`"
+$ go get github.com/shogo82148/go-mecab
+</code></p>
+
+<p>MeCabはデフォルトで<code>/usr/local/</code>以下に入るので、他の実装では決め打ちしている例が多いですが、
+100%とは言い切れないので面倒ですが都度指定にしてあります。
+cgoはpkg-configに対応しているで、MeCab側が対応してくれると環境変数の設定が不要になってもっと楽なんですけどね。</p>
+
+<h3>カジュアルに使う</h3>
+
+<p><code>Parse</code>を使うと<code>mecab</code>コマンドと同等の結果を文字列として受け取れます。</p>
+
+<p>``` go
+tagger, err := mecab.New(map[string]string{})
+if err != nil {</p>
+
+<pre><code>panic(err)
+</code></pre>
+
+<p>}
+defer tagger.Destroy()</p>
+
+<p>result, err := tagger.Parse("こんにちは世界")
+if err != nil {</p>
+
+<pre><code>panic(err)
+</code></pre>
+
+<p>}
+fmt.Println(result)
 ```</p>
 
-<p><code>'utf-8'</code>の部分は辞書の文字コードに合わせて適宜書き換えてください．
-デフォルトはeuc-jpですが，utf-8の方が幸せになれると思います．</p>
+<p>オプションの渡し方ですが、いろいろ考えた結果<code>map</code>で渡すようにしてみました。
+(Perlの<a href="https://metacpan.org/release/Text-MeCab">Text::MeCab</a>からのインスパイア)
+例えば、<code>mecab.New(map[string]string{"output-format-type": "wakati"})</code>のようにすると、分かち書きで出力されます。</p>
 
-<h2>必ず変数に入れる</h2>
+<h3>ノードの詳細情報にアクセスする</h3>
 
-<p>次にMeCabの作ったノードに直接アクセスして，品詞情報などを取ってくることを考えます．
-適当に書いてみるとこんな感じでしょうか．</p>
+<p><code>ParseToNode</code>を使うと表層表現と品詞が最初から分かれた形で取得できます。
+生起コストのようなより詳細な情報も取れます。</p>
 
-<p>```python
+<p>``` go
+tagger, err := mecab.New(map[string]string{})
+if err != nil {</p>
+
+<pre><code>panic(err)
+</code></pre>
+
+<p>}
+defer tagger.Destroy()</p>
+
+<p>// XXX: avoid GC problem with MeCab 0.996 (see https://github.com/taku910/mecab/pull/24)
+tagger.Parse("")</p>
+
+<p>node, err := tagger.ParseToNode("こんにちは世界")
+if err != nil {</p>
+
+<pre><code>panic(err)
+</code></pre>
+
+<p>}</p>
+
+<p>for ; node != (mecab.Node{}); node = node.Next() {</p>
+
+<pre><code>fmt.Printf("%s\t%s\n", node.Surface(), node.Feature())
+</code></pre>
+
+<p>}
+```</p>
+
+<p>以前紹介した<a href="http://shogo82148.github.io/blog/2015/12/20/mecab-in-python3-final/">MeCabをPython3から使う(続報)</a>の件、
+実はPythonに限ったことではなく、公式で提供されている全ての言語バインディングで発生します。
+(例えばRubyでも発生するっぽい: <a href="http://qiita.com/Salinger/items/3448d481b5b1e6cd2efb">Ruby + MeCab で Segmentation fault が発生した場合の対処</a>)
+Pythonが参照カウント方式のGCを採用しているので、たまたま発見されるのが早かったというだけですね(Rubyだとメモリを圧迫するまで落ちないらしい)。</p>
+
+<p>そして、公式で提供されているバインディングを参考に書いたので、今回のGo版でも発生します。
+<a href="https://github.com/taku910/mecab/pull/24">MeCab側で対応してもらった</a>のでわざわざバインディング側で対応することもないだろうとの考えから、go-mecabでは特に対策をとっていません。
+MeCab 0.996以下を使っている方は注意してください。(残念ながら0.996がまだ最新リリースだけど・・・)</p>
+
+<h3>Modelを共有する</h3>
+
+<p><a href="http://taku910.github.io/mecab/libmecab.html">MeCab ライブラリ</a>で紹介されている、マルチスレッド環境の場合での使い方にも対応しています。</p>
+
+<p>``` go
+model, err := mecab.NewModel(map[string]string{})
+if err != nil {</p>
+
+<pre><code>panic(err)
+</code></pre>
+
+<p>}
+defer model.Destroy()</p>
+
+<p>tagger, err := model.NewMeCab()
+if err != nil {</p>
+
+<pre><code>panic(err)
+</code></pre>
+
+<p>}
+defer tagger.Destroy()</p>
+
+<p>lattice, err := mecab.NewLattice()
+if err != nil {</p>
+
+<pre><code>panic(err)
+</code></pre>
+
+<p>}
+defer lattice.Destroy()</p>
+
+<p>lattice.SetSentence("こんにちは世界")
+err = tagger.ParseLattice(lattice)
+if err != nil {</p>
+
+<pre><code>panic(err)
+</code></pre>
+
+<p>}
+fmt.Println(lattice.String())
+```</p>
+
+<p>複数のゴルーチンから<code>model</code>や<code>tagger</code>を共有できると思います。<code>lattice</code>だけはゴルーチン毎に生成してください。
+(へいれつへーこーしょりとかよくわかってないですが、スレッドセーフならゴルーチンセーフという認識であってますよね？)
+メモリ効率もいいのでは(未検証なので誰か確かめて・・・)。</p>
+
+<h2>GoからCへ文字列を渡す方法について</h2>
+
+<h3>一般的な方法</h3>
+
+<p>GoからCへ文字列を渡すには、Goの文字列を<code>C.CString</code>を使ってCの文字列に変換する必要があります。</p>
+
+<p>``` go
+cstring := C.CString(gostring)
+defer C.free(unsafe.Pointer(cstring))</p>
+
+<p>C.some_useful_function(cstring)
+```</p>
+
+<p>ここで注意が必要なのは<code>C.CString</code>の戻り値はGoのガーベージコレクションの対象から外れるということです。
+C側での使用状況をGoのランタイムが把握しきれないからですね。
+<code>C.free</code>を使って明示的に開放してあげないとメモリーリークになります。
+巷にあふれているMeCabバインディングはここがちょっと甘いものがほとんどでした。</p>
+
+<h3>黒魔術を使う</h3>
+
+<p>別に<code>C.CString</code>でも十分だとは思ったのですが、
+<a href="http://qiita.com/mattn/items/176459728ff4f854b165">golang で string を []byte にキャストしてもメモリコピーが走らない方法を考えてみる</a>を見て、つい魔が差してしまいました。
+Goの<code>string</code>をメモリーコピーを避けて<code>[]byte</code>にできるのなら、Cの文字列型(<code>*C.char</code>)でも同じことができるはず・・・！</p>
+
+<p><code>go
+cstring := *(**C.char)(unsafe.Pointer(&amp;gostring))
+C.some_useful_function2(cstring, len(gostring))
+</code></p>
+
+<p>通常C言語の文字列は末尾に<code>'\0'</code>が番兵としてついており、<code>C.CString</code>はそこら辺の事情を考慮してくれます。
+しかし、この方法は番兵がいないため、文字列の長さを別途渡してあげる必要があります。
+幸いMeCabは文字列長さを明示するインターフェースを備えているので、そちらを使えばOKでした。</p>
+
+<p>Goの<code>string</code>はもちろんGCの対象なので、GCには要注意です。
+関数内で閉じた状態にするのが無難ですね。
+また、空文字が渡されるとヌルポで死んでしまうようなので、そこにも注意しましょう。</p>
+
+<h2>まとめ</h2>
+
+<ul>
+<li>カジュアルな用途から高度な使い方まで対応したMeCabのWrapperを書いてみました
+
+<ul>
+<li><a href="https://github.com/shogo82148/go-mecab">shogo82148/go-mecab</a></li>
+</ul>
+</li>
+<li>MeCab 0.996 と一緒に使う場合はGCに注意しましょう</li>
+<li>GoからCへの文字列の渡し方を紹介しました
+
+<ul>
+<li><code>C.CString</code>を使った方法</li>
+<li><code>unsafe.Ponter</code>を使った方法</li>
+</ul>
+</li>
+</ul>
+
+
+<p>ピンポーン <strong>unsafe をご使用になる時は、用法・用量を守り正しくお使い下さい。</strong></p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[AWS Lambda で MeCab を動かす(改)]]></title>
+    <link href="http://shogo82148.github.io/blog/2016/02/10/mecab-in-lambda/"/>
+    <updated>2016-02-10T14:52:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2016/02/10/mecab-in-lambda</id>
+    <content type="html"><![CDATA[<p>MeCabのPythonバインディングをいじってた関係で、MeCabについてインターネットをさまよっていたら、
+<a href="http://dev.classmethod.jp/cloud/aws-lambda-with-mecab/">AWS Lambda で MeCab を動かす</a>という記事を見つけました。
+Lambdaの計算リソースで形態素解析できるのは楽しいですねー。
+ただ実装にまだまだ改善できそうな部分があったので修正してみました。</p>
+
+<!-- More -->
+
+
+<h2>問題点</h2>
+
+<p>第一に<strong>「外部プロセスを起動しているので遅い」</strong>という点です。
+外部プロセスの起動は非常に重くて数百msかかります。
+MeCabは非常に高速で数msもあれば解析が終わるのに、もったいないですよね。</p>
+
+<p>第二に<strong>「OSコマンドインジェクションの危険性がある」</strong>という点です。
+解析対象の文字列をコマンドライン引数として渡しており、この際シェルを経由しています。
+そのため、<code>{"sentence": "$(ls)"}</code>のような文字列を渡すと、シェルがコマンドとして実行してしまいます。
+API Gatewayなどで外部に公開した場合、第三者が何でもし放題な状態になってしまいます。</p>
+
+<h2>頑張ってMeCabをライブラリとして呼ぶ</h2>
+
+<p>全ての元凶は外部プロセス起動にあるので、頑張ってMeCabをライブラリとして呼んでみましょう。
+そもそもなんで外部プロセス起動をしていたかというと、
+<code>LD_LIBRARY_PATH</code>が正しく設定されていないため<code>import MeCab</code>時に<code>libmecab.so</code>を発見できないからです。
+なんとかならないものかと探したところ、Stack Overflowにそれっぽい記事がありました。</p>
+
+<ul>
+<li><a href="http://stackoverflow.com/questions/6543847/setting-ld-library-path-from-inside-python">Setting LD_LIBRARY_PATH from inside Python</a></li>
+</ul>
+
+
+<p>「環境変数を設定してから自分自身をexecし直す方法」と「<code>ctypes</code>を使って絶対パス指定で読み込む方法」が紹介されています。
+前者の方がvoteは多いですがLambdaでこれをやるのは大変そうなので、後者で試してみます。</p>
+
+<p>``` python lambda_function.py</p>
+
+<h1>preload libmecab</h1>
+
+<p>import os
+import ctypes
+libdir = os.path.join(os.getcwd(), 'local', 'lib')
+libmecab = ctypes.cdll.LoadLibrary(os.path.join(libdir, 'libmecab.so'))
+```</p>
+
+<p>一度読み込んでしまったライブラリは再利用されるため、
+<code>import MeCab</code>はここで読み込んだライブラリにリンクされます(importの順番が重要なの闇な感じがする)。
+<code>LD_LIBRARY_PATH</code>が正しく設定されている必要はありません。</p>
+
+<p>さて、これで<code>lambda_function.py</code>と<code>tokenizer.py</code>が分かれている必要がなくなったので、二つを合体してみましょう。</p>
+
+<p>``` python lambda_function.py</p>
+
+<h1>coding=utf-8</h1>
+
+<p>import os
+import settings</p>
+
+<p>import logging
+logger = logging.getLogger(<strong>name</strong>)
+logger.setLevel(settings.LOG_LEVEL)</p>
+
+<h1>preload libmecab</h1>
+
+<p>import ctypes
+libdir = os.path.join(os.getcwd(), 'local', 'lib')
+libmecab = ctypes.cdll.LoadLibrary(os.path.join(libdir, 'libmecab.so'))</p>
+
+<p>import MeCab</p>
+
+<h1>prepare Tagger</h1>
+
+<p>dicdir = os.path.join(os.getcwd(), 'local', 'lib', 'mecab', 'dic', 'ipadic')
+rcfile = os.path.join(os.getcwd(), 'local', 'etc', 'mecabrc')
+default_tagger = MeCab.Tagger("-d{} -r{}".format(dicdir, rcfile))
+unk_tagger = MeCab.Tagger("-d{} -r{} --unk-feature 未知語,<em>,</em>,<em>,</em>,<em>,</em>,<em>,</em>".format(dicdir, rcfile))</p>
+
+<p>DEFAULT_STOPTAGS = ['BOS/EOS']</p>
+
+<p>def lambda_handler(event, context):</p>
+
+<pre><code>sentence = event.get('sentence', '').encode('utf-8')
+stoptags = event.get('stoptags', '').encode('utf-8').split(',') + DEFAULT_STOPTAGS
+unk_feature = event.get('unk_feature', False)
+
+tokens = []
+tagger = unk_tagger if unk_feature else default_tagger
+node = tagger.parseToNode(sentence)
+while node:
+    feature = node.feature + ',*,*'
+    part_of_speech = get_part_of_speech(feature)
+    reading = get_reading(feature)
+    base_form = get_base_form(feature)
+    token = {
+        "surface": node.surface.decode('utf-8'),
+        "feature": node.feature.decode('utf-8'),
+        "pos": part_of_speech.decode('utf-8'),
+        "reading": reading.decode('utf-8'),
+        "baseform": base_form.decode('utf-8'),
+        "stat": node.stat,
+    }
+
+    if part_of_speech not in stoptags:
+        tokens.append(token)
+    node = node.next
+return {"tokens": tokens}
+</code></pre>
+
+<p>def get_part_of_speech(feature):</p>
+
+<pre><code>return '-'.join([v for v in feature.split(',')[:4] if v != '*'])
+</code></pre>
+
+<p>def get_reading(feature):</p>
+
+<pre><code>return feature.split(',')[7]
+</code></pre>
+
+<p>def get_base_form(feature):</p>
+
+<pre><code>return feature.split(',')[6]
+</code></pre>
+
+<p>```</p>
+
+<h2>試してみる</h2>
+
+<p><a href="https://github.com/shogo82148/aws-lambda-ja-tokenizer">forkして上記の修正をいれたレポジトリ</a>を用意したので、READMEにしたがってzipファイルを作り、Lambdaに登録しましょう。
+雑なテストですが、Testボタンを5回押しみてログを見てみました。</p>
+
+<p>まずは元記事にあったオリジナルのコードから。</p>
+
+<table>
+<thead>
+<tr>
+<th></th>
+<th align="center"> Duration </th>
+<th align="center"> Billing Duration </th>
+<th align="center"> Memory Size </th>
+<th align="center"> Max Memory Used </th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td></td>
+<td align="center"> 280.76 ms </td>
+<td align="center"> 300 ms </td>
+<td align="center"> 128 MB </td>
+<td align="center"> 29 MB |</td>
+</tr>
+<tr>
+<td></td>
+<td align="center"> 310.00 ms </td>
+<td align="center"> 400 ms </td>
+<td align="center"> 128 MB </td>
+<td align="center"> 29 MB |</td>
+</tr>
+<tr>
+<td></td>
+<td align="center"> 205.99 ms </td>
+<td align="center"> 300 ms </td>
+<td align="center"> 128 MB </td>
+<td align="center"> 30 MB |</td>
+</tr>
+<tr>
+<td></td>
+<td align="center"> 205.74 ms </td>
+<td align="center"> 300 ms </td>
+<td align="center"> 128 MB </td>
+<td align="center"> 30 MB |</td>
+</tr>
+<tr>
+<td></td>
+<td align="center"> 213.96 ms </td>
+<td align="center"> 300 ms </td>
+<td align="center"> 128 MB </td>
+<td align="center"> 30 MB |</td>
+</tr>
+</tbody>
+</table>
+
+
+<p>外部プロセスを起動しないように修正したバージョンです。</p>
+
+<table>
+<thead>
+<tr>
+<th></th>
+<th align="center"> Duration </th>
+<th align="left"> Billing Duration </th>
+<th align="center"> Memory Size </th>
+<th align="center"> Max Memory Used </th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td></td>
+<td align="center"> 0.74 ms </td>
+<td align="left"> 100 ms </td>
+<td align="center"> 128 MB </td>
+<td align="center"> 11 MB |</td>
+</tr>
+<tr>
+<td></td>
+<td align="center"> 0.74 ms </td>
+<td align="left"> 100 ms </td>
+<td align="center"> 128 MB </td>
+<td align="center"> 11 MB |</td>
+</tr>
+<tr>
+<td></td>
+<td align="center"> 0.70 ms </td>
+<td align="left"> 100 ms </td>
+<td align="center"> 128 MB </td>
+<td align="center"> 11 MB |</td>
+</tr>
+<tr>
+<td></td>
+<td align="center"> 0.69 ms </td>
+<td align="left"> 100 ms </td>
+<td align="center"> 128 MB </td>
+<td align="center"> 11 MB |</td>
+</tr>
+<tr>
+<td></td>
+<td align="center"> 0.73 ms </td>
+<td align="left"> 100 ms </td>
+<td align="center"> 128 MB </td>
+<td align="center"> 11 MB |</td>
+</tr>
+</tbody>
+</table>
+
+
+<p>速くなった！！！</p>
+
+<h2>まとめ</h2>
+
+<ul>
+<li>AWS Lambdaでは外部プロセス起動は案外重たいのでなるべく避ける</li>
+<li>深遠な理由により外部プロセス起動する場合でもシェルは使わない方が無難</li>
+<li><code>LD_LIBRARY_PATH</code>の設定が必要なときは、<code>ctypes.cdll.LoadLibrary</code>を使って直接読みこめばなんとかなる</li>
+</ul>
+
+
+<p>外部ライブラリを読み込めるのは、いろいろ遊べそうですね・・・</p>
+
+<h2>追記(2016-02-15)</h2>
+
+<p><a href="https://github.com/KunihikoKido/aws-lambda-ja-tokenizer/pull/1">pullreq送って</a>取り込んでもらいました。</p>
+
+<ul>
+<li><a href="http://dev.classmethod.jp/cloud/improved-aws-lambda-with-mecab/">【改】AWS Lambda で MeCab を動かす</a></li>
+</ul>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[MeCabをPython3から使う(続報)]]></title>
+    <link href="http://shogo82148.github.io/blog/2015/12/20/mecab-in-python3-final/"/>
+    <updated>2015-12-20T01:03:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2015/12/20/mecab-in-python3-final</id>
+    <content type="html"><![CDATA[<p>Python3からMeCabを扱おうとして挫折していたのですが
+(<a href="http://shogo82148.github.io/blog/2015/06/02/mecab-in-python3/">MeCabをPython3から使う(中間報告)</a>)、
+改めて調査して、上手くいかなかった原因が分かったのでご報告します。</p>
+
+<!-- More -->
+
+
+<h2>おさらい</h2>
+
+<p>Python3で以下のようにMeCabを使おうとすると</p>
+
+<p>``` python
 import MeCab
-tagger = MeCab.tagger('')
-text = u'MeCabで遊んでみよう！'</p>
-
-<p>node = tagger.parseToNode(text.encode('utf-8'))
+tagger = MeCab.Tagger('')
+text = u'MeCabで遊んでみよう!'
+node = tagger.parseToNode(text)
 while node:</p>
 
-<pre><code>#printはstrを渡す必要があるのでdecodeは不要
-print node.surface + '\t' + node.feature
+<pre><code>print(node.surface + '\t' + node.feature)
 node = node.next
 </code></pre>
 
 <p>```</p>
 
-<p>MeCabに渡す直前にencodeもしているので上手く動きそうです．
-(decodeしてないのはprintに渡すためなので気にしなくておｋ)
-しかし，このコードの出力は下のような悲惨なものとなるのです
-(ブラウザさんに配慮して一部修正，環境によっても違うと思います)</p>
+<p>surfaceが全く読み取れないという現象に遭遇していました。</p>
+
+<p><code>plain
+BOS/EOS,*,*,*,*,*,*,*,*
+名詞,一般,*,*,*,*,*
+助詞,格助詞,一般,*,*,*,で,デ,デ
+動詞,自立,*,*,五段・バ行,連用タ接続,遊ぶ,アソン,アソン
+助詞,接続助詞,*,*,*,*,で,デ,デ
+Traceback (most recent call last):
+  File "m.py", line 10, in &lt;module&gt;
+  print( node.surface + '\t' + node.feature )
+  UnicodeDecodeError: 'utf-8' codec can't decode byte 0xa3 in position 1: invalid start byte
+</code></p>
+
+<h2>解決策</h2>
+
+<p>詳しい原因なんてどうでもいいからMeCabを使いたい人向けに、最初に解決方法を書いておきます。
+以下のように本当に解析したい対象を解析する前に、一度<code>parse</code>をしておけばOKです。</p>
+
+<p>``` python
+import MeCab
+tagger = MeCab.Tagger('')</p>
+
+<p>tagger.parse('') # これ重要！！！！</p>
+
+<p>text = u'MeCabで遊んでみよう!'
+node = tagger.parseToNode(text)
+while node:</p>
+
+<pre><code>print(node.surface + '\t' + node.feature)
+node = node.next
+</code></pre>
+
+<p>```</p>
+
+<p>解析結果を全く使わずに捨てていて無駄のように思えますが、この一行が重要です！
+これを入れると以下のように正常に解析ができます。</p>
 
 <p>``` plain</p>
 
 <pre><code>    BOS/EOS,*,*,*,*,*,*,*,*
 </code></pre>
 
-<p>MeCab   名詞,一般,<em>,</em>,<em>,</em>,*</p>
-
-<pre><code>    ??   助詞,格助詞,一般,*,*,*,で,デ,デ
-</code></pre>
-
-<p>?詞,?   動詞,自立,<em>,</em>,五段・バ行,連用タ接続,遊ぶ,アソン,アソン
-???     助詞,接続助詞,<em>,</em>,<em>,</em>,で,デ,デ
-??,<em>,</em>       動詞,非自立,<em>,</em>,一段,未然ウ接続,みる,ミヨ,ミヨ
-,<em>,     助動詞,</em>,<em>,</em>,不変化型,基本形,う,ウ,ウ
-<em>,</em>     記号,一般,<em>,</em>,<em>,</em>,！,！,！</p>
+<p>MeCab   名詞,一般,<em>,</em>,<em>,</em>,<em>
+で      助詞,格助詞,一般,</em>,<em>,</em>,で,デ,デ
+遊ん    動詞,自立,<em>,</em>,五段・バ行,連用タ接続,遊ぶ,アソン,アソン
+で      助詞,接続助詞,<em>,</em>,<em>,</em>,で,デ,デ
+みよ    動詞,非自立,<em>,</em>,一段,未然ウ接続,みる,ミヨ,ミヨ
+う      助動詞,<em>,</em>,<em>,不変化型,基本形,う,ウ,ウ
+!       名詞,サ変接続,</em>,<em>,</em>,<em>,</em></p>
 
 <pre><code>    BOS/EOS,*,*,*,*,*,*,*,*
 </code></pre>
 
 <p>```</p>
 
-<p>なぜこのようなことが起きてしまったのでしょう？
-答えは<code>text.encode('utf-8')</code>の戻り値の寿命と，MeCabノードの構造にあります．</p>
+<p>解析を行うメソッドであれば<code>parseToNode</code>でも構いません。</p>
 
-<p>みんなさんが普段お使いのPythonは，C言語で実装されたCPythonだと思います．
-「CPythonでは、ガベージコレクションの方式として参照カウント方式とマーク・アンド・スイープ方式を併用」しています
-(<a href="http://ja.wikipedia.org/wiki/Python#.E3.83.87.E3.83.BC.E3.82.BF.E5.9E.8B">Python - Wikipedia</a>)．
-参照カウント方式おかげでCPythonは不要になったオブジェクトを不要になった瞬間に検出し，そのオブジェクトを解放することができます．
-つまり実際には5行目を少し細かく見ると，Pythonは以下の処理をします．</p>
+<h2>原因</h2>
 
-<ol>
-<li><code>text.encode('utf-8')</code>を呼び出し，"エンコード済みtext"を作成</li>
-<li><code>tagger.parseToNode</code>を呼び出し，結果を<code>node</code>に代入</li>
-<li>不要になった<strong> "エンコード済みtext"を破棄 </strong></li>
-</ol>
+<p>結果が壊れる直接的な原因は<a href="http://shogo82148.github.io/blog/2012/12/15/mecab-python/">MeCabをPythonから使う注意点とか</a>で紹介したように、
+解析対象の文字列がPythonの管理下から外れGCされてしまったからです。
+高速化のために余計なメモリーアロケーションを避けており、メモリ管理は利用者の責任というわけです。</p>
 
+<p>なんとかならないものかと、よくソースコードを追ってみると<code>MECAB_ALLOCATE_SENTENCE</code>というフラグをONにすれば
+<a href="https://github.com/taku910/mecab/blob/6b392e3960a4f5562e18742cb390ae1e22353d2a/mecab/src/tagger.cpp#L769-L775">メモリ管理をMeCabに任せることができる</a>ということがわかりました。
+これはTaggerを作るときの引数から指定でき、<code>-C</code>もしくは<code>--allocate-sentence</code>というオプションがこのフラグに対応します。
+これを有効にすれば解決だ！と思ったのですが、実は各種言語バインディングからMeCabを利用する場合は<a href="https://github.com/taku910/mecab/blob/6b392e3960a4f5562e18742cb390ae1e22353d2a/mecab/swig/MeCab.i#L102">デフォルトで有効になっています</a>。</p>
 
-<p>ポイントは3番ですね．6行目を実行する前に，"エンコード済みtext"は破棄されてしまいます．</p>
+<p>何故だ・・・とさらにコードを追ってみると<code>parseToNode</code>の実装が<a href="https://github.com/taku910/mecab/blob/6b392e3960a4f5562e18742cb390ae1e22353d2a/mecab/src/tagger.cpp#L602-L611">以下のようになっていること</a>がわかりました。</p>
 
-<p>さて，次にMeCabがどのようにノードの情報を扱っているか見てみましょう．
-MeCabの言語バインディングのページには，ノードのsurfaceは文字列型であるような定義が書いてありますが，あれは嘘です．
-<a href="http://code.google.com/p/mecab/source/browse/trunk/mecab/src/mecab.h">ソース</a>を見ればわかりますが，みんな大好きポインタとして定義されています．
-実はこのポインタ，<strong> "エンコード済みtext"上の開始点を指し示しています </strong>．</p>
+<p>``` c
+const Node <em>TaggerImpl::parseToNode(const char </em>str, size_t len) {
+  Lattice *lattice = mutable_lattice();
+  lattice->set_sentence(str, len); // このなかでMECAB_ALLOCATE_SENTENCEフラグが立ってるか確認している
+  initRequestType();               // このなかでMECAB_ALLOCATE_SENTENCEフラグを立ててる
+  if (!parse(lattice)) {</p>
 
-<p>つまり，どういうことかというと，</p>
+<pre><code>set_what(lattice-&gt;what());
+return 0;
+</code></pre>
 
-<ul>
-<li>MeCabはsurfaceを作るのに毎回"エンコード済みtext"からコピペしてた</li>
-<li>しかし，MeCabはPythonにそのことを伝えていなかった</li>
-<li>不要と判断したPythonによって"エンコード済みtext"はすでに破棄されており，そこには何もなかった</li>
-</ul>
+<p>  }
+  return lattice->bos_node();
+}
+```</p>
 
+<p><strong>MECAB_ALLOCATE_SENTENCEフラグを立てる前に、立っているかを確認しています。</strong></p>
 
-<p>これを解決するにはPythonに"エンコード済みtext"が使用中であることを伝え，破棄されないようにする必要があります．
-一番簡単な方法は変数に保存しておくことです．変数のスコープにいる間は"エンコード済みtext"が破棄される心配はありません．</p>
+<p>解析対象の文字列を渡す前に<code>initRequestType()</code>を呼んで<code>MECAB_ALLOCATE_SENTENCE</code>フラグを立てれば良いのですが、
+残念ながら<code>initRequestType()</code>も<code>mutable_lattice()</code>もprivateなメソッドなのでPythonから直接呼ぶことはできません。
+そこで<code>parse()</code>を使って<code>initRequestType()</code>を間接的に呼び出せば問題解決というわけです。</p>
 
-<p>```python
+<h2>別解</h2>
+
+<p><code>mutable_lattice()</code>は触れなくても、自分で作ったlatticeなら自由にいじれるので、
+以下のようにlatticeをPython側で作るのも手ですね。</p>
+
+<p>``` python
+lattice = MeCab.Lattice()
 import MeCab
-tagger = MeCab.tagger('')
-text = u'MeCabで遊んでみよう！'</p>
-
-<p>encoded_text = text.encode('utf-8')
-node = tagger.parseToNode(encoded_text) # 変数に入れる！
+tagger = MeCab.Tagger('')
+lattice = MeCab.Lattice()
+text = u'MeCabで遊んでみよう!'
+lattice.set_sentence(text)
+tagger.parse(lattice)
+node = lattice.bos_node()
 while node:</p>
 
-<pre><code>print node.surface + '\t' + node.feature
+<pre><code>print(node.surface+"\t"+node.feature)
 node = node.next
 </code></pre>
 
 <p>```</p>
 
-<p>これで上手く行きます．</p>
+<p>いずれの方法でもnodeからlatticeやtaggerへの参照がない(実際はあるけどPythonはそのことを知らない)ので、
+解析結果を読んでいる最中にlatticeやtaggerがGCで回収されないよう注意しましょう。</p>
 
-<p>encode_textとnodeの寿命が一致している必要があります．
-nodeの結果を何度も利用する場合は一度nodeの内容をすべてPythonのリストか何かに格納しましょう．
-一度変換してしまえば，ガーベージコレクションは正しく動きます．</p>
+<h2>追記(2015-12-20)</h2>
+
+<p>MeCab自体の問題っぽいので、MeCabにpullreq送って直してもらおうとソースいじってたけど、<a href="https://github.com/taku910/mecab/issues/5">すでにpatchあった</a>。
+<a href="https://github.com/taku910/mecab/compare/master...shogo82148:request-type">patchを取り込んだブランチを用意した</a>ので、
+GCされて困っている方はgit cloneしてお試し下さい。</p>
+
+<h2>追記その2(2016-02-08)</h2>
+
+<p>なんとか取り込んでもらおうと<a href="https://github.com/taku910/mecab/pull/24">Pull Request</a>にしてマージしてもらいました。
+まだリリースはされていませんが、2016-02-08現在のmasterブランチをビルドすれば、ガーベージコレクションの問題はなくなるはずです。
+<a href="https://twitter.com/chezou/status/696306806394474496">Twitterで作者に聞いてくれた</a>人がいたみたいで、僕のpulllreq以外もたくさんマージされたようです。
+よかったよかった。リリースを心待ちにしています。
+(が、<a href="https://github.com/taku910/mecab/pull/16">Python3対応のpullreq</a>はマージされていない・・・一応試してみてから+1しておこうかな)</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[MeCabをPython3から使う(中間報告)]]></title>
+    <link href="http://shogo82148.github.io/blog/2015/06/02/mecab-in-python3/"/>
+    <updated>2015-06-02T23:12:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2015/06/02/mecab-in-python3</id>
+    <content type="html"><![CDATA[<p>先日このようなツイートを見かけて、
+「Python3になってGCの挙動変わったのかな？」と疑問に思ったので調査してみました。</p>
+
+<p><blockquote class="twitter-tweet"><p lang="ja" dir="ltr">MeCabをPythonから使う注意点とか - Shogo&#39;s Blog <a href="http://t.co/vJnOqZfUd7">http://t.co/vJnOqZfUd7</a> <a href="https://twitter.com/shogo82148">@shogo82148</a>さんから python3だと変数に代入しなくても動くのだけど2.xでは留意しないといけない</p>&mdash; NOKUBI Takatsugu野首貴嗣 (@knok) <a href="https://twitter.com/knok/status/605197292086263808">June 1, 2015</a></blockquote>
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script></p>
+
+<!-- More -->
+
+
+<h2>Python3へのMeCabインストール</h2>
+
+<p>手元のPython3.4.3にMeCab Bindingをインストールします。
+MeCabの公式(Google Codeサービス停止にともない<a href="https://taku910.github.io/mecab/">github pageへ移行している模様</a>)から落とせる
+Python BindingはPython2.x向けのため、setup.pyがそのままでは動きません。
+Python3.xでは非互換な文法の変更が入ったので以下のように書き換える必要があります。</p>
+
+<p>``` diff
+diff --git a/setup.py.org b/setup.py
+index 4486cbb..657945a 100644
+--- a/setup.py.org
++++ b/setup.py
+@@ -7,7 +7,7 @@ def cmd1(str):</p>
+
+<pre><code> return os.popen(str).readlines()[0][:-1]
+</code></pre>
+
+<p> def cmd2(str):
+-    return string.split (cmd1(str))
++    return cmd1(str).split()</p>
+
+<p> setup(name = "mecab-python",</p>
+
+<pre><code>    version = cmd1("mecab-config --version"),
+</code></pre>
+
+<p>```</p>
+
+<p>あとは <code>python setup.py install</code> で入ります。</p>
+
+<h2>動かしてみる</h2>
+
+<p>以前書いた「<a href="http://shogo82148.github.io/blog/2012/12/15/mecab-python/">MeCabをPythonから使う注意点とか</a>」を見返しながら、
+GCされて上手く動かない例 をPython3.4.3で動かしてみます。
+文字列の扱いが変わったり、print文の扱いが変わったりしているので、その部分だけ書き換えが必要です。</p>
+
+<p>``` python
+import MeCab
+tagger = MeCab.tagger('')
+text = u'MeCabで遊んでみよう！'</p>
+
+<p>node = tagger.parseToNode(text)</p>
+
+<h1>Python2.x ではencode必須だったのが要らなくなった！</h1>
+
+<h1>node = tagger.parseToNode(text.encode('utf-8'))</h1>
+
+<p>while node:</p>
+
+<pre><code>print(node.surface + '\t' + node.feature)
+# printは文ではなくなったのでカッコで囲う必要がある
+node = node.next
+</code></pre>
+
+<p>```</p>
+
+<p>さて、動かしてみましょう。</p>
+
+<p>``` plain</p>
+
+<pre><code>BOS/EOS,*,*,*,*,*,*,*,*
+名詞,一般,*,*,*,*,*
+助詞,格助詞,一般,*,*,*,で,デ,デ
+動詞,自立,*,*,五段・バ行,連用タ接続,遊ぶ,アソン,アソン
+助詞,接続助詞,*,*,*,*,で,デ,デ
+</code></pre>
+
+<p>Traceback (most recent call last):
+  File "m.py", line 10, in <module></p>
+
+<pre><code>print( node.surface + '\t' + node.feature )
+</code></pre>
+
+<p>UnicodeDecodeError: 'utf-8' codec can't decode byte 0xa3 in position 1: invalid start byt
+```</p>
+
+<p>surfaceが全く読み取れていない・・・。
+最後にはutf-8のデコードができず死んでしまっています。
+全然変わってないじゃないか！</p>
+
+<p>変わってないどころか、状況はさらに悪くなっています。
+解決方法は以前の記事の通り「エンコード済みtext」を変数に保存・・・なのですが、
+Python3.x(+SWIG)ではエンコードが自動的に行われてしまうので <strong>ユーザが「エンコード済みtext」にアクセスすることができません！ </strong></p>
+
+<p><a href="http://samurait.hatenablog.com/entry/Mecab-python3">python3対応 Mecabの紹介</a>や
+<a href="https://github.com/taku910/mecab/pull/16">SWIG 3.0.5で作りなおしたPR</a>等を試してみましたが、
+同様の症状でした。</p>
 
 <h2>まとめ</h2>
 
 <ul>
-<li>MeCabに渡す文字列はencode，戻ってきた文字列はdecodeする</li>
-<li>MeCabに渡した文字列は必ず変数に入れておく</li>
+<li>Python3.xでもPython2.xと同様で、元テキストがGCで回収されてしまう</li>
+<li>Python3.xになって回避策が無くなった</li>
 </ul>
 
 
-<p>面倒なのでラッパーを書くかといいかもしれませんね．
-もしくは自前で実装とか．</p>
+<p>ぱっと思いつく回避策は以下のような感じでしょうか・・・。</p>
+
+<ul>
+<li>諦めて <code>parseToNode</code> を使わず、<code>parse</code>の結果を頑張って解析する</li>
+<li>SWIGの設定やC++側の書き方で頑張る(具体策は未調査)</li>
+</ul>
+
+
+<p>インターフェースを変えずに後者の方法で何とかならないか、
+引き続きいじってみようと思います。</p>
+
+<h2>追記(2015-12-20)</h2>
+
+<p><a href="http://shogo82148.github.io/blog/2015/12/20/mecab-in-python3-final/">続報</a>を書きました。</p>
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="https://github.com/taku910/mecab">taku910/MeCab</a></li>
+<li><a href="https://taku910.github.io/mecab/">MeCab</a></li>
+<li><a href="http://shogo82148.github.io/blog/2012/12/15/mecab-python/">MeCabをPythonから使う注意点とか</a></li>
+<li><a href="http://www.trifields.jp/how-to-use-mecab-in-ubuntu-14-04-and-python-3-1196">Ubuntu14.04とPython3でMeCabを使う方法</a></li>
+<li><a href="http://samurait.hatenablog.com/entry/Mecab-python3">python3対応 Mecabの紹介</a></li>
+</ul>
+
 ]]></content>
   </entry>
   
