@@ -4,7 +4,7 @@
   <title><![CDATA[Category: go | Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/blog/categories/go/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2016-03-19T10:29:42+09:00</updated>
+  <updated>2016-03-29T13:35:23+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,120 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[数値と文字列がごちゃ混ぜになっているJSONをよしなにParseするやつ作った]]></title>
+    <link href="http://shogo82148.github.io/blog/2016/03/23/go-weaktyping/"/>
+    <updated>2016-03-23T20:44:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2016/03/23/go-weaktyping</id>
+    <content type="html"><![CDATA[<p>Goは数値と文字列を厳格に区別しますが、他の言語もそうとは限りません。
+例えばPerlは数値と文字列を自動変換してくれるので、気をつけていないといつの間にか数値が文字列になっていたりします。
+その言語の中に閉じていいれば問題ないのですが、Goとやり取りしようとすると困ります。
+そんなときに使えるライブラリを書いてみました。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/go-weaktyping">shogo82148/go-weaktyping</a></li>
+</ul>
+
+
+<!-- More -->
+
+
+<h2>背景</h2>
+
+<p><code>map[string][]*string</code>を返してくるライブラリがあって、
+そのままだと扱いにくいのでなんとか構造体にできないかと頭を悩ませていました。
+JSONに一旦変換すれば楽かなーとも思ったのですが、一部フィールドを数値に変換する必要がありました。
+JSONの数値と文字列を区別するため、JSONの文字列をGoの数値型に変換するのは厄介です。
+タグに<code>json:",string"</code>と指定すると変換可能になりますが、逆にJSONの数値を受け付けなくなりますし、
+JSONに変換すると文字列になってしまいます。
+変換先の構造体は普通のJSONの操作にも使いたかったので、これでは困ります。
+「数値も文字列もUnmarshalできて、Marshalするときには数値になる」ようなJSONライブラリが必要でした。</p>
+
+<p><code>"encoding/json"</code>に代わる新しいJSONライブラリを・・・とも考えたのですが、
+よく考えるとUnmarshal時の挙動は<code>"encoding/json".Unmarshaler</code>インターフェースを実装することでカスタマイズ可能です。
+こうして作ったのが go-weaktyping です。</p>
+
+<h2>使い方</h2>
+
+<p>builtinの型の先頭を大文字にしたものを用意しているので、
+適当にUnmarshalして欲しいところでbuiltinの型の代わりに指定するだけです。
+以下は整数型をUnmarshalする例です。</p>
+
+<p>``` go
+package main</p>
+
+<p>import (</p>
+
+<pre><code>"encoding/json"
+"fmt"
+"log"
+
+"github.com/shogo82148/go-weaktyping"
+</code></pre>
+
+<p>)</p>
+
+<p>func main() {</p>
+
+<pre><code>ptr := &amp;struct {
+    Foo weaktyping.Int `json:"foo"`
+}{}
+
+if err := json.Unmarshal([]byte(`{"foo":123}`), ptr); err != nil {
+    log.Fatal(err)
+}
+fmt.Println("Foo:", ptr.Foo)
+
+if err := json.Unmarshal([]byte(`{"foo":"456"}`), ptr); err != nil {
+    log.Fatal(err)
+}
+fmt.Println("Foo:", ptr.Foo)
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>{"foo":123}</code>が正常にUnmarshalできるのはもちろん、
+通常はエラーになってしまう<code>{"foo":"456"}</code>のUnmarshalも問題なく行えます。
+Marshal時は通常のint型と同様に振る舞います。</p>
+
+<p>数値型だけでなく<code>weaktyping.String</code>も用意されていて、
+通常はエラーになってしまう <code>{"foo":123}</code> も <code>struct { Foo weaktyping.String }{"123"}</code>にUnmarshal可能です。</p>
+
+<p>その他使える型は <a href="https://godoc.org/github.com/shogo82148/go-weaktyping">godoc</a> をどうぞ。</p>
+
+<h2>各種Boolたち</h2>
+
+<p>builtinの<code>bool</code>に対応する<code>weaktyping.Bool</code>も実装してみたのですが、
+何を持って真偽を判断するか難しい・・・。
+例えば空のARRAYは真とみなすべきか、偽とみなすべきか。
+普段触っている言語によって意見が分かれるのではないでしょうか。
+(そもそも型が違うからエラーという人もいるだろうけど、そういうときは普通に<code>bool</code>を使いましょう)</p>
+
+<p>JSONはもともとJavaScriptから派生した形式なので、JavaScriptに合わせるのが妥当かなと思い、
+<code>weaktyping.Bool</code>の挙動はJavaScriptに合わせてあります。
+「<a href="http://blog.mirakui.com/entry/20090604/truefalse">各言語におけるtrue/falseまとめ</a>」を参考に言語別のBoolも用意しています。</p>
+
+<ul>
+<li><code>Bool</code>/<code>JavaScriptBool</code>: <code>false</code>, <code>0</code>, <code>0.0</code>, <code>""</code>, <code>null</code> は偽、それ以外は真</li>
+<li><code>RubyBool</code>: <code>false</code>, <code>null</code> は偽、それ以外は真</li>
+<li><code>PHPBool</code>: <code>false</code>, <code>0</code>, <code>0.0</code>, <code>""</code>, <code>null</code>, <code>"0"</code>, <code>[]</code> は偽、それ以外は真</li>
+<li><code>PerlBool</code>: <code>false</code>, <code>0</code>, <code>0.0</code>, <code>""</code>, <code>null</code>, <code>"0"</code> は偽、それ以外は真</li>
+<li><code>PythonBool</code>: <code>false</code>, <code>0</code>, <code>0.0</code>, <code>""</code>, <code>null</code>, <code>[]</code>, <code>{}</code> は偽、それ以外は真</li>
+</ul>
+
+
+<p>ややこしい・・・なるべく使わない方がいいと思います。</p>
+
+<h2>最後に</h2>
+
+<p>これを作るきっかけになった問題ですが、reflectで解決しました。reflect最強。
+go-weaktypingを使うとすべてのUnmarshal時に有効になってしまって怖いなと考えたためです。</p>
+
+<p>今後もなるべく go-weaktyping を使わずに済むよう祈ってます。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[ngrokみたいなHTTPプロキシを書いてみた]]></title>
@@ -575,105 +689,6 @@ fmt.Println(data)
 WebSocketならインターネッツに繋がった環境なら大抵そのままつながります。
 Outgoing WebhookならチャンネルにJOINしていなくてもイベントを受け取れたりして便利ですが、
 ちょっとしたボットならこちらの方がお手軽ですね。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Go言語でPerlのテストを早くする]]></title>
-    <link href="http://shogo82148.github.io/blog/2015/09/19/faster-perl-test-with-go-lang/"/>
-    <updated>2015-09-19T21:49:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2015/09/19/faster-perl-test-with-go-lang</id>
-    <content type="html"><![CDATA[<p><a href="http://shogo82148.github.io/blog/2015/06/20/test-mysqld-multi/">Test::mysqld::Multiというモジュールを書いてみた</a>みたいな涙ぐましい努力により5分で終わるようになったテストですが、
-プロジェクトのコードも増えて人も増えた影響で、
-テスト時間が約7分まで伸び、テストのキューに10個近く並んで順番待ちさせられるという状況になってしまいした。</p>
-
-<p>この状況を解決すべく <a href="https://github.com/shogo82148/go-prove">go-prove</a> というものを書いてみたので、そのご紹介です。</p>
-
-<h2>proveが遅い理由</h2>
-
-<p>proveがテストの結果を読むところがブロッキングI/Oになっているらしく、そのせいで遅くなっているらしいです。</p>
-
-<ul>
-<li><a href="https://github.com/Perl-Toolchain-Gang/Test-Harness/issues/30">Perl-Toolchain-Gang/Test-Harness#30</a></li>
-</ul>
-
-
-<p>実際に<a href="https://github.com/Perl-Toolchain-Gang/Test-Harness/blob/a278e504794c649c61f2c362841eec1a9735a3d0/lib/TAP/Parser/Iterator/Process.pm#L245">結果読んでいるところ</a>はこの辺ですかね。
-selectとか使っていてなるべくブロッキングしないような作りにはなっていそうですが、どこかでブロッキングしてしまっているようです。
-今のプロジェクトだと32コアのCPUで32並列で動かしてもCPUを100%使い切ることができませんでした。</p>
-
-<h2>Shunme</h2>
-
-<p>ググるとShunmeというプロジェクトでproveの問題を解決しようという試みが行われているようです。</p>
-
-<ul>
-<li><a href="http://code-stylistics.net/archives/shunme.html">Shunmeというperl用のテストハーネスモジュールを書き始めました</a></li>
-<li><a href="https://github.com/magnolia-k/p5-Shunme">magnolia-k/p5-Shunme</a></li>
-</ul>
-
-
-<p>しかし残念ながらproveのプラグイン機構はサポートしておらず、Formatterの指定オプションもないようです。
-今のプロジェクトではプラグインでMySQLを立てたり、JUnitでテスト結果をフォーマットしたりということをしているので、そのままは使えなさそう。
-ちょっと改造するにはソースコードの理解が大変そうなので断念。
-「(逆に遅くなるときも有ります)」というところも気になりますね・・・。</p>
-
-<h2>go-prove</h2>
-
-<p>いろいろテストの実行方法を調べてはみましたが、どの方法も並行処理に苦労している模様。
-テストファイル自体はただのPerlのスクリプトなので、実行して集計する部分は別にPerlにこだわる必要ないのでは？
-並行処理といえば今ならGolangでしょ！ってことでproveのGo実装を書いてみました。</p>
-
-<ul>
-<li><a href="https://github.com/shogo82148/go-prove">go-prove</a></li>
-</ul>
-
-
-<p>例えば以下のようなテストをかいて、</p>
-
-<p>``` perl t/macopy.t
-use Test::More;</p>
-
-<p>ok "macopy";</p>
-
-<p>done_testing;
-```</p>
-
-<p>go-proveコマンドと実行すると、JUnit形式でテスト結果が出力されます。</p>
-
-<p>```
-$ go-prove
-2015/09/19 21:45:44 start t/macopy.t
-2015/09/19 21:45:44 finish t/macopy.t
-<testsuites></p>
-
-<pre><code>    &lt;testsuite tests="1" failures="0" time="0.225" name="t_macopy_t"&gt;
-            &lt;properties&gt;&lt;/properties&gt;
-            &lt;testcase classname="t_macopy_t" name="" time="0.225"&gt;&lt;/testcase&gt;
-    &lt;/testsuite&gt;
-</code></pre>
-
-<p></testsuites>
-```</p>
-
-<p><code>go-prove -j 32</code>とするとgoroutineを32個生成して、32並列でテストを実行してくれます。
-I/Oの処理をGolangのランタイムがよしなにやってくれるので、楽ちんです。</p>
-
-<p>また、今のプロジェクトではApp::Prove::Plugin::MySQLPoolを使っているので、それ相当の機能を<code>go-prove -plugin mysqld</code>で使えるようにしました。
-プラグインを有効にするとMySQLサーバを立ち上げて、その接続先情報を<code>GO_PROVE_MYSQLD</code>環境変数に設定してくれます。</p>
-
-<p>実際にプロジェクトのコードで試してみたところ7分かかっていたテストが4分を切るようになりました。
-CPUの使用率も100%近くになって、有効活用できているようです。</p>
-
-<h2>まとめ</h2>
-
-<ul>
-<li>Perl製のproveは並列実行に弱い</li>
-<li>Goで書きなおしてCPUをフル活用できるようになった</li>
-</ul>
-
-
-<p>早くはなるものの、既存のテストコードに手を加える必要があってちょっと怖いかなと思ったので、プロジェクトへの組み込みはやってません。
-まあ本番環境で走るものではないので、ある程度動くことが確認できたら置き換えてみたいですね。</p>
 ]]></content>
   </entry>
   
