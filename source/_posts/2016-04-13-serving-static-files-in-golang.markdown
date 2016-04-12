@@ -8,7 +8,7 @@ categories: [go]
 
 [net/httpで静的ファイルを返す](http://konboi.hatenablog.com/entry/2016/04/12/121105)で、
 `http.ServeFile`を使っていてアレ？と思ったのでちょっと詳しく調べてみました。
-(`http.FileServer`を使うものだと思ってたため。[godocのexample](https://golang.org/pkg/net/http/#example_FileServer)にはそっちの例しか載ってない)
+(`http.FileServer`を使うものだと思ってたため)
 
 結論だけ先に書いておくと
 
