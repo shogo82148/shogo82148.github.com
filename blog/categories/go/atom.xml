@@ -4,7 +4,7 @@
   <title><![CDATA[Category: go | Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/blog/categories/go/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2016-04-06T10:10:56+09:00</updated>
+  <updated>2016-04-13T04:04:46+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,316 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[net/httpで安全に静的ファイルを返す]]></title>
+    <link href="http://shogo82148.github.io/blog/2016/04/13/serving-static-files-in-golang/"/>
+    <updated>2016-04-13T02:29:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2016/04/13/serving-static-files-in-golang</id>
+    <content type="html"><![CDATA[<p><a href="http://konboi.hatenablog.com/entry/2016/04/12/121105">net/httpで静的ファイルを返す</a>で、
+<code>http.ServeFile</code>を使っていてアレ？と思ったのでちょっと詳しく調べてみました。
+(<code>http.FileServer</code>を使うものだと思ってたため。<a href="https://golang.org/pkg/net/http/#example_FileServer">godocのexample</a>にはそっちの例しか載ってない)</p>
+
+<p>結論だけ先に書いておくと</p>
+
+<ul>
+<li>やはり、特に理由がなければ<code>http.FileServer</code>を使ったほうが良さそう</li>
+<li>どうしても<code>http.ServeFile</code>を使う場合は定数でパス指定をする</li>
+<li>「自作パスルータを使っている」かつ「Go 1.6.1 未満を使っている」場合はとくに要注意</li>
+</ul>
+
+
+<!-- More -->
+
+
+<h2>ディレクトリトラバーサル脆弱性</h2>
+
+<p>紹介されているのは以下のコードです。</p>
+
+<p><code>go
+http.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {
+  http.ServeFile(w, r, r.URL.Path[1:])
+})
+</code></p>
+
+<p>しかし、参照先の「<a href="http://stackoverflow.com/questions/25945538/go-golang-to-serve-a-specific-html-file">Go Golang to serve a specific html file</a>」には
+<strong>Actually, do not do that.</strong> (やっちゃいけない)とコメントされています。
+<a href="https://ja.wikipedia.org/wiki/%E3%83%87%E3%82%A3%E3%83%AC%E3%82%AF%E3%83%88%E3%83%AA%E3%83%88%E3%83%A9%E3%83%90%E3%83%BC%E3%82%B5%E3%83%AB">ディレクトリトラバーサル</a>により
+脆弱性の原因となってしまう可能性があるためです。</p>
+
+<p>脆弱性再現のために、以下の様なコードを書いてGo1.5でコンパイルして実行してみました。</p>
+
+<p>``` go
+package main</p>
+
+<p>import (</p>
+
+<pre><code>"net/http"
+"strings"
+</code></pre>
+
+<p>)</p>
+
+<p>func main() {</p>
+
+<pre><code>http.ListenAndServe(":3000", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+    if strings.HasPrefix(r.URL.Path, "/static/") {
+        http.ServeFile(w, r, r.URL.Path[1:])
+    } else {
+        http.NotFound(w, r)
+    }
+}))
+</code></pre>
+
+<p>}
+```</p>
+
+<p><code>..</code>を含んだパスをリクエストしてみます。(実行した場所によって<code>..</code>の数は変わるので適宜調整してみてください)</p>
+
+<p>``` plain
+$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
+* About to connect() to localhost port 3000 (#0)
+*   Trying ::1... connected
+* Connected to localhost (::1) port 3000 (#0)</p>
+
+<blockquote><p>GET /static/../../../.ssh/id_rsa HTTP/1.1
+User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
+Host: localhost:3000
+Accept: <em>/</em></p>
+
+<p>&lt; HTTP/1.1 200 OK
+&lt; Accept-Ranges: bytes
+&lt; Content-Length: 1679
+&lt; Content-Type: text/plain; charset=utf-8
+&lt; Last-Modified: Fri, 13 Jun 2014 04:57:05 GMT
+&lt; Date: Tue, 12 Apr 2016 17:53:19 GMT
+&lt;
+-----BEGIN RSA PRIVATE KEY-----
+(中略)
+-----END RSA PRIVATE KEY-----
+* Connection #0 to host localhost left intact
+* Closing connection #0
+```</p></blockquote>
+
+<p>macのcurlで試したらクライアント側で相対パスを解決した状態でリクエストが飛んでしまって上手く行きませんでした。
+オプションで外す方法がよくわかなかったので、<code>telnet</code>で叩いてみた例も載せておきます。</p>
+
+<p>``` plain
+$ telnet localhost 3000
+Trying ::1...
+Connected to localhost.
+Escape character is '<sup>]'.</sup>
+GET /static/../../../.ssh/id_rsa HTTP/1.0</p>
+
+<p>HTTP/1.0 200 OK
+Accept-Ranges: bytes
+Content-Length: 1679
+Content-Type: text/plain; charset=utf-8
+Last-Modified: Fri, 13 Jun 2014 04:57:05 GMT
+Date: Tue, 12 Apr 2016 18:02:56 GMT</p>
+
+<p>-----BEGIN RSA PRIVATE KEY-----
+(中略)
+-----END RSA PRIVATE KEY-----
+Connection closed by foreign host.
+```</p>
+
+<p>ああ、僕の秘密鍵が・・・。</p>
+
+<h2>脆弱性を回避する</h2>
+
+<h3>Go1.6以降を使う</h3>
+
+<p>Go1.6以降では修正されており、
+同じコードをGo1.6でコンパイルしてcurlで叩くと400が帰ってきます。</p>
+
+<p>``` plain
+$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
+* About to connect() to localhost port 3000 (#0)
+*   Trying ::1... connected
+* Connected to localhost (::1) port 3000 (#0)</p>
+
+<blockquote><p>GET /static/../../../.ssh/id_rsa HTTP/1.1
+User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
+Host: localhost:3000
+Accept: <em>/</em></p>
+
+<p>&lt; HTTP/1.1 400 Bad Request
+&lt; Content-Type: text/plain; charset=utf-8
+&lt; X-Content-Type-Options: nosniff
+&lt; Date: Tue, 12 Apr 2016 18:12:46 GMT
+&lt; Content-Length: 17
+&lt;
+invalid URL path
+* Connection #0 to host localhost left intact
+* Closing connection #0
+```</p></blockquote>
+
+<h3><code>http.ServeMux</code>を使う</h3>
+
+<p><code>http.ServeMux</code>にはパスの正規化機能が組み込まれており、
+正規化されていないURLにアクセスが来た場合は自動的リダイレクトしてくれるようです。
+HTTPハンドラに渡ってくるときには、必ず相対パスが含まれていない状態になっています。
+(これに最初は気が付かず、脆弱性が再現しないので困ってた。)</p>
+
+<p>``` go
+package main</p>
+
+<p>import "net/http"</p>
+
+<p>func main() {
+  // 内部でhttp.ServeMuxを使ってくれる
+  http.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {</p>
+
+<pre><code>// r.URLには相対パスが含まれない形で渡ってくる
+http.ServeFile(w, r, r.URL.Path[1:])
+</code></pre>
+
+<p>  })
+  http.ListenAndServe(":3000", nil)
+}
+```</p>
+
+<p>相対パスを含んだリクエストを投げてもアクセスはできません。</p>
+
+<p>``` plain
+$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
+* About to connect() to localhost port 3000 (#0)
+*   Trying ::1... connected
+* Connected to localhost (::1) port 3000 (#0)</p>
+
+<blockquote><p>GET /static/../../../.ssh/id_rsa HTTP/1.1
+User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
+Host: localhost:3000
+Accept: <em>/</em></p>
+
+<p>&lt; HTTP/1.1 301 Moved Permanently
+&lt; Location: /.ssh/id_rsa
+&lt; Date: Tue, 12 Apr 2016 18:14:49 GMT
+&lt; Content-Length: 47
+&lt; Content-Type: text/html; charset=utf-8
+&lt;
+<a href="http://shogo82148.github.io/.ssh/id_rsa">Moved Permanently</a>.</p></blockquote>
+
+<ul>
+<li>Connection #0 to host localhost left intact</li>
+<li>Closing connection #0
+```</li>
+</ul>
+
+
+<h3><code>http.FileServer</code>を使う</h3>
+
+<p><code>http.Dir</code>と<code>http.FileServer</code>を使うとルートディレクトリを指定でき、
+その外へはアクセスできなくなるので想定外のファイルが見えてしまうことはありません。</p>
+
+<p>``` go
+package main</p>
+
+<p>import (
+  "net/http"
+  "strings"
+)</p>
+
+<p>func main() {
+  fileServer := http.StripPrefix("/static/", http.FileServer(http.Dir("static")))
+  http.ListenAndServe(":3000", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {</p>
+
+<pre><code>if strings.HasPrefix(r.URL.Path, "/static/") {
+  fileServer.ServeHTTP(w, r)
+} else {
+  http.NotFound(w, r)
+}
+</code></pre>
+
+<p>  }))
+}
+```</p>
+
+<p>相対パスを含んだURLにアクセスしても404になって見れません。</p>
+
+<p>``` plain
+$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
+* About to connect() to localhost port 3000 (#0)
+*   Trying ::1... connected
+* Connected to localhost (::1) port 3000 (#0)</p>
+
+<blockquote><p>GET /static/../../../.ssh/id_rsa HTTP/1.1
+User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
+Host: localhost:3000
+Accept: <em>/</em></p>
+
+<p>&lt; HTTP/1.1 404 Not Found
+&lt; Content-Type: text/plain; charset=utf-8
+&lt; X-Content-Type-Options: nosniff
+&lt; Date: Tue, 12 Apr 2016 18:39:34 GMT
+&lt; Content-Length: 19
+&lt;
+404 page not found
+* Connection #0 to host localhost left intact
+* Closing connection #0
+```</p></blockquote>
+
+<h3><code>http.ServeFile</code>に定数を渡す</h3>
+
+<p>どうしても特定のファイルを指定したい場合は<code>http.Request</code>の中身は一切見ずにファイルパスを直接<code>http.ServeFile</code>に渡すべきです。
+例えば、「<a href="http://stackoverflow.com/questions/25945538/go-golang-to-serve-a-specific-html-file">Go Golang to serve a specific html file</a>」の質問者が上げている例を
+正しく書きなおすと以下のようになると思います。</p>
+
+<blockquote><p><code>http.Handle("/", http.FileServer(http.Dir("static")))</code>
+Serves the html file in static directory.</p>
+
+<p>Is there any way in Go that we can specify the html file to serve?</p>
+
+<p>Something like render_template in Flask</p>
+
+<p>I want to do something like:</p>
+
+<p><code>http.Handle("/hello", http.FileServer(http.Dir("static/hello.html")))</code></p></blockquote>
+
+<p>``` go
+package main</p>
+
+<p>import "net/http"</p>
+
+<p>func main() {
+  http.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {</p>
+
+<pre><code>http.ServeFile(w, r, "static/hello.html")
+</code></pre>
+
+<p>  })
+  http.ListenAndServe(":3000", nil)
+}
+```</p>
+
+<h2>まとめ</h2>
+
+<p>まとめ再掲。</p>
+
+<ul>
+<li>やはり、特に理由がなければ<code>http.FileServer</code>を使ったほうが良さそう</li>
+<li>どうしても<code>http.ServeFile</code>を使う場合は定数でパス指定をする</li>
+<li>「自作パスルータを使っている」かつ「Go 1.6.1 未満を使っている」場合はとくに要注意</li>
+</ul>
+
+
+<h2>まとめのまとめ</h2>
+
+<p><a href="https://golang.org/pkg/net/http/#example_FileServer">godocのexample</a>どおりにやるのが一番。</p>
+
+<p>``` go
+package main</p>
+
+<p>import "net/http"</p>
+
+<p>func main() {
+  http.HandleFunc("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+  http.ListenAndServe(":3000", nil)
+}
+```</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[PerlでもGoでも実行できるQuine書いた]]></title>
@@ -433,130 +743,6 @@ GoogleでもFacebookでも認証できるようにしたいという場合、ngi
 
 <p>adapter自身の公開設定をしなくて良い分簡単にセットアップできます。
 nginx_omniauth_adapter互換ですぐに乗り換えもできるので、ぜひお気軽にお試し下さい。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Goでデプロイ神社書いてみた]]></title>
-    <link href="http://shogo82148.github.io/blog/2015/12/13/go-deploy-shrine/"/>
-    <updated>2015-12-13T10:51:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2015/12/13/go-deploy-shrine</id>
-    <content type="html"><![CDATA[<p><a href="http://qiita.com/advent-calendar/2015/go2">Go その2 Advent Calendar 2015</a>の13日目の記事です。</p>
-
-<ul>
-<li><a href="http://qiita.com/advent-calendar/2015/go">その1</a></li>
-<li><a href="http://qiita.com/advent-calendar/2015/go2">その2</a></li>
-<li><a href="http://qiita.com/advent-calendar/2015/go3">その3</a></li>
-</ul>
-
-
-<p>六曜を知ることができる便利コマンドを作ってみたお話です。</p>
-
-<!-- More -->
-
-
-<h2>Deploy神社とは</h2>
-
-<p><a href="https://twitter.com/Maco_Tasu">Maco_Tasu</a>が作ったいつdeployしたら安全かを教えてくれる便利APIです。
-詳しくは作者ブログ記事をどうぞ。(<a href="http://macotasu.hatenablog.jp/entry/2014/11/13/214337">Deploy神社APIを作った- 眠すぎて明日が見えない</a>)</p>
-
-<p>便利APIなのですが、依存している外部APIが利用できなくなってしまったため、Deploy神社自体が利用できなくなっています。</p>
-
-<h2>作ってみた</h2>
-
-<p>デプロイする時間が分からないと不便なので、Go実装を作ってみました。</p>
-
-<ul>
-<li><a href="https://github.com/shogo82148/go-deploy-shrine">shogo82148/go-deploy-shrine</a></li>
-</ul>
-
-
-<p><code>go get</code>してきてお祈りを捧げればデプロイするべき時間を教えてくれます。</p>
-
-<p><code>bash
-$ go get github.com/shogo82148/go-deploy-shrine/cli/pray
-$ pray
-今日は旧暦の11月3日(先勝)です。deployは午前中に済ませましょう。
-</code></p>
-
-<p><a href="http://www.weblio.jp/content/%E5%85%88%E5%8B%9D">先勝 - Weblio</a></p>
-
-<blockquote><p>六曜の一。急用や訴訟などによいとされ，早く事を行うのがよく，午前は吉，午後は凶という日。先勝日。せんかち。さきがち。</p></blockquote>
-
-<p>今日12月13日は先勝で午前中にデプロイするのが良いようです。便利ですね。</p>
-
-<h2>六曜とは</h2>
-
-<p>むかしのカレンダーには暦注と呼ばれる「今日の運勢」みたいなものが記載されていたらしいです。
-六曜はその暦注のひとつで、現在のカレンダーにも記載されることの多い影響力の大きなものです。</p>
-
-<p>詳しくはWikipediaで。</p>
-
-<ul>
-<li><a href="https://ja.wikipedia.org/wiki/%E5%85%AD%E6%9B%9C">六曜 - Wikipedia</a></li>
-</ul>
-
-
-<p>旧暦の(月＋日)を6で割った余りから簡単に求めることができます。</p>
-
-<ul>
-<li>0: 大安</li>
-<li>1: 赤口</li>
-<li>2: 先勝</li>
-<li>3: 友引</li>
-<li>4: 先負</li>
-<li>5: 仏滅</li>
-</ul>
-
-
-<h2>旧暦とは</h2>
-
-<p>旧暦の月日を求めることができれば六曜は簡単に出せるのですが、
-日本における旧暦である<a href="https://ja.wikipedia.org/wiki/%E5%A4%A9%E4%BF%9D%E6%9A%A6">天保暦</a>は月の満ち欠けと太陽の動きを元にした暦法であり、
-月と太陽の動きを正確に予測する必要があります。</p>
-
-<p>Go版デプロイ神社では「日の出・日の入りの計算―天体の出没時刻の求め方」で紹介されていた計算式を用いています</p>
-
-<iframe src="http://rcm-fe.amazon-adsystem.com/e/cm?lt1=_blank&bc1=000000&IS2=1&bg1=FFFFFF&fc1=000000&lc1=0000FF&t=shogo82148-22&o=9&p=8&l=as4&m=amazon&f=ifr&ref=ss_til&asins=4805206349" style="width:120px;height:240px;" scrolling="no" marginwidth="0" marginheight="0" frameborder="0"></iframe>
-
-
-<h2>2033年旧暦閏月問題</h2>
-
-<p>天保暦をそのまま当てはめると2033年に月を決定できない問題が知られています。
-日本カレンダー暦文化振興協会というところが「閏11月を推奨する」との見解を2015年8月に出しています。</p>
-
-<ul>
-<li><a href="http://www.rekibunkyo.or.jp/year2033problem.html">2033年旧暦閏月問題の見解</a></li>
-</ul>
-
-
-<p>Go版デプロイ神社では時憲暦方式を採用したつもりです。</p>
-
-<h2>せめてGoっぽい話題を</h2>
-
-<p>引数に日付を渡すとその日の六曜をかえしてくれます。
-いろんな形式に対応していて、以下はすべて2006年1月2日の六曜を返します。</p>
-
-<p><code>bash
-$ pray 20060102
-$ pray 1/2/2006
-$ pray 2-Jan-06
-$ pray 2-Jan-2006
-$ pray 2/Jan/2006
-$ pray 'Jan 2 2006'
-2006-01-02は旧暦の12月3日(友引)です。昼のdeployはさけましょう。するなら朝晩が吉です。
-</code></p>
-
-<p>引数の解析には <a href="https://github.com/tkuchiki/parsetime">tkuchiki/parsetime</a>を使っています。
-たいていの日時フォーマットなら解析してくれる便利ライブラリです。</p>
-
-<h2>最後に</h2>
-
-<p>暦法とか天文学とかよくわかってない人間が作ったプログラムなので、結果の保証はできません。
-今月の旧暦は<a href="http://keisan.casio.jp/exec/system/1186108192">六曜計算 - 高精度計算サイト</a>の計算結果と一致することは確認していますが、
-他の日でも正しい結果を返すかどうかは未検証です。</p>
-
-<p>Go版デプロイ神社を信じてのデプロイして事故っても、責任は負いかねますのでご了承ください。</p>
 ]]></content>
   </entry>
   

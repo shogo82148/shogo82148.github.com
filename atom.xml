@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="http://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="http://shogo82148.github.io/"/>
-  <updated>2016-04-06T10:10:56+09:00</updated>
+  <updated>2016-04-13T04:04:46+09:00</updated>
   <id>http://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,448 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[net/httpで安全に静的ファイルを返す]]></title>
+    <link href="http://shogo82148.github.io/blog/2016/04/13/serving-static-files-in-golang/"/>
+    <updated>2016-04-13T02:29:00+09:00</updated>
+    <id>http://shogo82148.github.io/blog/2016/04/13/serving-static-files-in-golang</id>
+    <content type="html"><![CDATA[<p><a href="http://konboi.hatenablog.com/entry/2016/04/12/121105">net/httpで静的ファイルを返す</a>で、
+<code>http.ServeFile</code>を使っていてアレ？と思ったのでちょっと詳しく調べてみました。
+(<code>http.FileServer</code>を使うものだと思ってたため。<a href="https://golang.org/pkg/net/http/#example_FileServer">godocのexample</a>にはそっちの例しか載ってない)</p>
+
+<p>結論だけ先に書いておくと</p>
+
+<ul>
+<li>やはり、特に理由がなければ<code>http.FileServer</code>を使ったほうが良さそう</li>
+<li>どうしても<code>http.ServeFile</code>を使う場合は定数でパス指定をする</li>
+<li>「自作パスルータを使っている」かつ「Go 1.6.1 未満を使っている」場合はとくに要注意</li>
+</ul>
+
+
+<!-- More -->
+
+
+<h2>ディレクトリトラバーサル脆弱性</h2>
+
+<p>紹介されているのは以下のコードです。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="nx">http</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">&quot;/static/&quot;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">ServeFile</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">,</span> <span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
+</span><span class='line'><span class="p">})</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>しかし、参照先の「<a href="http://stackoverflow.com/questions/25945538/go-golang-to-serve-a-specific-html-file">Go Golang to serve a specific html file</a>」には
+<strong>Actually, do not do that.</strong> (やっちゃいけない)とコメントされています。
+<a href="https://ja.wikipedia.org/wiki/%E3%83%87%E3%82%A3%E3%83%AC%E3%82%AF%E3%83%88%E3%83%AA%E3%83%88%E3%83%A9%E3%83%90%E3%83%BC%E3%82%B5%E3%83%AB">ディレクトリトラバーサル</a>により
+脆弱性の原因となってしまう可能性があるためです。</p>
+
+<p>脆弱性再現のために、以下の様なコードを書いてGo1.5でコンパイルして実行してみました。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;net/http&quot;</span>
+</span><span class='line'>  <span class="s">&quot;strings&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">&quot;:3000&quot;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nx">HandlerFunc</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">if</span> <span class="nx">strings</span><span class="p">.</span><span class="nx">HasPrefix</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">,</span> <span class="s">&quot;/static/&quot;</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>          <span class="nx">http</span><span class="p">.</span><span class="nx">ServeFile</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">,</span> <span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
+</span><span class='line'>      <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>          <span class="nx">http</span><span class="p">.</span><span class="nx">NotFound</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">)</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>  <span class="p">}))</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>..</code>を含んだパスをリクエストしてみます。(実行した場所によって<code>..</code>の数は変わるので適宜調整してみてください)</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
+</span><span class='line'>* About to connect() to localhost port 3000 (#0)
+</span><span class='line'>*   Trying ::1... connected
+</span><span class='line'>* Connected to localhost (::1) port 3000 (#0)
+</span><span class='line'>&gt; GET /static/../../../.ssh/id_rsa HTTP/1.1
+</span><span class='line'>&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
+</span><span class='line'>&gt; Host: localhost:3000
+</span><span class='line'>&gt; Accept: */*
+</span><span class='line'>&gt;
+</span><span class='line'>&lt; HTTP/1.1 200 OK
+</span><span class='line'>&lt; Accept-Ranges: bytes
+</span><span class='line'>&lt; Content-Length: 1679
+</span><span class='line'>&lt; Content-Type: text/plain; charset=utf-8
+</span><span class='line'>&lt; Last-Modified: Fri, 13 Jun 2014 04:57:05 GMT
+</span><span class='line'>&lt; Date: Tue, 12 Apr 2016 17:53:19 GMT
+</span><span class='line'>&lt;
+</span><span class='line'>-----BEGIN RSA PRIVATE KEY-----
+</span><span class='line'>(中略)
+</span><span class='line'>-----END RSA PRIVATE KEY-----
+</span><span class='line'>* Connection #0 to host localhost left intact
+</span><span class='line'>* Closing connection #0</span></code></pre></td></tr></table></div></figure>
+
+
+<p>macのcurlで試したらクライアント側で相対パスを解決した状態でリクエストが飛んでしまって上手く行きませんでした。
+オプションで外す方法がよくわかなかったので、<code>telnet</code>で叩いてみた例も載せておきます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ telnet localhost 3000
+</span><span class='line'>Trying ::1...
+</span><span class='line'>Connected to localhost.
+</span><span class='line'>Escape character is '^]'.
+</span><span class='line'>GET /static/../../../.ssh/id_rsa HTTP/1.0
+</span><span class='line'>
+</span><span class='line'>HTTP/1.0 200 OK
+</span><span class='line'>Accept-Ranges: bytes
+</span><span class='line'>Content-Length: 1679
+</span><span class='line'>Content-Type: text/plain; charset=utf-8
+</span><span class='line'>Last-Modified: Fri, 13 Jun 2014 04:57:05 GMT
+</span><span class='line'>Date: Tue, 12 Apr 2016 18:02:56 GMT
+</span><span class='line'>
+</span><span class='line'>-----BEGIN RSA PRIVATE KEY-----
+</span><span class='line'>(中略)
+</span><span class='line'>-----END RSA PRIVATE KEY-----
+</span><span class='line'>Connection closed by foreign host.</span></code></pre></td></tr></table></div></figure>
+
+
+<p>ああ、僕の秘密鍵が・・・。</p>
+
+<h2>脆弱性を回避する</h2>
+
+<h3>Go1.6以降を使う</h3>
+
+<p>Go1.6以降では修正されており、
+同じコードをGo1.6でコンパイルしてcurlで叩くと400が帰ってきます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
+</span><span class='line'>* About to connect() to localhost port 3000 (#0)
+</span><span class='line'>*   Trying ::1... connected
+</span><span class='line'>* Connected to localhost (::1) port 3000 (#0)
+</span><span class='line'>&gt; GET /static/../../../.ssh/id_rsa HTTP/1.1
+</span><span class='line'>&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
+</span><span class='line'>&gt; Host: localhost:3000
+</span><span class='line'>&gt; Accept: */*
+</span><span class='line'>&gt; 
+</span><span class='line'>&lt; HTTP/1.1 400 Bad Request
+</span><span class='line'>&lt; Content-Type: text/plain; charset=utf-8
+</span><span class='line'>&lt; X-Content-Type-Options: nosniff
+</span><span class='line'>&lt; Date: Tue, 12 Apr 2016 18:12:46 GMT
+</span><span class='line'>&lt; Content-Length: 17
+</span><span class='line'>&lt; 
+</span><span class='line'>invalid URL path
+</span><span class='line'>* Connection #0 to host localhost left intact
+</span><span class='line'>* Closing connection #0</span></code></pre></td></tr></table></div></figure>
+
+
+<h3><code>http.ServeMux</code>を使う</h3>
+
+<p><code>http.ServeMux</code>にはパスの正規化機能が組み込まれており、
+正規化されていないURLにアクセスが来た場合は自動的リダイレクトしてくれるようです。
+HTTPハンドラに渡ってくるときには、必ず相対パスが含まれていない状態になっています。
+(これに最初は気が付かず、脆弱性が再現しないので困ってた。)</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="s">&quot;net/http&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="c1">// 内部でhttp.ServeMuxを使ってくれる</span>
+</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">&quot;/static/&quot;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="c1">// r.URLには相対パスが含まれない形で渡ってくる</span>
+</span><span class='line'>    <span class="nx">http</span><span class="p">.</span><span class="nx">ServeFile</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">,</span> <span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
+</span><span class='line'>  <span class="p">})</span>
+</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">&quot;:3000&quot;</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>相対パスを含んだリクエストを投げてもアクセスはできません。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
+</span><span class='line'>* About to connect() to localhost port 3000 (#0)
+</span><span class='line'>*   Trying ::1... connected
+</span><span class='line'>* Connected to localhost (::1) port 3000 (#0)
+</span><span class='line'>&gt; GET /static/../../../.ssh/id_rsa HTTP/1.1
+</span><span class='line'>&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
+</span><span class='line'>&gt; Host: localhost:3000
+</span><span class='line'>&gt; Accept: */*
+</span><span class='line'>&gt; 
+</span><span class='line'>&lt; HTTP/1.1 301 Moved Permanently
+</span><span class='line'>&lt; Location: /.ssh/id_rsa
+</span><span class='line'>&lt; Date: Tue, 12 Apr 2016 18:14:49 GMT
+</span><span class='line'>&lt; Content-Length: 47
+</span><span class='line'>&lt; Content-Type: text/html; charset=utf-8
+</span><span class='line'>&lt; 
+</span><span class='line'>&lt;a href="http://shogo82148.github.io/.ssh/id_rsa"&gt;Moved Permanently&lt;/a&gt;.
+</span><span class='line'>
+</span><span class='line'>* Connection #0 to host localhost left intact
+</span><span class='line'>* Closing connection #0</span></code></pre></td></tr></table></div></figure>
+
+
+<h3><code>http.FileServer</code>を使う</h3>
+
+<p><code>http.Dir</code>と<code>http.FileServer</code>を使うとルートディレクトリを指定でき、
+その外へはアクセスできなくなるので想定外のファイルが見えてしまうことはありません。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;net/http&quot;</span>
+</span><span class='line'>  <span class="s">&quot;strings&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">fileServer</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">StripPrefix</span><span class="p">(</span><span class="s">&quot;/static/&quot;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nx">FileServer</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">Dir</span><span class="p">(</span><span class="s">&quot;static&quot;</span><span class="p">)))</span>
+</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">&quot;:3000&quot;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nx">HandlerFunc</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">if</span> <span class="nx">strings</span><span class="p">.</span><span class="nx">HasPrefix</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">,</span> <span class="s">&quot;/static/&quot;</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">fileServer</span><span class="p">.</span><span class="nx">ServeHTTP</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">)</span>
+</span><span class='line'>    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">http</span><span class="p">.</span><span class="nx">NotFound</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">)</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="p">}))</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>相対パスを含んだURLにアクセスしても404になって見れません。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
+</span><span class='line'>* About to connect() to localhost port 3000 (#0)
+</span><span class='line'>*   Trying ::1... connected
+</span><span class='line'>* Connected to localhost (::1) port 3000 (#0)
+</span><span class='line'>&gt; GET /static/../../../.ssh/id_rsa HTTP/1.1
+</span><span class='line'>&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
+</span><span class='line'>&gt; Host: localhost:3000
+</span><span class='line'>&gt; Accept: */*
+</span><span class='line'>&gt; 
+</span><span class='line'>&lt; HTTP/1.1 404 Not Found
+</span><span class='line'>&lt; Content-Type: text/plain; charset=utf-8
+</span><span class='line'>&lt; X-Content-Type-Options: nosniff
+</span><span class='line'>&lt; Date: Tue, 12 Apr 2016 18:39:34 GMT
+</span><span class='line'>&lt; Content-Length: 19
+</span><span class='line'>&lt; 
+</span><span class='line'>404 page not found
+</span><span class='line'>* Connection #0 to host localhost left intact
+</span><span class='line'>* Closing connection #0</span></code></pre></td></tr></table></div></figure>
+
+
+<h3><code>http.ServeFile</code>に定数を渡す</h3>
+
+<p>どうしても特定のファイルを指定したい場合は<code>http.Request</code>の中身は一切見ずにファイルパスを直接<code>http.ServeFile</code>に渡すべきです。
+例えば、「<a href="http://stackoverflow.com/questions/25945538/go-golang-to-serve-a-specific-html-file">Go Golang to serve a specific html file</a>」の質問者が上げている例を
+正しく書きなおすと以下のようになると思います。</p>
+
+<blockquote><p><code>http.Handle("/", http.FileServer(http.Dir("static")))</code>
+Serves the html file in static directory.</p>
+
+<p>Is there any way in Go that we can specify the html file to serve?</p>
+
+<p>Something like render_template in Flask</p>
+
+<p>I want to do something like:</p>
+
+<p><code>http.Handle("/hello", http.FileServer(http.Dir("static/hello.html")))</code></p></blockquote>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="s">&quot;net/http&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">&quot;/hello&quot;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nx">http</span><span class="p">.</span><span class="nx">ServeFile</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">,</span> <span class="s">&quot;static/hello.html&quot;</span><span class="p">)</span>
+</span><span class='line'>  <span class="p">})</span>
+</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">&quot;:3000&quot;</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>まとめ</h2>
+
+<p>まとめ再掲。</p>
+
+<ul>
+<li>やはり、特に理由がなければ<code>http.FileServer</code>を使ったほうが良さそう</li>
+<li>どうしても<code>http.ServeFile</code>を使う場合は定数でパス指定をする</li>
+<li>「自作パスルータを使っている」かつ「Go 1.6.1 未満を使っている」場合はとくに要注意</li>
+</ul>
+
+
+<h2>まとめのまとめ</h2>
+
+<p><a href="https://golang.org/pkg/net/http/#example_FileServer">godocのexample</a>どおりにやるのが一番。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="s">&quot;net/http&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">&quot;/static/&quot;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nx">StripPrefix</span><span class="p">(</span><span class="s">&quot;/static/&quot;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nx">FileServer</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">Dir</span><span class="p">(</span><span class="s">&quot;static&quot;</span><span class="p">))))</span>
+</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">&quot;:3000&quot;</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[PerlでもGoでも実行できるQuine書いた]]></title>
@@ -3892,265 +4334,6 @@ DateTimeモジュール以外のプログラムがうるう秒を正しく扱え
 廃止論とかありましたけど、<a href="http://internet.watch.impress.co.jp/docs/news/20151120_731707.html">とりあえず2023年までは調整がはいる</a>そうです・・・。</p>
 
 <p>他にもいろいろ罠がありそう・・・知っているかたがいれば教えて下さい。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Go言語でGraceful Restartをするときに取りこぼしを少なくする]]></title>
-    <link href="http://shogo82148.github.io/blog/2015/11/23/golang-graceful-restart-2nd/"/>
-    <updated>2015-11-23T20:51:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2015/11/23/golang-graceful-restart-2nd</id>
-    <content type="html"><![CDATA[<p>少し前に<a href="https://github.com/kazuho/Starlet">Starlet</a>にGraceful Restartが時たま上手く動かない問題を修正する<a href="https://github.com/kazuho/Starlet/pull/21">pullreq</a>を投げました。
-原因は割り込みハンドラ内でexitを呼んでいたからでした。
-「割り込みハンドラ内ではフラグを建てるだけ」
-「メインのプログラム内でそのフラグを見て分岐する」という原則があるのですが、それを守るのは難しいということですね。
-(しかし新たな問題を産んでしまい<a href="https://github.com/kazuho/Starlet/pull/23">revertされてしまいましたが・・・</a>
-まあ修正後のコードも考え方は一緒です。割り込みホント難しい・・・)</p>
-
-<p>このpullreqを取り込んでもらうときに再現実験をやってみたのですが、
-Goでもちゃんと動くのかな？と気になったので
-<a href="http://shogo82148.github.io/blog/2015/05/03/golang-graceful-restart/">Go言語でGraceful Restartをする</a>で紹介した
-プログラムに同じテストをやってみました。</p>
-
-<!-- More -->
-
-
-<h2>mannersでテストしてみる</h2>
-
-<p>前回の記事では<a href="https://github.com/braintree/manners">manners</a>と<a href="https://github.com/lestrrat/go-server-starter">go-server-starter</a>の
-組み合わせが良さそうとの結論になったので、この組み合わせでテストしてみます。
-以下テストに使用したコードです。
-(今回の内容とは直接関係は無いですが、go-server-starterに変更が入ってFallbackのやり方が前回から少し変わってます)</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-<span class='line-number'>37</span>
-<span class='line-number'>38</span>
-<span class='line-number'>39</span>
-<span class='line-number'>40</span>
-<span class='line-number'>41</span>
-<span class='line-number'>42</span>
-<span class='line-number'>43</span>
-<span class='line-number'>44</span>
-<span class='line-number'>45</span>
-<span class='line-number'>46</span>
-<span class='line-number'>47</span>
-<span class='line-number'>48</span>
-<span class='line-number'>49</span>
-<span class='line-number'>50</span>
-<span class='line-number'>51</span>
-<span class='line-number'>52</span>
-<span class='line-number'>53</span>
-<span class='line-number'>54</span>
-<span class='line-number'>55</span>
-<span class='line-number'>56</span>
-<span class='line-number'>57</span>
-<span class='line-number'>58</span>
-<span class='line-number'>59</span>
-<span class='line-number'>60</span>
-<span class='line-number'>61</span>
-<span class='line-number'>62</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
-</span><span class='line'>
-</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
-</span><span class='line'>        <span class="s">&quot;fmt&quot;</span>
-</span><span class='line'>        <span class="s">&quot;log&quot;</span>
-</span><span class='line'>        <span class="s">&quot;net&quot;</span>
-</span><span class='line'>        <span class="s">&quot;net/http&quot;</span>
-</span><span class='line'>        <span class="s">&quot;os&quot;</span>
-</span><span class='line'>        <span class="s">&quot;os/signal&quot;</span>
-</span><span class='line'>        <span class="s">&quot;syscall&quot;</span>
-</span><span class='line'>        <span class="s">&quot;time&quot;</span>
-</span><span class='line'>
-</span><span class='line'>        <span class="s">&quot;github.com/braintree/manners&quot;</span>
-</span><span class='line'>        <span class="s">&quot;github.com/lestrrat/go-server-starter/listener&quot;</span>
-</span><span class='line'><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">var</span> <span class="nx">now</span> <span class="p">=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-</span><span class='line'>        <span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&quot;start pid %d\n&quot;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Getpid</span><span class="p">())</span>
-</span><span class='line'>
-</span><span class='line'>        <span class="nx">signal_chan</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Signal</span><span class="p">)</span>
-</span><span class='line'>        <span class="nx">signal</span><span class="p">.</span><span class="nx">Notify</span><span class="p">(</span><span class="nx">signal_chan</span><span class="p">,</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span><span class="p">)</span>
-</span><span class='line'>        <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
-</span><span class='line'>                <span class="k">for</span> <span class="p">{</span>
-</span><span class='line'>                        <span class="nx">s</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">signal_chan</span>
-</span><span class='line'>                        <span class="k">if</span> <span class="nx">s</span> <span class="o">==</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span> <span class="p">{</span>
-</span><span class='line'>                                <span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&quot;SIGTERM!!!!\n&quot;</span><span class="p">)</span>
-</span><span class='line'>                                <span class="nx">manners</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
-</span><span class='line'>                        <span class="p">}</span>
-</span><span class='line'>                <span class="p">}</span>
-</span><span class='line'>        <span class="p">}()</span>
-</span><span class='line'>
-</span><span class='line'>        <span class="nx">listeners</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ListenAll</span><span class="p">()</span>
-</span><span class='line'>        <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="o">&amp;&amp;</span> <span class="nx">err</span> <span class="o">!=</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ErrNoListeningTarget</span> <span class="p">{</span>
-</span><span class='line'>                <span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
-</span><span class='line'>        <span class="p">}</span>
-</span><span class='line'>        <span class="kd">var</span> <span class="nx">l</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Listener</span>
-</span><span class='line'>        <span class="k">if</span> <span class="nx">err</span> <span class="o">==</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ErrNoListeningTarget</span> <span class="p">{</span>
-</span><span class='line'>                <span class="c1">// Fallback if not running under Server::Starter</span>
-</span><span class='line'>                <span class="nx">l</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Listen</span><span class="p">(</span><span class="s">&quot;tcp&quot;</span><span class="p">,</span> <span class="s">&quot;:8080&quot;</span><span class="p">)</span>
-</span><span class='line'>                <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-</span><span class='line'>                        <span class="nb">panic</span><span class="p">(</span><span class="s">&quot;Failed to listen to port 8080&quot;</span><span class="p">)</span>
-</span><span class='line'>                <span class="p">}</span>
-</span><span class='line'>        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-</span><span class='line'>                <span class="nx">l</span> <span class="p">=</span> <span class="nx">listeners</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-</span><span class='line'>        <span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'>        <span class="nx">manners</span><span class="p">.</span><span class="nx">Serve</span><span class="p">(</span><span class="nx">l</span><span class="p">,</span> <span class="nx">newHandler</span><span class="p">())</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">func</span> <span class="nx">newHandler</span><span class="p">()</span> <span class="nx">http</span><span class="p">.</span><span class="nx">Handler</span> <span class="p">{</span>
-</span><span class='line'>        <span class="nx">mux</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">NewServeMux</span><span class="p">()</span>
-</span><span class='line'>        <span class="nx">mux</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">&quot;/&quot;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>                <span class="nx">fmt</span><span class="p">.</span><span class="nx">Fprintf</span><span class="p">(</span>
-</span><span class='line'>                        <span class="nx">w</span><span class="p">,</span>
-</span><span class='line'>                        <span class="s">&quot;from pid %d.\n&quot;</span><span class="p">,</span>
-</span><span class='line'>                        <span class="nx">os</span><span class="p">.</span><span class="nx">Getpid</span><span class="p">(),</span>
-</span><span class='line'>                <span class="p">)</span>
-</span><span class='line'>        <span class="p">})</span>
-</span><span class='line'>        <span class="k">return</span> <span class="nx">mux</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>1秒毎にgraceful restartを行いながら負荷をかけます。
-以下のコマンドを別々のターミナルから実行します。
-<code>go run main.go</code>だと自分で書いたプログラムがシグナルを受け取れなくなってしまうので、
-<code>go build main.go</code>とコンパイルしてから実行するところがポイントです。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>start_server --port 8080 --pid app.pid -- ./main
-</span><span class='line'><span class="nv">$ </span><span class="k">while </span><span class="nb">true</span>; <span class="k">do </span><span class="nb">kill</span> -HUP <span class="sb">`</span>cat app.pid<span class="sb">`</span>; sleep 1; <span class="k">done</span>
-</span><span class='line'><span class="nv">$ </span>ab -r -n 1000000 -c 10 http://localhost:8080/
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p><a href="https://gist.github.com/shogo82148/a1524f31292202ec34f3#file-manners">mannersを使った場合の実験結果</a>へのリンクを貼っておきます。
-「Failed requests:        122」となっており、残念ながら取りこぼしが発生してしまいました。
-負荷をかけた時間は72.437秒なので、70回ほどリスタートをかけたことになります。
-github-flowを採用しているようなところだと毎日数回デプロイをするということも珍しくないので、
-1〜2ヶ月も運用していれば一度くらいはこの現象に遭遇することになります(秒間1万リクエストさばく必要のあるようなサービスの場合ですが)。
-ちょっと気になりますね。</p>
-
-<h2>自分で書いてみた</h2>
-
-<p>mannersの改造、難しそうだったので、自分で書いてみました。</p>
-
-<ul>
-<li>https://github.com/shogo82148/go-gracedown</li>
-</ul>
-
-
-<p>mannersと全く同じインタフェースなので、s/manners/gracedown/するだけです。
-これを使って実験してみた結果がこちら https://gist.github.com/shogo82148/a1524f31292202ec34f3#file-gracedown
-「Failed requests:        0」やったね！</p>
-
-<h2>その他メモ</h2>
-
-<p>これ書くのに色々しらべたのでメモとして残しておきます。</p>
-
-<h3>acceptの直後にcloseされた場合の挙動について</h3>
-
-<p>Starletで起こっていた不具合の原因は、
-acceptから処理が帰ってきてからcanExitフラグを落とすまでにわずかな期間があるのが問題でした。
-この期間にシグナルを受け取ると間違えてサーバを終了させてしまいます。
-GoでもacceptしてからステートがStateNewになるまでの間に若干の時間差があるので、
-ここが問題にならないか少し気になっていました。</p>
-
-<p>net/httpの処理を追ってみると、acceptとStateNewは<code>Serve(net.Listener)</code>を実行したのと同じgoroutineで実行されているようです。
-したがって、サーバシャットダウンの判定も<code>Serve(net.Listener)</code>と同じgoroutineで行えば、
-誤ってacceptしてからステートがStateNewになるまでの間にサーバをシャットダウンしてしまうことは防げるということがわかりました。</p>
-
-<h3>Acceptがブロックしているのを解除する方法について</h3>
-
-<p><a href="http://qiita.com/hiratara/items/0f0b6103a0dc9280cea9">UnixListener.Closeでソケットファイルが消えて困っている</a> という記事に</p>
-
-<blockquote><p>POSIX では Close() を呼んだからといって Accept() が制御を戻してくれる保証はないといことでしょうか。</p></blockquote>
-
-<p>という一文が書いてありました。</p>
-
-<p>これについて実際はどうなんだろうと調べてみたところ<a href="net.Listener">https://golang.org/pkg/net/#Listener</a>のコメントに</p>
-
-<blockquote><p>Close closes the listener.
-Any blocked Accept operations will be unblocked and return errors.</p></blockquote>
-
-<p>とありました。
-このコメントを読む限りGo言語では「<code>Close()</code> を呼んだら<code>Accept()</code>が制御を戻す」と考えて良さそうです。
-POSIXでどう規定されているかまでは調査しきれていませんが、
-たとえどう規定されていようとも互換性を保つために裏で色々やってくれていると信じています。</p>
-
-<p>この記事の主題である「UnixListener.Closeでソケットファイルが消えて困っている」件についても調べてはみたのですが、
-結論は出ませんでした・・・。
-たしかにソケットファイルは使い終わったらunlinkすることが推奨されているということがわかったくらいです。
-nameが「@」で始まっていると「abstract socket address」と見なされて削除されなくなるから、「@」をテキトウにつけるとか・・・？</p>
-
-<h3>keep-aliveの挙動について</h3>
-
-<p>mannersはKeep-Aliveなコネクションがあった場合でも、それがIdle状態であればシャットダウンしてしまいます。
-それに対してgo-gracedownは全部のコネクションがClosedになるまでまちます。
-終了処理に入った段階でKeep-Aliveは無効にしているので、
-go-gracedown側で特に操作しなくてもnet/httpがそのうちクローズしてくれるだろうとの考えからです。</p>
-
-<p>Keep-Aliveはクライアントからリクエストがないと切断できない(レスポンスに「Connection: Close」ヘッダを含める必要があるため)ので
-リクエストがないと永遠にシャットダウンできません。
-それでは困るので一応タイムアウトも入れてあります。</p>
-
-<p>この挙動のおかげで<a href="https://github.com/rakyll/boom">boom</a>(http benchで検索したら一番上にきた)でのベンチでも
-<a href="https://gist.github.com/shogo82148/a1524f31292202ec34f3#file-gracedown-boom">エラー無しで処理できています</a>。
-ちなみにApache Benchでも-kオプションでKeep-Aliveを有効にできるのですが、
-HTTP/1.0だと「Connection: Close」を送る方法が使えないので、<a href="https://gist.github.com/shogo82148/a1524f31292202ec34f3#file-gracedown-keep-alive">残念ながらエラーが出てしまいました</a>。</p>
-
-<h2>まとめ</h2>
-
-<ul>
-<li>実験の結果<a href="https://github.com/braintree/manners">manners</a>はときどきGraceful Shutdownに失敗する場合があることがわかった</li>
-<li><a href="https://github.com/shogo82148/go-gracedown">go-gracedown</a>というのを書いてみた
-
-<ul>
-<li>今回行った再現実験ではすべてのリクエストを正常に処理できました</li>
-</ul>
-</li>
-<li>Graceful Restartむずかしい</li>
-</ul>
-
 ]]></content>
   </entry>
   
