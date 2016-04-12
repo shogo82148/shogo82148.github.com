@@ -232,7 +232,7 @@ $ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
 
 ### `http.ServeFile`に定数を渡す
 
-どうしても特定のファイルを指定したい場合は`http.Request`の中身は一切見ずにファイルパスを直接`http.ServeFile`に渡すべきです。
+どうしても特定のファイルを指定したい場合は、`http.ServeFile`に渡すファイルパスを定数で指定するべきです。
 例えば、「[Go Golang to serve a specific html file](http://stackoverflow.com/questions/25945538/go-golang-to-serve-a-specific-html-file)」の質問者が上げている例を
 正しく書きなおすと以下のようになると思います。
 
