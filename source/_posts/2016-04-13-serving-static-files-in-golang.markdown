@@ -261,6 +261,10 @@ func main() {
 }
 ```
 
+回答者がActually, do not do thatとコメントしているのは`http.ServeFile`に`r.URL.Path[1:]`を渡すことで、
+`http.ServeFile`自体が悪いわけではありません。
+正しく安全に使いましょう。
+
 
 ## まとめ
 
@@ -269,6 +273,7 @@ func main() {
 - やはり、特に理由がなければ`http.FileServer`を使ったほうが良さそう
 - どうしても`http.ServeFile`を使う場合は定数でパス指定をする
 - 「自作パスルータを使っている」かつ「Go 1.6.1 未満を使っている」場合はとくに要注意
+
 
 ## まとめのまとめ
 
