@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
 
-  <title><![CDATA[Category: RaspberryPi | Shogo's Blog]]></title>
+  <title><![CDATA[Category: raspberrypi | Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/blog/categories/raspberrypi/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2016-06-09T13:57:36+09:00</updated>
+  <updated>2016-06-09T17:44:09+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -36,9 +36,8 @@ cron の設定自体は <code>crontab -e</code> コマンドを実行すれば�
 <p>Raspberry Pi には標準でMTA(Message Transfer Agent)が入ってないようなのでインストール。
 今回はPostfixを採用</p>
 
-<p><code>bash
-sudo apt-get install postfix
-</code></p>
+<pre><code class="bash">sudo apt-get install postfix
+</code></pre>
 
 <p>最初、Sendmailも試してみたんだけど、送信者マスカレードがなぜかうまく行かなったので断念。
 後述するように、この設定がないとスパムフィルタに引っかかってしまうのです。</p>
@@ -60,42 +59,37 @@ cron からのメールは送信元が pi@raspberrypi になってしまいド�
 <p>そこで、プロバイダが提供しているSMTPサーバにメールをリレーしてもらいます。
 <code>/etc/postfix/main.cf</code>に以下の行を追加します。</p>
 
-<p>``` plain /etc/postfix/main.cf
-sender_canonical_maps = regexp:/etc/postfix/canonical</p>
+<pre><code class="plain /etc/postfix/main.cf">sender_canonical_maps = regexp:/etc/postfix/canonical
 
-<p>relayhost = [smtp.example.com]:587
+relayhost = [smtp.example.com]:587
 smtp_sasl_auth_enable = yes
 smtp_sasl_password_maps = hash:/etc/postfix/relay_password
 smtp_sasl_security_options = noanonymous
-```</p>
+</code></pre>
 
 <p>プロバイダにリレーしてもらうには SMTP-Auth で認証する必要があるので、
 ユーザ名とパスワードを設定しておきます。</p>
 
-<p><code>plain /etc/postfix/elay_password
-smtp.example.com hogehoge:your-password
-</code></p>
+<pre><code class="plain /etc/postfix/elay_password">smtp.example.com hogehoge:your-password
+</code></pre>
 
 <p>postmapコマンドを使って、Postfixから扱える形式に変換します。</p>
 
-<p><code>bash command
-$ postmap hash:/etc/postfix/relay_password
-</code></p>
+<pre><code class="bash command">$ postmap hash:/etc/postfix/relay_password
+</code></pre>
 
 <p>さらに、エンベロープのFromがプロバイダから提供されたメールアドレスでないと
 メールをリレーしてくれないので、
 すべてのメールのFromをすべて書き換えるよう設定します。</p>
 
-<p><code>plain /etc/postfix/canonical
-/.*/ hogehoge@example.com
-</code></p>
+<pre><code class="plain /etc/postfix/canonical">/.*/ hogehoge@example.com
+</code></pre>
 
 <p>最後にPostfixに設定を読み込ませて設定完了。
 cron からメールを送れるようになるはず。</p>
 
-<p><code>bash command
-$ sudo /etc/init.d/postfix reload
-</code></p>
+<pre><code class="bash command">$ sudo /etc/init.d/postfix reload
+</code></pre>
 
 <p>・・・この設定にたどり着くのに非常に苦労した。
 メールなんてもう嫌だ・・・。</p>
@@ -135,9 +129,8 @@ Macで全く同じ事をするとうまくいく・・・。
 <p>接続先がTLSv1にしか対応していないのにSSLv3でアクセスしようとしていたことが問題だったらしい。
 明示的にTLSv1を使うように指定して curl を叩いてみるとうまくいった。</p>
 
-<p><code>bash
-$ curl --tlsv3 https://hogehoge
-</code></p>
+<pre><code class="bash">$ curl --tlsv3 https://hogehoge
+</code></pre>
 
 <p>なぜRaspberryPiではダメで
 Macでは成功するのか、という根本的な原因はよくわからなかった。
@@ -153,43 +146,37 @@ SSLv3に対応していないなら自動的にフォールバックしてくれ
 この問題普通のUbuntuでも起こるらしく、
 そのフォーラムで置き換えコードを見つけた。</p>
 
-<p>``` python
-import httplib
+<pre><code class="python">import httplib
 from httplib import HTTPConnection, HTTPS_PORT
-import ssl</p>
+import ssl
 
-<p>class HTTPSConnection(HTTPConnection):</p>
+class HTTPSConnection(HTTPConnection):
+    "This class allows communication via SSL."
+    default_port = HTTPS_PORT
 
-<pre><code>"This class allows communication via SSL."
-default_port = HTTPS_PORT
+    def __init__(self, host, port=None, key_file=None, cert_file=None,
+            strict=None, timeout=socket._GLOBAL_DEFAULT_TIMEOUT,
+            source_address=None):
+        HTTPConnection.__init__(self, host, port, strict, timeout,
+                source_address)
+        self.key_file = key_file
+        self.cert_file = cert_file
 
-def __init__(self, host, port=None, key_file=None, cert_file=None,
-        strict=None, timeout=socket._GLOBAL_DEFAULT_TIMEOUT,
-        source_address=None):
-    HTTPConnection.__init__(self, host, port, strict, timeout,
-            source_address)
-    self.key_file = key_file
-    self.cert_file = cert_file
+    def connect(self):
+        "Connect to a host on a given (SSL) port."
+        sock = socket.create_connection((self.host, self.port),
+                self.timeout, self.source_address)
+        if self._tunnel_host:
+            self.sock = sock
+            self._tunnel()
+        # this is the only line we modified from the httplib.py file
+        # we added the ssl_version variable
+        self.sock = ssl.wrap_socket(sock, self.key_file, self.cert_file, ssl_version=ssl.PROTOCOL_TLSv1)
 
-def connect(self):
-    "Connect to a host on a given (SSL) port."
-    sock = socket.create_connection((self.host, self.port),
-            self.timeout, self.source_address)
-    if self._tunnel_host:
-        self.sock = sock
-        self._tunnel()
-    # this is the only line we modified from the httplib.py file
-    # we added the ssl_version variable
-    self.sock = ssl.wrap_socket(sock, self.key_file, self.cert_file, ssl_version=ssl.PROTOCOL_TLSv1)
+#now we override the one in httplib
+httplib.HTTPSConnection = HTTPSConnection
+# ssl_version corrections are done
 </code></pre>
-
-<h1>now we override the one in httplib</h1>
-
-<p>httplib.HTTPSConnection = HTTPSConnection</p>
-
-<h1>ssl_version corrections are done</h1>
-
-<p>```</p>
 
 <p>これを通信開始前に読みこめば、あとは<code>urllib</code>で読み込めるようになるはず。</p>
 

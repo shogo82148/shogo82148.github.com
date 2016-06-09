@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
 
-  <title><![CDATA[Category: Redis | Shogo's Blog]]></title>
+  <title><![CDATA[Category: redis | Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/blog/categories/redis/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2016-06-09T13:57:36+09:00</updated>
+  <updated>2016-06-09T17:44:09+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -14,223 +14,528 @@
 
   
   <entry>
-    <title type="html"><![CDATA[Redis::Fastってモジュールを書いた]]></title>
-    <link href="https://shogo82148.github.io/blog/2013/09/28/redis-fast/"/>
-    <updated>2013-09-28T00:18:00+09:00</updated>
-    <id>https://shogo82148.github.io/blog/2013/09/28/redis-fast</id>
-    <content type="html"><![CDATA[<p><a href="https://github.com/redis/hiredis">hiredis</a>をPerlから扱うためのライブラリとして
-<a href="http://search.cpan.org/~neophenix/Redis-hiredis/lib/Redis/hiredis.pm">Redis::hiredis</a>ってのがあるけど、
-なんだか微妙だって聞いたので自分でPerlのhiredisバインディング書いてみたよ。</p>
+    <title type="html"><![CDATA[Redisのトランザクション・スクリプト・ランキングを扱うPerlモジュールを公開しました]]></title>
+    <link href="https://shogo82148.github.io/blog/2016/03/18/releaes-redis-modules/"/>
+    <updated>2016-03-18T22:16:00+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2016/03/18/releaes-redis-modules</id>
+    <content type="html"><![CDATA[<p>以前<a href="http://shogo82148.github.io/blog/2016/02/06/redis-leader-board-multi/">Redisでスコアを複数設定できるランキングを作ってみた</a>けど、
+Githubの肥やしになっていてもあれなので、CPANizeしました。
+あわせて、この実装のために作ったユーティリティモジュールも別モジュールとして公開しました。</p>
 
 <ul>
-<li><a href="https://github.com/shogo82148/Redis-Fast">https://github.com/shogo82148/Redis-Fast</a></li>
+<li><a href="https://metacpan.org/pod/Redis::LeaderBoardMulti">Redis::LeaderBoardMulti</a></li>
+<li><a href="https://metacpan.org/pod/Redis::Script">Redis::Script</a></li>
+<li><a href="https://metacpan.org/pod/Redis::Transaction">Redis::Transaction</a></li>
 </ul>
 
 
-<p>(READMEからRedis.pmをそのまま持ってきたことがまるわかりですね。なんとかしよう。)</p>
+<!-- More -->
+
+
+<h2>Redis::LeaderBoardMulti</h2>
+
+<p>最初の基準で順位を決められなかった場合の第二基準が欲しいというときに使うモジュールです。
+インターフェースがRedis::LeaderBoard互換になるように調整したので、
+前回とインターフェースがちょっと変わっています。</p>
+
+<pre><code class="perl">se Redis;
+use Redis::LeaderBoard;
+my $redis = Redis-&gt;new;
+my $lb = Redis::LeaderBoardMulti-&gt;new(
+    redis =&gt; $redis,
+    key   =&gt; 'leader_board:1',
+    order =&gt; ['asc', 'desc'], # asc/desc, desc as default
+);
+# Redis::LeaderBoardに合わせて複数指定できるようになりました
+$lb-&gt;set_score(
+    'one' =&gt; [100, time],
+    'two' =&gt; [ 50, time],
+);
+my ($rank, $score, $time) = $lb-&gt;get_rank_with_score('one');
+</code></pre>
+
+<p>Redis::LeaderBoard互換なのでそのまま入れ替えられるはずですが、以下のような実装上の制限があります。</p>
+
+<ul>
+<li>スコアはすべて64bit符号付き整数
+
+<ul>
+<li>Redis::LeaderBoardのスコアは倍精度浮動小数点型なので小数も扱えるが、Redis::LeaderBoardMultiは整数だけ</li>
+</ul>
+</li>
+<li>Redis 2.8.9以降のみで動きます</li>
+<li>同順の場合の出現順
+
+<ul>
+<li>Redis::LeaderBoard は ZRANK, ZREVRANK を使い分けているので、orderパラメータによって昇順/降順が変わります</li>
+<li>Redis::LaederBoardMulti は ZRANK しか使わないので、必ず昇順になります</li>
+</ul>
+</li>
+</ul>
+
+
+<p>一応 Lua Script を使わないオプションもそのまま残してありますが、特に理由がない限りデフォルト(Lua Script を使う)で使うといいと思います。
+どうしてもロックの範囲が広くなってしまう場合があり、楽観的ロックでは効率が悪いケースがあるためです。</p>
+
+<h2>Redis::Script</h2>
+
+<p>EVALSHAを簡単に使うためのモジュールです。
+EVALコマンドを使うとLua Scriptの実装ができますが、毎回毎回実行するスクリプト全体を送る必要があります。
+EVALSHAコマンドはその代わりにスクリプトのSHA1ハッシュを送ることで、帯域の節約ができるというコマンドです。
+しかしEVALSHAはSHA1ハッシュを事前に登録する必要があり、どのタイミングで登録を行うかが問題になってきます。</p>
+
+<p><a href="http://redis.io/commands/eval">EVALコマンドのドキュメント</a>によると、
+「EVALSHAで実行してみて <code>NOSCRIPT No matching script</code> で失敗したらEVALでやり直す」というのがおすすめらしいです。
+EVALコマンドはSHA1ハッシュの登録も行ってくれるので、初回 <code>NOSCRIPT</code> になっても次回からはEVALSHAが成功します。</p>
+
+<p>そんなに複雑なことではないのですが、毎回書くのも大変なのでモジュールとして切り出したのが Redis::Script です。
+以下のようにスクリプトオブジェクトを作っておいて、パラメータを渡して実行します。</p>
+
+<pre><code class="perl">use Redis;
+use Redis::Script;
+my $script = Redis::Script-&gt;new(script =&gt; "return {KEYS[1],KEYS[2],ARGV[1],ARGV[2]}");
+my ($key1, $key2, $arg1, $arg2) = $script-&gt;eval(Redis-&gt;new, ['key1', 'key2'], ['arg1', 'arg2']);
+</code></pre>
+
+<p><code>$script</code> が計算済みのSHA1ハッシュを保存しておいてくれるので、計算リソースの節約にもなるはずです。
+(ベンチとってみたところ、スクリプトのサイズが1kBから10kBくらいにならないと効果なさそうでしたが・・・)</p>
+
+<h2>Redis::Transaction</h2>
+
+<p>Redisのトランザクションを簡単に行うためのモジュールです。</p>
+
+<p>MULTI-EXECは単に実行するだけなら、MULTIとEXECで囲うだけでよいので簡単です。
+例えば、 <code>foo</code> と <code>bar</code> を同時にインクリメントしたい場合、以下のようにすると実現できます。</p>
+
+<pre><code class="perl">$redis-&gt;multi;
+$redis-&gt;incr('foo');
+$redis-&gt;incr('bar');
+$redis-&gt;exec; # 他のクライアントからはfooとbarが全く同時にインクリメントされたように見える
+</code></pre>
+
+<p>ただ、このような素朴な実装だと、途中でネットワークが不調になった場合などに再接続処理が止まったままになる可能性があります。
+例えば以下のようにトランザクションの中で例外が発生すると、以後そのコネクションを使おうとしたときにエラーになります。
+コネクションの永続化をしている場合はしばらくエラーが出続けることになり問題です。</p>
+
+<pre><code class="perl">eval {
+    $redis-&gt;multi; # トランザクション開始
+    $redis-&gt;incr('foo');
+    $redis-&gt;incr('bar');
+    die "ネットワークトラブル！"
+    $redis-&gt;exec;
+};
+$redis-&gt;ping; # 繋がらなくなる
+</code></pre>
+
+<p>Redis::Transaction はこのような問題を防ぐためのモジュールです。
+トランザクションが失敗したときの後始末をよしなにやってくれるので、万が一エラーになっても安心です。</p>
+
+<pre><code class="perl">multi_exec Redis-&gt;new, 1, sub { # 1は失敗したときのリトライ回数
+    my $redis = shift;
+    $redis-&gt;incr('foo');
+    $redis-&gt;incr('bar');
+    die "ネットワークトラブル！"
+};
+$redis-&gt;ping; # 繋がる！
+</code></pre>
+
+<p>WATCH-MULTI-EXECを使った楽観的ロックも扱えます。
+Redisのトランザクションは楽観的ロックなので、
+処理中に他のクライアントが書き換えを行った場合に失敗する可能性があります。
+その場合でもリトライを行ってくれて便利です。</p>
+
+<pre><code class="perl"># $redis-&gt;incr('mykey') をトランザクションを使って実現する
+watch_multi_exec Redis-&gt;new, ['mykey'], 10, sub {
+    my $redis = shift;
+    return $redis-&gt;get('mykey');
+}, sub {
+    my ($redis, $value) = @_;
+    $redis-&gt;set('mykey', $value + 1);
+};
+</code></pre>
+
+<h2>まとめ</h2>
+
+<p>Redisのトランザクション・スクリプト・ランキングを扱うPerlモジュールを紹介しました。
+それぞれは小さなモジュールですが、
+トラブル発生時にも問題にならないようちゃんとした実装しようとすると、
+意外と考えることが多く面倒なものです(特にトランザクション周りとか)。
+適当に実装してしまったこころ当たりのある人は、ぜひ試してみてください。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Redisでスコアを複数設定できるランキングを作ってみた]]></title>
+    <link href="https://shogo82148.github.io/blog/2016/02/06/redis-leader-board-multi/"/>
+    <updated>2016-02-06T02:30:00+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2016/02/06/redis-leader-board-multi</id>
+    <content type="html"><![CDATA[<p>ランキングを作っているとスコアを複数設定したいことがよくあると思います。
+例えば「得点が同じだったら早くその得点を出した人優先」とか「勝ち点が同じだったら得失点差が大きい方優先」とかのように、
+最初の基準で順位を決められなかった場合の第二基準が欲しいみたいな場合です。</p>
+
+<p>ランキングを作るのにはRedisのSorted Setを使うのが便利ですが、残念ながらSorted Setはひとつしかスコアを設定できません。
+少し前にどうやったら実装できるかと社内チャットで話題に上ったので、試しにRedis::LeaderBoardMulti(仮名)という名前で書いてみました。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/p5-Redis-LeaderBoardMulti">shogo82148/p5-Redis-LeaderBoardMulti</a></li>
+</ul>
+
 
 <!-- More -->
 
 
 <h2>使い方</h2>
 
-<p><a href="http://search.cpan.org/~melo/Redis-1.961/lib/Redis.pm">Redis.pm</a>と全く同じインターフェースなので、
-そのまま置換できる、はず。</p>
+<p>メソッドの名前は<a href="http://www.songmu.jp/riji/archives/2013/06/redisleaderboar.html">Redis::LeaderBoard</a>にあわせてありますが、
+スコアが複数指定できるようになった関係でちょっと変わってます。</p>
 
-<p>``` perl
-use Redis::Fast;
-my $redis = Redis::Fast->new;</p>
-
-<h3>synchronize mode</h3>
-
-<p>$redis->set('hoge', 'piyo');
-print $redis->get('hoge');  # piyo</p>
-
-<h3>asynchronize mode</h3>
-
-<p>$redis->get('hoge', sub {</p>
-
-<pre><code>my ($result, $error) = @_;
-print $result;  # piyo
+<pre><code class="perl">use Redis;
+use Redis::LeaderBoard;
+my $redis = Redis-&gt;new;
+my $lb = Redis::LeaderBoardMulti-&gt;new(
+    redis =&gt; $redis,
+    key   =&gt; 'leader_board:1',
+    order =&gt; ['asc', 'desc'], # asc/desc, desc as default
+);
+$lb-&gt;set_score('one' =&gt; 100, time); # 第二基準は時間=得点が同じだったら早くその得点を出した人優先
+$lb-&gt;set_score('two' =&gt;  50, time);
+my ($rank, $score, $time) = $lb-&gt;get_rank_with_score('one');
 </code></pre>
 
-<p>});
-$redis->wait_all_responses;</p>
+<p><code>set_score</code>の第二引数以降はすべてスコアとして扱われます。(そのためRedis::LeaderBoardと互換性はない)
+上の例では「得点が同じだったら早くその得点を出した人優先」になってます。</p>
 
-<h3>pubsub</h3>
+<h2>制限事項</h2>
 
-<p>$redis->publish('fugu', 'fuga');
-$redis->subscribe('fugu', sub {</p>
+<p>実装の都合により、以下のような制限があります。</p>
 
-<pre><code>my ($message, $topic, $subscribed_topic) = @_;
+<ul>
+<li>スコアはすべて64bit符号付き整数です
+
+<ul>
+<li>Redis::LeaderBoardのスコアは倍精度浮動小数点型なので小数も扱えるが、Redis::LeaderBoardMultiは整数だけ</li>
+</ul>
+</li>
+<li>Redis 2.8.9以降のみで動きます</li>
+</ul>
+
+
+<h2>実装の仕組み</h2>
+
+<p>Sorted Setの同じスコアを持つメンバーは辞書順にソートされます(zaddの<a href="http://redis.io/commands/zadd#elements-with-the-same-score">同じスコアを持つ要素</a>の項を参照)。
+例えば以下の様にメンバー「a」「b」「c」を追加すると、必ず「abc」の順番になることが保証されています。</p>
+
+<pre><code class="plain">127.0.0.1:6379&gt; ZADD ranking 0 "a" 0 "b" 0 "c"
+(integer) 3
+127.0.0.1:6379&gt; ZRANK ranking "b"
+(integer) 1
 </code></pre>
 
-<p>});</p>
+<p>これを利用して、メンバーの先頭にスコアをエンコードして付けておきます。
+もちろんエンコードしたあとでもスコアの大小関係が保たれている必要があります。
+以下はエンコード方式にビッグエンディアンの16bit整数を使った例です。
+Redis 2.8.9から辞書順比較に特化したコマンド(LEXがつくやつ)が追加されているので、
+ランクを求める処理は以下のように書くことができます。</p>
 
-<p>my $timeout = 10;
-$redis->wait_for_messages($timeout) while 1;
-```</p>
-
-<p>以前作った、<a href="https://github.com/shogo82148/Redis-Namepace">Redis::Namespace</a>にもそのまま使えます。</p>
-
-<p>``` perl
-use Redis::Fast;
-use Redis::Namespace;</p>
-
-<p>my $redis = Redis::Fast->new;
-my $ns = Redis::Namespace(redis => $redis, namespace => 'fugu');</p>
-
-<p>$ns->set('foo', 'bar');    # $redis->set('fugu:foo', 'bar');
-my $foo = $ns->get('foo'); # my $foo = $redis->get('fugu:foo');
-```</p>
-
-<h2>ベンチマーク</h2>
-
-<h3>Redis.pm</h3>
-
-<p>``` plain Redis.pm
-Benchmark: running 00_ping, 10_set, 11_set_r, 20_get, 21_get_r, 30_incr, 30_incr_r, 40_lpush, 50_lpop, 90_h_get, 90_h_set for at least 5 CPU seconds...
-   00_ping:  8 wallclock secs ( 0.69 usr +  4.77 sys =  5.46 CPU) @ 5538.64/s (n=30241)</p>
-
-<pre><code>10_set:  8 wallclock secs ( 1.07 usr +  4.01 sys =  5.08 CPU) @ 5794.09/s (n=29434)
+<pre><code class="plain">127.0.0.1:6379&gt; ZADD ranking 0 "\x00\x02b"    (bをスコア2で追加)
+(integer) 1
+127.0.0.1:6379&gt; ZADD ranking 0 "\x00\x01a"    (aをスコア1で追加)
+(integer) 1
+127.0.0.1:6379&gt; ZLEXCOUNT ranking - "(\x00\x02"    (スコア2未満の個数=bのランク)
+(integer) 1
 </code></pre>
 
-<p>  11_set_r:  7 wallclock secs ( 0.42 usr +  4.84 sys =  5.26 CPU) @ 5051.33/s (n=26570)</p>
+<p>さすがに16bit符号なし整数だと範囲が狭いので、実際の実装は以下のようになっています。</p>
 
-<pre><code>20_get:  8 wallclock secs ( 0.69 usr +  4.82 sys =  5.51 CPU) @ 5080.40/s (n=27993)
+<ul>
+<li>エンコードはビッグエンディアンの64bit符号付き整数</li>
+<li>負数も扱えるように下駄を履かせる
+
+<ul>
+<li>1と-1を単純にエンコードすると-1の方が大きくなってしまう</li>
+<li>0x8000000000000000を足して符号なし整数の範囲で比較できるように補正</li>
+</ul>
+</li>
+</ul>
+
+
+<h2>アトミック性について</h2>
+
+<p>この方法だとSorted Setだけでは現在のスコアを取得できないので、
+スコアだけ別管理にする必要があります。
+スコアの更新とランキングの更新があるので、
+片方だけ更新される状況がないようにアトミック性に注意する必要があります。
+更新途中の間違った結果を返すだけならすぐに復旧するのでまだマシですが、
+途中でネットワーク障害が起こって不整合なデータが残ってしまうと面倒です。</p>
+
+<p>アトミック性を確保するためのパターンをいくつか実装してみました。
+<code>use_script</code>と<code>use_hash</code>で制御が可能です。</p>
+
+<h3>トランザクションを使った方法</h3>
+
+<p>Redisには<a href="http://redis.io/topics/transactions">トランザクション</a>の仕組みがあるのでこれを使った方法です。
+<code>use_script=&gt;0</code>が指定されるとこの方法で更新を行います。</p>
+
+<pre><code class="plain">127.0.0.1:6379&gt; WATCH ranking:a   (他のクライアントが更新を行っていないか監視)
+OK
+127.0.0.1:6379&gt; GET ranking:a   (ranking:aに入っている現在のスコアを取得)
+"\x00\x01"
+127.0.0.1:6379&gt; MULTI
+OK
+127.0.0.1:6379&gt; ZREM ranking "\x00\x01a"
+QUEUED
+127.0.0.1:6379&gt; ZADD ranking 0 "\x00\x03a"
+QUEUED
+127.0.0.1:6379&gt; SET ranking:a "\x00\x03"
+QUEUED
+127.0.0.1:6379&gt; EXEC   (スコアの更新とランキングの更新をアトミックに行う)
+1) (integer) 1
+2) (integer) 1
+3) OK
 </code></pre>
 
-<p>  21_get_r:  7 wallclock secs ( 2.21 usr +  3.09 sys =  5.30 CPU) @ 5389.06/s (n=28562)
-   30_incr:  7 wallclock secs ( 0.69 usr +  4.73 sys =  5.42 CPU) @ 5671.77/s (n=30741)
- 30_incr_r:  7 wallclock secs ( 0.85 usr +  4.31 sys =  5.16 CPU) @ 5824.42/s (n=30054)
-  40_lpush:  8 wallclock secs ( 0.60 usr +  4.77 sys =  5.37 CPU) @ 5832.59/s (n=31321)
-   50_lpop:  7 wallclock secs ( 1.24 usr +  4.17 sys =  5.41 CPU) @ 5112.75/s (n=27660)
-  90_h_get:  7 wallclock secs ( 0.63 usr +  4.65 sys =  5.28 CPU) @ 5716.29/s (n=30182)
-  90_h_set:  7 wallclock secs ( 0.65 usr +  4.74 sys =  5.39 CPU) @ 5593.14/s (n=30147)
-```</p>
+<p>Redisのトランザクションは楽観的ロックなので、他のクライアントがスコアを更新していると失敗する場合があります。
+失敗した場合はリトライが必要です。
+(この機構、いろいろと注意点があって毎回実装するのはつらすぎるので、別モジュールとして分離したいけど、いい名前とインターフェース募集中)</p>
 
-<h3>Redis::hiredis</h3>
+<p><code>use_hash=&gt;1</code>が指定されていると、スコアの記録にHashを使います。
+「Hashの特定のキーの更新をWATCHする」という命令はないため、ランキング全体を<code>WATCH</code>で監視します。
+(<code>use_hash=&gt;0</code>の場合、そのメンバのスコアだけ監視する)</p>
 
-<p>``` plain Redis::hiredis
-Benchmark: running 00_ping, 10_set, 11_set_r, 20_get, 21_get_r, 30_incr, 30_incr_r, 40_lpush, 50_lpop for at least 5 CPU seconds...
-   00_ping: 10 wallclock secs ( 0.15 usr +  5.13 sys =  5.28 CPU) @ 8998.48/s (n=47512)</p>
+<h3>Luaスクリプトを使った方法</h3>
 
-<pre><code>10_set:  9 wallclock secs ( 0.12 usr +  4.90 sys =  5.02 CPU) @ 8552.39/s (n=42933)
+<p>RedisはLuaスクリプトを実行する機能があります。
+Luaスクリプト実行中は他の命令の実行をブロックするので、アトミック性が確保されます。</p>
+
+<pre><code class="lua">local s=redis.call('GET', 'ranking:a')
+if s then
+  redis.call('ZREM', 'ranking', s..'a')
+end
+redis.call('ZADD', 'ranking', 0, '\x00\x03a')
+redis.call('SET', 'ranking:a', '\x00\x03')
 </code></pre>
 
-<p>  11_set_r:  9 wallclock secs ( 0.14 usr +  4.95 sys =  5.09 CPU) @ 8555.01/s (n=43545)</p>
+<p>Luaスクリプトを実行するには<code>EVAL</code>と<code>EVALSHA</code>の二種類のコマンドがあります。
+<code>EVALSHA</code>は転送量を抑えられて便利ですが、事前に<code>SCRIPT LOAD</code>で使うスクリプトを登録しておく必要があります。
+(ココらへんも別モジュールに分離したいけど、いい名前とインターフェース募集中)
+<code>use_evalsha</code>オプションでどちらを使うか制御可能です。</p>
 
-<pre><code>20_get:  9 wallclock secs ( 0.09 usr +  5.42 sys =  5.51 CPU) @ 8785.48/s (n=48408)
+<p>ちなみに<code>EVAL</code>で実行したスクリプトも<a href="http://redis.io/commands/eval#script-cache-semantics">永遠にキャッシュされる</a>らしいです。
+上の例はわかりやすいようにキー名や値を直接埋め込んでいますが、同じことをしようとLuaスクリプトの動的生成なんてすると死にます。
+スクリプト内で<code>KEYS</code>や<code>ARGV</code>を使うと<code>EVAL</code>時にパラメータを渡せるようになるので、これを活用しましょう。</p>
+
+<h3>諦める</h3>
+
+<p><a href="https://metacpan.org/pod/Redis::LeaderBoard">Redis::LeaderBoard</a>の実装を見て気がついたんですが、
+<code>get_rank</code>の実装は「スコアの取得」「スコアに対応するランクの取得」がアトミックでないため、
+以下の条件を満たすと実際のランクより1大きい結果を返します。</p>
+
+<ul>
+<li>同じメンバーのスコア更新とランク取得が同時に行われる</li>
+<li>ランクが上がるようにスコアが更新される</li>
+</ul>
+
+
+<p>確かに厳密性は欠けますがたかだか1結果が変わるだけですし、
+そもそも更新と取得が同時に行われないようにモジュールを使う側が排他制御するべきですね。
+こういうケースでは諦めるというのも一つの手かなと思いました。
+もちろんデータの整合性が壊れる場合は頑張ってアトミック性を確保するべきでしょう。</p>
+
+<h2>まとめ</h2>
+
+<ul>
+<li>Redisでランキングをつくる際に、スコアを複数設定する方法を紹介しました</li>
+<li>アトミック性を確保する方法を紹介しました
+
+<ul>
+<li>トランザクションを使った方法</li>
+<li>Luaスクリプトを使った方法</li>
+<li>諦める</li>
+</ul>
+</li>
+</ul>
+
+
+<p>もうちょっとドキュメントを整備したらCPANにあげてみますかね。
+トランザクション管理・Luaスクリプト管理も分離したい(いい名前を思いついたら)。
+「こんな名前がいい！」「こんなインターフェースがいい！」等あればコメントください。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Redis::Fast 0.17 をリリースしました]]></title>
+    <link href="https://shogo82148.github.io/blog/2016/01/23/redis-fast-0-dot-17-released/"/>
+    <updated>2016-01-23T16:20:00+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2016/01/23/redis-fast-0-dot-17-released</id>
+    <content type="html"><![CDATA[<p><a href="https://metacpan.org/release/SHOGO/Redis-Fast-0.17">Redis::Fast 0.17</a> をリリースしました。
+主な変更点は以下のとおりです。</p>
+
+<ul>
+<li>I/Oの待ち合わせに使うシステムコールをselect(2)からpoll(2)に変更</li>
+<li>hiredisをv0.13.3にアップデート</li>
+</ul>
+
+
+<!-- More -->
+
+
+<p>macでテストが終わらない問題がありましたが、この変更によって修正されています。</p>
+
+<p>hiredisは<a href="https://linuxjm.osdn.jp/html/LDP_man-pages/man2/connect.2.html">connect(2)</a>をnonblokingモードで呼び出しています。
+nonblockingなので接続が未完了であってもすぐに制御を返し、errnoにEINPROGRESSが設定されます。
+この場合、manにあるようにselect(2)で書き込み可能になるのを待つことで、接続完了を検知できます。</p>
+
+<blockquote><p>select(2) で書き込み可能になった後に、 getsockopt(2) を使って SOL_SOCKET レベルで SO_ERROR オプションを読み出すこ とにより、 connect() が成功したか、失敗したかを判断できる。</p></blockquote>
+
+<p>linuxの場合はこれで上手く動くのですが、macだと何故かselect(2)が永遠に制御を返さない場合があるようです。
+接続先が存在しない場合に起こるのですが、制御を返す場合もあるので謎です。</p>
+
+<p>いろいろ調べてはみたのですがselect(2)だとどうやっても上手く動かなかったので、poll(2)に変更しました。
+poll(2)変更版でテストしてみると、接続先が存在しない場合にPOLLOUTを返すケースとPOLLHUPを返すケースがあるようです。
+どうやらPOLLHUPにあたるイベントが来た時の挙動がlinuxとmacとで違うらしい？
+謎です。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Redis::Fast 0.13をリリースしました]]></title>
+    <link href="https://shogo82148.github.io/blog/2014/10/16/redis-fast-0-dot-13-released/"/>
+    <updated>2014-10-16T23:51:00+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2014/10/16/redis-fast-0-dot-13-released</id>
+    <content type="html"><![CDATA[<p>Redis::Fast 0.13をリリースしました。
+主な変更点は以下のとおりです。</p>
+
+<ul>
+<li>passwordオプションの対応</li>
+<li>maxclientsに達した場合に、deep recursion することがある問題の修正</li>
+<li>トランザクション内で再接続処理が行われる問題の修正</li>
+</ul>
+
+
+<!-- More -->
+
+
+<h2>passwordオプションの対応</h2>
+
+<p>今更感のある機能ですね。昔は対応してたんです。
+対応してたんですが、Sentinel対応のために接続開始周りをごそっと入れ替えて、そのときに間違ってパスワード認証機能を削除しちゃってたっぽいです(・ω&lt;)
+なんというかごめんなさい。</p>
+
+<p>実際実装してテストしてみると、認証失敗したときにdouble freeで落ちてちょっとハマりました。
+hiredisを使う場合は<code>redisAsyncSetConnectCallback</code>に指定する関数内で、コネクションを切断するような処理(password認証とか)はしないようにしましょう。</p>
+
+<h2>maxclientsに達した場合に、deep recursion することがある問題の修正</h2>
+
+<p>Redis::Fastでは、接続処理の中で、コネクションに名前をつけたり、パスワード認証したり、その他独自の処理を実行しています。
+この処理の途中でも再接続処理が走ってしまい、
+再接続処理の中で再接続処理が実行されて、その再接続処理の中で再接続が&hellip; というような無限ループに突入する場合があります。
+maxclientsに達した場合、一度コネクションの確立に成功したあとに接続が切られるので、この無限ループに入ってしまうようです。</p>
+
+<p>接続処理中は再接続処理を行わないようにすることで対応しました。</p>
+
+<h2>トランザクション内で再接続処理が行われる問題の修正</h2>
+
+<p>Redis::Fast 0.07以降、<code>MULTI</code>-<code>EXEC</code>コマンドを遣ったトランザクションの中にいるときは再接続処理が行わないようになっています。
+その仕組みを作るにあたって、トランザクションの中にいるか外にいるかを表すフラグをコマンド送信前に更新していました。</p>
+
+<ol>
+<li>再接続を禁止する</li>
+<li><code>MULTI</code> コマンドを送る</li>
+<li>結果を受け取る</li>
+<li>必要なコマンド発行を行う</li>
+<li>再接続を許可する</li>
+<li><code>EXEC</code>コマンドを実行する</li>
+<li>結果を受け取る</li>
+</ol>
+
+
+<p>しかしこれだと 5 と 6 の間で再接続が起こってしまいます。
+<code>EXEC</code>コマンドがまだ実行されていないので、ここはまだトランザクションの中ですね。</p>
+
+<p>Redis::Fast 0.13ではフラグの更新はコマンドが成功したときに変更してあります。</p>
+
+<ol>
+<li><code>MULTI</code>コマンドを送る</li>
+<li>結果を受け取る</li>
+<li>再接続を禁止する</li>
+<li>必要なコマンド発行を行う</li>
+<li><code>EXEC</code>コマンドを実行する</li>
+<li>結果を受け取る</li>
+<li>再接続を許可する</li>
+</ol>
+
+
+<p>これでトランザクション中に再接続処理が走ることは無いはずです。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Redis::Fast 0.07 をリリースしました！]]></title>
+    <link href="https://shogo82148.github.io/blog/2014/05/17/redis-fast-0-dot-07-released/"/>
+    <updated>2014-05-17T16:27:00+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2014/05/17/redis-fast-0-dot-07-released</id>
+    <content type="html"><![CDATA[<p><a href="https://metacpan.org/release/Redis-Fast">Redis::Fast 0.07</a> をリリースしました。
+現時点での最新バージョンである Redis.pm 1.974 とコンパチブルになります。</p>
+
+<!-- More -->
+
+
+<p>主な修正点は以下の通りです</p>
+
+<ul>
+<li>Redis Sentinel 対応</li>
+<li>トランザクション内での再接続禁止</li>
+<li>再接続にDB選択し直し</li>
+</ul>
+
+
+<h2>Redis Sentinel 対応</h2>
+
+<p>Redis Sentinel というのは自動フェールオーバーの仕組みらしいです。
+(ソースはコピペしたきただけで仕組みはあまり理解していない)
+どんなものかは本家ドキュメントや実際に検証してみた人の記事をご参照ください。</p>
+
+<ul>
+<li><a href="http://redis.io/topics/sentinel">Redis Sentinel Documentation</a></li>
+<li><a href="http://chrone.hatenablog.com/entry/2014/02/28/212616">Redis 2.8 の Sentinel の動きを検証してみた</a></li>
+<li><a href="http://blog.kenjiskywalker.org/blog/2013/01/24/redis-sentiel-howto/">Redis Sentinelを動かしてみた</a></li>
+</ul>
+
+
+<p>前から移植作業は進めてたのですが、本家 Redis.pm でもテストがコケたりしてちょっと不安だったのでリリースを見送ってました。
+今日 Redis.pm の安定版がリリースされたのでこっちも追従しますよ！！</p>
+
+<p>コネクションを作るときに <code>sentinels</code> を渡すと Redis Sentinel から接続情報を取ってきてくれます。
+一緒に <code>reconnect</code> を設定しておいてあげると、Masterに何かあった時に接続情報を再取得→
+自動的に Slave へフェールオーバーしてくれます。</p>
+
+<pre><code class="perl">use Redis::Fast;
+my $redis = Redis::Fast-&gt;new(
+    sentinels =&gt; [ '127.0.0.1:26379' ],
+    service =&gt; 'mymaster',
+    reconnect =&gt; 1,
+);
 </code></pre>
 
-<p>  21_get_r:  9 wallclock secs ( 0.20 usr +  4.94 sys =  5.14 CPU) @ 8181.52/s (n=42053)
-   30_incr:  9 wallclock secs ( 0.12 usr +  5.29 sys =  5.41 CPU) @ 8622.55/s (n=46648)
- 30_incr_r:  8 wallclock secs ( 0.16 usr +  4.92 sys =  5.08 CPU) @ 8113.39/s (n=41216)
-  40_lpush:  9 wallclock secs ( 0.21 usr +  5.15 sys =  5.36 CPU) @ 8547.57/s (n=45815)
-   50_lpop:  8 wallclock secs ( 0.12 usr +  4.91 sys =  5.03 CPU) @ 9024.06/s (n=45391)
-```</p>
+<h2>トランザクション内での再接続禁止</h2>
 
-<h3>Redis::Fast</h3>
+<p>Redisにも簡単な<a href="http://redis.io/topics/transactions">トランザクション機能</a>があって、
+複数の命令を同時に実行することができます。
+トランザクション中に再接続が発生するとトランザクションがリセットされてしまうので、
+接続前の命令を再投入する必要があるのですが、Redis.pm/Redis::Fastの再接続処理はそこまで面倒を見てくれません。
+以前のバージョンではそこの面倒を見てくれないのに適当に処理してしまい、
+トランザクションが中途半端なまま実行されてしました。</p>
 
-<p>Redis.pm の3〜5割増しくらいで速くなる。
-Redis::hiredisと比べると1割〜2割くらい遅い。</p>
+<p>0.07 からはトランザクション内では再接続を行わずに例外を吐きます。
+トランザクションを最初からやり直すなど、よしなに対応してください。</p>
 
-<p>``` plain Redis::Fast
-Benchmark: running 00_ping, 10_set, 11_set_r, 20_get, 21_get_r, 30_incr, 30_incr_r, 40_lpush, 50_lpop, 90_h_get, 90_h_set for at least 5 CPU seconds...
-   00_ping:  9 wallclock secs ( 0.18 usr +  4.84 sys =  5.02 CPU) @ 7939.24/s (n=39855)</p>
+<h2>再接続時にDB選択し直し</h2>
 
-<pre><code>10_set: 10 wallclock secs ( 0.31 usr +  5.40 sys =  5.71 CPU) @ 7454.64/s (n=42566)
-</code></pre>
-
-<p>  11_set_r:  9 wallclock secs ( 0.31 usr +  4.87 sys =  5.18 CPU) @ 7993.05/s (n=41404)</p>
-
-<pre><code>20_get: 10 wallclock secs ( 0.27 usr +  4.84 sys =  5.11 CPU) @ 8350.68/s (n=42672)
-</code></pre>
-
-<p>  21_get_r: 10 wallclock secs ( 0.32 usr +  5.17 sys =  5.49 CPU) @ 8238.62/s (n=45230)
-   30_incr:  9 wallclock secs ( 0.23 usr +  5.27 sys =  5.50 CPU) @ 8221.82/s (n=45220)
- 30_incr_r:  8 wallclock secs ( 0.28 usr +  4.91 sys =  5.19 CPU) @ 8092.29/s (n=41999)
-  40_lpush:  9 wallclock secs ( 0.18 usr +  5.06 sys =  5.24 CPU) @ 8312.02/s (n=43555)
-   50_lpop:  9 wallclock secs ( 0.20 usr +  4.84 sys =  5.04 CPU) @ 8010.12/s (n=40371)
-  90_h_get:  9 wallclock secs ( 0.19 usr +  5.51 sys =  5.70 CPU) @ 7467.72/s (n=42566)
-  90_h_set:  8 wallclock secs ( 0.28 usr +  4.83 sys =  5.11 CPU) @ 7724.07/s (n=39470)
-```</p>
-
-<h3>pipeline mode</h3>
-
-<p>毎回レスポンスを待っているとI/Oがボトルネックになってあんまり速度上がらないけど、
-レスポンスを待たずにコマンドをどんどん送りつけると差が原著になります。</p>
-
-<p>``` perl bench.pl</p>
-
-<h1>!/usr/bin/perl</h1>
-
-<p>use warnings;
-use strict;</p>
-
-<p>use Time::HiRes qw/time/;
-use Redis;
-use Redis::Fast;
-use Redis::hiredis;</p>
-
-<p>my $count = 100000;</p>
-
-<p>{</p>
-
-<pre><code>my $r = Redis-&gt;new;
-my $start = time;
-for(1..$count) {
-    $r-&gt;set('hoge', 'fuga', sub{});
-}
-$r-&gt;wait_all_responses;
-printf "Redis.pm:\n%.2f/s\n", $count / (time - $start);
-</code></pre>
-
-<p>}</p>
-
-<p>{</p>
-
-<pre><code>my $r = Redis::hiredis-&gt;new;
-$r-&gt;connect("127.0.0.1", 6379);
-my $start = time;
-for(1..$count) {
-    $r-&gt;append_command('set hoge fuga');
-}
-for(1..$count) {
-    $r-&gt;get_reply();
-}
-printf "Redis::hiredis:\n%.2f/s\n", $count / (time - $start);
-</code></pre>
-
-<p>}</p>
-
-<p>{</p>
-
-<pre><code>my $r = Redis::Fast-&gt;new;
-my $start = time;
-for(1..$count) {
-    $r-&gt;set('hoge', 'fuga', sub{});
-}
-$r-&gt;wait_all_responses;
-printf "Redis::Fast:\n%.2f/s\n", $count / (time - $start);
-</code></pre>
-
-<p>}
-```</p>
-
-<p>大体Redis.pmの4倍速い。でもRedis::hiredisと比べると2割ほど遅い。
-Fastを名乗るのは早すぎた。</p>
-
-<p><code>plain bench
-Redis.pm:
-22588.95/s
-Redis::hiredis:
-105159.88/s
-Redis::Fast:
-81098.01/s
-</code></p>
-
-<p>Perl API よくわからない。Socket通信まったくわからない。</p>
+<p>一つのRedis-Serverが複数のデータベースを持てるようになっていて、
+<a href="http://redis.io/commands/select">SELECT</a>コマンドを使って切り替え可能です。
+今までのバージョンでは、SELECTコマンドでデータベースを切り替えていても、
+再接続時にリセットされてしまう問題がありました。
+0.07では再接続の中でSELECTを実行し直すので、再接続を気にする必要はありません。</p>
 ]]></content>
   </entry>
   

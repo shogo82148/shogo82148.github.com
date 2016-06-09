@@ -4,7 +4,7 @@
   <title><![CDATA[Category: mecab | Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/blog/categories/mecab/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2016-06-09T13:57:36+09:00</updated>
+  <updated>2016-06-09T17:44:09+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -60,20 +60,18 @@ libmecabの一番高機能だけど面倒な使い方しか対応していなく
 
 <p><code>go get</code>で取ってくることはできますが、事前にlibmecabとリンクするための設定が必要です。</p>
 
-<p><code>bash
-$ export CGO_LDFLAGS="-L/path/to/lib -lmecab -lstdc++"
+<pre><code class="bash">$ export CGO_LDFLAGS="-L/path/to/lib -lmecab -lstdc++"
 $ export CGO_CFLAGS="-I/path/to/include"
 $ go get github.com/shogo82148/go-mecab
-</code></p>
+</code></pre>
 
 <p><code>mecab</code>コマンドと一緒に<code>mecab-config</code>がインストールされているはずなので、
 それを使うのが楽でしょう。</p>
 
-<p><code>bash
-$ export CGO_LDFLAGS="`mecab-config --libs`"
+<pre><code class="bash">$ export CGO_LDFLAGS="`mecab-config --libs`"
 $ export CGO_FLAGS="`mecab-config --inc-dir`"
 $ go get github.com/shogo82148/go-mecab
-</code></p>
+</code></pre>
 
 <p>MeCabはデフォルトで<code>/usr/local/</code>以下に入るので、他の実装では決め打ちしている例が多いですが、
 100%とは言い切れないので面倒ですが都度指定にしてあります。
@@ -83,25 +81,18 @@ cgoはpkg-configに対応しているで、MeCab側が対応してくれると�
 
 <p><code>Parse</code>を使うと<code>mecab</code>コマンドと同等の結果を文字列として受け取れます。</p>
 
-<p>``` go
-tagger, err := mecab.New(map[string]string{})
-if err != nil {</p>
+<pre><code class="go">tagger, err := mecab.New(map[string]string{})
+if err != nil {
+    panic(err)
+}
+defer tagger.Destroy()
 
-<pre><code>panic(err)
-</code></pre>
-
-<p>}
-defer tagger.Destroy()</p>
-
-<p>result, err := tagger.Parse("こんにちは世界")
-if err != nil {</p>
-
-<pre><code>panic(err)
-</code></pre>
-
-<p>}
+result, err := tagger.Parse("こんにちは世界")
+if err != nil {
+    panic(err)
+}
 fmt.Println(result)
-```</p>
+</code></pre>
 
 <p>オプションの渡し方ですが、いろいろ考えた結果<code>map</code>で渡すようにしてみました。
 (Perlの<a href="https://metacpan.org/release/Text-MeCab">Text::MeCab</a>からのインスパイア)
@@ -112,34 +103,24 @@ fmt.Println(result)
 <p><code>ParseToNode</code>を使うと表層表現と品詞が最初から分かれた形で取得できます。
 生起コストのようなより詳細な情報も取れます。</p>
 
-<p>``` go
-tagger, err := mecab.New(map[string]string{})
-if err != nil {</p>
+<pre><code class="go">tagger, err := mecab.New(map[string]string{})
+if err != nil {
+    panic(err)
+}
+defer tagger.Destroy()
 
-<pre><code>panic(err)
+// XXX: avoid GC problem with MeCab 0.996 (see https://github.com/taku910/mecab/pull/24)
+tagger.Parse("")
+
+node, err := tagger.ParseToNode("こんにちは世界")
+if err != nil {
+    panic(err)
+}
+
+for ; node != (mecab.Node{}); node = node.Next() {
+    fmt.Printf("%s\t%s\n", node.Surface(), node.Feature())
+}
 </code></pre>
-
-<p>}
-defer tagger.Destroy()</p>
-
-<p>// XXX: avoid GC problem with MeCab 0.996 (see https://github.com/taku910/mecab/pull/24)
-tagger.Parse("")</p>
-
-<p>node, err := tagger.ParseToNode("こんにちは世界")
-if err != nil {</p>
-
-<pre><code>panic(err)
-</code></pre>
-
-<p>}</p>
-
-<p>for ; node != (mecab.Node{}); node = node.Next() {</p>
-
-<pre><code>fmt.Printf("%s\t%s\n", node.Surface(), node.Feature())
-</code></pre>
-
-<p>}
-```</p>
 
 <p>以前紹介した<a href="http://shogo82148.github.io/blog/2015/12/20/mecab-in-python3-final/">MeCabをPython3から使う(続報)</a>の件、
 実はPythonに限ったことではなく、公式で提供されている全ての言語バインディングで発生します。
@@ -154,44 +135,31 @@ MeCab 0.996以下を使っている方は注意してください。(残念な�
 
 <p><a href="http://taku910.github.io/mecab/libmecab.html">MeCab ライブラリ</a>で紹介されている、マルチスレッド環境の場合での使い方にも対応しています。</p>
 
-<p>``` go
-model, err := mecab.NewModel(map[string]string{})
-if err != nil {</p>
+<pre><code class="go">model, err := mecab.NewModel(map[string]string{})
+if err != nil {
+    panic(err)
+}
+defer model.Destroy()
 
-<pre><code>panic(err)
-</code></pre>
+tagger, err := model.NewMeCab()
+if err != nil {
+    panic(err)
+}
+defer tagger.Destroy()
 
-<p>}
-defer model.Destroy()</p>
+lattice, err := mecab.NewLattice()
+if err != nil {
+    panic(err)
+}
+defer lattice.Destroy()
 
-<p>tagger, err := model.NewMeCab()
-if err != nil {</p>
-
-<pre><code>panic(err)
-</code></pre>
-
-<p>}
-defer tagger.Destroy()</p>
-
-<p>lattice, err := mecab.NewLattice()
-if err != nil {</p>
-
-<pre><code>panic(err)
-</code></pre>
-
-<p>}
-defer lattice.Destroy()</p>
-
-<p>lattice.SetSentence("こんにちは世界")
+lattice.SetSentence("こんにちは世界")
 err = tagger.ParseLattice(lattice)
-if err != nil {</p>
-
-<pre><code>panic(err)
-</code></pre>
-
-<p>}
+if err != nil {
+    panic(err)
+}
 fmt.Println(lattice.String())
-```</p>
+</code></pre>
 
 <p>複数のゴルーチンから<code>model</code>や<code>tagger</code>を共有できると思います。<code>lattice</code>だけはゴルーチン毎に生成してください。
 (へいれつへーこーしょりとかよくわかってないですが、スレッドセーフならゴルーチンセーフという認識であってますよね？)
@@ -203,12 +171,11 @@ fmt.Println(lattice.String())
 
 <p>GoからCへ文字列を渡すには、Goの文字列を<code>C.CString</code>を使ってCの文字列に変換する必要があります。</p>
 
-<p>``` go
-cstring := C.CString(gostring)
-defer C.free(unsafe.Pointer(cstring))</p>
+<pre><code class="go">cstring := C.CString(gostring)
+defer C.free(unsafe.Pointer(cstring))
 
-<p>C.some_useful_function(cstring)
-```</p>
+C.some_useful_function(cstring)
+</code></pre>
 
 <p>ここで注意が必要なのは<code>C.CString</code>の戻り値はGoのガーベージコレクションの対象から外れるということです。
 C側での使用状況をGoのランタイムが把握しきれないからですね。
@@ -221,10 +188,9 @@ C側での使用状況をGoのランタイムが把握しきれないからで�
 <a href="http://qiita.com/mattn/items/176459728ff4f854b165">golang で string を []byte にキャストしてもメモリコピーが走らない方法を考えてみる</a>を見て、つい魔が差してしまいました。
 Goの<code>string</code>をメモリーコピーを避けて<code>[]byte</code>にできるのなら、Cの文字列型(<code>*C.char</code>)でも同じことができるはず・・・！</p>
 
-<p><code>go
-cstring := *(**C.char)(unsafe.Pointer(&amp;gostring))
+<pre><code class="go">cstring := *(**C.char)(unsafe.Pointer(&amp;gostring))
 C.some_useful_function2(cstring, len(gostring))
-</code></p>
+</code></pre>
 
 <p>通常C言語の文字列は末尾に<code>'\0'</code>が番兵としてついており、<code>C.CString</code>はそこら辺の事情を考慮してくれます。
 しかし、この方法は番兵がいないため、文字列の長さを別途渡してあげる必要があります。
@@ -297,15 +263,12 @@ API Gatewayなどで外部に公開した場合、第三者が何でもし放題
 <p>「環境変数を設定してから自分自身をexecし直す方法」と「<code>ctypes</code>を使って絶対パス指定で読み込む方法」が紹介されています。
 前者の方がvoteは多いですがLambdaでこれをやるのは大変そうなので、後者で試してみます。</p>
 
-<p>``` python lambda_function.py</p>
-
-<h1>preload libmecab</h1>
-
-<p>import os
+<pre><code class="python lambda_function.py"># preload libmecab
+import os
 import ctypes
 libdir = os.path.join(os.getcwd(), 'local', 'lib')
 libmecab = ctypes.cdll.LoadLibrary(os.path.join(libdir, 'libmecab.so'))
-```</p>
+</code></pre>
 
 <p>一度読み込んでしまったライブラリは再利用されるため、
 <code>import MeCab</code>はここで読み込んだライブラリにリンクされます(importの順番が重要なの闇な感じがする)。
@@ -313,79 +276,65 @@ libmecab = ctypes.cdll.LoadLibrary(os.path.join(libdir, 'libmecab.so'))
 
 <p>さて、これで<code>lambda_function.py</code>と<code>tokenizer.py</code>が分かれている必要がなくなったので、二つを合体してみましょう。</p>
 
-<p>``` python lambda_function.py</p>
+<pre><code class="python lambda_function.py"># coding=utf-8
+import os
+import settings
 
-<h1>coding=utf-8</h1>
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(settings.LOG_LEVEL)
 
-<p>import os
-import settings</p>
-
-<p>import logging
-logger = logging.getLogger(<strong>name</strong>)
-logger.setLevel(settings.LOG_LEVEL)</p>
-
-<h1>preload libmecab</h1>
-
-<p>import ctypes
+# preload libmecab
+import ctypes
 libdir = os.path.join(os.getcwd(), 'local', 'lib')
-libmecab = ctypes.cdll.LoadLibrary(os.path.join(libdir, 'libmecab.so'))</p>
+libmecab = ctypes.cdll.LoadLibrary(os.path.join(libdir, 'libmecab.so'))
 
-<p>import MeCab</p>
+import MeCab
 
-<h1>prepare Tagger</h1>
-
-<p>dicdir = os.path.join(os.getcwd(), 'local', 'lib', 'mecab', 'dic', 'ipadic')
+# prepare Tagger
+dicdir = os.path.join(os.getcwd(), 'local', 'lib', 'mecab', 'dic', 'ipadic')
 rcfile = os.path.join(os.getcwd(), 'local', 'etc', 'mecabrc')
 default_tagger = MeCab.Tagger("-d{} -r{}".format(dicdir, rcfile))
-unk_tagger = MeCab.Tagger("-d{} -r{} --unk-feature 未知語,<em>,</em>,<em>,</em>,<em>,</em>,<em>,</em>".format(dicdir, rcfile))</p>
+unk_tagger = MeCab.Tagger("-d{} -r{} --unk-feature 未知語,*,*,*,*,*,*,*,*".format(dicdir, rcfile))
 
-<p>DEFAULT_STOPTAGS = ['BOS/EOS']</p>
+DEFAULT_STOPTAGS = ['BOS/EOS']
 
-<p>def lambda_handler(event, context):</p>
+def lambda_handler(event, context):
+    sentence = event.get('sentence', '').encode('utf-8')
+    stoptags = event.get('stoptags', '').encode('utf-8').split(',') + DEFAULT_STOPTAGS
+    unk_feature = event.get('unk_feature', False)
 
-<pre><code>sentence = event.get('sentence', '').encode('utf-8')
-stoptags = event.get('stoptags', '').encode('utf-8').split(',') + DEFAULT_STOPTAGS
-unk_feature = event.get('unk_feature', False)
+    tokens = []
+    tagger = unk_tagger if unk_feature else default_tagger
+    node = tagger.parseToNode(sentence)
+    while node:
+        feature = node.feature + ',*,*'
+        part_of_speech = get_part_of_speech(feature)
+        reading = get_reading(feature)
+        base_form = get_base_form(feature)
+        token = {
+            "surface": node.surface.decode('utf-8'),
+            "feature": node.feature.decode('utf-8'),
+            "pos": part_of_speech.decode('utf-8'),
+            "reading": reading.decode('utf-8'),
+            "baseform": base_form.decode('utf-8'),
+            "stat": node.stat,
+        }
 
-tokens = []
-tagger = unk_tagger if unk_feature else default_tagger
-node = tagger.parseToNode(sentence)
-while node:
-    feature = node.feature + ',*,*'
-    part_of_speech = get_part_of_speech(feature)
-    reading = get_reading(feature)
-    base_form = get_base_form(feature)
-    token = {
-        "surface": node.surface.decode('utf-8'),
-        "feature": node.feature.decode('utf-8'),
-        "pos": part_of_speech.decode('utf-8'),
-        "reading": reading.decode('utf-8'),
-        "baseform": base_form.decode('utf-8'),
-        "stat": node.stat,
-    }
+        if part_of_speech not in stoptags:
+            tokens.append(token)
+        node = node.next
+    return {"tokens": tokens}
 
-    if part_of_speech not in stoptags:
-        tokens.append(token)
-    node = node.next
-return {"tokens": tokens}
+def get_part_of_speech(feature):
+    return '-'.join([v for v in feature.split(',')[:4] if v != '*'])
+
+def get_reading(feature):
+    return feature.split(',')[7]
+
+def get_base_form(feature):
+    return feature.split(',')[6]
 </code></pre>
-
-<p>def get_part_of_speech(feature):</p>
-
-<pre><code>return '-'.join([v for v in feature.split(',')[:4] if v != '*'])
-</code></pre>
-
-<p>def get_reading(feature):</p>
-
-<pre><code>return feature.split(',')[7]
-</code></pre>
-
-<p>def get_base_form(feature):</p>
-
-<pre><code>return feature.split(',')[6]
-</code></pre>
-
-<p>```</p>
 
 <h2>試してみる</h2>
 
@@ -397,48 +346,42 @@ return {"tokens": tokens}
 <table>
 <thead>
 <tr>
-<th></th>
-<th align="center"> Duration </th>
-<th align="center"> Billing Duration </th>
-<th align="center"> Memory Size </th>
-<th align="center"> Max Memory Used </th>
+<th style="text-align:center;"> Duration </th>
+<th style="text-align:center;"> Billing Duration </th>
+<th style="text-align:center;"> Memory Size </th>
+<th style="text-align:center;"> Max Memory Used </th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td></td>
-<td align="center"> 280.76 ms </td>
-<td align="center"> 300 ms </td>
-<td align="center"> 128 MB </td>
-<td align="center"> 29 MB |</td>
+<td style="text-align:center;"> 280.76 ms </td>
+<td style="text-align:center;"> 300 ms </td>
+<td style="text-align:center;"> 128 MB </td>
+<td style="text-align:center;"> 29 MB </td>
 </tr>
 <tr>
-<td></td>
-<td align="center"> 310.00 ms </td>
-<td align="center"> 400 ms </td>
-<td align="center"> 128 MB </td>
-<td align="center"> 29 MB |</td>
+<td style="text-align:center;"> 310.00 ms </td>
+<td style="text-align:center;"> 400 ms </td>
+<td style="text-align:center;"> 128 MB </td>
+<td style="text-align:center;"> 29 MB </td>
 </tr>
 <tr>
-<td></td>
-<td align="center"> 205.99 ms </td>
-<td align="center"> 300 ms </td>
-<td align="center"> 128 MB </td>
-<td align="center"> 30 MB |</td>
+<td style="text-align:center;"> 205.99 ms </td>
+<td style="text-align:center;"> 300 ms </td>
+<td style="text-align:center;"> 128 MB </td>
+<td style="text-align:center;"> 30 MB </td>
 </tr>
 <tr>
-<td></td>
-<td align="center"> 205.74 ms </td>
-<td align="center"> 300 ms </td>
-<td align="center"> 128 MB </td>
-<td align="center"> 30 MB |</td>
+<td style="text-align:center;"> 205.74 ms </td>
+<td style="text-align:center;"> 300 ms </td>
+<td style="text-align:center;"> 128 MB </td>
+<td style="text-align:center;"> 30 MB </td>
 </tr>
 <tr>
-<td></td>
-<td align="center"> 213.96 ms </td>
-<td align="center"> 300 ms </td>
-<td align="center"> 128 MB </td>
-<td align="center"> 30 MB |</td>
+<td style="text-align:center;"> 213.96 ms </td>
+<td style="text-align:center;"> 300 ms </td>
+<td style="text-align:center;"> 128 MB </td>
+<td style="text-align:center;"> 30 MB </td>
 </tr>
 </tbody>
 </table>
@@ -449,48 +392,42 @@ return {"tokens": tokens}
 <table>
 <thead>
 <tr>
-<th></th>
-<th align="center"> Duration </th>
-<th align="left"> Billing Duration </th>
-<th align="center"> Memory Size </th>
-<th align="center"> Max Memory Used </th>
+<th style="text-align:center;"> Duration </th>
+<th style="text-align:left;"> Billing Duration </th>
+<th style="text-align:center;"> Memory Size </th>
+<th style="text-align:center;"> Max Memory Used </th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td></td>
-<td align="center"> 0.74 ms </td>
-<td align="left"> 100 ms </td>
-<td align="center"> 128 MB </td>
-<td align="center"> 11 MB |</td>
+<td style="text-align:center;"> 0.74 ms </td>
+<td style="text-align:left;"> 100 ms </td>
+<td style="text-align:center;"> 128 MB </td>
+<td style="text-align:center;"> 11 MB </td>
 </tr>
 <tr>
-<td></td>
-<td align="center"> 0.74 ms </td>
-<td align="left"> 100 ms </td>
-<td align="center"> 128 MB </td>
-<td align="center"> 11 MB |</td>
+<td style="text-align:center;"> 0.74 ms </td>
+<td style="text-align:left;"> 100 ms </td>
+<td style="text-align:center;"> 128 MB </td>
+<td style="text-align:center;"> 11 MB </td>
 </tr>
 <tr>
-<td></td>
-<td align="center"> 0.70 ms </td>
-<td align="left"> 100 ms </td>
-<td align="center"> 128 MB </td>
-<td align="center"> 11 MB |</td>
+<td style="text-align:center;"> 0.70 ms </td>
+<td style="text-align:left;"> 100 ms </td>
+<td style="text-align:center;"> 128 MB </td>
+<td style="text-align:center;"> 11 MB </td>
 </tr>
 <tr>
-<td></td>
-<td align="center"> 0.69 ms </td>
-<td align="left"> 100 ms </td>
-<td align="center"> 128 MB </td>
-<td align="center"> 11 MB |</td>
+<td style="text-align:center;"> 0.69 ms </td>
+<td style="text-align:left;"> 100 ms </td>
+<td style="text-align:center;"> 128 MB </td>
+<td style="text-align:center;"> 11 MB </td>
 </tr>
 <tr>
-<td></td>
-<td align="center"> 0.73 ms </td>
-<td align="left"> 100 ms </td>
-<td align="center"> 128 MB </td>
-<td align="center"> 11 MB |</td>
+<td style="text-align:center;"> 0.73 ms </td>
+<td style="text-align:left;"> 100 ms </td>
+<td style="text-align:center;"> 128 MB </td>
+<td style="text-align:center;"> 11 MB </td>
 </tr>
 </tbody>
 </table>
@@ -536,23 +473,18 @@ return {"tokens": tokens}
 
 <p>Python3で以下のようにMeCabを使おうとすると</p>
 
-<p>``` python
-import MeCab
+<pre><code class="python">import MeCab
 tagger = MeCab.Tagger('')
 text = u'MeCabで遊んでみよう!'
 node = tagger.parseToNode(text)
-while node:</p>
-
-<pre><code>print(node.surface + '\t' + node.feature)
-node = node.next
+while node:
+    print(node.surface + '\t' + node.feature)
+    node = node.next
 </code></pre>
-
-<p>```</p>
 
 <p>surfaceが全く読み取れないという現象に遭遇していました。</p>
 
-<p><code>plain
-BOS/EOS,*,*,*,*,*,*,*,*
+<pre><code class="plain">BOS/EOS,*,*,*,*,*,*,*,*
 名詞,一般,*,*,*,*,*
 助詞,格助詞,一般,*,*,*,で,デ,デ
 動詞,自立,*,*,五段・バ行,連用タ接続,遊ぶ,アソン,アソン
@@ -561,49 +493,38 @@ Traceback (most recent call last):
   File "m.py", line 10, in &lt;module&gt;
   print( node.surface + '\t' + node.feature )
   UnicodeDecodeError: 'utf-8' codec can't decode byte 0xa3 in position 1: invalid start byte
-</code></p>
+</code></pre>
 
 <h2>解決策</h2>
 
 <p>詳しい原因なんてどうでもいいからMeCabを使いたい人向けに、最初に解決方法を書いておきます。
 以下のように本当に解析したい対象を解析する前に、一度<code>parse</code>をしておけばOKです。</p>
 
-<p>``` python
-import MeCab
-tagger = MeCab.Tagger('')</p>
+<pre><code class="python">import MeCab
+tagger = MeCab.Tagger('')
 
-<p>tagger.parse('') # これ重要！！！！</p>
+tagger.parse('') # これ重要！！！！
 
-<p>text = u'MeCabで遊んでみよう!'
+text = u'MeCabで遊んでみよう!'
 node = tagger.parseToNode(text)
-while node:</p>
-
-<pre><code>print(node.surface + '\t' + node.feature)
-node = node.next
+while node:
+    print(node.surface + '\t' + node.feature)
+    node = node.next
 </code></pre>
-
-<p>```</p>
 
 <p>解析結果を全く使わずに捨てていて無駄のように思えますが、この一行が重要です！
 これを入れると以下のように正常に解析ができます。</p>
 
-<p>``` plain</p>
-
-<pre><code>    BOS/EOS,*,*,*,*,*,*,*,*
+<pre><code class="plain">        BOS/EOS,*,*,*,*,*,*,*,*
+MeCab   名詞,一般,*,*,*,*,*
+で      助詞,格助詞,一般,*,*,*,で,デ,デ
+遊ん    動詞,自立,*,*,五段・バ行,連用タ接続,遊ぶ,アソン,アソン
+で      助詞,接続助詞,*,*,*,*,で,デ,デ
+みよ    動詞,非自立,*,*,一段,未然ウ接続,みる,ミヨ,ミヨ
+う      助動詞,*,*,*,不変化型,基本形,う,ウ,ウ
+!       名詞,サ変接続,*,*,*,*,*
+        BOS/EOS,*,*,*,*,*,*,*,*
 </code></pre>
-
-<p>MeCab   名詞,一般,<em>,</em>,<em>,</em>,<em>
-で      助詞,格助詞,一般,</em>,<em>,</em>,で,デ,デ
-遊ん    動詞,自立,<em>,</em>,五段・バ行,連用タ接続,遊ぶ,アソン,アソン
-で      助詞,接続助詞,<em>,</em>,<em>,</em>,で,デ,デ
-みよ    動詞,非自立,<em>,</em>,一段,未然ウ接続,みる,ミヨ,ミヨ
-う      助動詞,<em>,</em>,<em>,不変化型,基本形,う,ウ,ウ
-!       名詞,サ変接続,</em>,<em>,</em>,<em>,</em></p>
-
-<pre><code>    BOS/EOS,*,*,*,*,*,*,*,*
-</code></pre>
-
-<p>```</p>
 
 <p>解析を行うメソッドであれば<code>parseToNode</code>でも構いません。</p>
 
@@ -620,21 +541,17 @@ node = node.next
 
 <p>何故だ・・・とさらにコードを追ってみると<code>parseToNode</code>の実装が<a href="https://github.com/taku910/mecab/blob/6b392e3960a4f5562e18742cb390ae1e22353d2a/mecab/src/tagger.cpp#L602-L611">以下のようになっていること</a>がわかりました。</p>
 
-<p>``` c
-const Node <em>TaggerImpl::parseToNode(const char </em>str, size_t len) {
+<pre><code class="c">const Node *TaggerImpl::parseToNode(const char *str, size_t len) {
   Lattice *lattice = mutable_lattice();
-  lattice->set_sentence(str, len); // このなかでMECAB_ALLOCATE_SENTENCEフラグが立ってるか確認している
+  lattice-&gt;set_sentence(str, len); // このなかでMECAB_ALLOCATE_SENTENCEフラグが立ってるか確認している
   initRequestType();               // このなかでMECAB_ALLOCATE_SENTENCEフラグを立ててる
-  if (!parse(lattice)) {</p>
-
-<pre><code>set_what(lattice-&gt;what());
-return 0;
-</code></pre>
-
-<p>  }
-  return lattice->bos_node();
+  if (!parse(lattice)) {
+    set_what(lattice-&gt;what());
+    return 0;
+  }
+  return lattice-&gt;bos_node();
 }
-```</p>
+</code></pre>
 
 <p><strong>MECAB_ALLOCATE_SENTENCEフラグを立てる前に、立っているかを確認しています。</strong></p>
 
@@ -647,8 +564,7 @@ return 0;
 <p><code>mutable_lattice()</code>は触れなくても、自分で作ったlatticeなら自由にいじれるので、
 以下のようにlatticeをPython側で作るのも手ですね。</p>
 
-<p>``` python
-lattice = MeCab.Lattice()
+<pre><code class="python">lattice = MeCab.Lattice()
 import MeCab
 tagger = MeCab.Tagger('')
 lattice = MeCab.Lattice()
@@ -656,13 +572,10 @@ text = u'MeCabで遊んでみよう!'
 lattice.set_sentence(text)
 tagger.parse(lattice)
 node = lattice.bos_node()
-while node:</p>
-
-<pre><code>print(node.surface+"\t"+node.feature)
-node = node.next
+while node:
+    print(node.surface+"\t"+node.feature)
+    node = node.next
 </code></pre>
-
-<p>```</p>
 
 <p>いずれの方法でもnodeからlatticeやtaggerへの参照がない(実際はあるけどPythonはそのことを知らない)ので、
 解析結果を読んでいる最中にlatticeやtaggerがGCで回収されないよう注意しましょう。</p>
@@ -691,8 +604,7 @@ GCされて困っている方はgit cloneしてお試し下さい。</p>
     <content type="html"><![CDATA[<p>先日このようなツイートを見かけて、
 「Python3になってGCの挙動変わったのかな？」と疑問に思ったので調査してみました。</p>
 
-<p><blockquote class="twitter-tweet"><p lang="ja" dir="ltr">MeCabをPythonから使う注意点とか - Shogo&#39;s Blog <a href="http://t.co/vJnOqZfUd7">http://t.co/vJnOqZfUd7</a> <a href="https://twitter.com/shogo82148">@shogo82148</a>さんから python3だと変数に代入しなくても動くのだけど2.xでは留意しないといけない</p>&mdash; NOKUBI Takatsugu野首貴嗣 (@knok) <a href="https://twitter.com/knok/status/605197292086263808">June 1, 2015</a></blockquote>
-<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script></p>
+<p><a href="https://twitter.com/knok/status/605197292086263808">https://twitter.com/knok/status/605197292086263808</a>">https://twitter.com/knok/status/605197292086263808">https://twitter.com/knok/status/605197292086263808</a></a></p>
 
 <!-- More -->
 
@@ -704,26 +616,20 @@ MeCabの公式(Google Codeサービス停止にともない<a href="https://taku
 Python BindingはPython2.x向けのため、setup.pyがそのままでは動きません。
 Python3.xでは非互換な文法の変更が入ったので以下のように書き換える必要があります。</p>
 
-<p>``` diff
-diff --git a/setup.py.org b/setup.py
+<pre><code class="diff">diff --git a/setup.py.org b/setup.py
 index 4486cbb..657945a 100644
 --- a/setup.py.org
 +++ b/setup.py
-@@ -7,7 +7,7 @@ def cmd1(str):</p>
+@@ -7,7 +7,7 @@ def cmd1(str):
+     return os.popen(str).readlines()[0][:-1]
 
-<pre><code> return os.popen(str).readlines()[0][:-1]
-</code></pre>
-
-<p> def cmd2(str):
+ def cmd2(str):
 -    return string.split (cmd1(str))
-+    return cmd1(str).split()</p>
++    return cmd1(str).split()
 
-<p> setup(name = "mecab-python",</p>
-
-<pre><code>    version = cmd1("mecab-config --version"),
+ setup(name = "mecab-python",
+        version = cmd1("mecab-config --version"),
 </code></pre>
-
-<p>```</p>
 
 <p>あとは <code>python setup.py install</code> で入ります。</p>
 
@@ -733,45 +639,32 @@ index 4486cbb..657945a 100644
 GCされて上手く動かない例 をPython3.4.3で動かしてみます。
 文字列の扱いが変わったり、print文の扱いが変わったりしているので、その部分だけ書き換えが必要です。</p>
 
-<p>``` python
-import MeCab
+<pre><code class="python">import MeCab
 tagger = MeCab.tagger('')
-text = u'MeCabで遊んでみよう！'</p>
+text = u'MeCabで遊んでみよう！'
 
-<p>node = tagger.parseToNode(text)</p>
+node = tagger.parseToNode(text)
+# Python2.x ではencode必須だったのが要らなくなった！
+# node = tagger.parseToNode(text.encode('utf-8'))
 
-<h1>Python2.x ではencode必須だったのが要らなくなった！</h1>
-
-<h1>node = tagger.parseToNode(text.encode('utf-8'))</h1>
-
-<p>while node:</p>
-
-<pre><code>print(node.surface + '\t' + node.feature)
-# printは文ではなくなったのでカッコで囲う必要がある
-node = node.next
+while node:
+    print(node.surface + '\t' + node.feature)
+    # printは文ではなくなったのでカッコで囲う必要がある
+    node = node.next
 </code></pre>
-
-<p>```</p>
 
 <p>さて、動かしてみましょう。</p>
 
-<p>``` plain</p>
-
-<pre><code>BOS/EOS,*,*,*,*,*,*,*,*
-名詞,一般,*,*,*,*,*
-助詞,格助詞,一般,*,*,*,で,デ,デ
-動詞,自立,*,*,五段・バ行,連用タ接続,遊ぶ,アソン,アソン
-助詞,接続助詞,*,*,*,*,で,デ,デ
+<pre><code class="plain">    BOS/EOS,*,*,*,*,*,*,*,*
+    名詞,一般,*,*,*,*,*
+    助詞,格助詞,一般,*,*,*,で,デ,デ
+    動詞,自立,*,*,五段・バ行,連用タ接続,遊ぶ,アソン,アソン
+    助詞,接続助詞,*,*,*,*,で,デ,デ
+Traceback (most recent call last):
+  File "m.py", line 10, in &lt;module&gt;
+    print( node.surface + '\t' + node.feature )
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xa3 in position 1: invalid start byt
 </code></pre>
-
-<p>Traceback (most recent call last):
-  File "m.py", line 10, in <module></p>
-
-<pre><code>print( node.surface + '\t' + node.feature )
-</code></pre>
-
-<p>UnicodeDecodeError: 'utf-8' codec can't decode byte 0xa3 in position 1: invalid start byt
-```</p>
 
 <p>surfaceが全く読み取れていない・・・。
 最後にはutf-8のデコードができず死んでしまっています。
@@ -818,6 +711,150 @@ Python3.x(+SWIG)ではエンコードが自動的に行われてしまうので 
 <li><a href="http://samurait.hatenablog.com/entry/Mecab-python3">python3対応 Mecabの紹介</a></li>
 </ul>
 
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[MeCabをPythonから使う注意点とか]]></title>
+    <link href="https://shogo82148.github.io/blog/2012/12/15/mecab-python/"/>
+    <updated>2012-12-15T17:38:00+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2012/12/15/mecab-python</id>
+    <content type="html"><![CDATA[<p>日本語の文章をコンピュータで色々いじるときに，
+必ずと言っていいほどよく使うのが形態素解析器．
+スペースなどの明示的な区切りの無い日本語を単語に分割してくれるツールです．
+中でもMeCabが非常に有名で，さまざまなところで使われています．</p>
+
+<p>MeCabはいろいろな言語から呼び出すことができます．
+自然言語処理の分野ではPythonが人気のようですね．僕も使っています．
+しかし，MeCabをPythonから使う場合，注意する点がいくつかあります．
+そこにハマっている後輩を見かけたので，文章として残しておくことにします．
+Python2系が対象です(3系はよくわからない)．
+注意するのは以下の二点です．</p>
+
+<ul>
+<li>MeCabに渡す文字列はencode，戻ってきた文字列はdecodeする</li>
+<li>MeCabに渡した文字列は必ず変数に入れておく</li>
+</ul>
+
+
+<!-- More -->
+
+
+<h2>EncodeとDecode</h2>
+
+<p>Python2系の文字列には，バイト列として扱われる文字列(str)と，Unicodeで表現された文字列(unicode)があります．
+日本語を扱う場合，strだといろいろ問題があるので，特に理由がなければunicodeを使うべきです．
+しかし，MeCabはstrしか受け付けません．
+そこでMeCabに渡す直前・直後でencode・decodeするようにします．</p>
+
+<pre><code class="python">import MeCab
+tagger = MeCab.tagger('-Owakati')
+text = u'MeCabで遊んでみよう！'
+
+result = tagger.parse(text) # エラー！
+
+encoded_text = text.encode('utf-8') # encodeが必要
+encoded_result = tagger.parse(text)
+result = result.decode('utf-8') # 必ずdecode
+</code></pre>
+
+<p><code>'utf-8'</code>の部分は辞書の文字コードに合わせて適宜書き換えてください．
+デフォルトはeuc-jpですが，utf-8の方が幸せになれると思います．</p>
+
+<h2>必ず変数に入れる</h2>
+
+<p>次にMeCabの作ったノードに直接アクセスして，品詞情報などを取ってくることを考えます．
+適当に書いてみるとこんな感じでしょうか．</p>
+
+<pre><code class="python">import MeCab
+tagger = MeCab.tagger('')
+text = u'MeCabで遊んでみよう！'
+
+node = tagger.parseToNode(text.encode('utf-8'))
+while node:
+    #printはstrを渡す必要があるのでdecodeは不要
+    print node.surface + '\t' + node.feature
+    node = node.next
+</code></pre>
+
+<p>MeCabに渡す直前にencodeもしているので上手く動きそうです．
+(decodeしてないのはprintに渡すためなので気にしなくておｋ)
+しかし，このコードの出力は下のような悲惨なものとなるのです
+(ブラウザさんに配慮して一部修正，環境によっても違うと思います)</p>
+
+<pre><code class="plain">        BOS/EOS,*,*,*,*,*,*,*,*
+MeCab   名詞,一般,*,*,*,*,*
+        ??   助詞,格助詞,一般,*,*,*,で,デ,デ
+?詞,?   動詞,自立,*,*,五段・バ行,連用タ接続,遊ぶ,アソン,アソン
+???     助詞,接続助詞,*,*,*,*,で,デ,デ
+??,*,*       動詞,非自立,*,*,一段,未然ウ接続,みる,ミヨ,ミヨ
+,*,     助動詞,*,*,*,不変化型,基本形,う,ウ,ウ
+*,*     記号,一般,*,*,*,*,！,！,！
+        BOS/EOS,*,*,*,*,*,*,*,*
+</code></pre>
+
+<p>なぜこのようなことが起きてしまったのでしょう？
+答えは<code>text.encode('utf-8')</code>の戻り値の寿命と，MeCabノードの構造にあります．</p>
+
+<p>みんなさんが普段お使いのPythonは，C言語で実装されたCPythonだと思います．
+「CPythonでは、ガベージコレクションの方式として参照カウント方式とマーク・アンド・スイープ方式を併用」しています
+(<a href="http://ja.wikipedia.org/wiki/Python#.E3.83.87.E3.83.BC.E3.82.BF.E5.9E.8B">Python - Wikipedia</a>)．
+参照カウント方式おかげでCPythonは不要になったオブジェクトを不要になった瞬間に検出し，そのオブジェクトを解放することができます．
+つまり実際には5行目を少し細かく見ると，Pythonは以下の処理をします．</p>
+
+<ol>
+<li><code>text.encode('utf-8')</code>を呼び出し，"エンコード済みtext"を作成</li>
+<li><code>tagger.parseToNode</code>を呼び出し，結果を<code>node</code>に代入</li>
+<li>不要になった<strong> &ldquo;エンコード済みtext"を破棄 </strong></li>
+</ol>
+
+
+<p>ポイントは3番ですね．6行目を実行する前に，"エンコード済みtext"は破棄されてしまいます．</p>
+
+<p>さて，次にMeCabがどのようにノードの情報を扱っているか見てみましょう．
+MeCabの言語バインディングのページには，ノードのsurfaceは文字列型であるような定義が書いてありますが，あれは嘘です．
+<a href="http://code.google.com/p/mecab/source/browse/trunk/mecab/src/mecab.h">ソース</a>を見ればわかりますが，みんな大好きポインタとして定義されています．
+実はこのポインタ，<strong> &ldquo;エンコード済みtext"上の開始点を指し示しています </strong>．</p>
+
+<p>つまり，どういうことかというと，</p>
+
+<ul>
+<li>MeCabはsurfaceを作るのに毎回"エンコード済みtext"からコピペしてた</li>
+<li>しかし，MeCabはPythonにそのことを伝えていなかった</li>
+<li>不要と判断したPythonによって"エンコード済みtext"はすでに破棄されており，そこには何もなかった</li>
+</ul>
+
+
+<p>これを解決するにはPythonに"エンコード済みtext"が使用中であることを伝え，破棄されないようにする必要があります．
+一番簡単な方法は変数に保存しておくことです．変数のスコープにいる間は"エンコード済みtext"が破棄される心配はありません．</p>
+
+<pre><code class="python">import MeCab
+tagger = MeCab.tagger('')
+text = u'MeCabで遊んでみよう！'
+
+encoded_text = text.encode('utf-8')
+node = tagger.parseToNode(encoded_text) # 変数に入れる！
+while node:
+    print node.surface + '\t' + node.feature
+    node = node.next
+</code></pre>
+
+<p>これで上手く行きます．</p>
+
+<p>encode_textとnodeの寿命が一致している必要があります．
+nodeの結果を何度も利用する場合は一度nodeの内容をすべてPythonのリストか何かに格納しましょう．
+一度変換してしまえば，ガーベージコレクションは正しく動きます．</p>
+
+<h2>まとめ</h2>
+
+<ul>
+<li>MeCabに渡す文字列はencode，戻ってきた文字列はdecodeする</li>
+<li>MeCabに渡した文字列は必ず変数に入れておく</li>
+</ul>
+
+
+<p>面倒なのでラッパーを書くかといいかもしれませんね．
+もしくは自前で実装とか．</p>
 ]]></content>
   </entry>
   

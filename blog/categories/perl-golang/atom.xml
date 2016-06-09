@@ -4,7 +4,7 @@
   <title><![CDATA[Category: perl golang | Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/blog/categories/perl-golang/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2016-06-09T13:57:36+09:00</updated>
+  <updated>2016-06-09T17:44:09+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -27,38 +27,35 @@
 
 <p>Perlから使いたい関数に以下のようにgo2xsで始まるコメントを付けておきます。</p>
 
-<p>``` go hoge
-package main</p>
+<pre><code class="go hoge">package main
 
-<p>//go2xs hello
+//go2xs hello
 func hello(str string) string {
   return "Hello " + str
 }
-```</p>
+</code></pre>
 
 <p><a href="https://github.com/shogo82148/go2xs">go2xs</a>をgo getして、xsのグルーコードを作成。
 その後通常のPerlモジュールと同じ手順でコンパイルします。
 Go 1.5から入ったShared Libraryの機能を使っているのでGo 1.5が必要です。</p>
 
-<p><code>bash
-go get https://github.com/shogo82148/go2xs/cli/go2xs
+<pre><code class="bash">go get https://github.com/shogo82148/go2xs/cli/go2xs
 go2xs -name hoge hoge.go
 perl Makefile.PL
 make
-</code></p>
+</code></pre>
 
 <p>あとは普通に呼び出すだけ。</p>
 
-<p><code>
-perl -Mblib -Mhoge -e 'print hoge::hello("World")'
+<pre><code>perl -Mblib -Mhoge -e 'print hoge::hello("World")'
 Hello World
-</code></p>
+</code></pre>
 
 <h2>制限事項</h2>
 
 <p>今はまだ、整数・浮動小数点型・文字列しか扱えません。</p>
 
-<p>あとGoのShared Libraryを複数回読み込むことができないっぽい？ (ref. https://github.com/golang/go/issues/11100 )
+<p>あとGoのShared Libraryを複数回読み込むことができないっぽい？ (ref. <a href="https://github.com/golang/go/issues/11100">https://github.com/golang/go/issues/11100</a> )
 ので、go2xsを使ったコードを二つ以上useすると死にます。</p>
 
 <h2>FFI::Rawを使う方法</h2>
@@ -66,50 +63,44 @@ Hello World
 <p>go2xsはGoをShared Libraryとしてコンパイルしているだけなので、go2xsを使わなくても頑張れば呼び出すことができます。
 <a href="http://qiita.com/yanolab/items/1e0dd7fd27f19f697285">Golang で Shared Library を出力する。</a>で紹介されているこちらのコードで試してみます。</p>
 
-<p>``` go libgofib.go
-package main</p>
+<pre><code class="go libgofib.go">package main
 
-<p>import (
+import (
   "C"
   "log"
-)</p>
+)
 
-<p>//export fib
+//export fib
 func fib(n int) int {
   if (n &lt; 2) { return n }
   return fib(n - 2) + fib(n - 1)
-}</p>
-
-<p>func init() {
-  log.Println("Loaded!!")
-}</p>
-
-<p>func main() {
 }
-```</p>
+
+func init() {
+  log.Println("Loaded!!")
+}
+
+func main() {
+}
+</code></pre>
 
 <p>ビルドしてShared Libraryを作ってみます。</p>
 
-<p><code>bash
-build -buildmode=c-shared -o libgofib.so libgofib.go
-</code></p>
+<pre><code class="bash">build -buildmode=c-shared -o libgofib.so libgofib.go
+</code></pre>
 
 <p>PerlからShared Libraryを呼び出すには<a href="https://metacpan.org/pod/FFI::Raw">FFI::Raw</a>を使うのがお手軽のようです。</p>
 
-<p>``` perl test.pl
-use FFI::Raw;</p>
+<pre><code class="perl test.pl">use FFI::Raw;
 
-<p>my $fib = FFI::Raw->new(</p>
+my $fib = FFI::Raw-&gt;new(
+    'libfib.so', 'fib',
+    FFI::Raw::int, # 戻り値
+    FFI::Raw::int, # 引数
+);
 
-<pre><code>'libfib.so', 'fib',
-FFI::Raw::int, # 戻り値
-FFI::Raw::int, # 引数
+print $format-&gt;call(32);
 </code></pre>
-
-<p>);</p>
-
-<p>print $format->call(32);
-```</p>
 
 <h2>文字列の受け渡しをしてみる</h2>
 
@@ -119,43 +110,38 @@ FFI::Raw::int, # 引数
 
 <p>Golangの<code>string</code>はPerlでそのまま扱えないので、<code>C.GoString</code>と<code>C.CString</code>を使い一度C言語の文字列形式を経由してから相互変換する必要があります。</p>
 
-<p>``` go libgofmt.go
-import "C"</p>
+<pre><code class="go libgofmt.go">import "C"
 
-<p>import (
+import (
   f "go/format"
-)</p>
+)
 
-<p>//export format
-func format(src <em>C.char) </em>C.char {
+//export format
+func format(src *C.char) *C.char {
   gosrc := C.GoString(src)
   dst, _ := f.Source([]byte(gosrc))
   return C.CString(string(dst))
-}</p>
-
-<p>func main() {
 }
-```</p>
 
-<p>``` perl test.pl
-use FFI::Raw;</p>
-
-<p>my $format = FFI::Raw->new(</p>
-
-<pre><code>'libgofmt.so', 'format',
-FFI::Raw::str, # 戻り値
-FFI::Raw::str,  # 引数1
+func main() {
+}
 </code></pre>
 
-<p>);</p>
+<pre><code class="perl test.pl">use FFI::Raw;
 
-<p>print $format->call(&lt;&lt;"EOF");
+my $format = FFI::Raw-&gt;new(
+    'libgofmt.so', 'format',
+    FFI::Raw::str, # 戻り値
+    FFI::Raw::str,  # 引数1
+);
+
+print $format-&gt;call(&lt;&lt;"EOF");
 package main
 import   "fmt"
 func main(   )   {
 fmt.Println("hogehoge") }
 EOF
-```</p>
+</code></pre>
 
 <p>なんとなく動いてよさ気な感じがしますが、
 実はこのコード、メモリーリークしてます。
@@ -167,58 +153,53 @@ EOF
 <p>Golang側でバッファを確保するとPerlに戻った時にバッファ開放ができないので、
 Perl側で結果を格納するバッファを確保してみます。</p>
 
-<p>``` go libgofmt.go
-package main</p>
+<pre><code class="go libgofmt.go">package main
 
-<p>/*</p>
+/*
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+*/
+import "C"
 
-<h1>include &lt;stdlib.h></h1>
-
-<h1>include &lt;string.h></h1>
-
-<p>*/
-import "C"</p>
-
-<p>import (
+import (
   f "go/format"
   "unsafe"
-)</p>
+)
 
-<p>//export format
-func format(dst <em>C.char, src </em>C.char) {
+//export format
+func format(dst *C.char, src *C.char) {
   gosrc := C.GoString(src)
   godst, _ := f.Source([]byte(gosrc))
   cs := C.CString(string(godst))
   defer C.free(unsafe.Pointer(cs))
   C.strcpy(dst, cs)
-}</p>
-
-<p>func main() {
 }
-```</p>
 
-<p>``` perl test.pl
-use FFI::Raw;</p>
+func main() {
+}
+</code></pre>
 
-<p>my $format = FFI::Raw->new(
+<pre><code class="perl test.pl">use FFI::Raw;
+
+my $format = FFI::Raw-&gt;new(
   'libgofmt.so', 'format',
   FFI::Raw::void, # 戻り値
   FFI::Raw::str,
   FFI::Raw::ptr,
-);</p>
+);
 
-<p>while(1) {
+while(1) {
   my $hoge;
   my $coderef = sub { $hoge = shift };
   my $callback = FFI::Raw::callback($coderef, FFI::Raw::void, FFI::Raw::str);
-  $format->call(&lt;&lt;"EOF", $callback);
+  $format-&gt;call(&lt;&lt;"EOF", $callback);
 package main
 import   "fmt"
 func main(   )   {
 fmt.Println("hogehoge") }
 EOF
 }
-```</p>
+</code></pre>
 
 <p>この方式なら作ったShared Libraryを他の言語からも呼びやすいので無難かも？
 ただし、まだまだ実装が不十分で、このコードはバッファオーバーランの危険があります。
@@ -229,75 +210,61 @@ EOF
 <p>結果の保存をコールバック関数の呼び出しで行えば、Golang側でfreeを実行するタイミングが分かるので、メモリーリークを防ぐことができます。
 ただし、Goからは関数ポインタを呼び出すことはできないので、gcoでグルーコードを書いてあげる必要があります。</p>
 
-<p>``` go libgofmt.go
-package main</p>
+<pre><code class="go libgofmt.go">package main
 
-<p>/*</p>
+/*
+#include &lt;stdlib.h&gt;
+typedef void (*callbackFunc) (const char*);
 
-<h1>include &lt;stdlib.h></h1>
+void bridge_callback(callbackFunc f, const char* str);
+*/
+import "C"
 
-<p>typedef void (<em>callbackFunc) (const char</em>);</p>
-
-<p>void bridge_callback(callbackFunc f, const char<em> str);
-</em>/
-import "C"</p>
-
-<p>import (
+import (
   f "go/format"
   "unsafe"
-  )</p>
+  )
 
-<p>//export format
+//export format
 func format(src *C.char, dstCallback unsafe.Pointer) {
   gosrc := C.GoString(src)
   godst, _ := f.Source([]byte(gosrc))
   cs := C.CString(string(godst))
   defer C.free(unsafe.Pointer(cs))
   C.bridge_callback(C.callbackFunc(dstCallback), cs)
-}</p>
-
-<p>func main() {
 }
-```</p>
 
-<p>``` c libgofmt.c
-typedef void (<em>callbackFunc) (const char</em>);</p>
-
-<p>void bridge_callback(callbackFunc f, const char* str) {</p>
-
-<pre><code>f(str);
+func main() {
+}
 </code></pre>
 
-<p>}
-```</p>
+<pre><code class="c libgofmt.c">typedef void (*callbackFunc) (const char*);
 
-<p>``` perl test.pl
-use FFI::Raw;</p>
-
-<p>my $format = FFI::Raw->new(</p>
-
-<pre><code>'libgofmt.so', 'format',
-FFI::Raw::void, # 戻り値
-FFI::Raw::str, FFI::Raw::ptr,
+void bridge_callback(callbackFunc f, const char* str) {
+    f(str);
+}
 </code></pre>
 
-<p>);</p>
+<pre><code class="perl test.pl">use FFI::Raw;
 
-<p>while(1) {</p>
+my $format = FFI::Raw-&gt;new(
+    'libgofmt.so', 'format',
+    FFI::Raw::void, # 戻り値
+    FFI::Raw::str, FFI::Raw::ptr,
+);
 
-<pre><code>my $hoge;
-my $coderef = sub { $hoge = shift };
-my $callback = FFI::Raw::callback($coderef, FFI::Raw::void, FFI::Raw::str);
-$format-&gt;call(&lt;&lt;"EOF", $callback);
-</code></pre>
-
-<p>package main
+while(1) {
+    my $hoge;
+    my $coderef = sub { $hoge = shift };
+    my $callback = FFI::Raw::callback($coderef, FFI::Raw::void, FFI::Raw::str);
+    $format-&gt;call(&lt;&lt;"EOF", $callback);
+package main
 import   "fmt"
 func main(   )   {
 fmt.Println("hogehoge") }
 EOF
 }
-```</p>
+</code></pre>
 
 <h2>まとめ</h2>
 

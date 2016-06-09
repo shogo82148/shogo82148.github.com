@@ -4,7 +4,7 @@
   <title><![CDATA[Category: unazusan | Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/blog/categories/unazusan/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2016-06-09T13:57:36+09:00</updated>
+  <updated>2016-06-09T17:44:09+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -36,105 +36,87 @@ TAGNAMEに関連する画像の情報がJSONで帰ってくるので、
 Perlからこのエンドポイントを叩きます。
 IRCとのやりとりには<a href="http://www.songmu.jp/riji/entry/2013-09-09-unazusan.html">UnazuSan</a>を使いました。</p>
 
-<p>``` perl
-!/usr/bin/env perl
+<pre><code class="perl">!/usr/bin/env perl
 use 5.014;
 use warnings;
 use strict;
 use utf8;
 use Encode qw/encode_utf8/;
 use Furl;
-use JSON;</p>
+use JSON;
 
-<p>use UnazuSan;</p>
+use UnazuSan;
 
-<p>sub neko {</p>
-
-<pre><code>state $data = undef;
-state $time = 0;
-if( !$data || time - $time &gt; 60 * 60) {
-    $time = time;
-    my $furl = Furl-&gt;new;
-    my $res = $furl-&gt;get('https://api.instagram.com/v1/tags/%E7%8C%AB/media/recent?access_token=YOUR_ACCESS_TOKEN');
-    my $hash = JSON::decode_json($res-&gt;content);
-    $data = $hash-&gt;{data};
+sub neko {
+    state $data = undef;
+    state $time = 0;
+    if( !$data || time - $time &gt; 60 * 60) {
+        $time = time;
+        my $furl = Furl-&gt;new;
+        my $res = $furl-&gt;get('https://api.instagram.com/v1/tags/%E7%8C%AB/media/recent?access_token=YOUR_ACCESS_TOKEN');
+        my $hash = JSON::decode_json($res-&gt;content);
+        $data = $hash-&gt;{data};
+    }
+    my $media = $data-&gt;[rand(scalar @$data)];
+    return $media-&gt;{images}{standard_resolution}{url};
 }
-my $media = $data-&gt;[rand(scalar @$data)];
-return $media-&gt;{images}{standard_resolution}{url};
-</code></pre>
 
-<p>}</p>
-
-<p>my $unazu_san;
+my $unazu_san;
 my $NICKNAME = 'iyashi';
-$unazu_san = UnazuSan->new(</p>
+$unazu_san = UnazuSan-&gt;new(
+    host       =&gt; '127.0.0.1',
+    enable_ssl =&gt; 1,
+    join_channels =&gt; ['#test'],
+    respond_all   =&gt; 1,
+    nickname      =&gt; $NICKNAME,
+);
 
-<pre><code>host       =&gt; '127.0.0.1',
-enable_ssl =&gt; 1,
-join_channels =&gt; ['#test'],
-respond_all   =&gt; 1,
-nickname      =&gt; $NICKNAME,
+$unazu_san-&gt;on_message(
+    qr/^\s+$NICKNAME:/ =&gt; sub {
+        my $receive = shift;
+        $receive-&gt;reply('うんうん');
+    },
+    qr/(.*)/ =&gt; sub {
+        my ($receive, $match) = @_;
+        say $match;
+        say $receive-&gt;message;
+    },
+);
+
+$unazu_san-&gt;on_command(
+   ' 癒やし' =&gt; sub {
+        my ($receive, @args) = @_;
+        $receive-&gt;reply(neko());
+    }
+);
+
+$unazu_san-&gt;run;
 </code></pre>
-
-<p>);</p>
-
-<p>$unazu_san->on_message(</p>
-
-<pre><code>qr/^\s+$NICKNAME:/ =&gt; sub {
-    my $receive = shift;
-    $receive-&gt;reply('うんうん');
-},
-qr/(.*)/ =&gt; sub {
-    my ($receive, $match) = @_;
-    say $match;
-    say $receive-&gt;message;
-},
-</code></pre>
-
-<p>);</p>
-
-<p>$unazu_san->on_command(
-   ' 癒やし' => sub {</p>
-
-<pre><code>    my ($receive, @args) = @_;
-    $receive-&gt;reply(neko());
-}
-</code></pre>
-
-<p>);</p>
-
-<p>$unazu_san->run;
-```</p>
 
 <p>「癒して」と話しかけると猫画像を検索して返してくれます。</p>
 
 <h2>引数をMeCabで解析する</h2>
 
-<p><code>plain
-acidlemon unazu_san: 癒やしをうさぎで頼む
+<pre><code class="plain">acidlemon unazu_san: 癒やしをうさぎで頼む
 acidlemon ネコやん! ('-'#)
-</code></p>
+</code></pre>
 
 <p>みたいなことがあったので、「癒して」のあとも見ることにしました。
 MeCabを使って名詞っぽいものを抽出して、タグ名に使います。</p>
 
-<p>``` perl
-state $mecab = Text::MeCab->new();</p>
+<pre><code class="perl">state $mecab = Text::MeCab-&gt;new();
 
-<p>my $n = $mecab->parse(join ' ', @_);
+my $n = $mecab-&gt;parse(join ' ', @_);
 my $keyword = undef;
-while ($n) {</p>
-
-<pre><code>my $f = decode_utf8 $n-&gt;feature;
-$keyword //= decode_utf8($n-&gt;surface) if ($f =~ /^名詞,/) &amp;&amp; ($f !~ /^名詞,代名詞,/);
-$n = $n-&gt;next;
-</code></pre>
-
-<p>}
+while ($n) {
+    my $f = decode_utf8 $n-&gt;feature;
+    $keyword //= decode_utf8($n-&gt;surface) if ($f =~ /^名詞,/) &amp;&amp; ($f !~ /^名詞,代名詞,/);
+    $n = $n-&gt;next;
+}
 $keyword //= '猫';
 my $word = uri_escape_utf8($keyword);
-my $res = $furl->get("https://api.instagram.com/v1/tags/$word/media/recent?access_token=ACCESS_TOKEN");
-```</p>
+my $res = $furl-&gt;get("https://api.instagram.com/v1/tags/$word/media/recent?access_token=ACCESS_TOKEN");
+</code></pre>
 
 <p>これで癒やしをうさぎで頼まれてもウサギ画像を返せるようになりました。</p>
 ]]></content>

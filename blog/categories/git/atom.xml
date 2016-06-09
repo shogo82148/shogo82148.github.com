@@ -4,7 +4,7 @@
   <title><![CDATA[Category: git | Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/blog/categories/git/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2016-06-09T13:57:36+09:00</updated>
+  <updated>2016-06-09T17:44:09+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -35,33 +35,25 @@ gitで差分をみれるようにしてみました。</p>
 
 <p>csvのときと同じ要領で、まずはfntファイルをdiffを取りやすい形式に変換するスクリプト(fnt2txt)を用意し</p>
 
-<p>``` bash fnt2txt</p>
+<pre><code class="bash fnt2txt">#!/bin/bash
 
-<h1>!/bin/bash</h1>
-
-<p>grep 'char id=' $1 | cut -d' ' -f2 | cut -d= -f2 | perl -MEncode -ne 'printf "%04x: %s\n", $<em>, encode_utf8 chr($</em>) if $_ >= 32'
-```</p>
+grep 'char id=' $1 | cut -d' ' -f2 | cut -d= -f2 | perl -MEncode -ne 'printf "%04x: %s\n", $_, encode_utf8 chr($_) if $_ &gt;= 32'
+</code></pre>
 
 <p>fnt2txtを使う設定を<code>.git/config</code>に設定します。</p>
 
-<p>``` plain .git/config
-[diff "fnt"]</p>
-
-<pre><code>    textconv = fnt2txt
+<pre><code class="plain .git/config">[diff "fnt"]
+        textconv = fnt2txt
 </code></pre>
-
-<p>```</p>
 
 <p>最後に拡張子.fntに対してだけこの設定が反映されるようにすればOKです。</p>
 
-<p><code>plain .gitatrribute
-*.fnt diff=fnt
-</code></p>
+<pre><code class="plain .gitatrribute">*.fnt diff=fnt
+</code></pre>
 
 <p>こんな感じでdiffが見れます。</p>
 
-<p><code>diff git-diff
-diff --git a/foo.fnt b/foo.fnt
+<pre><code class="diff git-diff">diff --git a/foo.fnt b/foo.fnt
 index 79391c0..e262b2d 100755
 --- a/foo.fnt
 +++ b/foo.fnt
@@ -73,7 +65,7 @@ index 79391c0..e262b2d 100755
  00a1: ¡
  00a2: ¢
  00a3: £
-</code></p>
+</code></pre>
 
 <p>事故防止に是非ご利用ください。</p>
 ]]></content>
@@ -127,10 +119,9 @@ index 79391c0..e262b2d 100755
 <p>text, binaryはコンフリクトしたときによく見る挙動ですね。
 unionは初めて知ったので、簡単なレポジトリを作って挙動を確かめてみました。</p>
 
-<p>``` bash
-$ # masterブランチ上でmembers.txtにAliceを追加する
+<pre><code class="bash">$ # masterブランチ上でmembers.txtにAliceを追加する
 $ git init
-$ echo Alice > members.txt
+$ echo Alice &gt; members.txt
 $ git add members.txt
 $ git commit -m 'add Alice'
 [master (root-commit) 8c39714] add Alice
@@ -140,7 +131,7 @@ $
 $ # add-bobブランチ上でmembers.txtにBobを追加する
 $ git checkout -b add-bob
 Switched to a new branch 'add-bob'
-$ echo 'Bob' >> members.txt
+$ echo 'Bob' &gt;&gt; members.txt
 $ git add members.txt
 $ git commit -m 'add Bob'
 [add-bob 9c406ae] add Bob
@@ -149,7 +140,7 @@ $
 $ # masterブランチ上でmembers.txtにEveを追加する
 $ git checkout -
  Switched to branch 'master'
-$ echo 'Eve' >> members.txt
+$ echo 'Eve' &gt;&gt; members.txt
 $ git add members.txt
 $ git commit -m 'add Eve'
 [master 9eabd8a] add Eve
@@ -163,18 +154,16 @@ $ cat members.txt
  &lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD
  Eve
  =======
- Bob</p>
-
-<blockquote><blockquote><blockquote><blockquote><blockquote><blockquote><blockquote><p>add-bob
-```</p></blockquote></blockquote></blockquote></blockquote></blockquote></blockquote></blockquote>
+ Bob
+ &gt;&gt;&gt;&gt;&gt;&gt;&gt; add-bob
+</code></pre>
 
 <p>わざとコンフリクトを起こしてみるテストです。
 ファイル末尾にEveとBobをそれぞれ別々のブランチで追加したためコンフリクトしてしまっています。</p>
 
 <p>では次にgitattributeを追加して<code>merge=union</code>を指定した場合に挙動を確認してみましょう。</p>
 
-<p><code>bash
-$ # merge=union属性を追加
+<pre><code class="bash">$ # merge=union属性を追加
 $ echo 'members.txt merge=union' &gt; .gitattributes
 $ git add -f .gitattributes
 $ git commit -m 'add gitattributes'
@@ -192,7 +181,7 @@ $ cat members.txt
 Alice
 Eve
 Bob
-</code></p>
+</code></pre>
 
 <p>通常はコンフリクトするケースですが、今度はうまくマージできました。</p>
 
@@ -202,29 +191,22 @@ Bob
 unionでは行の順番が不定になって不便なので、試しに「必ずソートされており重複がないファイルをマージする」ためのmerge driverを作ってみます。
 まずはマージするためのコマンド用意しましょう。</p>
 
-<p>``` bash merge-sorted-set.sh</p>
-
-<h1>!/bin/bash</h1>
-
-<p>A="$1"
+<pre><code class="bash merge-sorted-set.sh">#!/bin/bash
+A="$1"
 O="$2"
 B="$3"
 tmpfile=$(mktemp temp.XXXXXX)
 cp "$A" "$tmpfile"
-git merge-file -p -q --union "$tmpfile" "$O" "$B" | sort | uniq > "$A"
+git merge-file -p -q --union "$tmpfile" "$O" "$B" | sort | uniq &gt; "$A"
 rm "$tmpfile"
-```</p>
+</code></pre>
 
 <p>パスの通った場所にこのファイルを置き、<code>.git/config</code>にこれを呼び出す設定を書けば、gitattributeから使用できるようになります。</p>
 
-<p>``` plain .git/config
-[merge "zset"]</p>
-
-<pre><code>    name = merge sorted set
-    driver = merge-sorted-set.sh %A %O %B
+<pre><code class="plain .git/config">[merge "zset"]
+        name = merge sorted set
+        driver = merge-sorted-set.sh %A %O %B
 </code></pre>
-
-<p>```</p>
 
 <ul>
 <li><code>%A</code>: 現在のブランチの状態</li>
@@ -241,28 +223,21 @@ rm "$tmpfile"
 
 <p>僕のケースではtheirs-oursの順番で並んでくれると都合が良いので、こんなスクリプトを書いてみました。</p>
 
-<p>``` bash merge-theirs-ours.sh</p>
-
-<h1>!/bin/bash</h1>
-
-<p>A="$1"
+<pre><code class="bash merge-theirs-ours.sh">#!/bin/bash
+A="$1"
 O="$2"
 B="$3"
 tmpfile=$(mktemp temp.XXXXXX)
 cp "$A" "$tmpfile"
-git merge-file -p -q --union "$B" "$O" "$tmpfile" > "$A"
+git merge-file -p -q --union "$B" "$O" "$tmpfile" &gt; "$A"
 rm "$tmpfile"
-```</p>
-
-<p>``` plain .git/config
-[merge "theirsours"]</p>
-
-<pre><code>    name = theirs first
-    driver = merge-theirs-ours.sh %A %O %B
-    recursive = text
 </code></pre>
 
-<p>```</p>
+<pre><code class="plain .git/config">[merge "theirsours"]
+        name = theirs first
+        driver = merge-theirs-ours.sh %A %O %B
+        recursive = text
+</code></pre>
 
 <p>あとは勝手にコンフリクト解消して欲しいファイルに対して
 .gitattributesで<code>merge=theirsours</code>を指定すれば通常はコンフリクトする場合でもマージしてくれます。</p>
@@ -270,29 +245,20 @@ rm "$tmpfile"
 <p>ただ、さすがに全自動だとちょっと怖いので、以下の様にコンフリクトするようであればユーザに確認(<code>exit 1</code>するとコンフリクトした扱いになる)
 したほうが無難な気もしますね。</p>
 
-<p>``` bash merge-theirs-ours.sh</p>
-
-<h1>!/bin/bash</h1>
-
-<p>A="$1"
+<pre><code class="bash merge-theirs-ours.sh">#!/bin/bash
+A="$1"
 O="$2"
 B="$3"
-if git merge-file -p -q "$A" "$O" "$B" > /dev/null; then</p>
-
-<pre><code>git merge-file "$A" "$O" "$B";
+if git merge-file -p -q "$A" "$O" "$B" &gt; /dev/null; then
+    git merge-file "$A" "$O" "$B";
+else
+    tmpfile=$(mktemp temp.XXXXXX)
+    cp "$A" "$tmpfile"
+    git merge-file -p -q --union "$B" "$O" "$tmpfile" &gt; "$A"
+    rm "$tmpfile"
+    exit 1
+fi
 </code></pre>
-
-<p>else</p>
-
-<pre><code>tmpfile=$(mktemp temp.XXXXXX)
-cp "$A" "$tmpfile"
-git merge-file -p -q --union "$B" "$O" "$tmpfile" &gt; "$A"
-rm "$tmpfile"
-exit 1
-</code></pre>
-
-<p>fi
-```</p>
 
 <h2>まとめ</h2>
 
@@ -332,16 +298,14 @@ merge strategyのカスタマイズは大変そう・・・
 <p>git-for-each-refを使うと各ブランチに対していろいろ操作できるようです。
 各ブランチの最後にコミットした人一覧を出すには以下のコマンド。</p>
 
-<p><code>bash
-git for-each-ref --format='%(authordate:short) %(authorname) %(refname)' --sort=-committerdate refs/remotes/origin/
-</code></p>
+<pre><code class="bash">git for-each-ref --format='%(authordate:short) %(authorname) %(refname)' --sort=-committerdate refs/remotes/origin/
+</code></pre>
 
 <p>formatは自由にいじれるのでいろいろ遊べます。
 例えば、ブランチをたくさん抱え込んでいる人の一覧を表示する例。</p>
 
-<p><code>bash
-git for-each-ref --format="%(authorname)" refs/remotes/origin/ | sort | uniq -c | sort -nr
-</code></p>
+<pre><code class="bash">git for-each-ref --format="%(authorname)" refs/remotes/origin/ | sort | uniq -c | sort -nr
+</code></pre>
 
 <h2>参考</h2>
 
@@ -368,18 +332,16 @@ gitのdiffがかなり自由にカスタマイズできることを知ったの�
 
 <p>例として、以下のようなcsvファイルを編集することを考えます。</p>
 
-<p><code>plain hogehoge.csv
-id,name,param_a,param_b,param_c,param_d,param_e
+<pre><code class="plain hogehoge.csv">id,name,param_a,param_b,param_c,param_d,param_e
 101,hoge,314,159,265,358,979
 102,fuga,271,828,182,845,904
-</code></p>
+</code></pre>
 
 <p>一行目は列の見出しになっていて、プログラムからは列番号ではなく<code>param_d</code>の様に指定する、
 という作りになってます。
 <code>id: 101</code>の行の<code>param_d</code>の数値に変更が入った場合、普通のgitだと以下のようになります。</p>
 
-<p><code>diff git-diff
-diff --git a/hogehoge.csv b/hogehoge.csv
+<pre><code class="diff git-diff">diff --git a/hogehoge.csv b/hogehoge.csv
 index c8dbd17..37f4ff5 100644
 --- a/hogehoge.csv
 +++ b/hogehoge.csv
@@ -388,7 +350,7 @@ id,name,param_a,param_b,param_c,param_d,param_e
 -101,hoge,314,159,265,358,979
 +101,hoge,314,159,265,359,979
  102,fuga,271,828,182,845,904
-</code></p>
+</code></pre>
 
 <p>二行目に何か変更があったことはわかりますが、
 <code>param_d</code> だとはすぐにはわかりませんね・・・</p>
@@ -399,20 +361,15 @@ id,name,param_a,param_b,param_c,param_d,param_e
 git-diffを実行する前に変換ツールを実行する機能があります。
 拡張子がcsvのファイルに対してこの機能が働くように<code>.gitattributes</code>に以下の行を足します。</p>
 
-<p><code>plain .gitattributes
-*.csv diff=csv
-</code></p>
+<pre><code class="plain .gitattributes">*.csv diff=csv
+</code></pre>
 
 <p><code>.git/config</code> に変換ツールの設定を追加します。
 <code>key: value</code>の形式になっていると見やすそうなので、変換先の形式にはyamlを選びました。</p>
 
-<p>``` plain .git/config
-[diff "csv"]</p>
-
-<pre><code>textconv = csv2yaml
+<pre><code class="plain .git/config">[diff "csv"]
+    textconv = csv2yaml
 </code></pre>
-
-<p>```</p>
 
 <p>ここで指定している<code>csv2yaml</code>は自前で用意する必要があります。
 インターネット上をさまよえば同名のツールはいくらでもありそうですが、今回は自分でgoを使って書きました。
@@ -427,8 +384,7 @@ csv2yamlは自分のよく使うcsvのフォーマットにあわせて以下の
 
 <p>この状態で<code>git diff</code>を実行すると以下のようになります。</p>
 
-<p><code>diff git-diff
-diff --git a/hogehoge.csv b/hogehoge.csv
+<pre><code class="diff git-diff">diff --git a/hogehoge.csv b/hogehoge.csv
 index c8dbd17..37f4ff5 100644
 --- a/hogehoge.csv
 +++ b/hogehoge.csv
@@ -441,7 +397,7 @@ index c8dbd17..37f4ff5 100644
    param_e: "979"
  - id: "102"
    name: fuga
-</code></p>
+</code></pre>
 
 <p>これなら <code>param_d</code> が変更されたとすぐに分かりますね。</p>
 
@@ -453,19 +409,14 @@ index c8dbd17..37f4ff5 100644
 <p>差分の <code>@@ -3,7 +3,7 @@</code> となっている部分はhunk-headerといって、自由にカスタマイズすることができます。
 <code>.git/config</code> に表示したい文字列のパターンを入力しましょう。</p>
 
-<p>``` plain .git/config
-[diff "csv"]</p>
-
-<pre><code>textconv = csv2yaml
-xfuncname = "^- .*$"
+<pre><code class="plain .git/config">[diff "csv"]
+    textconv = csv2yaml
+    xfuncname = "^- .*$"
 </code></pre>
-
-<p>```</p>
 
 <p>この状態で差分を確認すると「<code>id: 101</code>の<code>param_d</code>をいうパラメータ」が更新されたことが一目瞭然ですね！</p>
 
-<p><code>diff git-diff
-diff --git a/hogehoge.csv b/hogehoge.csv
+<pre><code class="diff git-diff">diff --git a/hogehoge.csv b/hogehoge.csv
 index c8dbd17..37f4ff5 100644
 --- a/hogehoge.csv
 +++ b/hogehoge.csv
@@ -478,7 +429,7 @@ index c8dbd17..37f4ff5 100644
    param_e: "979"
  - id: "102"
    name: fuga
-</code></p>
+</code></pre>
 
 <p><code>csv2yaml</code>を作るときに「<code>id</code>という名前のキーを必ず最初にする」としたのはこの機能を使うためです。
 僕のユースケースでは<code>id</code>がわかれば十分なことがほとんどですが、
@@ -504,9 +455,8 @@ index c8dbd17..37f4ff5 100644
     <content type="html"><![CDATA[<p><a href="http://moznion.hatenadiary.com/entry/2015/03/20/175035">git で管理しているリポジトリの各ブランチの中身をそれぞれ個別のディレクトリにエクスポートする</a> を読んで、
 git-archive を使うともう少しシンプルに書けるんじゃないかと思ってやってみた。</p>
 
-<p><code>bash
-git branch | sed -e 's/^[\* ]*//g' | xargs -n1 -I% sh -c 'git archive --prefix=%/ % | tar x'
-</code></p>
+<pre><code class="bash">git branch | sed -e 's/^[\* ]*//g' | xargs -n1 -I% sh -c 'git archive --prefix=%/ % | tar x'
+</code></pre>
 
 <p>.gitconfig とかでエイリアスを設定しておくといいんじゃないでしょうか</p>
 

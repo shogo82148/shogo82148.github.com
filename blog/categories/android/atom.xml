@@ -4,7 +4,7 @@
   <title><![CDATA[Category: android | Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/blog/categories/android/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2016-06-09T13:57:36+09:00</updated>
+  <updated>2016-06-09T17:44:09+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -32,20 +32,18 @@ AndroidSDKに付属しているaaptというツールを使えば読めるんだ
 
 <p><a href="https://github.com/shogo82148/androidbinary">githubのレポジトリ</a> からダウンロードしてきます。</p>
 
-<p><code>bash
-go get github.com/shogo82148/androidbinary
-</code></p>
+<pre><code class="bash">go get github.com/shogo82148/androidbinary
+</code></pre>
 
 <h3>AndroidManifest.xmlを解析する</h3>
 
 <p><code>io.ReaderAt</code>インターフェースを満たすオブジェクトを<code>androidbinary.NewXMLFile</code>に渡すと解析してくれます。</p>
 
-<p><code>go
-f, _ := os.Open("AndroidManifest.xml")
+<pre><code class="go">f, _ := os.Open("AndroidManifest.xml")
 xmlFile, _ := androidbinary.NewXMLFile(f)
 reader := xmlFile.Reader()
 // reader を読むと普通のXMLファイルとして読める
-</code></p>
+</code></pre>
 
 <h3>resources.arscを解析する</h3>
 
@@ -54,102 +52,87 @@ reader := xmlFile.Reader()
 リソースの情報はapk内のresources.arscに書かれているので、
 このファイルを読む機能もついてます。</p>
 
-<p>``` go
-f, _ := os.Open("resources.arsc")
-tableFile, _ := androidbinary.NewTableFile(f)</p>
+<pre><code class="go">f, _ := os.Open("resources.arsc")
+tableFile, _ := androidbinary.NewTableFile(f)
 
-<p>// ID 0x7F040000 に対応するリソースを読む
+// ID 0x7F040000 に対応するリソースを読む
 config := &amp;androidbinary.ResTableConfig{}
 val, _ := tableFile.GetResource(androidbinary.ResId(0x7f040000), config)
-```</p>
+</code></pre>
 
 <p>アプリ名はロケールによって変わったりするので、
 <code>config</code>で設定できます。
 例えば日本語の名前を取得したい場合はこんな感じ。</p>
 
-<p><code>go
-// ID 0x7F040000 に対応するリソース(日本語)を読む
+<pre><code class="go">// ID 0x7F040000 に対応するリソース(日本語)を読む
 config := &amp;androidbinary.ResTableConfig{}
 config.Language[0] = 'j'
 config.Language[1] = 'a'
 val, _ := tableFile.GetResource(androidbinary.ResId(0x7f040000), config)
-</code></p>
+</code></pre>
 
 <h3>サンプルコード</h3>
 
 <p>apkを解析してアプリの日本語名を取得する例。</p>
 
-<p>``` go
-package main</p>
+<pre><code class="go">package main
 
-<p>import (</p>
+import (
+    "archive/zip"
+    "bytes"
+    "encoding/xml"
+    "fmt"
+    "github.com/shogo82148/androidbinary"
+    "io/ioutil"
+    "strconv"
+)
 
-<pre><code>"archive/zip"
-"bytes"
-"encoding/xml"
-"fmt"
-"github.com/shogo82148/androidbinary"
-"io/ioutil"
-"strconv"
-</code></pre>
-
-<p>)</p>
-
-<p>type XMLManifest struct {</p>
-
-<pre><code>XMLName      xml.Name          `xml:"manifest"`
-Applications []*XMLApplication `xml:"application"`
-</code></pre>
-
-<p>}</p>
-
-<p>type XMLApplication struct {</p>
-
-<pre><code>XMLName xml.Name `xml:"application"`
-Label   string   `xml:"http://schemas.android.com/apk/res/android label,attr"`
-</code></pre>
-
-<p>}</p>
-
-<p>func main() {</p>
-
-<pre><code>r, _ := zip.OpenReader("sample.apk")
-defer r.Close()
-
-// read manifest and resource
-var xmlFile *androidbinary.XMLFile
-var tableFile *androidbinary.TableFile
-for _, f := range r.File {
-    switch f.Name {
-    case "AndroidManifest.xml":
-        rc, _ := f.Open()
-        buf, _ := ioutil.ReadAll(rc)
-        xmlFile, _ = androidbinary.NewXMLFile(bytes.NewReader(buf))
-        rc.Close()
-    case "resources.arsc":
-        rc, _ := f.Open()
-        buf, _ := ioutil.ReadAll(rc)
-        tableFile, _ = androidbinary.NewTableFile(bytes.NewReader(buf))
-        rc.Close()
-    }
+type XMLManifest struct {
+    XMLName      xml.Name          `xml:"manifest"`
+    Applications []*XMLApplication `xml:"application"`
 }
 
-// parse xml
-decoder := xml.NewDecoder(xmlFile.Reader())
-xmlManifest := &amp;XMLManifest{}
-decoder.Decode(xmlManifest)
+type XMLApplication struct {
+    XMLName xml.Name `xml:"application"`
+    Label   string   `xml:"http://schemas.android.com/apk/res/android label,attr"`
+}
 
-// get application label
-labelId, _ := strconv.ParseInt(xmlManifest.Applications[0].Label[3:], 16, 32)
-config := &amp;androidbinary.ResTableConfig{}
-config.Language[0] = 'j'
-config.Language[1] = 'a'
-label, _ := tableFile.GetResource(androidbinary.ResId(labelId), config)
-fmt.Println("Application Name:", label)
+func main() {
+    r, _ := zip.OpenReader("sample.apk")
+    defer r.Close()
+
+    // read manifest and resource
+    var xmlFile *androidbinary.XMLFile
+    var tableFile *androidbinary.TableFile
+    for _, f := range r.File {
+        switch f.Name {
+        case "AndroidManifest.xml":
+            rc, _ := f.Open()
+            buf, _ := ioutil.ReadAll(rc)
+            xmlFile, _ = androidbinary.NewXMLFile(bytes.NewReader(buf))
+            rc.Close()
+        case "resources.arsc":
+            rc, _ := f.Open()
+            buf, _ := ioutil.ReadAll(rc)
+            tableFile, _ = androidbinary.NewTableFile(bytes.NewReader(buf))
+            rc.Close()
+        }
+    }
+
+    // parse xml
+    decoder := xml.NewDecoder(xmlFile.Reader())
+    xmlManifest := &amp;XMLManifest{}
+    decoder.Decode(xmlManifest)
+
+    // get application label
+    labelId, _ := strconv.ParseInt(xmlManifest.Applications[0].Label[3:], 16, 32)
+    config := &amp;androidbinary.ResTableConfig{}
+    config.Language[0] = 'j'
+    config.Language[1] = 'a'
+    label, _ := tableFile.GetResource(androidbinary.ResId(labelId), config)
+    fmt.Println("Application Name:", label)
+}
 </code></pre>
-
-<p>}
-```</p>
 
 <p>エラー処理とか完全に省いているので上手く補ってください。</p>
 
@@ -192,6 +175,558 @@ golang初心者なのでイケてないところがあったら教えて下さ�
 <li><a href="https://gist.github.com/cielavenir/4365521">ruby_apk Android::Resource can relate string pool (partially)</a></li>
 </ul>
 
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[OAuthの認証にWebViewを使うのはやめよう]]></title>
+    <link href="https://shogo82148.github.io/blog/2012/11/24/no-more-webview/"/>
+    <updated>2012-11-24T23:06:00+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2012/11/24/no-more-webview</id>
+    <content type="html"><![CDATA[<p>AndroidからTwitterへアクセスするためのライブラリとして，<a href="http://twitter4j.org/ja/index.html">Twitter4J</a>が有名です．
+これを使ってみようと，「Android Twitter4J」と検索すると
+認証にWebViewを使った例がたくさん出てきます．</p>
+
+<p>・・・いや，ちょっとまて．
+それはちょっとまずいだろう．</p>
+
+<p>そういうわけでもうちょっと賢い方法を探してみました．</p>
+
+<!-- More -->
+
+
+<h2>何がまずいのさ</h2>
+
+<p>「Android Twitter4J」と検索すると，上位にこんなページが出てきます．</p>
+
+<ul>
+<li><a href="http://andante.in/i/android%E3%82%A2%E3%83%97%E3%83%AAtips/twitter4j%E3%82%92%E4%BD%BF%E3%81%A3%E3%81%A6oauth%E8%AA%8D%E8%A8%BC%E3%82%92%E3%82%A2%E3%83%97%E3%83%AA%E5%86%85%E3%81%A7%E8%A1%8C%E3%81%86%E6%96%B9%E6%B3%95/">Twitter4jを使ってOAuth認証をアプリ内で行う方法</a></li>
+<li><a href="http://blog.kyosuke25.com/2011/12/twitter4j-22xoauth.html">Twitter4j-2.2.xを使ったOAuth認証のコーディング例</a></li>
+<li><a href="http://init0.net/wp/archives/171">twitter4jでツイートする</a></li>
+<li><a href="http://wada811.blog.fc2.com/blog-entry-103.html">Android+Twitter4JでOAuthするためのソースコード</a></li>
+</ul>
+
+
+<p>上のサイトでは次の様は方法をとっています．</p>
+
+<ul>
+<li>アプリ内にWebViewを貼り付け</li>
+<li>WebViewでTwitterの認証画面を表示</li>
+<li>onPageStarted や onPageFinished をオーバーライドして callback URL へのアクセスを検出</li>
+<li>URL に入っている認証コードで認証</li>
+</ul>
+
+
+<p>アプリ内でWebViewを使うとURLが表示されません．
+つまり <strong> 本当にツイッターにアクセスしているかわからない </strong> のです．
+もし，表示されるのが偽の認証画面だったら，アプリから簡単にパスワードがわかってしまいます．</p>
+
+<p>じゃあ，URL を表示させればいいかというとそういうわけでもありません．
+画面上のURL表示なんて簡単に偽装できてしまいます．
+どんな工夫をしても <strong> アプリがパスワードの要求をしていることには変わりありません </strong> ．
+アプリはパスワードを簡単に取得できます．</p>
+
+<p>アプリのユーザはTwitterに限らずSNSへのログイン時にブラウザを開かないアプリは信用しないようにしましょう．
+どこかでパスワードの抜かれている可能性があります．
+(ただし，公式アプリは除く．公式アプリが信用できないならそもそもサービスを利用できないもんね．)</p>
+
+<h2>じゃあどうするのさ</h2>
+
+<p>じゃあ，開発者はどうするのかって話ですが，もう少し詳しく検索してみましょう．
+他の方法を使っているページもでてきます．</p>
+
+<ul>
+<li>PINコードを利用
+
+<ul>
+<li><a href="http://techbooster.org/android/mashup/14064/">TwitterでPIN番号認証を行う</a></li>
+</ul>
+</li>
+<li>Intent Fileterを利用しコールバック
+
+<ul>
+<li><a href="http://d.hatena.ne.jp/yujimny/20110204/1296805905">twitter4jを使用したAndroid Twitterアプリケーション作成</a></li>
+<li><a href="http://d.hatena.ne.jp/itog/20120214/1329193954">Twitter4Jを使ってAndroidアプリでStreamingAPIのUserTimelineを取得する</a></li>
+<li>TwitterでOAuth認証を行う
+
+<ol>
+<li><a href="http://techbooster.org/android/mashup/4525/">Twitterへのアプリケーション登録</a></li>
+<li><a href="http://techbooster.org/android/5040/">Twitterの認証ページをブラウザで開く</a></li>
+<li><a href="http://techbooster.org/android/mashup/5301/">Access Tokenを取得する</a></li>
+</ol>
+</li>
+</ul>
+</li>
+</ul>
+
+
+<h3>PIN コードを利用</h3>
+
+<p>一つ目の方法はPC版クライアントでよく使われる方法．
+認証後にPINコードと呼ばれる数字が表示されるので，それをアプリに入力します．
+twiccaなんかでも使われてますね．
+Twitter へのアプリケーション登録のときにコールバックURLを入力しないとこの認証方式になります．</p>
+
+<p>認証画面に，ブラウザを開くボタン，PINコードの入力ボックス，ログインボタンを用意しておきます．</p>
+
+<pre><code class="xml activity_oauth.xml">&lt;?xml version="1.0" encoding="utf-8"?&gt;
+&lt;LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical" &gt;
+
+    &lt;Button
+        android:id="@+id/button_start_login"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Twitterへアクセス" /&gt;
+
+   &lt;EditText
+      android:id="@+id/edit_pin_code"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:ems="10"
+      android:inputType="number" /&gt;
+
+   &lt;Button
+      android:id="@+id/button_login"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:layout_below="@+id/edit_pin_code"
+      android:text="ログイン" /&gt;
+
+&lt;/LinearLayout&gt;
+</code></pre>
+
+<p>あとはボタンが押されたときにブラウザを呼ぶだけです．
+認証したらPINコードを入力してもらいます．</p>
+
+<pre><code class="java OAuthActivity.java">package net.sorablue.shogo82148.yuire;
+
+import twitter4j.AsyncTwitter;
+import twitter4j.AsyncTwitterFactory;
+import twitter4j.TwitterAdapter;
+import twitter4j.TwitterException;
+import twitter4j.TwitterListener;
+import twitter4j.TwitterMethod;
+import twitter4j.auth.AccessToken;
+import twitter4j.auth.RequestToken;
+import android.net.Uri;
+import android.os.Bundle;
+import android.app.Activity;
+import android.content.Intent;
+import android.view.View.OnClickListener;
+import android.widget.EditText;
+
+public class OAuthActivity extends Activity implements OnClickListener {
+    public final static String EXTRA_CONSUMER_KEY = "consumer_key";
+    public final static String EXTRA_CONSUMER_SECRET = "consumer_secret";
+    public final static String EXTRA_ACCESS_TOKEN = "access_token";
+    public final static String EXTRA_ACCESS_TOKEN_SECRET = "access_token_secret";
+
+    private RequestToken mRequestToken;
+    final AsyncTwitterFactory factory = new AsyncTwitterFactory();
+    final AsyncTwitter twitter = factory.getInstance();
+
+    // 非同期版 Twitter4J のリスナ
+    private final TwitterListener listener = new TwitterAdapter() {
+            @Override
+            public void gotOAuthRequestToken(RequestToken token) {
+                mRequestToken = token;
+            }
+
+            @Override
+            public void gotOAuthAccessToken(AccessToken token) {
+                // Access Token 取得成功
+                // 呼び出し元に Access Token を返す
+                final Intent intent = new Intent();
+                intent.putExtra(EXTRA_ACCESS_TOKEN, token.getToken());
+                intent.putExtra(EXTRA_ACCESS_TOKEN_SECRET, token.getTokenSecret());
+                setResult(Activity.RESULT_OK, intent);
+                finish();
+            }
+        };
+
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_oauth);
+
+        // Request Token をリクエスト
+        final Intent intent = getIntent();
+        final String consumer_key = intent.getStringExtra(EXTRA_CONSUMER_KEY);
+        final String consumer_secret = intent.getStringExtra(EXTRA_CONSUMER_SECRET);
+        twitter.addListener(listener);
+        twitter.setOAuthConsumer(consumer_key, consumer_secret);
+        twitter.getOAuthRequestTokenAsync();
+
+        // EventListener をセット
+        final View start_login = findViewById(R.id.button_start_login);
+        start_login.setOnClickListener(this);
+        final View login = findViewById(R.id.button_login);
+        login.setOnClickListener(this);
+    }
+
+    @Override
+    public void onClick(View v) {
+        switch(v.getId()) {
+        case R.id.button_start_login:
+            {
+                // 認証画面をブラウザで開く
+                final Intent intent = new Intent(Intent.ACTION_VIEW,
+                                                 Uri.parse(mRequestToken.getAuthorizationURL()));
+                startActivity(intent);
+            }
+            break;
+        case R.id.button_login:
+            {
+                // PINコードを取得
+                final String pin = editPin.getText().toString();
+
+                // Access Token をリクエスト
+                twitter.getOAuthAccessTokenAsync(mRequestToken, pin);
+            }
+            break;
+        }
+    }
+}
+</code></pre>
+
+<p>Token の取得にはインターネットアクセスが必要なので，
+Twitter4J に含まれている非同期版のライブラリを使っています．</p>
+
+<p>Consumer Key と Consumer Secret はアクティビティの呼び出し時にインテントに設定します．</p>
+
+<pre><code class="java MainActivity.java">final int REQUEST_ACCESS_TOKEN = 0;
+final Intent intent = new Intent(this, OAuthActivity.class);
+intent.setExtraString(OAuthActivity.EXTRA_CONSUMER_KEY, "Your Cosumer Key");
+intent.setExtraString(OAuthActivity.EXTRA_CONSUMER_SECRET, "Your Consumer Secret");
+startActivityForResult(intent, REQUEST_ACCESS_TOKEN);
+</code></pre>
+
+<p>認証が完了すると <code>onAcivityResult</code> が呼び出されるので，
+Access Token を保存するなり，つぶやくのに使うだけです．</p>
+
+<pre><code class="java MainActivity.java">@Override
+public void onActivityResult(int requestCode, int resultCode, Intent data) {
+    if(requestCode == REQUEST_ACCESS_TOKEN &amp;&amp; resultCode == Activity.RESULT_OK) {
+        final String token = data.getStringExtra(OAuthActivity.EXTRA_ACCESS_TOKEN);
+        final String token_secret = data.getStringExtra(OAuthActivity.EXTRA_ACCESS_TOKEN_SECRET);
+        twitter.setOAuthAccessToken(new AccessToken(token, token_secret));
+    }
+}
+</code></pre>
+
+<h3>Intent Filterを利用</h3>
+
+<p>二つ目の方法は Intent Fileter を使って
+callback URL へアクセスしたときに，ブラウザにインテントを発行してもらう方法です．
+ユーザがPINコードを覚える必要がないので楽ちんです．</p>
+
+<p><strong> (2013-03-09追記) </strong>
+この記事を公開したらギルティ言われてしまいました．
+(<a href="https://gist.github.com/mala/5062931">TwitterのOAuthの問題まとめ</a>・<a href="https://gist.github.com/mala/5107120">TwitterのOAuthの問題の補足とか</a>)
+「Consumer Key が漏れる可能性を否定できないクライアントアプリでは，Callback URL をつかべきではない」とのご指摘です．
+ごもっとなご意見です．
+この方法は<strong> 非推奨 </strong>です．
+PINコードを使った認証を使いましょう．</p>
+
+<p>その分開発は面倒ですが．
+ポイントは以下の点です．</p>
+
+<ul>
+<li>Twitter へのアプリケーション登録時に Callback URL にテキトーなURLを入れておく</li>
+<li>独自スキーマを定義して，受け取れるようにしておく</li>
+<li><code>getOAuthRequestToken</code> 呼び出し時に，Callback URL を明示的に渡す</li>
+<li>アクティビティの多重起動を防止しておく</li>
+</ul>
+
+
+<p>Intent Filter に <a href="http://">http://</a> で始まるURLでも設定してしまうと，
+アプリケーションの選択画面が開いてしまったり，
+ブラウザによってはリダイレクト時にインテントを飛ばしてくれなかったりします．
+そのため， myapplication:// のような独自スキーマを使う必要があるのですが，
+Twitterへアプリケーション登録時に設定する Callback URL は <a href="http://">http://</a> で始まっていないと受け付けてくれません．
+かと言って空にしておくとうまく動かないので callback URL にはテキトーな URL を入れておいて，
+<code>getOAuthRequestToken</code> 呼び出し時に Callback URL を指定します(なぜかこっちは独自スキーマが使える)．</p>
+
+<p>具体的なプログラムは以下のような感じ．</p>
+
+<pre><code class="java MainActivity.java">package net.sorablue.shogo82148.yuire;
+
+import twitter4j.AsyncTwitter;
+import twitter4j.AsyncTwitterFactory;
+import twitter4j.TwitterAdapter;
+import twitter4j.TwitterException;
+import twitter4j.TwitterListener;
+import twitter4j.TwitterMethod;
+import twitter4j.auth.AccessToken;
+import twitter4j.auth.RequestToken;
+import android.net.Uri;
+import android.os.Bundle;
+import android.os.Handler;
+import android.app.Activity;
+import android.content.Intent;
+
+public class MainActivity extends Activity {
+    public final static String CALLBACK = "myappsheme://callback/";
+    public final static String CONSUMER_KEY = "Your consumer_key";
+    public final static String CONSUMER_SECRET = "Your consumer secret";
+
+    private RequestToken mRequestToken;
+    final AsyncTwitterFactory factory = new AsyncTwitterFactory();
+    final AsyncTwitter twitter = factory.getInstance();
+
+    private final TwitterListener listener = new TwitterAdapter() {
+            @Override
+            public void gotOAuthRequestToken(RequestToken token) {
+                // ブラウザを開く
+                mRequestToken = token;
+                final Intent intent = new Intent(Intent.ACTION_VIEW,
+                                                 Uri.parse(mRequestToken.getAuthorizationURL()));
+                startActivity(intent);
+            }
+
+            @Override
+            public void gotOAuthAccessToken(AccessToken token) {
+                // 永続化とかする
+            }
+        };
+
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_oauth);
+
+        twitter.addListener(listener);
+        twitter.setOAuthConsumer(CONSUMER_KEY, CONSUMER_SECRET);
+
+        // 認証開始
+        // Request Token を取得する
+        twitter.getOAuthRequestTokenAsync(CALLBACK); // ここで CALLBACK URL を渡す！
+    }
+
+    @Override
+    public void onNewIntent(Intent intent) {
+        // callback してきた
+        final Uri uri = intent.getData();
+        if(uri == null) return ;
+        final String verifier = uri.getQueryParameter("oauth_verifier");
+        twitter.getOAuthAccessTokenAsync(mRequestToken, verifier);
+    }
+}
+</code></pre>
+
+<p>多重起動防止と独自スキーマの定義はマニフェストに記述します．</p>
+
+<pre><code class="xml Manifest.xml">&lt;activity
+    android:name=".MainActivity"
+    android:label="@string/title_activity_main"
+    android:launchMode="singleTask" &gt; &lt;!-- 多重起動防止 --&gt;
+
+    &lt;intent-filter&gt;
+        &lt;action android:name="android.intent.action.MAIN" /&gt;
+        &lt;category android:name="android.intent.category.LAUNCHER" /&gt;
+    &lt;/intent-filter&gt;
+
+    &lt;!-- 独自スキーマの定義 --&gt;
+    &lt;intent-filter&gt;
+        &lt;action android:name="android.intent.action.VIEW" /&gt;
+        &lt;category android:name="android.intent.category.DEFAULT" /&gt;
+        &lt;category android:name="android.intent.category.BROWSABLE"/&gt;
+        &lt;data android:scheme="myappsheme" /&gt;
+    &lt;/intent-filter&gt;
+&lt;/activity&gt;
+</code></pre>
+
+<p><code>launchMode</code> に <code>singleTask</code> を指定すると，
+多重起動のときに新しいアクティビティを起動する代わりに，すでに起動していたアクティビティの <code>onNewIntent</code> が実行されます．</p>
+
+<p>PINコードを同じインターフェース(<code>startActivityForResult</code> で認証用アクティビティを呼び出すと，戻り値に Access Token が入っている)にしたかったけど，
+認証用アクティビティが <code>singleTask</code> だと，ブラウザを開いた時に呼び出し元の<code>onActivityResult</code>が呼び出されてしまう．
+誰かいい案ありません？</p>
+
+<h2>まとめ</h2>
+
+<p>WebViewはアプリからブラウザの機能を扱うのに非常に便利ですが，
+あくまでもアプリの管理下にあるもので，ブラウザとは少し性質が違うものということに注意．
+<a href="http://ierae.co.jp/uploads/webview.pdf">WebViewの脆弱性</a>に関する資料を見つけてビクビクしています．
+認証画面にかぎらず WebView を使うときはセキュリティに注意しましょう．</p>
+
+<p>今回調べたことを使って，
+じょりぼっとにお湯入れたとつぶやくだけのアプリ<a href="https://github.com/shogo82148/yuire">「お湯入れた」</a>を
+作りました．
+3分間計りたいときにどうぞ．</p>
+
+<p><a href="https://twitter.com/JO_RI_bot" class="twitter-follow-button" data-show-count="false" data-lang="ja">@JO_RI_botさんをフォロー</a></p>
+
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0];if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src="//platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);}}(document,"script","twitter-wjs");</script>
+
+
+<h2>おへんじ</h2>
+
+<p>たくさんシェアしてもらったのでお返事書いておきます．</p>
+
+<blockquote class="twitter-tweet" lang="ja"><p>たしかにそうなんだけど、PIN形式は実装が手間だし、PINコピペするのも手間だし、IntentFilter形式は空のブラウザー窓が残るのがものすごく気になるんだよなぁ… / “OAuthの認証にWebViewを使うのはやめよう - S…” <a href="http://t.co/NS0kyGg2" title="http://htn.to/hZZLhx">htn.to/hZZLhx</a></p>&mdash; たくじさん (@takuji31) <a href="https://twitter.com/takuji31/status/272987171202424833" data-datetime="2012-11-26T08:56:28+00:00">11月 26, 2012</a></blockquote>
+
+
+<script src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+
+<p>WebViewでURLフックを入れるよりは，PINコードのほうがコードもわかりやすく簡単かと．
+ただPINコードのコピペが面倒なのはそのとおりなので，Android アプリの場合採用は難しいかもしれません．</p>
+
+<p>Intent Filterはマニフェストに手を入れる必要がある分面倒．ブラウザにタブが残るのも厄介です．
+ここは利便性とセキュリティとのトレードオフと割り切るしか無いでしょう．
+Web上での本人確認の方法がパスワードくらいしかない以上，パスワード流出の危険性はかなり重大な欠陥だと言えます．
+手間なのは最初の一回だけですし，Intent Filter を使うのが賢い方法だと思います．</p>
+
+<blockquote class="twitter-tweet" lang="ja"><p>追記。あと標準ブラウザも絶対ダメ。。→そもそもWebViewを使っちゃダメなのよ。。Android版のChromeだけ使いましょう。。 / “OAuthの認証にWebViewを使うのはやめよう - Shogo's Blog” <a href="http://t.co/jjo1o4Gb" title="http://htn.to/ybxt7Y">htn.to/ybxt7Y</a></p>&mdash; Kietaさん (@typex20) <a href="https://twitter.com/typex20/status/273001101798813696" data-datetime="2012-11-26T09:51:49+00:00">11月 26, 2012</a></blockquote>
+
+
+<script src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+
+<p>はい．おっしゃるとおりです．
+わざわざ反論してまで WebView を使う理由が思い浮かびません．
+代替手法を考えるべきだと思います．</p>
+
+<blockquote class="twitter-tweet" lang="ja"><p>安全に実装できるんならこしたことはないけど、悪意のある実装を前提にするのならWebViewでも他のコンポーネントでもかわらないかな。どっちかというと外部サイトビューワーの役割を持つWebViewでフィッシング開くじょとの方がリスク高そう<a href="http://t.co/QB2HoJSc" title="http://shogo82148.github.com/blog/2012/11/24/no-more-webview/">shogo82148.github.com/blog/2012/11/2…</a></p>&mdash; laiso(レイソー)さん (@laiso) <a href="https://twitter.com/laiso/status/273027828126187520" data-datetime="2012-11-26T11:38:01+00:00">11月 26, 2012</a></blockquote>
+
+
+<script src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+
+
+
+<blockquote class="twitter-tweet" data-in-reply-to="273027828126187520" lang="ja"><p>@<a href="https://twitter.com/laiso">laiso</a> 普段使ってるブラウザでログイン済みの場合なら、少なくともパスワード取られないことが保証できるので、WebViewだろうとブラウザっぽいものだろうとパスワード聞かれたタイミングで警戒すべき、という方が分かりやすいんじゃないかと思う。</p>&mdash; malaさん (@bulkneets) <a href="https://twitter.com/bulkneets/status/273029308254154753" data-datetime="2012-11-26T11:43:54+00:00">11月 26, 2012</a></blockquote>
+
+
+<script src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+
+<p>このポストで取り上げているのは「認証画面を偽装してパスワードを盗む」ことが可能という，まさしくフィッシングの話題です．
+開発者は，自前で「<strong> ブラウザっぽいもの </strong> 」を実装するのではなく，「 <strong> 本物のブラウザ </strong> 」を使いましょう，という紹介でした．</p>
+
+<p>問題なのは「パスワードを聞かれる or 聞かれない」ではなく，「どのアプリがパスワードを聞いているか」です．
+ログインしていなければ当然Webブラウザでもパスワードは聞かれます．
+認証を求めているアプリとは別の，<strong> 信用のできるアプリ </strong> がパスワードを聞いてくるということが重要なのです．
+Webブラウザを信用出来ないというのであれば，そもそもWebサービスを使うべきではありません．</p>
+
+<blockquote class="twitter-tweet" lang="ja"><p>OAuthの認証にWebViewを使うのはやめよう - Shogo's Blog<a href="http://t.co/EQElowcq" title="http://bit.ly/S75tRa">bit.ly/S75tRa</a> WebView使って怪し気な事してたらどうせパケットキャプチャでばれない？ まぁ、PINの方が確実に安全だと思うのでそこは賛成だけど</p>&mdash; nakamura001さん (@nakamura001) <a href="https://twitter.com/nakamura001/status/273012182357266432" data-datetime="2012-11-26T10:35:51+00:00">11月 26, 2012</a></blockquote>
+
+
+<script src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+
+<p>パケットキャプチャだけでは見抜けないと思います．
+認証画面のDOM要素を直接見れば，通信にまったく介入しなくてもパスワードなんて簡単に抜けます．
+実際には WebView からDOM要素を見ることはできないようですが，
+DOM 操作が可能な WebView を自前実装することだって技術的には可能です．
+そのため，パスワードを盗みとっているかどうかを外からみた動作だけで判断することは非常に難しく，
+内部構造を解析する必要があると思います．</p>
+
+<p>パケットキャプチャやらリバースエンジニアリングを駆使すれば理論的はすべての不正は防げるとは思いますが，
+それをすべてのアプリでやるのは非常に面倒ですし，一般ユーザが実践するのは困難です．
+こういうことをやらなくてもある程度安全にサービスを使えるようにするのが OAuth の役割．
+積極的に利用していくべきでしょう．</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[夏だ！花火だ！Androidで遊ぼう！]]></title>
+    <link href="https://shogo82148.github.io/blog/2012/08/02/fireworks/"/>
+    <updated>2012-08-02T14:43:00+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2012/08/02/fireworks</id>
+    <content type="html"><![CDATA[<p>さあ、皆さん！今年も長岡の大花火大会の季節がやって参りました！</p>
+
+<p>花火大会といえば、
+光と音の速度差を体感できる絶好の機会です。
+というわけで、去年も<a href="http://shogo82148.hatenablog.com/entry/20110802/1312274610">こんなアプリ</a>を作って遊んでました。
+このアプリを頑張って改良したので、改めて紹介したいと思います。</p>
+
+<p><a href="https://github.com/downloads/shogo82148/FireworksMeasure/FireworksMeasure.apk">アプリをダウンロード</a></p>
+
+<!-- more -->
+
+
+<h2>使い方</h2>
+
+<p>起動すると、こんな画面が表示されます。</p>
+
+<p><img src="/images/2012-08-02-fireworks1.png" alt="起動画面" /></p>
+
+<p>花火が開いたら画面をタップ！
+そして、花火が画面中央に来るよう素早く端末を動かします。
+(※画像ははめ込み合成です)</p>
+
+<p><img src="/images/2012-08-02-fireworks2.png" alt="花火をセンターに捉えたところ" /></p>
+
+<p>花火の音がしたら、目標をセンターに入れてタップ！</p>
+
+<p><img src="/images/2012-08-02-result.png" alt="結果" /></p>
+
+<p>タップの間隔から花火までの距離を計算し表示してくれます。
+さらに、加速度センサの値から端末の仰角を読み取り、花火の高さや水平距離などを算出してくれるという機能もついてます。</p>
+
+<h2>去年からの変更点</h2>
+
+<p>と、ここまでは、去年と一緒。
+今年はさらにパワーアップしました。</p>
+
+<h3>地図へのマッピング</h3>
+
+<p>スマートフォンには磁気センサがついており、方位が分かります。
+加えて、GPSもついているので、スマートフォンの現在位置も分かります。
+これだけの情報が揃えば、地図にプロットできるはず！</p>
+
+<p><img src="/images/2012-08-02-map.png" alt="地図へのマッピング" /></p>
+
+<p>結果表示の画面で「地図を表示」を選ぶとマッピングしてくれます。
+この画面でメニューキーを押すと、TwitterやGoogle+などで、花火の位置をみんなに知らせることもできます。</p>
+
+<p>GPS測位ができない場合は、デフォルトの位置を使用します。
+この位置は設定画面で変更できます。</p>
+
+<h3>自動花火検出</h3>
+
+<p>去年からの課題であった、花火の自動検出も試みてみました。
+初期画面でメニューキーを押すと設定画面へ飛べます。</p>
+
+<p><img src="/images/2012-08-02-settings.png" alt="設定画面" /></p>
+
+<p>ここで「花火を自動的に検出する」「花火の音を検出する」を選択すると、自動検出してくれるはずです(※理論値)。</p>
+
+<p>花火が開いたことは、画面が明るくなったことで検出します。
+明るさの検出は初期画面中央の四角の中が使われます。
+設定画面でこの四角の大きさを変えることができます。
+明るさの変化が閾値を超えたら測定開始です。</p>
+
+<p>音は音量で検出します。
+音声にDFTをかけて、周波数フィルタリングをかけてあります。
+これで人ごみにまぎれても花火の音が検出できる・・・はず。
+周波数0Hzにすると、周波数フィルタを通さずに振幅のみで判定します。</p>
+
+<p>検出した値は、画面の右上に表示しているので、設定の時の参考にしてください。</p>
+
+<h2>ダウンロード</h2>
+
+<p><a href="https://github.com/downloads/shogo82148/FireworksMeasure/FireworksMeasure.apk">アプリをダウンロード</a></p>
+
+<p>野良アプリなので、「設定→アプリケーション→提供元不明のアプリ」をチェックする必要があります。
+スマートフォンの機能をフル活用するので権限をたくさん要求してきますが、きっとだいじょうぶ。
+そろそろマーケットでの公開も試してみたいですね。</p>
+
+<p><strong> Google Play にリリースしました！ </strong>
+<a href="https://play.google.com/store/apps/details?id=net.sorablue.shogo.FWMeasure">Google Play からアプリをダウンロード</a>
+<img src="https://chart.googleapis.com/chart?cht=qr&amp;chs=300x300&amp;chl=https://play.google.com/store/apps/details?id=net.sorablue.shogo.FWMeasure" alt="FireworksMeasure" /></p>
+
+<h2>まとめ</h2>
+
+<p>それでは、大幅に機能UPしたアプリと一緒に、長岡の大花火大会をお楽しみください。</p>
+
+<p>打ち上げは<a href="http://nagaokamatsuri.com/jmap.html">このあたり</a>らしいです。
+ちゃんとマッピングできますかね？</p>
 ]]></content>
   </entry>
   
