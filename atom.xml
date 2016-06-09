@@ -2,10 +2,10 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
 
   <title><![CDATA[Shogo's Blog]]></title>
-  <link href="http://shogo82148.github.io/atom.xml" rel="self"/>
-  <link href="http://shogo82148.github.io/"/>
-  <updated>2016-03-23T23:49:26+09:00</updated>
-  <id>http://shogo82148.github.io/</id>
+  <link href="https://shogo82148.github.io/atom.xml" rel="self"/>
+  <link href="https://shogo82148.github.io/"/>
+  <updated>2016-06-09T11:55:19+09:00</updated>
+  <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
     
@@ -14,10 +14,680 @@
 
   
   <entry>
+    <title type="html"><![CDATA[net/httpで安全に静的ファイルを返す]]></title>
+    <link href="https://shogo82148.github.io/blog/2016/04/13/serving-static-files-in-golang/"/>
+    <updated>2016-04-13T02:29:00+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2016/04/13/serving-static-files-in-golang</id>
+    <content type="html"><![CDATA[<p><a href="http://konboi.hatenablog.com/entry/2016/04/12/121105">net/httpで静的ファイルを返す</a>で、
+<code>http.ServeFile</code>を使っていてアレ？と思ったのでちょっと詳しく調べてみました。
+(<code>http.FileServer</code>を使うものだと思ってたため)</p>
+
+<p>結論だけ先に書いておくと</p>
+
+<ul>
+<li>やはり、特に理由がなければ<code>http.FileServer</code>を使ったほうが良さそう</li>
+<li>どうしても<code>http.ServeFile</code>を使う場合は定数でパス指定をする</li>
+<li>「自作パスルータを使っている」かつ「Go 1.6.1 未満を使っている」場合はとくに要注意</li>
+</ul>
+
+
+<!-- More -->
+
+
+<h2>ディレクトリトラバーサル脆弱性</h2>
+
+<p>紹介されているのは以下のコードです。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="nx">http</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">&quot;/static/&quot;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">ServeFile</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">,</span> <span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
+</span><span class='line'><span class="p">})</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>しかし、参照先の「<a href="http://stackoverflow.com/questions/25945538/go-golang-to-serve-a-specific-html-file">Go Golang to serve a specific html file</a>」には
+<strong>Actually, do not do that.</strong> (やっちゃいけない)とコメントされています。
+<a href="https://ja.wikipedia.org/wiki/%E3%83%87%E3%82%A3%E3%83%AC%E3%82%AF%E3%83%88%E3%83%AA%E3%83%88%E3%83%A9%E3%83%90%E3%83%BC%E3%82%B5%E3%83%AB">ディレクトリトラバーサル</a>により
+脆弱性の原因となってしまう可能性があるためです。</p>
+
+<p>脆弱性再現のために、以下の様なコードを書いてGo1.5でコンパイルして実行してみました。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;net/http&quot;</span>
+</span><span class='line'>  <span class="s">&quot;strings&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">&quot;:3000&quot;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nx">HandlerFunc</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">if</span> <span class="nx">strings</span><span class="p">.</span><span class="nx">HasPrefix</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">,</span> <span class="s">&quot;/static/&quot;</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>          <span class="nx">http</span><span class="p">.</span><span class="nx">ServeFile</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">,</span> <span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
+</span><span class='line'>      <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>          <span class="nx">http</span><span class="p">.</span><span class="nx">NotFound</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">)</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>  <span class="p">}))</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>..</code>を含んだパスをリクエストしてみます。(実行した場所によって<code>..</code>の数は変わるので適宜調整してみてください)</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
+</span><span class='line'>* About to connect() to localhost port 3000 (#0)
+</span><span class='line'>*   Trying ::1... connected
+</span><span class='line'>* Connected to localhost (::1) port 3000 (#0)
+</span><span class='line'>&gt; GET /static/../../../.ssh/id_rsa HTTP/1.1
+</span><span class='line'>&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
+</span><span class='line'>&gt; Host: localhost:3000
+</span><span class='line'>&gt; Accept: */*
+</span><span class='line'>&gt;
+</span><span class='line'>&lt; HTTP/1.1 200 OK
+</span><span class='line'>&lt; Accept-Ranges: bytes
+</span><span class='line'>&lt; Content-Length: 1679
+</span><span class='line'>&lt; Content-Type: text/plain; charset=utf-8
+</span><span class='line'>&lt; Last-Modified: Fri, 13 Jun 2014 04:57:05 GMT
+</span><span class='line'>&lt; Date: Tue, 12 Apr 2016 17:53:19 GMT
+</span><span class='line'>&lt;
+</span><span class='line'>-----BEGIN RSA PRIVATE KEY-----
+</span><span class='line'>(中略)
+</span><span class='line'>-----END RSA PRIVATE KEY-----
+</span><span class='line'>* Connection #0 to host localhost left intact
+</span><span class='line'>* Closing connection #0</span></code></pre></td></tr></table></div></figure>
+
+
+<p>macのcurlで試したらクライアント側で相対パスを解決した状態でリクエストが飛んでしまって上手く行きませんでした。
+オプションで外す方法がよくわかなかったので、<code>telnet</code>で叩いてみた例も載せておきます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ telnet localhost 3000
+</span><span class='line'>Trying ::1...
+</span><span class='line'>Connected to localhost.
+</span><span class='line'>Escape character is '^]'.
+</span><span class='line'>GET /static/../../../.ssh/id_rsa HTTP/1.0
+</span><span class='line'>
+</span><span class='line'>HTTP/1.0 200 OK
+</span><span class='line'>Accept-Ranges: bytes
+</span><span class='line'>Content-Length: 1679
+</span><span class='line'>Content-Type: text/plain; charset=utf-8
+</span><span class='line'>Last-Modified: Fri, 13 Jun 2014 04:57:05 GMT
+</span><span class='line'>Date: Tue, 12 Apr 2016 18:02:56 GMT
+</span><span class='line'>
+</span><span class='line'>-----BEGIN RSA PRIVATE KEY-----
+</span><span class='line'>(中略)
+</span><span class='line'>-----END RSA PRIVATE KEY-----
+</span><span class='line'>Connection closed by foreign host.</span></code></pre></td></tr></table></div></figure>
+
+
+<p>ああ、僕の秘密鍵が・・・。</p>
+
+<h2>脆弱性を回避する</h2>
+
+<h3>Go1.6以降を使う</h3>
+
+<p>Go1.6以降では修正されており、
+同じコードをGo1.6でコンパイルしてcurlで叩くと400が帰ってきます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
+</span><span class='line'>* About to connect() to localhost port 3000 (#0)
+</span><span class='line'>*   Trying ::1... connected
+</span><span class='line'>* Connected to localhost (::1) port 3000 (#0)
+</span><span class='line'>&gt; GET /static/../../../.ssh/id_rsa HTTP/1.1
+</span><span class='line'>&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
+</span><span class='line'>&gt; Host: localhost:3000
+</span><span class='line'>&gt; Accept: */*
+</span><span class='line'>&gt; 
+</span><span class='line'>&lt; HTTP/1.1 400 Bad Request
+</span><span class='line'>&lt; Content-Type: text/plain; charset=utf-8
+</span><span class='line'>&lt; X-Content-Type-Options: nosniff
+</span><span class='line'>&lt; Date: Tue, 12 Apr 2016 18:12:46 GMT
+</span><span class='line'>&lt; Content-Length: 17
+</span><span class='line'>&lt; 
+</span><span class='line'>invalid URL path
+</span><span class='line'>* Connection #0 to host localhost left intact
+</span><span class='line'>* Closing connection #0</span></code></pre></td></tr></table></div></figure>
+
+
+<h3><code>http.ServeMux</code>を使う</h3>
+
+<p><code>http.ServeMux</code>にはパスの正規化機能が組み込まれており、
+正規化されていないURLにアクセスが来た場合は自動的リダイレクトしてくれるようです。
+HTTPハンドラに渡ってくるときには、必ず相対パスが含まれていない状態になっています。
+(これに最初は気が付かず、脆弱性が再現しないので困ってた。)</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="s">&quot;net/http&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="c1">// 内部でhttp.ServeMuxを使ってくれる</span>
+</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">&quot;/static/&quot;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="c1">// r.URLには相対パスが含まれない形で渡ってくる</span>
+</span><span class='line'>    <span class="nx">http</span><span class="p">.</span><span class="nx">ServeFile</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">,</span> <span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
+</span><span class='line'>  <span class="p">})</span>
+</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">&quot;:3000&quot;</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>相対パスを含んだリクエストを投げてもアクセスはできません。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
+</span><span class='line'>* About to connect() to localhost port 3000 (#0)
+</span><span class='line'>*   Trying ::1... connected
+</span><span class='line'>* Connected to localhost (::1) port 3000 (#0)
+</span><span class='line'>&gt; GET /static/../../../.ssh/id_rsa HTTP/1.1
+</span><span class='line'>&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
+</span><span class='line'>&gt; Host: localhost:3000
+</span><span class='line'>&gt; Accept: */*
+</span><span class='line'>&gt; 
+</span><span class='line'>&lt; HTTP/1.1 301 Moved Permanently
+</span><span class='line'>&lt; Location: /.ssh/id_rsa
+</span><span class='line'>&lt; Date: Tue, 12 Apr 2016 18:14:49 GMT
+</span><span class='line'>&lt; Content-Length: 47
+</span><span class='line'>&lt; Content-Type: text/html; charset=utf-8
+</span><span class='line'>&lt; 
+</span><span class='line'>&lt;a href="https://shogo82148.github.io/.ssh/id_rsa"&gt;Moved Permanently&lt;/a&gt;.
+</span><span class='line'>
+</span><span class='line'>* Connection #0 to host localhost left intact
+</span><span class='line'>* Closing connection #0</span></code></pre></td></tr></table></div></figure>
+
+
+<h3><code>http.FileServer</code>を使う</h3>
+
+<p><code>http.Dir</code>と<code>http.FileServer</code>を使うとルートディレクトリを指定でき、
+その外へはアクセスできなくなるので想定外のファイルが見えてしまうことはありません。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;net/http&quot;</span>
+</span><span class='line'>  <span class="s">&quot;strings&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">fileServer</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">StripPrefix</span><span class="p">(</span><span class="s">&quot;/static/&quot;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nx">FileServer</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">Dir</span><span class="p">(</span><span class="s">&quot;static&quot;</span><span class="p">)))</span>
+</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">&quot;:3000&quot;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nx">HandlerFunc</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">if</span> <span class="nx">strings</span><span class="p">.</span><span class="nx">HasPrefix</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">,</span> <span class="s">&quot;/static/&quot;</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">fileServer</span><span class="p">.</span><span class="nx">ServeHTTP</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">)</span>
+</span><span class='line'>    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">http</span><span class="p">.</span><span class="nx">NotFound</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">)</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="p">}))</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>相対パスを含んだURLにアクセスしても404になって見れません。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
+</span><span class='line'>* About to connect() to localhost port 3000 (#0)
+</span><span class='line'>*   Trying ::1... connected
+</span><span class='line'>* Connected to localhost (::1) port 3000 (#0)
+</span><span class='line'>&gt; GET /static/../../../.ssh/id_rsa HTTP/1.1
+</span><span class='line'>&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
+</span><span class='line'>&gt; Host: localhost:3000
+</span><span class='line'>&gt; Accept: */*
+</span><span class='line'>&gt; 
+</span><span class='line'>&lt; HTTP/1.1 404 Not Found
+</span><span class='line'>&lt; Content-Type: text/plain; charset=utf-8
+</span><span class='line'>&lt; X-Content-Type-Options: nosniff
+</span><span class='line'>&lt; Date: Tue, 12 Apr 2016 18:39:34 GMT
+</span><span class='line'>&lt; Content-Length: 19
+</span><span class='line'>&lt; 
+</span><span class='line'>404 page not found
+</span><span class='line'>* Connection #0 to host localhost left intact
+</span><span class='line'>* Closing connection #0</span></code></pre></td></tr></table></div></figure>
+
+
+<h3><code>http.ServeFile</code>に定数を渡す</h3>
+
+<p>どうしても特定のファイルを指定したい場合は、<code>http.ServeFile</code>に渡すファイルパスを定数で指定するべきです。
+例えば、「<a href="http://stackoverflow.com/questions/25945538/go-golang-to-serve-a-specific-html-file">Go Golang to serve a specific html file</a>」の質問者が上げている例を
+正しく書きなおすと以下のようになると思います。</p>
+
+<blockquote><p><code>http.Handle("/", http.FileServer(http.Dir("static")))</code>
+Serves the html file in static directory.</p>
+
+<p>Is there any way in Go that we can specify the html file to serve?</p>
+
+<p>Something like render_template in Flask</p>
+
+<p>I want to do something like:</p>
+
+<p><code>http.Handle("/hello", http.FileServer(http.Dir("static/hello.html")))</code></p></blockquote>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="s">&quot;net/http&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">&quot;/hello&quot;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nx">http</span><span class="p">.</span><span class="nx">ServeFile</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">,</span> <span class="s">&quot;static/hello.html&quot;</span><span class="p">)</span>
+</span><span class='line'>  <span class="p">})</span>
+</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">&quot;:3000&quot;</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>回答者がActually, do not do thatとコメントしているのは<code>http.ServeFile</code>に<code>r.URL.Path[1:]</code>を渡すことで、
+<code>http.ServeFile</code>自体が悪いわけではありません。
+正しく安全に使いましょう。</p>
+
+<h2>まとめ</h2>
+
+<p>まとめ再掲。</p>
+
+<ul>
+<li>やはり、特に理由がなければ<code>http.FileServer</code>を使ったほうが良さそう</li>
+<li>どうしても<code>http.ServeFile</code>を使う場合は定数でパス指定をする</li>
+<li>「自作パスルータを使っている」かつ「Go 1.6.1 未満を使っている」場合はとくに要注意</li>
+</ul>
+
+
+<h2>まとめのまとめ</h2>
+
+<p><a href="https://golang.org/pkg/net/http/#example_FileServer">godocのexample</a>どおりにやるのが一番。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="s">&quot;net/http&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">&quot;/static/&quot;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nx">StripPrefix</span><span class="p">(</span><span class="s">&quot;/static/&quot;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nx">FileServer</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">Dir</span><span class="p">(</span><span class="s">&quot;static&quot;</span><span class="p">))))</span>
+</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">&quot;:3000&quot;</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[PerlでもGoでも実行できるQuine書いた]]></title>
+    <link href="https://shogo82148.github.io/blog/2016/04/06/ployglot-quine-of-golang-and-perl/"/>
+    <updated>2016-04-06T10:07:00+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2016/04/06/ployglot-quine-of-golang-and-perl</id>
+    <content type="html"><![CDATA[<p><a href="http://shogo82148.github.io/blog/2016/04/05/polyglot-of-perl-and-golang/">昨日のPolyglot</a>を元にPerlでもGoでも実行できるQuine書いた。</p>
+
+<!-- More -->
+
+
+
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>package main;import("fmt");var(q=`printf'package main;import("fmt");var(q%c%c%s%c/*%c);sub import{}sub var{$_%cshift%c~s!%c(.*)%c/\*!$1!gr;eval}%c__END__%c',61,96,$_,96,61,61,61,96,96,10,10;print&lt;DATA&gt;`/*=);sub import{}sub var{$_=shift=~s!`(.*)`/\*!$1!gr;eval}
+</span><span class='line'>__END__
+</span><span class='line'>*/);func main(){s:=`package main;import("fmt");var(q=%c%s%c/*=);sub import{}sub var{$_=shift=~s!%c(.*)%c/\*!$1!gr;eval}
+</span><span class='line'>__END__
+</span><span class='line'>*/);func main(){s:=%c%s%c;fmt.Printf(s,96,q,96,96,96,96,s,96)}
+</span><span class='line'>`;fmt.Printf(s,96,q,96,96,96,96,s,96)}</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Perlで実行してもGoで実行しても自分自身を出力します。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[PerlとGolangで実行できるPolyglot書いてみた]]></title>
+    <link href="https://shogo82148.github.io/blog/2016/04/05/polyglot-of-perl-and-golang/"/>
+    <updated>2016-04-05T12:27:00+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2016/04/05/polyglot-of-perl-and-golang</id>
+    <content type="html"><![CDATA[<p>Rubyの会社をPerlの会社に変えてしまおう計画。
+Golangのフリをして忍び込ませれば行けるのではという話になったので、
+GoでもPerlでも実行できるコードを書いてみた。</p>
+
+<!-- More -->
+
+
+<p>出来上がったのがこちら。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>package main;
+</span><span class='line'>import ("fmt");
+</span><span class='line'>var (s=0/*==);
+</span><span class='line'>sub import {}
+</span><span class='line'>sub var { print "Hello macotasu"; }
+</span><span class='line'>__END__
+</span><span class='line'>*/)
+</span><span class='line'>func main() { fmt.Println("Hello macotasu") }</span></code></pre></td></tr></table></div></figure>
+
+
+<p>一番のポイントは<code>var (s=0/*==);</code>の行ですね。
+Perlで解釈すると正規表現置換<code>s///</code>として解釈され、<code>/*</code>が無視されます。
+Goで解釈すると変数<code>s</code>への代入として解釈され、<code>/*</code>がコメントとして扱われます。</p>
+
+<p>あとはGoのキーワードをPerlが解釈できないので、ちょっと書き方を工夫します。</p>
+
+<ul>
+<li><code>package main</code> はGoでもPerlでも似たような意味で解釈されるのでそのまま</li>
+<li>Goの <code>import</code>, <code>var</code> はPerlで解釈できないので、()を省略せずに書いてPerlの関数呼び出しっぽくする</li>
+<li>省略可能なセミコロンをちゃんと書く</li>
+</ul>
+
+
+<p>GoとPerlのコードは分かれているのでどんな処理でも自由に書くことができますが、
+<code>import</code> だけGoでもPerlでも解釈されてしまうというという制限があります。
+<code>import</code> するパッケージが一個だけなら問題ないんですが、
+複数書く場合は以下のように２個め以降をすべてドットインポートする必要があって男気あふれる感じです。
+(Perlでは文字列結合として解釈される。Goでは<code>var</code>のあとに<code>import</code>かけないっぽいので、ここに押し込むしかない。)</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>package main;
+</span><span class='line'>import (
+</span><span class='line'>  "fmt"
+</span><span class='line'>  . "math"
+</span><span class='line'>);
+</span><span class='line'>var (s=0/*==);
+</span><span class='line'>sub import {}
+</span><span class='line'>sub var { print "Hello macotasu"; }
+</span><span class='line'>__END__
+</span><span class='line'>*/)
+</span><span class='line'>func main() { fmt.Println("Hello macotasu", Pi) }</span></code></pre></td></tr></table></div></figure>
+
+
+<p>もっと簡潔にかけないかな。</p>
+
+<h2>追記</h2>
+
+<p>シンタックスハイライトしてみたらわかりやすいかなと思ってやってみた。</p>
+
+<p>Perlのシンタックスハイライト。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="nb">package</span> <span class="n">main</span><span class="p">;</span>
+</span><span class='line'><span class="nb">import</span> <span class="p">(</span><span class="s">&quot;fmt&quot;</span><span class="p">);</span>
+</span><span class='line'><span class="n">var</span> <span class="p">(</span><span class="n">s</span><span class="o">=</span><span class="mi">0</span><span class="o">/*==</span><span class="p">);</span>
+</span><span class='line'><span class="k">sub </span><span class="nf">import</span> <span class="p">{}</span>
+</span><span class='line'><span class="k">sub </span><span class="nf">var</span> <span class="p">{</span> <span class="k">print</span> <span class="s">&quot;Hello macotasu&quot;</span><span class="p">;</span> <span class="p">}</span>
+</span><span class='line'><span class="cp">__END__</span>
+</span><span class='line'><span class="cp">*/)</span>
+</span><span class='line'><span class="cp">func main() { fmt.Println(&quot;Hello macotasu&quot;) }</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Goのシンタックスハイライト。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span><span class="p">;</span>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span><span class="s">&quot;fmt&quot;</span><span class="p">);</span>
+</span><span class='line'><span class="kd">var</span> <span class="p">(</span><span class="nx">s</span><span class="p">=</span><span class="mi">0</span><span class="cm">/*==);</span>
+</span><span class='line'><span class="cm">sub import {}</span>
+</span><span class='line'><span class="cm">sub var { print &quot;Hello macotasu&quot;; }</span>
+</span><span class='line'><span class="cm">__END__</span>
+</span><span class='line'><span class="cm">*/</span><span class="p">)</span>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span> <span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;Hello macotasu&quot;</span><span class="p">)</span> <span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="https://golang.org/ref/spec">The Go Programming Language Specification</a></li>
+<li><a href="http://d.hatena.ne.jp/sugyan/20110306/1299418878">polyglot 基礎の基礎</a></li>
+</ul>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Webブラウザを使って電波を出してみた]]></title>
+    <link href="https://shogo82148.github.io/blog/2016/03/29/web-jjy/"/>
+    <updated>2016-03-29T12:19:00+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2016/03/29/web-jjy</id>
+    <content type="html"><![CDATA[<p>読者の持っている至って普通のコンピューターは、実は電波時計の時刻合わせを行うために必要な標準電波の発信装置が備わっている。</p>
+
+<p>コードは以下から入手できる。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/web-jjy">shogo82148/web-jjy</a></li>
+<li><a href="http://shogo82148.github.io/web-jjy/">JJYシミュレータWeb版</a></li>
+</ul>
+
+
+<!-- More -->
+
+
+<h2>動かし方</h2>
+
+<p>パソコンのイヤホンジャックにアンテナ(普通のイヤホンで十分です)を接続し、電波時計の近くに置きます。
+音量を最大にし、「Start」ボタンを押すと信号が送信されます。
+電波時計を強制受信モードにし、時刻が設定されるのを待ちましょう。</p>
+
+<p>パソコンの時間を基準にするので、あらかじめntpとかで時刻設定をしておくといいと思います。</p>
+
+<h2>原理</h2>
+
+<p><a href="http://jjy.nict.go.jp/jjy/trans/index.html">標準電波JJY</a>は日本標準時のタイムコードを送信する電波で、
+東日本では40kHz、西日本では60kHzの周波数で発信されています。
+電波時計はこの信号を使って時刻合わせをしています。</p>
+
+<p>この信号をオーディオデバイスから出力する<a href="http://www.starstonesoft.com/jjy_simulator.htm">電波時計用JJYシミュレータ</a>というものがあるのを知り、
+「今のWebブラウザならjavascriptだけで実装できるのでは？」と思いやってみました。
+一般的なオーディオデバイスは、20kHz以上の周波数の再生には適していないため、そのままでは40kHz/60kHzの信号は出せません。
+そこで、<a href="http://www.starstonesoft.com/jjy_simulator.htm">電波時計用JJYシミュレータ</a>は、歪んだ波形に含まれる高調波を利用しています。
+ボリュームを大きくして音が割れた状態になると、音声信号は矩形波に近いかたちになります。
+矩形波には3倍、5倍、7倍&#8230;の奇数倍の周波数成分が含まれているため、
+(<a href="http://togetter.com/li/942071">世はまさに大フーリエ時代</a>とか見ると楽しい)
+13.333kHzの矩形波を出力することで、39.999kHzの信号を出せるというわけです。</p>
+
+<p>元のソフトウェアはWindowsのバイナリ形式でしたが、
+WebAudioの登場によりWebブラウザからも同様のことが行えるようになりました。</p>
+
+<h2>最後に</h2>
+
+<p>少し前にCPUから出るノイズを使ってAMラジオの電波を発信するという記事が話題になりましたね。</p>
+
+<ul>
+<li><a href="http://cpplover.blogspot.jp/2016/03/am.html">普通のコンピューターからAMラジオを鳴らそう</a></li>
+</ul>
+
+
+<p>CPUやオーディオデバイスも電気で動いている以上、電波が出ているのは当たり前のことなのですが、
+こうやって改めて確認できると面白いですね。</p>
+
+<p>パソコンから出る程度の電波強度では、電波法に抵触することはないと思いますが、
+うっかり強力な電波を発信しないよう気をつけてください。</p>
+]]></content>
+  </entry>
+  
+  <entry>
     <title type="html"><![CDATA[数値と文字列がごちゃ混ぜになっているJSONをよしなにParseするやつ作った]]></title>
-    <link href="http://shogo82148.github.io/blog/2016/03/23/go-weaktyping/"/>
+    <link href="https://shogo82148.github.io/blog/2016/03/23/go-weaktyping/"/>
     <updated>2016-03-23T20:44:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2016/03/23/go-weaktyping</id>
+    <id>https://shogo82148.github.io/blog/2016/03/23/go-weaktyping</id>
     <content type="html"><![CDATA[<p>Goは数値と文字列を厳格に区別しますが、他の言語もそうとは限りません。
 例えばPerlは数値と文字列を自動変換してくれるので、気をつけていないといつの間にか数値が文字列になっていたりします。
 その言語の中に閉じていいれば問題ないのですが、Goとやり取りしようとすると困ります。
@@ -148,9 +818,9 @@ go-weaktypingを使うとすべてのUnmarshal時に有効になってしまっ�
   
   <entry>
     <title type="html"><![CDATA[Redisのトランザクション・スクリプト・ランキングを扱うPerlモジュールを公開しました]]></title>
-    <link href="http://shogo82148.github.io/blog/2016/03/18/releaes-redis-modules/"/>
+    <link href="https://shogo82148.github.io/blog/2016/03/18/releaes-redis-modules/"/>
     <updated>2016-03-18T22:16:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2016/03/18/releaes-redis-modules</id>
+    <id>https://shogo82148.github.io/blog/2016/03/18/releaes-redis-modules</id>
     <content type="html"><![CDATA[<p>以前<a href="http://shogo82148.github.io/blog/2016/02/06/redis-leader-board-multi/">Redisでスコアを複数設定できるランキングを作ってみた</a>けど、
 Githubの肥やしになっていてもあれなので、CPANizeしました。
 あわせて、この実装のために作ったユーティリティモジュールも別モジュールとして公開しました。</p>
@@ -350,9 +1020,9 @@ Redisのトランザクションは楽観的ロックなので、
   
   <entry>
     <title type="html"><![CDATA[ngrokみたいなHTTPプロキシを書いてみた]]></title>
-    <link href="http://shogo82148.github.io/blog/2016/03/14/http2-over-websocket/"/>
+    <link href="https://shogo82148.github.io/blog/2016/03/14/http2-over-websocket/"/>
     <updated>2016-03-14T22:59:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2016/03/14/http2-over-websocket</id>
+    <id>https://shogo82148.github.io/blog/2016/03/14/http2-over-websocket</id>
     <content type="html"><![CDATA[<p>開発中のWebアプリをみんなに試してほしいけど、
 サーバなんてなくて開発環境がローカルにしか無くて公開できないということは、
 開発初期段階だとよくあることだと思います。
@@ -627,9 +1297,9 @@ Websocketは3000番ポートで待ち受けです。</p>
   
   <entry>
     <title type="html"><![CDATA[nginx-omniauth-adapterのGolangポート作った]]></title>
-    <link href="http://shogo82148.github.io/blog/2016/03/10/go-nginx-oauth2-adapter/"/>
+    <link href="https://shogo82148.github.io/blog/2016/03/10/go-nginx-oauth2-adapter/"/>
     <updated>2016-03-10T12:51:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2016/03/10/go-nginx-oauth2-adapter</id>
+    <id>https://shogo82148.github.io/blog/2016/03/10/go-nginx-oauth2-adapter</id>
     <content type="html"><![CDATA[<p>「<a href="http://techlife.cookpad.com/entry/2015/10/16/080000">nginx で omniauth を利用してアクセス制御を行う</a>」という記事で、
 <a href="http://nginx.org/en/docs/http/ngx_http_auth_request_module.html">ngx_http_auth_request_module</a>の存在を知ったので、
 Golangで<a href="https://github.com/sorah/nginx_omniauth_adapter">nginx_omniauth_adapter</a>と似たようなものを作ってみました。</p>
@@ -719,9 +1389,9 @@ nginx_omniauth_adapter互換ですぐに乗り換えもできるので、ぜひ�
   
   <entry>
     <title type="html"><![CDATA[転職して一週間がたちました]]></title>
-    <link href="http://shogo82148.github.io/blog/2016/03/08/join-fuller/"/>
+    <link href="https://shogo82148.github.io/blog/2016/03/08/join-fuller/"/>
     <updated>2016-03-08T15:55:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2016/03/08/join-fuller</id>
+    <id>https://shogo82148.github.io/blog/2016/03/08/join-fuller</id>
     <content type="html"><![CDATA[<p>転職して1週間がたち，新しい生活サイクルにも慣れてきましたので近況報告をします．
 <a href="http://www.kayac.com/">面白法人</a>を卒業し、3月1日から <a href="http://fuller.co.jp/">Fuller 株式会社</a>で働き始めました！
 アプリの視聴率調査の<a href="https://analytics.appa.pe/">App Ape Analytics</a>の提供を中心に、スマフォアプリの開発・分析をやってる会社です。</p>
@@ -763,16 +1433,16 @@ nginx_omniauth_adapter互換ですぐに乗り換えもできるので、ぜひ�
   
   <entry>
     <title type="html"><![CDATA[グロンギ語翻訳辞書をアップデートしました]]></title>
-    <link href="http://shogo82148.github.io/blog/2016/02/27/update-grongish-dictionary/"/>
+    <link href="https://shogo82148.github.io/blog/2016/02/27/update-grongish-dictionary/"/>
     <updated>2016-02-27T10:27:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2016/02/27/update-grongish-dictionary</id>
+    <id>https://shogo82148.github.io/blog/2016/02/27/update-grongish-dictionary</id>
     <content type="html"><![CDATA[<p>やることがたくさんあるときに限ってどうでもいいことが捗ってこまっているいっちーです。
 先日、挑戦状を受け取ったので、グロンギ語翻訳の品質改善に挑戦しました。</p>
 
 <blockquote class="twitter-tweet"><p lang="ja" dir="ltr">《緊急告知》2月26日(金)、何かが起こる!!「仮面ライダークウガ」にまつわる新商品のようですが・・・。ページに書かれているのは、グロンギ語？お客様の中で、リントの言葉に翻訳できる方はいらっしゃいますか～？ <a href="https://t.co/hMDQCST6Tz">https://t.co/hMDQCST6Tz</a></p>&mdash; プレミアムバンダイ (@p_bandai) <a href="https://twitter.com/p_bandai/status/699790752985931776">February 17, 2016</a></blockquote>
 
 
-<script async src="http://shogo82148.github.io//platform.twitter.com/widgets.js" charset="utf-8"></script>
+<script async src="https://shogo82148.github.io//platform.twitter.com/widgets.js" charset="utf-8"></script>
 
 
 <ul>
@@ -944,9 +1614,9 @@ PerlであればStarlet,Starman,Gazelleといった対応モジュールが出�
   
   <entry>
     <title type="html"><![CDATA[MeCabのGolangバインディングを書いてみた]]></title>
-    <link href="http://shogo82148.github.io/blog/2016/02/11/golang-mecab-binding/"/>
+    <link href="https://shogo82148.github.io/blog/2016/02/11/golang-mecab-binding/"/>
     <updated>2016-02-11T19:32:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2016/02/11/golang-mecab-binding</id>
+    <id>https://shogo82148.github.io/blog/2016/02/11/golang-mecab-binding</id>
     <content type="html"><![CDATA[<p>Golangから<a href="http://taku910.github.io/mecab/">MeCab</a>を呼び出すライブラリ探せばあるにはあるのですが、
 なんだかどれもメモリ管理がちょっと怪しいんですよね・・・。</p>
 
@@ -1226,9 +1896,9 @@ Goの<code>string</code>をメモリーコピーを避けて<code>[]byte</code>�
   
   <entry>
     <title type="html"><![CDATA[AWS Lambda で MeCab を動かす(改)]]></title>
-    <link href="http://shogo82148.github.io/blog/2016/02/10/mecab-in-lambda/"/>
+    <link href="https://shogo82148.github.io/blog/2016/02/10/mecab-in-lambda/"/>
     <updated>2016-02-10T14:52:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2016/02/10/mecab-in-lambda</id>
+    <id>https://shogo82148.github.io/blog/2016/02/10/mecab-in-lambda</id>
     <content type="html"><![CDATA[<p>MeCabのPythonバインディングをいじってた関係で、MeCabについてインターネットをさまよっていたら、
 <a href="http://dev.classmethod.jp/cloud/aws-lambda-with-mecab/">AWS Lambda で MeCab を動かす</a>という記事を見つけました。
 Lambdaの計算リソースで形態素解析できるのは楽しいですねー。
@@ -1536,9 +2206,9 @@ API Gatewayなどで外部に公開した場合、第三者が何でもし放題
   
   <entry>
     <title type="html"><![CDATA[Redisでスコアを複数設定できるランキングを作ってみた]]></title>
-    <link href="http://shogo82148.github.io/blog/2016/02/06/redis-leader-board-multi/"/>
+    <link href="https://shogo82148.github.io/blog/2016/02/06/redis-leader-board-multi/"/>
     <updated>2016-02-06T02:30:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2016/02/06/redis-leader-board-multi</id>
+    <id>https://shogo82148.github.io/blog/2016/02/06/redis-leader-board-multi</id>
     <content type="html"><![CDATA[<p>ランキングを作っているとスコアを複数設定したいことがよくあると思います。
 例えば「得点が同じだったら早くその得点を出した人優先」とか「勝ち点が同じだったら得失点差が大きい方優先」とかのように、
 最初の基準で順位を決められなかった場合の第二基準が欲しいみたいな場合です。</p>
@@ -1779,9 +2449,9 @@ Luaスクリプト実行中は他の命令の実行をブロックするので�
   
   <entry>
     <title type="html"><![CDATA[Redis::Fast 0.17 をリリースしました]]></title>
-    <link href="http://shogo82148.github.io/blog/2016/01/23/redis-fast-0-dot-17-released/"/>
+    <link href="https://shogo82148.github.io/blog/2016/01/23/redis-fast-0-dot-17-released/"/>
     <updated>2016-01-23T16:20:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2016/01/23/redis-fast-0-dot-17-released</id>
+    <id>https://shogo82148.github.io/blog/2016/01/23/redis-fast-0-dot-17-released</id>
     <content type="html"><![CDATA[<p><a href="https://metacpan.org/release/SHOGO/Redis-Fast-0.17">Redis::Fast 0.17</a> をリリースしました。
 主な変更点は以下のとおりです。</p>
 
@@ -1814,9 +2484,9 @@ poll(2)変更版でテストしてみると、接続先が存在しない場合�
   
   <entry>
     <title type="html"><![CDATA[UnityのBitmapフォントの収録文字のdiffを取る]]></title>
-    <link href="http://shogo82148.github.io/blog/2015/12/22/diff-of-unity-bitmap-font/"/>
+    <link href="https://shogo82148.github.io/blog/2015/12/22/diff-of-unity-bitmap-font/"/>
     <updated>2015-12-22T19:04:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2015/12/22/diff-of-unity-bitmap-font</id>
+    <id>https://shogo82148.github.io/blog/2015/12/22/diff-of-unity-bitmap-font</id>
     <content type="html"><![CDATA[<p>Unityで文字を描画するには
 「<a href="http://d.hatena.ne.jp/nakamura001/20120910/1347241168">BMFont(Bitmap Font Generator)でビットマップフォントを作る方法</a>」等にあるように
 ビットマップフォントを自分で作ってあげないといけないらしいです。
@@ -1892,9 +2562,9 @@ gitで差分をみれるようにしてみました。</p>
   
   <entry>
     <title type="html"><![CDATA[MeCabをPython3から使う(続報)]]></title>
-    <link href="http://shogo82148.github.io/blog/2015/12/20/mecab-in-python3-final/"/>
+    <link href="https://shogo82148.github.io/blog/2015/12/20/mecab-in-python3-final/"/>
     <updated>2015-12-20T01:03:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2015/12/20/mecab-in-python3-final</id>
+    <id>https://shogo82148.github.io/blog/2015/12/20/mecab-in-python3-final</id>
     <content type="html"><![CDATA[<p>Python3からMeCabを扱おうとして挫折していたのですが
 (<a href="http://shogo82148.github.io/blog/2015/06/02/mecab-in-python3/">MeCabをPython3から使う(中間報告)</a>)、
 改めて調査して、上手くいかなかった原因が分かったのでご報告します。</p>
@@ -2091,9 +2761,9 @@ GCされて困っている方はgit cloneしてお試し下さい。</p>
   
   <entry>
     <title type="html"><![CDATA[PerlのDBIx::Class利用上の注意点]]></title>
-    <link href="http://shogo82148.github.io/blog/2015/12/17/dbix-class/"/>
+    <link href="https://shogo82148.github.io/blog/2015/12/17/dbix-class/"/>
     <updated>2015-12-17T18:35:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2015/12/17/dbix-class</id>
+    <id>https://shogo82148.github.io/blog/2015/12/17/dbix-class</id>
     <content type="html"><![CDATA[<p>この記事は、<a href="http://qiita.com/advent-calendar/2015/perl5">Perl 5 Advent Calendar</a>の17日目の記事です。</p>
 
 <p><a href="http://tech.kayac.com/archive/reconnect_redisfast.html">Redis::Fast の reconnect について</a>の中で
@@ -2891,9 +3561,9 @@ DBIx::Classが裏で再接続処理を自動的にやってくれるので、普
   
   <entry>
     <title type="html"><![CDATA[git-mergeの挙動をカスタマイズする]]></title>
-    <link href="http://shogo82148.github.io/blog/2015/12/16/customize-git-merge/"/>
+    <link href="https://shogo82148.github.io/blog/2015/12/16/customize-git-merge/"/>
     <updated>2015-12-16T22:24:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2015/12/16/customize-git-merge</id>
+    <id>https://shogo82148.github.io/blog/2015/12/16/customize-git-merge</id>
     <content type="html"><![CDATA[<p>最近gitのコンフリクト解消職人みたいになっていてすごくつらいです。
 普通のプログラムであれば順番が重要なので手動でのコンフリクト解消は避けられないのですが、
 僕が相手にしているのは最終的にMySQLに食わせるデータなのでそこまで順番は重要ではありません。
@@ -3199,9 +3869,9 @@ merge strategyのカスタマイズは大変そう・・・
   
   <entry>
     <title type="html"><![CDATA[Goでデプロイ神社書いてみた]]></title>
-    <link href="http://shogo82148.github.io/blog/2015/12/13/go-deploy-shrine/"/>
+    <link href="https://shogo82148.github.io/blog/2015/12/13/go-deploy-shrine/"/>
     <updated>2015-12-13T10:51:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2015/12/13/go-deploy-shrine</id>
+    <id>https://shogo82148.github.io/blog/2015/12/13/go-deploy-shrine</id>
     <content type="html"><![CDATA[<p><a href="http://qiita.com/advent-calendar/2015/go2">Go その2 Advent Calendar 2015</a>の13日目の記事です。</p>
 
 <ul>
@@ -3333,9 +4003,9 @@ merge strategyのカスタマイズは大変そう・・・
   
   <entry>
     <title type="html"><![CDATA[Perl の DateTime 利用上の注意点]]></title>
-    <link href="http://shogo82148.github.io/blog/2015/12/09/perl-datetime/"/>
+    <link href="https://shogo82148.github.io/blog/2015/12/09/perl-datetime/"/>
     <updated>2015-12-09T00:00:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2015/12/09/perl-datetime</id>
+    <id>https://shogo82148.github.io/blog/2015/12/09/perl-datetime</id>
     <content type="html"><![CDATA[<p>この投稿は <a href="http://qiita.com/advent-calendar/2015/perl5">Perl 5 Advent Calendar 2015</a> の 9日目の記事です。</p>
 
 <p><a href="http://developer.hatenastaff.com/entry/2015/12/02/050000">Perl の Time::Piece 利用上の注意点</a>
@@ -3668,661 +4338,6 @@ DateTimeモジュール以外のプログラムがうるう秒を正しく扱え
 廃止論とかありましたけど、<a href="http://internet.watch.impress.co.jp/docs/news/20151120_731707.html">とりあえず2023年までは調整がはいる</a>そうです・・・。</p>
 
 <p>他にもいろいろ罠がありそう・・・知っているかたがいれば教えて下さい。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Go言語でGraceful Restartをするときに取りこぼしを少なくする]]></title>
-    <link href="http://shogo82148.github.io/blog/2015/11/23/golang-graceful-restart-2nd/"/>
-    <updated>2015-11-23T20:51:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2015/11/23/golang-graceful-restart-2nd</id>
-    <content type="html"><![CDATA[<p>少し前に<a href="https://github.com/kazuho/Starlet">Starlet</a>にGraceful Restartが時たま上手く動かない問題を修正する<a href="https://github.com/kazuho/Starlet/pull/21">pullreq</a>を投げました。
-原因は割り込みハンドラ内でexitを呼んでいたからでした。
-「割り込みハンドラ内ではフラグを建てるだけ」
-「メインのプログラム内でそのフラグを見て分岐する」という原則があるのですが、それを守るのは難しいということですね。
-(しかし新たな問題を産んでしまい<a href="https://github.com/kazuho/Starlet/pull/23">revertされてしまいましたが・・・</a>
-まあ修正後のコードも考え方は一緒です。割り込みホント難しい・・・)</p>
-
-<p>このpullreqを取り込んでもらうときに再現実験をやってみたのですが、
-Goでもちゃんと動くのかな？と気になったので
-<a href="http://shogo82148.github.io/blog/2015/05/03/golang-graceful-restart/">Go言語でGraceful Restartをする</a>で紹介した
-プログラムに同じテストをやってみました。</p>
-
-<!-- More -->
-
-
-<h2>mannersでテストしてみる</h2>
-
-<p>前回の記事では<a href="https://github.com/braintree/manners">manners</a>と<a href="https://github.com/lestrrat/go-server-starter">go-server-starter</a>の
-組み合わせが良さそうとの結論になったので、この組み合わせでテストしてみます。
-以下テストに使用したコードです。
-(今回の内容とは直接関係は無いですが、go-server-starterに変更が入ってFallbackのやり方が前回から少し変わってます)</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-<span class='line-number'>37</span>
-<span class='line-number'>38</span>
-<span class='line-number'>39</span>
-<span class='line-number'>40</span>
-<span class='line-number'>41</span>
-<span class='line-number'>42</span>
-<span class='line-number'>43</span>
-<span class='line-number'>44</span>
-<span class='line-number'>45</span>
-<span class='line-number'>46</span>
-<span class='line-number'>47</span>
-<span class='line-number'>48</span>
-<span class='line-number'>49</span>
-<span class='line-number'>50</span>
-<span class='line-number'>51</span>
-<span class='line-number'>52</span>
-<span class='line-number'>53</span>
-<span class='line-number'>54</span>
-<span class='line-number'>55</span>
-<span class='line-number'>56</span>
-<span class='line-number'>57</span>
-<span class='line-number'>58</span>
-<span class='line-number'>59</span>
-<span class='line-number'>60</span>
-<span class='line-number'>61</span>
-<span class='line-number'>62</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
-</span><span class='line'>
-</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
-</span><span class='line'>        <span class="s">&quot;fmt&quot;</span>
-</span><span class='line'>        <span class="s">&quot;log&quot;</span>
-</span><span class='line'>        <span class="s">&quot;net&quot;</span>
-</span><span class='line'>        <span class="s">&quot;net/http&quot;</span>
-</span><span class='line'>        <span class="s">&quot;os&quot;</span>
-</span><span class='line'>        <span class="s">&quot;os/signal&quot;</span>
-</span><span class='line'>        <span class="s">&quot;syscall&quot;</span>
-</span><span class='line'>        <span class="s">&quot;time&quot;</span>
-</span><span class='line'>
-</span><span class='line'>        <span class="s">&quot;github.com/braintree/manners&quot;</span>
-</span><span class='line'>        <span class="s">&quot;github.com/lestrrat/go-server-starter/listener&quot;</span>
-</span><span class='line'><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">var</span> <span class="nx">now</span> <span class="p">=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-</span><span class='line'>        <span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&quot;start pid %d\n&quot;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Getpid</span><span class="p">())</span>
-</span><span class='line'>
-</span><span class='line'>        <span class="nx">signal_chan</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Signal</span><span class="p">)</span>
-</span><span class='line'>        <span class="nx">signal</span><span class="p">.</span><span class="nx">Notify</span><span class="p">(</span><span class="nx">signal_chan</span><span class="p">,</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span><span class="p">)</span>
-</span><span class='line'>        <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
-</span><span class='line'>                <span class="k">for</span> <span class="p">{</span>
-</span><span class='line'>                        <span class="nx">s</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">signal_chan</span>
-</span><span class='line'>                        <span class="k">if</span> <span class="nx">s</span> <span class="o">==</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span> <span class="p">{</span>
-</span><span class='line'>                                <span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&quot;SIGTERM!!!!\n&quot;</span><span class="p">)</span>
-</span><span class='line'>                                <span class="nx">manners</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
-</span><span class='line'>                        <span class="p">}</span>
-</span><span class='line'>                <span class="p">}</span>
-</span><span class='line'>        <span class="p">}()</span>
-</span><span class='line'>
-</span><span class='line'>        <span class="nx">listeners</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ListenAll</span><span class="p">()</span>
-</span><span class='line'>        <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="o">&amp;&amp;</span> <span class="nx">err</span> <span class="o">!=</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ErrNoListeningTarget</span> <span class="p">{</span>
-</span><span class='line'>                <span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
-</span><span class='line'>        <span class="p">}</span>
-</span><span class='line'>        <span class="kd">var</span> <span class="nx">l</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Listener</span>
-</span><span class='line'>        <span class="k">if</span> <span class="nx">err</span> <span class="o">==</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ErrNoListeningTarget</span> <span class="p">{</span>
-</span><span class='line'>                <span class="c1">// Fallback if not running under Server::Starter</span>
-</span><span class='line'>                <span class="nx">l</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Listen</span><span class="p">(</span><span class="s">&quot;tcp&quot;</span><span class="p">,</span> <span class="s">&quot;:8080&quot;</span><span class="p">)</span>
-</span><span class='line'>                <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-</span><span class='line'>                        <span class="nb">panic</span><span class="p">(</span><span class="s">&quot;Failed to listen to port 8080&quot;</span><span class="p">)</span>
-</span><span class='line'>                <span class="p">}</span>
-</span><span class='line'>        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-</span><span class='line'>                <span class="nx">l</span> <span class="p">=</span> <span class="nx">listeners</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-</span><span class='line'>        <span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'>        <span class="nx">manners</span><span class="p">.</span><span class="nx">Serve</span><span class="p">(</span><span class="nx">l</span><span class="p">,</span> <span class="nx">newHandler</span><span class="p">())</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">func</span> <span class="nx">newHandler</span><span class="p">()</span> <span class="nx">http</span><span class="p">.</span><span class="nx">Handler</span> <span class="p">{</span>
-</span><span class='line'>        <span class="nx">mux</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">NewServeMux</span><span class="p">()</span>
-</span><span class='line'>        <span class="nx">mux</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">&quot;/&quot;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>                <span class="nx">fmt</span><span class="p">.</span><span class="nx">Fprintf</span><span class="p">(</span>
-</span><span class='line'>                        <span class="nx">w</span><span class="p">,</span>
-</span><span class='line'>                        <span class="s">&quot;from pid %d.\n&quot;</span><span class="p">,</span>
-</span><span class='line'>                        <span class="nx">os</span><span class="p">.</span><span class="nx">Getpid</span><span class="p">(),</span>
-</span><span class='line'>                <span class="p">)</span>
-</span><span class='line'>        <span class="p">})</span>
-</span><span class='line'>        <span class="k">return</span> <span class="nx">mux</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>1秒毎にgraceful restartを行いながら負荷をかけます。
-以下のコマンドを別々のターミナルから実行します。
-<code>go run main.go</code>だと自分で書いたプログラムがシグナルを受け取れなくなってしまうので、
-<code>go build main.go</code>とコンパイルしてから実行するところがポイントです。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>start_server --port 8080 --pid app.pid -- ./main
-</span><span class='line'><span class="nv">$ </span><span class="k">while </span><span class="nb">true</span>; <span class="k">do </span><span class="nb">kill</span> -HUP <span class="sb">`</span>cat app.pid<span class="sb">`</span>; sleep 1; <span class="k">done</span>
-</span><span class='line'><span class="nv">$ </span>ab -r -n 1000000 -c 10 http://localhost:8080/
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p><a href="https://gist.github.com/shogo82148/a1524f31292202ec34f3#file-manners">mannersを使った場合の実験結果</a>へのリンクを貼っておきます。
-「Failed requests:        122」となっており、残念ながら取りこぼしが発生してしまいました。
-負荷をかけた時間は72.437秒なので、70回ほどリスタートをかけたことになります。
-github-flowを採用しているようなところだと毎日数回デプロイをするということも珍しくないので、
-1〜2ヶ月も運用していれば一度くらいはこの現象に遭遇することになります(秒間1万リクエストさばく必要のあるようなサービスの場合ですが)。
-ちょっと気になりますね。</p>
-
-<h2>自分で書いてみた</h2>
-
-<p>mannersの改造、難しそうだったので、自分で書いてみました。</p>
-
-<ul>
-<li>https://github.com/shogo82148/go-gracedown</li>
-</ul>
-
-
-<p>mannersと全く同じインタフェースなので、s/manners/gracedown/するだけです。
-これを使って実験してみた結果がこちら https://gist.github.com/shogo82148/a1524f31292202ec34f3#file-gracedown
-「Failed requests:        0」やったね！</p>
-
-<h2>その他メモ</h2>
-
-<p>これ書くのに色々しらべたのでメモとして残しておきます。</p>
-
-<h3>acceptの直後にcloseされた場合の挙動について</h3>
-
-<p>Starletで起こっていた不具合の原因は、
-acceptから処理が帰ってきてからcanExitフラグを落とすまでにわずかな期間があるのが問題でした。
-この期間にシグナルを受け取ると間違えてサーバを終了させてしまいます。
-GoでもacceptしてからステートがStateNewになるまでの間に若干の時間差があるので、
-ここが問題にならないか少し気になっていました。</p>
-
-<p>net/httpの処理を追ってみると、acceptとStateNewは<code>Serve(net.Listener)</code>を実行したのと同じgoroutineで実行されているようです。
-したがって、サーバシャットダウンの判定も<code>Serve(net.Listener)</code>と同じgoroutineで行えば、
-誤ってacceptしてからステートがStateNewになるまでの間にサーバをシャットダウンしてしまうことは防げるということがわかりました。</p>
-
-<h3>Acceptがブロックしているのを解除する方法について</h3>
-
-<p><a href="http://qiita.com/hiratara/items/0f0b6103a0dc9280cea9">UnixListener.Closeでソケットファイルが消えて困っている</a> という記事に</p>
-
-<blockquote><p>POSIX では Close() を呼んだからといって Accept() が制御を戻してくれる保証はないといことでしょうか。</p></blockquote>
-
-<p>という一文が書いてありました。</p>
-
-<p>これについて実際はどうなんだろうと調べてみたところ<a href="net.Listener">https://golang.org/pkg/net/#Listener</a>のコメントに</p>
-
-<blockquote><p>Close closes the listener.
-Any blocked Accept operations will be unblocked and return errors.</p></blockquote>
-
-<p>とありました。
-このコメントを読む限りGo言語では「<code>Close()</code> を呼んだら<code>Accept()</code>が制御を戻す」と考えて良さそうです。
-POSIXでどう規定されているかまでは調査しきれていませんが、
-たとえどう規定されていようとも互換性を保つために裏で色々やってくれていると信じています。</p>
-
-<p>この記事の主題である「UnixListener.Closeでソケットファイルが消えて困っている」件についても調べてはみたのですが、
-結論は出ませんでした・・・。
-たしかにソケットファイルは使い終わったらunlinkすることが推奨されているということがわかったくらいです。
-nameが「@」で始まっていると「abstract socket address」と見なされて削除されなくなるから、「@」をテキトウにつけるとか・・・？</p>
-
-<h3>keep-aliveの挙動について</h3>
-
-<p>mannersはKeep-Aliveなコネクションがあった場合でも、それがIdle状態であればシャットダウンしてしまいます。
-それに対してgo-gracedownは全部のコネクションがClosedになるまでまちます。
-終了処理に入った段階でKeep-Aliveは無効にしているので、
-go-gracedown側で特に操作しなくてもnet/httpがそのうちクローズしてくれるだろうとの考えからです。</p>
-
-<p>Keep-Aliveはクライアントからリクエストがないと切断できない(レスポンスに「Connection: Close」ヘッダを含める必要があるため)ので
-リクエストがないと永遠にシャットダウンできません。
-それでは困るので一応タイムアウトも入れてあります。</p>
-
-<p>この挙動のおかげで<a href="https://github.com/rakyll/boom">boom</a>(http benchで検索したら一番上にきた)でのベンチでも
-<a href="https://gist.github.com/shogo82148/a1524f31292202ec34f3#file-gracedown-boom">エラー無しで処理できています</a>。
-ちなみにApache Benchでも-kオプションでKeep-Aliveを有効にできるのですが、
-HTTP/1.0だと「Connection: Close」を送る方法が使えないので、<a href="https://gist.github.com/shogo82148/a1524f31292202ec34f3#file-gracedown-keep-alive">残念ながらエラーが出てしまいました</a>。</p>
-
-<h2>まとめ</h2>
-
-<ul>
-<li>実験の結果<a href="https://github.com/braintree/manners">manners</a>はときどきGraceful Shutdownに失敗する場合があることがわかった</li>
-<li><a href="https://github.com/shogo82148/go-gracedown">go-gracedown</a>というのを書いてみた
-
-<ul>
-<li>今回行った再現実験ではすべてのリクエストを正常に処理できました</li>
-</ul>
-</li>
-<li>Graceful Restartむずかしい</li>
-</ul>
-
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Goオールスターズで登壇してきました]]></title>
-    <link href="http://shogo82148.github.io/blog/2015/10/14/go-all-stars/"/>
-    <updated>2015-10-14T08:11:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2015/10/14/go-all-stars</id>
-    <content type="html"><![CDATA[<p>先週の日曜日に登壇してきました。</p>
-
-<iframe src="https://www.slideshare.net/slideshow/embed_code/key/gC0o0V8Vx7tI9z" width="427" height="356" frameborder="0" marginwidth="0" marginheight="0" scrolling="no" style="border:1px solid #CCC; border-width:1px; margin-bottom:5px; max-width: 100%;" allowfullscreen> </iframe>
-
-
-<p> <div style="margin-bottom:5px"> <strong> <a href="https://www.slideshare.net/shogo82148/go-go-53787565" title="過去に自作したGoプロダクトの紹介 - Goオールスターズ" target="_blank">過去に自作したGoプロダクトの紹介 - Goオールスターズ</a> </strong> from <strong><a target="_blank" href="http://www.slideshare.net/shogo82148">Shogo Ichinose</a></strong> </div></p>
-
-<ul>
-<li><a href="http://www.slideshare.net/shogo82148/go-go-53787565">過去に自作したGoプロダクトの紹介 - Goオールスタース</a></li>
-</ul>
-
-
-<!-- More -->
-
-
-<p>発表の10日くらい前にsongmuさんがKAYACのIRCに現われオールスターを募集に来てくださったものの、
-弊社スターの都合がつかないため僕が代わりに発表してきました。</p>
-
-<p>KAYACではGoプロダクトたくさん動いていますが説明は作者にお任せしたほうがいいかなと思い、
-自作のGoプロダクトをメインに発表してきました。</p>
-
-<ul>
-<li><a href="https://github.com/shogo82148/go-rgba4444">go-rgba4444</a></li>
-<li><a href="https://github.com/shogo82148/androidbinary">androidbinary</a> - <a href="http://shogo82148.github.io/blog/2014/05/07/androidbinary/">Androidのバイナリファイルを解析するgoのライブラリ</a></li>
-<li><a href="https://github.com/shogo82148/go-sql-proxy">go-sql-proxy</a> - <a href="http://shogo82148.github.io/blog/2015/05/13/golang-sql-proxy/">Go言語でSQLのトレースをする</a></li>
-<li><a href="https://github.com/shogo82148/go-dithering">go-dithering</a> - <a href="http://shogo82148.github.io/blog/2015/04/25/quantize-image-in-golang/">Go言語で画像の減色を行う</a></li>
-<li><a href="https://github.com/shogo82148/go-prove">go-prove</a>/<a href="https://github.com/shogo82148/go-tap">go-tap</a> - <a href="http://shogo82148.github.io/blog/2015/09/19/faster-perl-test-with-go-lang/">Go言語でPerlのテストを早くする</a></li>
-<li><a href="https://github.com/shogo82148/go-webtail">go-webtail</a>/<a href="https://github.com/shogo82148/go-tail">go-webtail</a> - <a href="http://shogo82148.github.io/blog/2015/06/21/go-webtail/">Go-webtailってのを書いた</a></li>
-</ul>
-
-
-<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">go-prove、CPANに上げればいいんじゃない？w <a href="https://twitter.com/hashtag/eventdots?src=hash">#eventdots</a></p>&mdash; songmu (@songmu) <a href="https://twitter.com/songmu/status/653100524296736768">October 11, 2015</a></blockquote>
-
-
-<script async src="http://shogo82148.github.io//platform.twitter.com/widgets.js" charset="utf-8"></script>
-
-
-<p>Perl Archive Network とはいったい・・・</p>
-
-<p>KAYACではいろんなGoプロダクトが動いているのでこちらもどうぞ。</p>
-
-<ul>
-<li><a href="https://github.com/kayac/go-katsubushi">go-katsubushi</a> snowﬂake-likeなIDジェネレータ</li>
-<li><a href="https://github.com/fujiwara/stretcher">stretcher</a> Consul/Surfと連携したデプロイツール</li>
-<li><a href="https://github.com/fujiwara/Rin">rin</a> AWS-S3に出力されたログをRedshiftへインポートするツール</li>
-<li><a href="https://github.com/acidlemon/mirage">mirage</a> Dockerを使ったテスト用環境構築</li>
-<li><a href="https://github.com/kayac/alphawing">alphawing</a> Android/iOSアプリの社内配信ツール</li>
-</ul>
-
-
-<p>スライドにちょこちょこ修正いれててGopherくん人形もらうの忘れてたけどもらっておけばよかった。</p>
-
-<p>他の人の発表はこちら。</p>
-
-<ul>
-<li><a href="http://eventdots.jp/event/571126">Goオールスターズ</a></li>
-<li><a href="http://togetter.com/li/885585">GoオールスターズToggetterまとめ</a></li>
-<li><a href="http://www.songmu.jp/riji/entry/2015-10-12-go-all-stars.html">Goオールスターズで登壇してきました - おそらくはそれさえも平凡な日々</a></li>
-<li><a href="http://ymotongpoo.hatenablog.com/entry/2015/10/13/104247">Goオールスターズでpackage managementについて話してきました - YAMAGUCHI::weblog</a></li>
-<li><a href="http://www.slideshare.net/takuyaueda967/go-53785408">Goだけでモバイルアプリを作ろう</a></li>
-<li><a href="http://bokko.hatenablog.com/entry/2015/10/12/151641">Goオールスターズ - 考える人、コードを書く人</a></li>
-</ul>
-
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[AnySan::Provider::Slackとape-slackを書いた]]></title>
-    <link href="http://shogo82148.github.io/blog/2015/09/28/anysan-provider-slack-and-ape-slack/"/>
-    <updated>2015-09-28T22:11:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2015/09/28/anysan-provider-slack-and-ape-slack</id>
-    <content type="html"><![CDATA[<p>先週、今のプロジェクトでのメインのコミュニケーションツールをIRCからSlack切り替えました。
-それにともないIRCに済んでいたボットたちもお引越しする必要があったので、
-ボットとSlackをつなぐためのライブラリを書きました。</p>
-
-<ul>
-<li><a href="https://metacpan.org/release/AnySan-Provider-Slack">AnySan::Provider::Slack</a></li>
-<li><a href="https://github.com/shogo82148/ape-slack">ape-slack</a></li>
-</ul>
-
-
-<p>Perlとgoのボットが住んでいるのでそれぞれの言語で実装してあります。</p>
-
-<!-- More -->
-
-
-<h2>AnySan::Provider::Slack</h2>
-
-<p>Perlの<a href="https://metacpan.org/pod/AnySan">AnySan</a>用のモジュールです。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">AnySan</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="nn">AnySan::Provider::</span><span class="n">Slack</span><span class="p">;</span>
-</span><span class='line'><span class="k">my</span> <span class="nv">$slack</span> <span class="o">=</span> <span class="n">slack</span>
-</span><span class='line'>    <span class="n">token</span> <span class="o">=&gt;</span> <span class="s">&#39;YOUR SLACK API TOKEN&#39;</span><span class="p">,</span>
-</span><span class='line'>    <span class="n">channels</span> <span class="o">=&gt;</span> <span class="p">{</span>
-</span><span class='line'>        <span class="s">&#39;general&#39;</span> <span class="o">=&gt;</span> <span class="p">{},</span>
-</span><span class='line'>    <span class="p">};</span>
-</span><span class='line'><span class="nv">$slack</span><span class="o">-&gt;</span><span class="n">send_message</span><span class="p">(</span><span class="s">&#39;slack message&#39;</span><span class="p">,</span> <span class="n">channel</span> <span class="o">=&gt;</span> <span class="s">&#39;C024BE91L&#39;</span><span class="p">);</span>
-</span><span class='line'><span class="n">AnySan</span><span class="o">-&gt;</span><span class="n">run</span><span class="p">;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>AnySanを使うだけでも便利なんですが、
-今のプロジェクトではAnySanを対話形式で使いやすくするように<a href="http://www.songmu.jp/riji/entry/2013-09-09-unazusan.html">UnazuSan</a>を使っています。
-UnazuSanはIRC前提で書かれていて、AnySan::Provider::Slackをインストールしてもそのままは使えません。</p>
-
-<p>UnazuSanを置き換えるもの面倒なので、イベントの名前を書き換えて投げ直すことで、
-SlackのメッセージをIRCに見せかける方法をとっています。
-また<a href="https://beatsync.net/main/log20150926.html">SlackのOutgoing Webhookで@つきのmentionを捕まえる</a>にもあるように、
-Slackのメンションは &lt;@U08DGJVJ7&gt;のような形式になってしまい、UnazuSanは自分へのメッセージとして扱ってくれません。
-これをUnazuSanが解釈できる形式に置き換えるのがポイントです。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-<span class='line-number'>37</span>
-<span class='line-number'>38</span>
-<span class='line-number'>39</span>
-<span class='line-number'>40</span>
-<span class='line-number'>41</span>
-<span class='line-number'>42</span>
-<span class='line-number'>43</span>
-<span class='line-number'>44</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="mf">5.010</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="n">warnings</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="n">utf8</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="n">Encode</span> <span class="sx">qw/encode_utf8/</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="n">UnazuSan</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="n">AnySan</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="nn">AnySan::Provider::</span><span class="n">Slack</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">my</span> <span class="nv">$unazu_san</span> <span class="o">=</span> <span class="n">UnazuSan</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span>
-</span><span class='line'>    <span class="n">host</span>       <span class="o">=&gt;</span> <span class="s">&#39;example.com&#39;</span><span class="p">,</span>
-</span><span class='line'>    <span class="n">password</span>   <span class="o">=&gt;</span> <span class="s">&#39;xxxxxxxxxxx&#39;</span><span class="p">,</span>
-</span><span class='line'>    <span class="n">enable_ssl</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span>
-</span><span class='line'>    <span class="n">join_channels</span> <span class="o">=&gt;</span> <span class="p">[</span><span class="sx">qw/arcade/</span><span class="p">],</span>
-</span><span class='line'>    <span class="n">respond_all</span>   <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span>
-</span><span class='line'><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'><span class="k">my</span> <span class="nv">$slack</span> <span class="o">=</span> <span class="n">slack</span><span class="p">(</span>
-</span><span class='line'>    <span class="n">token</span>    <span class="o">=&gt;</span> <span class="s">&#39;YOUR SLACK TOKEN&#39;</span><span class="p">,</span>
-</span><span class='line'>    <span class="n">channels</span> <span class="o">=&gt;</span> <span class="p">{},</span>
-</span><span class='line'>    <span class="n">as_user</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span>
-</span><span class='line'><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'><span class="n">AnySan</span><span class="o">-&gt;</span><span class="n">register_listener</span><span class="p">(</span>
-</span><span class='line'>    <span class="n">slack</span> <span class="o">=&gt;</span> <span class="p">{</span>
-</span><span class='line'>        <span class="n">event</span> <span class="o">=&gt;</span> <span class="s">&#39;message&#39;</span><span class="p">,</span>
-</span><span class='line'>        <span class="n">cb</span> <span class="o">=&gt;</span> <span class="k">sub </span><span class="p">{</span>
-</span><span class='line'>            <span class="k">my</span> <span class="nv">$receive</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
-</span><span class='line'>            <span class="c1"># fake irc privmsg</span>
-</span><span class='line'>            <span class="nv">$receive</span><span class="o">-&gt;</span><span class="p">{</span><span class="n">event</span><span class="p">}</span> <span class="o">=</span> <span class="s">&#39;privmsg&#39;</span><span class="p">;</span>
-</span><span class='line'>            <span class="nv">$receive</span><span class="o">-&gt;</span><span class="p">{</span><span class="n">message</span><span class="p">}</span> <span class="o">=~</span> <span class="sr">s/&lt;\@xxxxx&gt;:/unazusan:/</span><span class="p">;</span>
-</span><span class='line'>            <span class="n">AnySan</span><span class="o">-&gt;</span><span class="n">broadcast_message</span><span class="p">(</span><span class="nv">$receive</span><span class="p">);</span>
-</span><span class='line'>        <span class="p">},</span>
-</span><span class='line'>    <span class="p">}</span>
-</span><span class='line'><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'><span class="nv">$unazu_san</span><span class="o">-&gt;</span><span class="n">on_command</span><span class="p">(</span>
-</span><span class='line'>    <span class="n">help</span> <span class="o">=&gt;</span> <span class="k">sub </span><span class="p">{</span>
-</span><span class='line'>        <span class="k">my</span> <span class="p">(</span><span class="nv">$receive</span><span class="p">,</span> <span class="nv">@args</span><span class="p">)</span> <span class="o">=</span> <span class="nv">@_</span><span class="p">;</span>
-</span><span class='line'>        <span class="nv">$receive</span><span class="o">-&gt;</span><span class="n">reply</span><span class="p">(</span><span class="s">&#39;help &#39;</span><span class="o">.</span> <span class="p">(</span><span class="nv">$args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">||</span> <span class="s">&#39;&#39;</span><span class="p">));</span>
-</span><span class='line'>    <span class="p">}</span>
-</span><span class='line'><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'><span class="nv">$unazu_san</span><span class="o">-&gt;</span><span class="n">run</span><span class="p">;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>ape-slack</h2>
-
-<p><a href="https://github.com/m0t0k1ch1/ape">ape</a>のSlack対応版です。
-SlackRTM APIを使ってイベントを受け取ります。</p>
-
-<p>GoはWebSocketも比較的カンタンに使えるので、実はape-slackを使わなくても以下のようなコードだけでSlackRTM APIを使えてしまいます。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">import</span> <span class="p">(</span>
-</span><span class='line'>  <span class="s">&quot;encoding/json&quot;</span>
-</span><span class='line'>  <span class="s">&quot;fmt&quot;</span>
-</span><span class='line'>  <span class="s">&quot;net/http&quot;</span>
-</span><span class='line'>  <span class="s">&quot;net/url&quot;</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="s">&quot;golang.org/x/net/websocket&quot;</span>
-</span><span class='line'><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">resp</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">PostForm</span><span class="p">(</span><span class="s">&quot;https://slack.com/api/rtm.start&quot;</span><span class="p">,</span> <span class="nx">url</span><span class="p">.</span><span class="nx">Values</span><span class="p">{</span><span class="s">&quot;token&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s">&quot;YOUR SLACK TOKEN&quot;</span><span class="p">}})</span>
-</span><span class='line'>  <span class="kd">var</span> <span class="nx">r</span> <span class="kd">struct</span> <span class="p">{</span>
-</span><span class='line'>    <span class="nx">Url</span>   <span class="kt">string</span> <span class="s">`json:&quot;url&quot;`</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="nx">json</span><span class="p">.</span><span class="nx">NewDecoder</span><span class="p">(</span><span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">).</span><span class="nx">Decode</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">r</span><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="nx">ws</span> <span class="o">:=</span> <span class="nx">websocket</span><span class="p">.</span><span class="nx">Dial</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nx">Url</span><span class="p">,</span> <span class="s">&quot;&quot;</span><span class="p">,</span> <span class="s">&quot;https://slack.com/&quot;</span><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="k">for</span> <span class="p">{</span>
-</span><span class='line'>    <span class="kd">var</span> <span class="nx">data</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kd">interface</span><span class="p">{}</span>
-</span><span class='line'>    <span class="nx">websocket</span><span class="p">.</span><span class="nx">JSON</span><span class="p">.</span><span class="nx">Receive</span><span class="p">(</span><span class="nx">ws</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">data</span><span class="p">)</span>
-</span><span class='line'>    <span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="nx">data</span><span class="p">)</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Outgoing Webhookを使うとSlackから呼んでもらえるようセキュリティの設定が必要で面倒ですが、
-WebSocketならインターネッツに繋がった環境なら大抵そのままつながります。
-Outgoing WebhookならチャンネルにJOINしていなくてもイベントを受け取れたりして便利ですが、
-ちょっとしたボットならこちらの方がお手軽ですね。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[ISUCON5の予選に参加して惨敗してきた]]></title>
-    <link href="http://shogo82148.github.io/blog/2015/09/28/isucon5-qualifying/"/>
-    <updated>2015-09-28T06:16:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2015/09/28/isucon5-qualifying</id>
-    <content type="html"><![CDATA[<p>こんにちは、チームぽわわ4 feat. ネコトーストラボです。
-<a href="http://isucon.net/archives/45166636.html">ISUCON5</a>の予選に参加してきて見事に惨敗してきました。</p>
-
-<!-- More -->
-
-
-<h2>お題</h2>
-
-<p>「ISUxi」という名前の「高負荷に耐えられるSNSコミュニティサイト」。
-日記やコメントの投稿ができて、ホーム画面には「あしあと」「あなたへのコメント」「あなたの友だちの日記エントリ」「あなたの友だちのコメント」が表示されています。
-日記にはprivateとpublicの公開範囲があって、これの出し分けも必要です。
-やることおおい・・・。</p>
-
-<h2>やったこと</h2>
-
-<h3>〜開始</h3>
-
-<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">時間余裕でしょと思ったら全くそんなことなかった</p>&mdash; ひさいち (@hisaichi5518) <a href="https://twitter.com/hisaichi5518/status/647559828068413442">September 25, 2015</a></blockquote>
-
-
-<script async src="http://shogo82148.github.io//platform.twitter.com/widgets.js" charset="utf-8"></script>
-
-
-
-
-<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">時間余裕でしょと思ったら全くそんなことなかった</p>&mdash; Ichinose Shogo (@shogo82148) <a href="https://twitter.com/shogo82148/status/647560930629279744">September 25, 2015</a></blockquote>
-
-
-<script async src="http://shogo82148.github.io//platform.twitter.com/widgets.js" charset="utf-8"></script>
-
-
-
-
-<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">5時間で決着をつける <a href="https://t.co/AbnnSyHuZ8">https://t.co/AbnnSyHuZ8</a></p>&mdash; Ichinose Shogo (@shogo82148) <a href="https://twitter.com/shogo82148/status/647574277529583616">September 26, 2015</a></blockquote>
-
-
-<script async src="http://shogo82148.github.io//platform.twitter.com/widgets.js" charset="utf-8"></script>
-
-
-
-
-<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">バッテリ残量との戦いがすでに始まっている <a href="https://twitter.com/hashtag/ISUCON?src=hash">#ISUCON</a> <a href="https://twitter.com/hashtag/%E3%82%A2%E3%83%80%E3%83%97%E3%82%BF%E5%BF%98%E3%82%8C%E3%81%9F?src=hash">#アダプタ忘れた</a></p>&mdash; Ichinose Shogo (@shogo82148) <a href="https://twitter.com/shogo82148/status/647579466898608128">September 26, 2015</a></blockquote>
-
-
-<script async src="http://shogo82148.github.io//platform.twitter.com/widgets.js" charset="utf-8"></script>
-
-
-<h3>〜午前中</h3>
-
-<p>ソースコードをgit管理下に置くとか準備したあと、ソースコードを眺めてスキーマやクエリの改善ができないかを見てました。
-主にインデックスに不足は無いか、ループクエリは無いかを見てみました。
-インデックスに関しては必要そうなところにはすでに貼ってあって、これ以上することなさそうな感じ。
-ループクエリに関しては、ホーム画面の「あなたの友だちのコメント」の部分で、エントリ情報や、関連するユーザの情報を取ってくるところで見つけたので、JOINに書き換えられないか着手。
-しかし、実行計画が大きく変わって極端に遅くなってしまい、なんだこれーってなってました。</p>
-
-<h3>〜14時</h3>
-
-<p>SQLじゃ無理だってことで、Redisに切り替え。
-エントリやコメントをRedisのリストで管理して、
-エントリやコメントを投稿したときに友だち全員に配信する形式に変更しました。</p>
-
-<p>ある程度書けてこれで動くのでは！ってとこまで書けたんだけど、
-「投稿した時に友だちに配信」形式だと、友だち関係があとから変化するケースに対応できないという気がつく。
-いろいろ考えてみたものの、友だち関係が変化した場合は元の実装を使うしか思いつきませんでした。</p>
-
-<p>そしてここでバッテリー切れ・・・</p>
-
-<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">あと3%…(ヽ´ω`)</p>&mdash; Ichinose Shogo (@shogo82148) <a href="https://twitter.com/shogo82148/status/647648583173275648">September 26, 2015</a></blockquote>
-
-
-<script async src="http://shogo82148.github.io//platform.twitter.com/widgets.js" charset="utf-8"></script>
-
-
-<h3>〜16時</h3>
-
-<p>アダプタを借りることができて延命しました。ありがとうございます！</p>
-
-<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">アダプター貸していただけました。ありがとうございます！m(__)m <a href="https://twitter.com/hashtag/isucon?src=hash">#isucon</a></p>&mdash; Ichinose Shogo (@shogo82148) <a href="https://twitter.com/shogo82148/status/647650705411473409">September 26, 2015</a></blockquote>
-
-
-<script async src="http://shogo82148.github.io//platform.twitter.com/widgets.js" charset="utf-8"></script>
-
-
-<p>コメント部分のキャッシュが一応は動いたので、エントリ部分についてもRedisを使ったキャッシュ化を進めてました。
-200位スコアはあがるものの劇的な改善にはならず・・・(ヽ´ω`)</p>
-
-<h3>〜19時</h3>
-
-<p>コメントや日記部分これ以上の改善案を思いつけなかったので、諦めてあしあとの改善に着手。
-DATE()関数をGROUP BY句に使っていてインデックスが使えない感じだったので、
-カラムにしてインデックスが効くように書き換え。
-しかし、ベンチが最後まで通らず、この修正は断念・・・。</p>
-
-<p>ユーザのIDとかニックネームとかは書き換わらないので、
-perlのコードにユーザ情報を埋め込んでループクエリを削除みたいな姑息な手段で足掻いたりしましたが、
-コメントやエントリの一覧を取ってくるところがボトルネックなのでほとんど効果なしでした。</p>
-
-<h2>まとめ</h2>
-
-<p>忘れ物するし、全くスコア上がらないし、いいとこなしのまま終わってしまいました。
-毎回、Redisでの置き換えを頑張るけど元の実装を完全に置き換えることができずそこがボトルネックになって全然スコア上がらない、
-というパターンになってしまうので、実装能力を上げていきたい・・・。</p>
 ]]></content>
   </entry>
   
