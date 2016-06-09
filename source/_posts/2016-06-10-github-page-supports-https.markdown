@@ -20,7 +20,7 @@ categories: [web]
 画像・CSS・Javascript等のURLを、以下のようにnetwork-path referenceへの置き換えましょう。
 HTTPでページを開いた場合はHTTPで、HTTPSでページを開いた場合はHTTPSで、リソースを取得してくれます。
 
-``` html
+``` plain
 <a href="http://google.co.jp">
 <a href="//google.co.jp">
 ```
