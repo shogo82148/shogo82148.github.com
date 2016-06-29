@@ -47,3 +47,28 @@ HTTPとHTTPSは別URLとして扱われるようなので、過去の記事に�
 {% oembed https://twitter.com/masutaka/status/739747936318283776 %}
 
 はてなさんの方で対応してくれないかな・・・
+
+
+## 2016/06/30追記: DISQUSのマイグレーション
+
+記事にコメントをつけるのに使っている[DISQUS](https://disqus.com/)をマイグレーションするのを忘れてて、
+過去のコメントが見れなくなっていたので追記。
+
+[DISQUS](https://disqus.com/)のホームから「Admin」「Edit Settings」で設定画面を開き、
+Website URLの近くの「Changing domains? Learn how.」をクリックします。
+すると「Migration Tools」が開くので、「Start URL mapper」「you can download a CSV here」をクリック。
+5分くらいするとDISQUSがコメントを管理しているURL一覧がメールで届くので、
+それを元に新旧URLの対応表を作ります。
+
+今回はプロトコルの変更なので、以下のような雑なワンライナーで変換しました。
+(改行コードがCRLFで地味に面倒だった)
+
+```
+grep http:// links.csv | perl -e '$/="\r\n";while(<>){chomp;print "$_,@{[$_=~s/^http:/https:/r]}$/"}' > new-links.csv
+```
+
+最後に設定画面からCSVをアップロードします。
+以上で作業完了です。
+最後に「24時間以内に反映するよ」的なメッセージが表示されましたが、僕の場合は5分くらいで反映が確認できました。
+
+残るははてブ。はてなさん頼む〜〜〜。
