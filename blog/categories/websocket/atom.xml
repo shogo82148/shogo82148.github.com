@@ -2,10 +2,10 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
 
   <title><![CDATA[Category: websocket | Shogo's Blog]]></title>
-  <link href="http://shogo82148.github.io/blog/categories/websocket/atom.xml" rel="self"/>
-  <link href="http://shogo82148.github.io/"/>
-  <updated>2016-04-13T04:41:37+09:00</updated>
-  <id>http://shogo82148.github.io/</id>
+  <link href="https://shogo82148.github.io/blog/categories/websocket/atom.xml" rel="self"/>
+  <link href="https://shogo82148.github.io/"/>
+  <updated>2016-11-24T18:30:48+09:00</updated>
+  <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
     
@@ -15,9 +15,9 @@
   
   <entry>
     <title type="html"><![CDATA[ngrokみたいなHTTPプロキシを書いてみた]]></title>
-    <link href="http://shogo82148.github.io/blog/2016/03/14/http2-over-websocket/"/>
+    <link href="https://shogo82148.github.io/blog/2016/03/14/http2-over-websocket/"/>
     <updated>2016-03-14T22:59:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2016/03/14/http2-over-websocket</id>
+    <id>https://shogo82148.github.io/blog/2016/03/14/http2-over-websocket</id>
     <content type="html"><![CDATA[<p>開発中のWebアプリをみんなに試してほしいけど、
 サーバなんてなくて開発環境がローカルにしか無くて公開できないということは、
 開発初期段階だとよくあることだと思います。
@@ -55,95 +55,79 @@ Golangならきっと上手いこと<code>interface</code>を実装すれば、�
 
 <p>そうしてできたのが以下のサーバです。</p>
 
-<p>``` go server.go
-package main</p>
+<pre><code class="go server.go">package main
 
-<p>import (</p>
+import (
+    "errors"
+    "log"
+    "net/http"
+    "net/http/httputil"
+    "sync"
 
-<pre><code>"errors"
-"log"
-"net/http"
-"net/http/httputil"
-"sync"
+    "golang.org/x/net/http2"
+    "golang.org/x/net/websocket"
+)
 
-"golang.org/x/net/http2"
-"golang.org/x/net/websocket"
-</code></pre>
-
-<p>)</p>
-
-<p>type transport struct {</p>
-
-<pre><code>m      sync.Mutex
-t      http.RoundTripper
-closed chan struct{}
-</code></pre>
-
-<p>}</p>
-
-<p>var t *transport</p>
-
-<p>func main() {</p>
-
-<pre><code>t = &amp;transport{}
-s := websocket.Server{Handler: websocket.Handler(Handler)}
-http.Handle("/", s)
-go http.ListenAndServe(":3000", nil)
-http.ListenAndServe(":3001", &amp;httputil.ReverseProxy{
-    Transport: t,
-    Director: func(req *http.Request) {
-    },
-})
-</code></pre>
-
-<p>}</p>
-
-<p>func Handler(ws *websocket.Conn) {</p>
-
-<pre><code>log.Println("start new connection")
-t2 := &amp;http2.Transport{}
-conn, err := t2.NewClientConn(ws)
-if err != nil {
-    log.Println(err)
-    return
+type transport struct {
+    m      sync.Mutex
+    t      http.RoundTripper
+    closed chan struct{}
 }
 
-t.m.Lock()
-if t.t != nil {
-    t.m.Unlock()
-    log.Println("already connected.")
-    return
+var t *transport
+
+func main() {
+    t = &amp;transport{}
+    s := websocket.Server{Handler: websocket.Handler(Handler)}
+    http.Handle("/", s)
+    go http.ListenAndServe(":3000", nil)
+    http.ListenAndServe(":3001", &amp;httputil.ReverseProxy{
+        Transport: t,
+        Director: func(req *http.Request) {
+        },
+    })
 }
-t.t = conn
-t.m.Unlock()
-&lt;-t.closed
-log.Println("close connection")
-</code></pre>
 
-<p>}</p>
+func Handler(ws *websocket.Conn) {
+    log.Println("start new connection")
+    t2 := &amp;http2.Transport{}
+    conn, err := t2.NewClientConn(ws)
+    if err != nil {
+        log.Println(err)
+        return
+    }
 
-<p>func (t <em>transport) RoundTrip(req </em>http.Request) (*http.Response, error) {</p>
-
-<pre><code>t.m.Lock()
-t2 := t.t
-t.m.Unlock()
-if t2 == nil {
-    return nil, errors.New("connection not found")
-}
-res, err := t2.RoundTrip(req)
-if err != nil {
-    log.Println(err)
     t.m.Lock()
-    t.t = nil
+    if t.t != nil {
+        t.m.Unlock()
+        log.Println("already connected.")
+        return
+    }
+    t.t = conn
     t.m.Unlock()
-    t.closed &lt;- struct{}{}
-    return nil, err
+    &lt;-t.closed
+    log.Println("close connection")
 }
-return res, nil
-</code></pre>
 
-<p>}
-```</p>
+func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
+    t.m.Lock()
+    t2 := t.t
+    t.m.Unlock()
+    if t2 == nil {
+        return nil, errors.New("connection not found")
+    }
+    res, err := t2.RoundTrip(req)
+    if err != nil {
+        log.Println(err)
+        t.m.Lock()
+        t.t = nil
+        t.m.Unlock()
+        t.closed &lt;- struct{}{}
+        return nil, err
+    }
+    return res, nil
+}
+</code></pre>
 
 <p>複数Websocketのコネクションが張られた場合の処理が少し煩雑ですが、思いのほか短くかけました。
 3001番ポートに来たリクエストをWebsocket経由で転送します。
@@ -151,40 +135,33 @@ Websocketは3000番ポートで待ち受けです。</p>
 
 <p>これにアクセスするためのクライアントがこちら。</p>
 
-<p>``` go client.go
-package main</p>
+<pre><code class="go client.go">package main
 
-<p>import (</p>
+import (
+    "log"
+    "net/http/httputil"
+    "net/url"
 
-<pre><code>"log"
-"net/http/httputil"
-"net/url"
+    "golang.org/x/net/http2"
+    "golang.org/x/net/websocket"
+)
 
-"golang.org/x/net/http2"
-"golang.org/x/net/websocket"
-</code></pre>
+func main() {
+    origin := "http://localhost:3000/"
+    u := "ws://localhost:3000/"
+    ws, err := websocket.Dial(u, "", origin)
+    if err != nil {
+        log.Fatal(err)
+    }
 
-<p>)</p>
+    target, _ := url.Parse("http://localhost:8000/")
 
-<p>func main() {</p>
-
-<pre><code>origin := "http://localhost:3000/"
-u := "ws://localhost:3000/"
-ws, err := websocket.Dial(u, "", origin)
-if err != nil {
-    log.Fatal(err)
+    s := &amp;http2.Server{}
+    s.ServeConn(ws, &amp;http2.ServeConnOpts{
+        Handler: httputil.NewSingleHostReverseProxy(target),
+    })
 }
-
-target, _ := url.Parse("http://localhost:8000/")
-
-s := &amp;http2.Server{}
-s.ServeConn(ws, &amp;http2.ServeConnOpts{
-    Handler: httputil.NewSingleHostReverseProxy(target),
-})
 </code></pre>
-
-<p>}
-```</p>
 
 <p>Websocket経由でリクエストを受け付け、それを8000番ポートに転送します。
 こちらも非常に短くかけました。

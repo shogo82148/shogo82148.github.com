@@ -2,10 +2,10 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
 
   <title><![CDATA[Category: chrome | Shogo's Blog]]></title>
-  <link href="http://shogo82148.github.io/blog/categories/chrome/atom.xml" rel="self"/>
-  <link href="http://shogo82148.github.io/"/>
-  <updated>2016-04-13T04:41:37+09:00</updated>
-  <id>http://shogo82148.github.io/</id>
+  <link href="https://shogo82148.github.io/blog/categories/chrome/atom.xml" rel="self"/>
+  <link href="https://shogo82148.github.io/"/>
+  <updated>2016-11-24T18:30:48+09:00</updated>
+  <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
     
@@ -15,9 +15,9 @@
   
   <entry>
     <title type="html"><![CDATA[githubのタブサイズを変えるChrome拡張を作った]]></title>
-    <link href="http://shogo82148.github.io/blog/2014/02/10/github-tab-change/"/>
+    <link href="https://shogo82148.github.io/blog/2014/02/10/github-tab-change/"/>
     <updated>2014-02-10T08:01:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2014/02/10/github-tab-change</id>
+    <id>https://shogo82148.github.io/blog/2014/02/10/github-tab-change</id>
     <content type="html"><![CDATA[<p>にゃんぱすー。
 最近 C# のコードを見ることが多くなってきました。
 開発はVSやMonoDevelop等のIDEを使っているのですが、
@@ -56,6 +56,233 @@ githubのプレビューの一斉設定だけでなく、
 
 
 <p>(これ作ってるときに、githubのHTMLソースの中にtab-size-8というクラスを見つけたのですが、実はどこかに隠し機能としてあるんですかね？)</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Google Cloud Messaging for Chrome を試してみた]]></title>
+    <link href="https://shogo82148.github.io/blog/2013/05/15/google-cloud-messaging-for-chrome/"/>
+    <updated>2013-05-15T11:26:00+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2013/05/15/google-cloud-messaging-for-chrome</id>
+    <content type="html"><![CDATA[<p>少し前に<a href="http://developer.chrome.com/apps/cloudMessaging.html">Google Cloud Messaging for Chrome</a>
+が発表されました。
+Android向けに提供されていた Push 通信の仕組みである GCM の Chrome 版です。
+ちょうど GCM for Android に触っていたところだったので、
+for Chrome のほうも試してみることにしました。</p>
+
+<!-- More -->
+
+
+<h2>拡張機能の登録</h2>
+
+<p>公式ページの説明にしたがって、
+APIを使えるようにします。
+GCMはOAuth2.0で認証を行うので、</p>
+
+<ol>
+<li>クライアントIDを作る</li>
+<li>Refresh Token を作る</li>
+</ol>
+
+
+<p>という2ステップが必要。</p>
+
+<h3>クライアントIDを作る</h3>
+
+<p>まず、新しい OAuth2.0 のアプリを作成。
+拡張機能をアップロードする予定のGoogleアカウントで以下の作業して
+Client IDを作ります。</p>
+
+<ol>
+<li><a href="https://code.google.com/apis/console/">Google APIs Console</a> にログインする</li>
+<li><strong> Create&hellip; </strong> メニューから新しいプロジェクトを作成</li>
+<li>&ldquo;Services&rdquo; を開いて <strong> Google Cloud Messaging for Chrome API </strong> を有効化</li>
+<li>&ldquo;API Access&rdquo; を開いて <strong> Create an OAuth 2.0 cliend ID&hellip; </strong> というボタンをクリック</li>
+<li>branding information を適当に入力</li>
+<li>&ldquo;Application Type&rdquo; という項目の &ldquo;Web application&rdquo; を選択</li>
+<li>&ldquo;Create client ID"！！</li>
+</ol>
+
+
+<p>Client ID と Client Secret が表示されるのでメモしておきましょう。</p>
+
+<h3>Refresh Token を取得する</h3>
+
+<p>次に作成したクライアントIDを使って、
+OAuth2.0認証。</p>
+
+<ol>
+<li>シークレットウィンドウを開く(複数アカウント持ってない場合は必要ない)</li>
+<li><a href="https://developers.google.com/oauthplayground/">OAuth 2.0 Playground</a>へアクセス</li>
+<li><strong> OAuth2.0 Configuration </strong> をクリック</li>
+<li>&ldquo;Use your own OAuth credentials&rdquo; にチェックを入れ、Client ID と Client Secret を入力。"Close"を押して画面を閉じる</li>
+<li>&ldquo;Step 1"セクションの"Input your own scopes"に <code>https://www.googleapis.com/auth/gcm_for_chrome</code> を入力して、"Authorize APIs"ボタンを押す</li>
+<li>ログインページにリダイレクトされるので、拡張機能をアップロードする予定のアカウントで認証</li>
+<li>今度はアプリの認証画面に飛ぶので &ldquo;Allow Access&rdquo; をクリック</li>
+<li>&ldquo;Step 2&rdquo; セクションの &ldquo;Exchange authorization code for tokens&rdquo; ボタンをクリック</li>
+</ol>
+
+
+<p>以上の手順で Access Token と Refresh Token がもらえる。
+通知を送るには Access Token があれば十分なんだけど、有効期間が1時間程度しかない。
+有効期間が切れたら Refresh Token を使って再取得する必要がある。
+Refresh Token の方には有効期間は無いので、大事にとっておこう。</p>
+
+<p>(GCM for Android みたいに Sever key 作るだけじゃダメだったのかな・・・OAuth2.0認証面倒・・・)</p>
+
+<h2>拡張機能でGCMを使う</h2>
+
+<p>次は通知を受け取る拡張機能を作ります。</p>
+
+<h3>パーミッションを追加</h3>
+
+<p>まずはマニフェストを作成。
+permissions という項目に &ldquo;pushMessaging&rdquo; を追加しておくのがポイント。</p>
+
+<pre><code class="javascript manifest.json">{
+    "manifest_version": 2,
+    "name": "Shogo GCM Test",
+    "description": "It's test extension",
+    "version": "1.0",
+
+    "permissions": [
+        "pushMessaging",
+        "notifications"
+    ],
+
+    "background": {
+        "scripts": ["background.js"]
+    }
+}
+</code></pre>
+
+<h3>JavaScript を書く</h3>
+
+<p>通知を受け取るプログラムを書いてみます。</p>
+
+<pre><code class="javascript background.js">// ChannelIDを取得
+chrome.pushMessaging.getChannelId(false, function (response){
+    console.log(response); // 本当はサーバに送るんだけど、とりあえず、コンソールに出力しておく
+});
+
+// 通知を受け取るイベントハンドラを登録
+chrome.pushMessaging.onMessage.addListener(function (message) {
+    // デスクトップ通知で表示
+    var notification = webkitNotifications.createNotification(
+        '',
+        'Message',
+        message.payload
+    );
+    notification.show();
+});
+</code></pre>
+
+<h3>マーケットに公開！</h3>
+
+<p>ローカル環境でも Channel ID の取得まではできるんだけど、
+実際に Push 通知を受信するには、マーケットへのアップロードが必要。</p>
+
+<p><a href="https://chrome.google.com/webstore/developer/dashboard">デベロッパーダッシュボード</a>で
+新しいアイテムを追加ボタンを押し、さっきのファイルをzipで固めたファイルを送ります。
+公開するには初回のみ5ドル必要です。
+さすがに開発中のものを全世界に公開するのはまずいので、
+テスターにのみ公開というオプションを選択しておきましょう。</p>
+
+<h2>Push 通知を送る</h2>
+
+<p>さあ、Push通知を送ってみましょう。</p>
+
+<h3>新しい Access Token を取得する</h3>
+
+<p>と、そのまえに</p>
+
+<p>そろそろ最初にもらった Access Token の有効期間が切れているころだと思うので、
+新しいものを取得しておきましょう。</p>
+
+<p>最近 Perler になりつつあるので、Perlで書いてみます。
+Client ID, Client Secret, Refresh Token を Post するだけの簡単なスクリプトです。</p>
+
+<pre><code class="perl refresh_token.pl">#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Encode;
+use Data::Dumper;
+
+use Furl;
+use JSON::XS;
+
+my $refresh = 'your_refresh_token';
+my $client_id = 'your_client_id.apps.googleusercontent.com';
+my $client_secret = 'your_client_secret';
+
+my $furl = Furl-&gt;new;
+my $res = $furl-&gt;post(
+    'https://accounts.google.com/o/oauth2/token',
+    [ ],
+    [
+        client_id =&gt; $client_id,
+        client_secret =&gt; $client_secret,
+        refresh_token =&gt; $refresh,
+        grant_type =&gt; 'refresh_token',
+    ],
+);
+
+print Dumper decode_json($res-&gt;content);
+</code></pre>
+
+<h3>Push! Push! Push!</h3>
+
+<p>さあ、ようやくPush！</p>
+
+<p>Access Token をヘッダにつけ、
+メッセージをChannel IDと一緒に POST するだけ。</p>
+
+<p>Channel ID は <code>chrome://extensions/</code> から自分の拡張機能の選択、
+ビューを調査: _generated_background_page.html というところをクリックすると、
+Consoleが見れるのでそこから確認できます。</p>
+
+<pre><code class="perl push.pl">#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Encode;
+
+use Furl;
+use JSON::XS;
+
+my $access = 'your_access_token';
+my $channelId = 'your_channel_id';
+
+my $data = {
+    channelId =&gt; $channelId,
+    subchannelId =&gt; "0",
+    payload =&gt; decode_utf8(join(' ', @ARGV)),
+};
+
+my $furl = Furl-&gt;new;
+my $res = $furl-&gt;post(
+    'https://www.googleapis.com/gcm_for_chrome/v1/messages',
+    [
+        'Content-Type' =&gt; 'application/json',
+        'Authorization' =&gt; "Bearer $access",
+    ],
+    encode_json $data,
+);
+</code></pre>
+
+<pre><code class="bash Command">$ perl push.pl hogehoge
+</code></pre>
+
+<p>うまくいくと、デスクトップ通知が出るはず！</p>
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="http://developer.chrome.com/apps/cloudMessaging.html">Google Cloud Messaging for Chrome</a></li>
+<li><a href="http://blog.maripo.org/2013/05/gcm-for-chrome/">Google Cloud Messaging for Chromeを体験してみた</a></li>
+</ul>
+
 ]]></content>
   </entry>
   

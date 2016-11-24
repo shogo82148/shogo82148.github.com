@@ -1,0 +1,560 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: c# | Shogo's Blog]]></title>
+  <link href="https://shogo82148.github.io/blog/categories/c-number/atom.xml" rel="self"/>
+  <link href="https://shogo82148.github.io/"/>
+  <updated>2016-11-24T18:30:48+09:00</updated>
+  <id>https://shogo82148.github.io/</id>
+  <author>
+    <name><![CDATA[Shogo Ichinose]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[初期化なしのusing文ってOK？]]></title>
+    <link href="https://shogo82148.github.io/blog/2014/05/27/using-statement-without-instantiating/"/>
+    <updated>2014-05-27T13:48:00+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2014/05/27/using-statement-without-instantiating</id>
+    <content type="html"><![CDATA[<p>C# の using ステートメント、普通は変数の初期化とか new とかをまとめてやるものだと思ってたんですが、
+某プロジェクトでusing文をこんな感じで使っているのを見かけました。</p>
+
+<pre><code class="csharp">var hoge = new Hoge();
+using(hoge) { // using( var hoge = new Hoge() ) { ならよく見る
+    ...
+}
+</code></pre>
+
+<p>見慣れない書き方だったので、本当にリソース解放が行われているのか不安・・・。
+リソース解放が行われているのか調べてみました。</p>
+
+<!-- More -->
+
+
+<h2>まずは結論</h2>
+
+<ul>
+<li>リソース解放自体は行われているので、ちゃんと書いてあれば問題なし</li>
+<li>しかしエラーをコンパイル時に見つけられない場合があるので非推奨</li>
+</ul>
+
+
+<h2>逆アセンブルして調べてみた</h2>
+
+<p>コンパイル結果見ればちゃんとリソース解放されているかわかるよね！
+ってことでバイナリを逆アセンブルして調べてみました。</p>
+
+<h3>サンプルコード</h3>
+
+<p>検証に使ったのはこんなコード。</p>
+
+<pre><code class="csharp">using System;
+using System.IO;
+
+namespace UsingTest
+{
+    class MainClass
+    {
+        public static void Main (string[] args)
+        {
+            var sr = new StreamReader ("hoge.txt");
+            Console.WriteLine ("Hoge: {0}", sr.ReadLine ());
+        }
+    }
+}
+</code></pre>
+
+<p>僕はMac使いに転向したので、Monoを使います。
+<code>mcs</code>を使ってコンパイル、<code>monodis</code> ってのを使うとILを見れるらしいです。
+Windowsだったら .NET Framework SDK に <code>ildasm</code> ってのが付属してるので、それで見れるはず。</p>
+
+<pre><code class="bash">mcs UsingTest.cs
+monodis UsingTest.exe
+</code></pre>
+
+<p>標準出力にILが吐かれます。</p>
+
+<pre><code class="plain">.assembly extern mscorlib
+// ... 中略 ...
+.namespace UsingTest
+{
+  .class private auto ansi beforefieldinit MainClass
+     extends [mscorlib]System.Object
+  {
+
+    // method line 1
+    .method public hidebysig specialname rtspecialname
+           instance default void '.ctor' ()  cil managed
+    {
+        // Method begins at RVA 0x2050
+    // Code size 7 (0x7)
+    .maxstack 8
+    IL_0000:  ldarg.0
+    IL_0001:  call instance void object::'.ctor'()
+    IL_0006:  ret
+    } // end of method MainClass::.ctor
+
+    // method line 2
+    .method public static hidebysig
+           default void Main (string[] args)  cil managed
+    {
+        // Method begins at RVA 0x2058
+    .entrypoint
+    // Code size 29 (0x1d)
+    .maxstack 2
+    .locals init (
+        class [mscorlib]System.IO.StreamReader  V_0)
+        IL_0000:  nop
+        IL_0001:  ldstr "hoge.txt"
+        IL_0006:  newobj instance void class [mscorlib]System.IO.StreamReader::'.ctor'(string)
+        IL_000b:  stloc.0
+        IL_000c:  ldstr "Hoge: {0}"
+        IL_0011:  ldloc.0
+        IL_0012:  callvirt instance string class [mscorlib]System.IO.TextReader::ReadLine()
+        IL_0017:  call void class [mscorlib]System.Console::WriteLine(string, object)
+        IL_001c:  ret
+    } // end of method MainClass::Main
+
+  } // end of class UsingTest.MainClass
+}
+</code></pre>
+
+<p>Disposeが呼ばれてない！
+リソース解放されてないぞ！！</p>
+
+<h3>usingと一緒に初期化してみる</h3>
+
+<p>usingステートメントを使って解放処理をしてみます。</p>
+
+<pre><code class="csharp">using (var sr = new StreamReader ("hoge.txt")) {
+    Console.WriteLine ("Hoge: {0}", sr.ReadLine ());
+}
+</code></pre>
+
+<pre><code class="plain">// Code size 49 (0x31)
+.maxstack 2
+.locals init (
+    class [mscorlib]System.IO.StreamReader  V_0)
+IL_0000:  nop
+IL_0001:  ldstr "hoge.txt"
+IL_0006:  newobj instance void class [mscorlib]System.IO.StreamReader::'.ctor'(string)
+IL_000b:  stloc.0
+.try { // 0
+  L_000c:  nop
+  IL_000d:  ldstr "Hoge: {0}"
+  IL_0012:  ldloc.0
+  IL_0013:  callvirt instance string class [mscorlib]System.IO.TextReader::ReadLine()
+  IL_0018:  call void class [mscorlib]System.Console::WriteLine(string, object)
+  IL_001d:  nop
+  IL_001e:  leave IL_0030
+
+} // end .try 0
+finally { // 0
+  IL_0023:  ldloc.0
+  IL_0024:  brfalse IL_002f
+
+  IL_0029:  ldloc.0
+  IL_002a:  callvirt instance void class [mscorlib]System.IDisposable::Dispose()
+  IL_002f:  endfinally
+} // end handler 0
+IL_0030:  ret
+} // end of method MainClass::Main
+</code></pre>
+
+<p>自動的に try-finall節が作られ、その中でDisposeが呼ばれています。(たぶん。ILよくわかんないけど)</p>
+
+<h3>usingでは初期化しない</h3>
+
+<p>次にusingの外で初期化</p>
+
+<pre><code class="csharp">var sr = new StreamReader ("hoge.txt");
+using (sr) {
+    Console.WriteLine ("Hoge: {0}", sr.ReadLine ());
+}
+</code></pre>
+
+<pre><code class="plain">// Code size 51 (0x33)
+.locals init (
+    class [mscorlib]System.IO.StreamReader V_0,
+    class [mscorlib]System.IO.StreamReader V_1)
+IL_0000:  nop
+IL_0001:  ldstr "hoge.txt"
+IL_0006:  newobj instance void class [mscorlib]System.IO.StreamReader::'.ctor'(string)
+IL_000b:  stloc.0
+IL_000c:  ldloc.0
+IL_000d:  stloc.1
+.try { // 0
+  IL_000e:  nop
+  IL_000f:  ldstr "Hoge: {0}"
+  IL_0014:  ldloc.0
+  IL_0015:  callvirt instance string class [mscorlib]System.IO.TextReader::ReadLine()
+  IL_001a:  call void class [mscorlib]System.Console::WriteLine(string, object)
+  IL_001f:  nop
+  IL_0020:  leave IL_0032
+
+} // end .try 0
+finally  { // 0
+  IL_0025:  ldloc.1
+  IL_0026:  brfalse IL_0031
+
+  IL_002b:  ldloc.1
+  IL_002c:  callvirt instance void class [mscorlib]System.IDisposable::Dispose()
+  IL_0031:  endfinally
+} // end handler 0
+IL_0032:  ret
+</code></pre>
+
+<p>お、ちゃんとDispose呼ばれてるみたい！
+リソース解放はされてますね。</p>
+
+<p>上のILをよく見ると、ローカル変数が２つ定義されています。
+どうやらusingの中と外では同じ<code>sr</code>を指定しても別変数として扱われているようです。
+そのためにコピーするコードが追加されているので、コードサイズが2byteほど増えてます。</p>
+
+<h3>ブロックの外でインタンスを使う</h3>
+
+<p><code>sr</code> のスコープは<code>Main</code>メソッドの中全体なので、usingのあとに<code>sr</code> をいじってもコンパイルは通ります。</p>
+
+<pre><code class="csharp">var sr = new StreamReader ("hoge.txt");
+using (sr) {
+    Console.WriteLine ("Hoge: {0}", sr.ReadLine ());
+}
+Console.WriteLine ("Hoge: {0}", sr.ReadLine ()); // 例外を吐いて死ぬ
+</code></pre>
+
+<p>しかし、最後の行で例外を吐いて死にます。
+使えるけど使うと死ぬインスタンスが残ってるの気持ち悪いですね・・・。</p>
+
+<h2>再び結論</h2>
+
+<p>ちゃんと Dispose は呼ばれるので、usingを抜けたところでリソース解放は行われます。
+(たった2byteだけど)意味の無いILが生成されたり、コンパイル時のチェックがされなかったり、
+あんまりいいことが無いので積極的に使う理由はないですね。</p>
+
+<h2>SEE ALSO</h2>
+
+<p>ちゃんとドキュメントに書いてあった。</p>
+
+<ul>
+<li><a href="http://msdn.microsoft.com/ja-jp/library/yh598w02.aspx">using ステートメント (C# リファレンス)</a></li>
+</ul>
+
+
+<blockquote><p>リソース オブジェクトをインスタンス化して、変数を using ステートメントに渡すことは可能ですが、これはベスト プラクティスではありません。
+You can instantiate the resource object and then pass the variable to the using statement, but this is not a best practice.</p></blockquote>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[C# でお手軽にMessagePack解析！]]></title>
+    <link href="https://shogo82148.github.io/blog/2014/05/25/mini-message-pack/"/>
+    <updated>2014-05-25T01:38:00+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2014/05/25/mini-message-pack</id>
+    <content type="html"><![CDATA[<p><a href="https://github.com/shogo82148/MiniMessagePack">MiniMessagePack.cs</a>ってのを作った。
+C#のプロジェクトにファイルひとつ導入するだけで、お手軽にMessagePackの解析ができます。</p>
+
+<!-- More -->
+
+
+<h2>なんで作ったの？</h2>
+
+<p><a href="https://gist.github.com/darktable/1411710">MiniJSON</a> の置き換えが目的です。
+とあるUnityプロジェクトでMB単位のJSONをパースする箇所があってですね・・・
+パースにはMiniJSONを使っているのですが、さすがに対象がでかすぎて重たい。
+そこでMessagePackへの置き換えを検討してみたわけです。</p>
+
+<p>もちろん C# で動く MessagePack のパーサはすでにあって、
+<a href="https://github.com/msgpack/msgpack-cli">messagepack-cli</a>とか<a href="https://github.com/southwudang/msgpack-unity">messagepack-unity</a>とか見つけました。
+しかし、Unityのちょっと古いMonoで動かすためにちょっとゴニョゴニョしないといけなかったり、
+MiniJSON との互換性を取るためにもゴニョゴニョしないといけなかったり(実際やってみたらキャストが大量に失敗して辛かった・・・)、
+今回の用途にはちょっと高機能かなーと思ったので作っちゃいました！</p>
+
+<h2>つかいかた</h2>
+
+<h3>デコードする</h3>
+
+<p><code>byte</code>の配列を渡すとパースして返してくれます。
+配列は<code>List&lt;object&gt;</code>で、マップは<code>Dictionary&lt;string, object&gt;</code>になります。</p>
+
+<pre><code class="csharp">using MiniMessagePack;
+
+// it means {"compact":true,"schema":0} in JSON
+var msgpack = new byte[] {
+    0x82, 0xa7, 0x63, 0x6f, 0x6d, 0x70, 0x61, 0x63, 0x74, 0xc3,
+    0xa6, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x00
+};
+
+var packer = new MiniMessagePacker ();
+object unpacked_data = packer.Unpack (msgpack);
+/*
+unpacked_data = new Dictionary&lt;string, object&gt; {
+    { "compact", true },
+    { "schema", 0},
+};
+*/
+</code></pre>
+
+<h3>エンコードする</h3>
+
+<p>オブジェクトを渡すと MessagePack にエンコードして返してくれます。</p>
+
+<pre><code class="csharp">using MiniMessagePack;
+
+var unpacked_data = new Dictionary&lt;string, object&gt; {
+    { "compact", true },
+    { "schema", 0},
+};
+
+var packer = new MiniMessagePacker ();
+bytep[] msgpack = packer.Pack (unpacked_data);
+// msgpack = new byte[] { 0x82, 0xa7, ...};
+</code></pre>
+
+<h2>制限事項</h2>
+
+<p>MiniJSON との互換性を取るために、色々と制限事項があります。</p>
+
+<ul>
+<li>デコード時、整数型は全て<code>long</code>型
+
+<ul>
+<li>整数の大きさに関係なく全て<code>long</code>型になります</li>
+<li>符号なし64bit整数型も<code>long</code>として扱われるので、表現できる範囲が狭くなっていることに注意してください</li>
+</ul>
+</li>
+<li>デコード時、浮動小数点型は全て<code>double</code>型
+
+<ul>
+<li><code>float</code>も<code>double</code>として扱われます(拡張される方向への変換だから問題ないとは思うけど)</li>
+</ul>
+</li>
+<li>デコード時、マップ型のキーは文字列にキャストされます
+
+<ul>
+<li>MessagePackの仕様にはキーの型に制限が無いっぽい(？)けど、扱えるのは文字列の場合のみです</li>
+</ul>
+</li>
+<li>Extended は今のところ扱えません</li>
+</ul>
+
+
+<h2>ちょっとだけ使ってみた結果</h2>
+
+<p>正確なベンチマークとかはとってないのですが、
+実際のプロジェクトに組み込んでみた結果、MiniJSONとくらべて約2倍の速さでパースできました！</p>
+
+<p>MiniJSON を使っているプロジェクトであれば簡単に導入できるはずなので、ぜひ試してみてみてください。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Unity Test Tools を使ってみる]]></title>
+    <link href="https://shogo82148.github.io/blog/2013/12/21/unity-test-tools/"/>
+    <updated>2013-12-21T21:02:00+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2013/12/21/unity-test-tools</id>
+    <content type="html"><![CDATA[<p>みなさんこんにちは、
+最近つらいことばかりで元気のないいっちーです。
+少しでもつらいことを解消できないかと Unity Test Tools ってので遊んでみました。</p>
+
+<!-- More -->
+
+
+<h2>背景</h2>
+
+<p>最近あったつらいことのひとつに「Unityで作ってるプロジェクトで、機能拡張したときに間違えて一行消しちゃった！！！」
+ってのがあります。</p>
+
+<p>もちろん僕が消したわけじゃないですよ！！！
+僕サーバサイドエンジニアですから、Unityはいじりません。
+でも、一応修正コミットは見ていたはずなので、気がつけなかったのは残念です・・・。</p>
+
+<p>どんなにコード書く人が頑張っても、レビューする人が頑張っても、
+人間誰だってミスします。
+じゃあ、機械にやらせよう！テストコードだ！って話なんですが、
+コードカバレッジが低く、今回のつらい事例でもテストがありませんでした。
+一部書いてあるテストも、担当者が代わってからなんか怪しい・・・。</p>
+
+<p>あと、自分も手元でテスト動かしてみたのですが、今のテスト面倒・・・。</p>
+
+<ul>
+<li>Unityのコンソールにドバッと流れる
+
+<ul>
+<li>テストが全部通ったのか、失敗したのかよくわからない</li>
+</ul>
+</li>
+<li>ユニットテストを1項目だけやりたいとかどうやるんだろう
+
+<ul>
+<li>「テストの実行」が「シーンの再生」なので1項目とかどうすんの？</li>
+</ul>
+</li>
+</ul>
+
+
+<h2>Unity Test Tools</h2>
+
+<p>つらいので解決方法を探るべくインターネットの海をさまよっていたら Unity Test Tools なるものを発見。</p>
+
+<ul>
+<li><a href="http://blogs.unity3d.com/2013/12/18/unity-test-tools-released/">Unity Test Tools Released</a></li>
+</ul>
+
+
+<p>これを書いてる時点で、3日前のリリースです！
+タイムリーだ！！</p>
+
+<p>英語でよくわかんないけど、スクリーンショットはわかりやすくてかっこいいぞ！
+遊んでみよう！</p>
+
+<h2>事前準備</h2>
+
+<p>まず、Unity Testing Tools をダウンロードしてこよう！
+Aseet Store に並んでるので、ダウンロードボタンを押してしばらく待ってれば Unity が勝手に使える状態にしてくれます。</p>
+
+<h2>簡単なユニットテストを書いてみる</h2>
+
+<p>以前れもんさんが書いた「<a href="http://tech.kayac.com/archive/merry_christmas_2012.html">#24 「Unityでコルーチンも単体テストしよう」 tech.kayac.com Advent Calendar 2012</a>」を
+Unity Testing Tools でやってみました。</p>
+
+<p>テストの対象はこんな感じのクラスです(短く書けそうな部分があったのでちょっと変えた)。</p>
+
+<pre><code class="csharp">namespace MyProject {
+    public class Plan {
+        public string Title { get; private set; }
+        public string Text { get; private set; }
+
+        public Plan(string title, string text) {
+            Title = title;
+            Text = text;
+        }
+    }
+}
+</code></pre>
+
+<p>れもんさんの記事ではSharpUnitを使っていましたが、
+Unity Test Tools は NUnit というテストフレームワークを使うようです。
+Plan のテストをNUnitを使って書きなおしてみます。</p>
+
+<pre><code class="csharp">using System;
+using System.Threading;
+using NUnit.Framework;
+
+namespace MyProject.Tests
+{
+    class PlanTest
+    {
+        [TestCase("Christmas", "Let's play tennis!")]
+        [TestCase("Christmas", null)]
+        public void Constractor (string title, string text)
+        {
+            Plan plan = new Plan(title, text);
+            Assert.AreEqual(plan.Title, title);
+            Assert.AreEqual(plan.Text, text);
+        }
+    }
+}
+</code></pre>
+
+<p>TestCaseのお陰でずいぶんシンプルになりました。
+(にわかC#erの僕はアトリビュートが出てきてドキドキです)</p>
+
+<p>気をつけないといけないのは、このテストをEditorというフォルダの中に入れないといけないことです。
+Editorってフォルダの中に入っていると、普段のプロジェクトとは別のプロジェクトに所属するようになります。
+Unity Editor の動作を変更するようなスクリプトをかけるらしいので、その一つとして実装するってことですかね・・・？
+(そのへんよくわかってない)</p>
+
+<p>テストスクリプトを保存したら、あとはメニューから「Unity Test Tools」「Run all unit tests」をクリックするだけ！
+テスト用シーンを追加する必要もありません。簡単！</p>
+
+<p>「Unit Test Runner」を使えば、テストを1項目だけテストすることもできるし、
+ファイルを右クリックしたときのメニューから「Load tests from this file」を選べばファイルごとにテストもできます。</p>
+
+<h2>結合テストをやってみる</h2>
+
+<p>次にネットワーク周りのテストをやってみます。
+テストするのはこのクラスです。</p>
+
+<pre><code class="csharp">using UnityEngine;
+using System.Collections;
+
+namespace MyProject {
+    public class InternetPlanFactory {
+        public Plan Plan { get; private set; }
+
+        // 特定のURLにアクセスし、1行目をタイトル、2行目をテキストとしてオブジェクトを生成
+        public IEnumerator PlanFromUrl(string url) {
+            WWW www = new WWW(url);
+            yield return www;
+            if (www.error != null) {
+                // ノープランだ
+                this.Plan = null;
+            } else {
+                // 適当にPlanつくる
+                string[] lines = www.text.Split('\n');
+                string title = lines[0];
+                string text = lines.Length &gt; 1 ? lines[1] : "";
+                this.Plan = new Plan(title, text);
+            }
+        }
+    }
+}
+</code></pre>
+
+<p>このクラスのテストには <code>GameObject</code> が必要みたいです。
+<code>GameObject</code> って何者？とUnity情弱の僕は思うのですが、なにやらシーンから取ってこないといけないものらしいです。
+ユニットテストでも頑張ればとってこれるのかもしれないけど、
+結合テストとしてシーンの中で実行してみます。</p>
+
+<p>結合テストを作るには、新しいシーンを追加し、
+そのシーンを開いた状態で「Integration Test Runner」を開きます。
+ここで緑の「＋」ボタンを押すとシーンに「TestRunner」と新しいテストが現れます。
+さらにテストの子として新しい<code>GameObject</code>を追加しておきましょう。</p>
+
+<p>次に以下の様なスクリプトを書きます。</p>
+
+<pre><code class="csharp">using UnityEngine;
+using System;
+using System.Collections;
+using MyProject;
+
+public class Hoge : MonoBehaviour {
+    void Start () {
+        StartCoroutine(TestPlanFromUrlOk());
+    }
+
+    private IEnumerator TestPlanFromUrlOk() {
+        InternetPlanFactory factory = new InternetPlanFactory();
+        yield return StartCoroutine(factory.PlanFromUrl("http://example.com"));
+
+        if(factory.Plan == null)
+            throw new Exception("Plan is null");
+        if(factory.Plan.Title == null)
+            throw new Exception("Plan.Title is null");
+        if(factory.Plan.Text == null)
+            throw new Exception("Plan.Text is null");
+        IntegrationTest.Pass(gameObject);
+        // IntegrationTest.Fail(gameObject); // と書くとテスト失敗できる
+    }
+}
+</code></pre>
+
+<p>(アサーションの仕方が残念すぎるけど力尽きた)</p>
+
+<p>このスクリプトをさっき作った<code>GameObject</code>にアタッチすれば準備完了です。
+「Integration Test Runner」からテスト可能になります。</p>
+
+<h2>おわり</h2>
+
+<p>今日はここまで。
+今までも一応テストあったけど、Unity Testing Tools使うともっと便利に書けそう。
+きっとぴーちんとかがもっと便利な機能を見つけてくれる。</p>
+
+<p>ちなみに <code>Plan("Christmas", null)</code> なので、
+<code>Text != null</code> なURLを募集してます。</p>
+]]></content>
+  </entry>
+  
+</feed>

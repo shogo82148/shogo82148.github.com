@@ -2,10 +2,10 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
 
   <title><![CDATA[Category: go | Shogo's Blog]]></title>
-  <link href="http://shogo82148.github.io/blog/categories/go/atom.xml" rel="self"/>
-  <link href="http://shogo82148.github.io/"/>
-  <updated>2016-04-13T04:41:37+09:00</updated>
-  <id>http://shogo82148.github.io/</id>
+  <link href="https://shogo82148.github.io/blog/categories/go/atom.xml" rel="self"/>
+  <link href="https://shogo82148.github.io/"/>
+  <updated>2016-11-24T18:30:48+09:00</updated>
+  <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
     
@@ -15,9 +15,9 @@
   
   <entry>
     <title type="html"><![CDATA[net/httpで安全に静的ファイルを返す]]></title>
-    <link href="http://shogo82148.github.io/blog/2016/04/13/serving-static-files-in-golang/"/>
+    <link href="https://shogo82148.github.io/blog/2016/04/13/serving-static-files-in-golang/"/>
     <updated>2016-04-13T02:29:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2016/04/13/serving-static-files-in-golang</id>
+    <id>https://shogo82148.github.io/blog/2016/04/13/serving-static-files-in-golang</id>
     <content type="html"><![CDATA[<p><a href="http://konboi.hatenablog.com/entry/2016/04/12/121105">net/httpで静的ファイルを返す</a>で、
 <code>http.ServeFile</code>を使っていてアレ？と思ったのでちょっと詳しく調べてみました。
 (<code>http.FileServer</code>を使うものだと思ってたため)</p>
@@ -38,11 +38,10 @@
 
 <p>紹介されているのは以下のコードです。</p>
 
-<p><code>go
-http.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {
+<pre><code class="go">http.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {
   http.ServeFile(w, r, r.URL.Path[1:])
 })
-</code></p>
+</code></pre>
 
 <p>しかし、参照先の「<a href="http://stackoverflow.com/questions/25945538/go-golang-to-serve-a-specific-html-file">Go Golang to serve a specific html file</a>」には
 <strong>Actually, do not do that.</strong> (やっちゃいけない)とコメントされています。
@@ -51,45 +50,36 @@ http.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {
 
 <p>脆弱性再現のために、以下の様なコードを書いてGo1.5でコンパイルして実行してみました。</p>
 
-<p>``` go
-package main</p>
+<pre><code class="go">package main
 
-<p>import (</p>
+import (
+    "net/http"
+    "strings"
+)
 
-<pre><code>"net/http"
-"strings"
+func main() {
+    http.ListenAndServe(":3000", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        if strings.HasPrefix(r.URL.Path, "/static/") {
+            http.ServeFile(w, r, r.URL.Path[1:])
+        } else {
+            http.NotFound(w, r)
+        }
+    }))
+}
 </code></pre>
-
-<p>)</p>
-
-<p>func main() {</p>
-
-<pre><code>http.ListenAndServe(":3000", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-    if strings.HasPrefix(r.URL.Path, "/static/") {
-        http.ServeFile(w, r, r.URL.Path[1:])
-    } else {
-        http.NotFound(w, r)
-    }
-}))
-</code></pre>
-
-<p>}
-```</p>
 
 <p><code>..</code>を含んだパスをリクエストしてみます。(実行した場所によって<code>..</code>の数は変わるので適宜調整してみてください)</p>
 
-<p>``` plain
-$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
+<pre><code class="plain">$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
 * About to connect() to localhost port 3000 (#0)
 *   Trying ::1... connected
-* Connected to localhost (::1) port 3000 (#0)</p>
-
-<blockquote><p>GET /static/../../../.ssh/id_rsa HTTP/1.1
-User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
-Host: localhost:3000
-Accept: <em>/</em></p>
-
-<p>&lt; HTTP/1.1 200 OK
+* Connected to localhost (::1) port 3000 (#0)
+&gt; GET /static/../../../.ssh/id_rsa HTTP/1.1
+&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
+&gt; Host: localhost:3000
+&gt; Accept: */*
+&gt;
+&lt; HTTP/1.1 200 OK
 &lt; Accept-Ranges: bytes
 &lt; Content-Length: 1679
 &lt; Content-Type: text/plain; charset=utf-8
@@ -101,30 +91,29 @@ Accept: <em>/</em></p>
 -----END RSA PRIVATE KEY-----
 * Connection #0 to host localhost left intact
 * Closing connection #0
-```</p></blockquote>
+</code></pre>
 
 <p>macのcurlで試したらクライアント側で相対パスを解決した状態でリクエストが飛んでしまって上手く行きませんでした。
 オプションで外す方法がよくわかなかったので、<code>telnet</code>で叩いてみた例も載せておきます。</p>
 
-<p>``` plain
-$ telnet localhost 3000
+<pre><code class="plain">$ telnet localhost 3000
 Trying ::1...
 Connected to localhost.
-Escape character is '<sup>]'.</sup>
-GET /static/../../../.ssh/id_rsa HTTP/1.0</p>
+Escape character is '^]'.
+GET /static/../../../.ssh/id_rsa HTTP/1.0
 
-<p>HTTP/1.0 200 OK
+HTTP/1.0 200 OK
 Accept-Ranges: bytes
 Content-Length: 1679
 Content-Type: text/plain; charset=utf-8
 Last-Modified: Fri, 13 Jun 2014 04:57:05 GMT
-Date: Tue, 12 Apr 2016 18:02:56 GMT</p>
+Date: Tue, 12 Apr 2016 18:02:56 GMT
 
-<p>-----BEGIN RSA PRIVATE KEY-----
+-----BEGIN RSA PRIVATE KEY-----
 (中略)
 -----END RSA PRIVATE KEY-----
 Connection closed by foreign host.
-```</p>
+</code></pre>
 
 <p>ああ、僕の秘密鍵が・・・。</p>
 
@@ -135,27 +124,25 @@ Connection closed by foreign host.
 <p>Go1.6以降では修正されており、
 同じコードをGo1.6でコンパイルしてcurlで叩くと400が帰ってきます。</p>
 
-<p>``` plain
-$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
+<pre><code class="plain">$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
 * About to connect() to localhost port 3000 (#0)
 *   Trying ::1... connected
-* Connected to localhost (::1) port 3000 (#0)</p>
-
-<blockquote><p>GET /static/../../../.ssh/id_rsa HTTP/1.1
-User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
-Host: localhost:3000
-Accept: <em>/</em></p>
-
-<p>&lt; HTTP/1.1 400 Bad Request
+* Connected to localhost (::1) port 3000 (#0)
+&gt; GET /static/../../../.ssh/id_rsa HTTP/1.1
+&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
+&gt; Host: localhost:3000
+&gt; Accept: */*
+&gt; 
+&lt; HTTP/1.1 400 Bad Request
 &lt; Content-Type: text/plain; charset=utf-8
 &lt; X-Content-Type-Options: nosniff
 &lt; Date: Tue, 12 Apr 2016 18:12:46 GMT
 &lt; Content-Length: 17
-&lt;
+&lt; 
 invalid URL path
 * Connection #0 to host localhost left intact
 * Closing connection #0
-```</p></blockquote>
+</code></pre>
 
 <h3><code>http.ServeMux</code>を使う</h3>
 
@@ -164,103 +151,88 @@ invalid URL path
 HTTPハンドラに渡ってくるときには、必ず相対パスが含まれていない状態になっています。
 (これに最初は気が付かず、脆弱性が再現しないので困ってた。)</p>
 
-<p>``` go
-package main</p>
+<pre><code class="go">package main
 
-<p>import "net/http"</p>
+import "net/http"
 
-<p>func main() {
+func main() {
   // 内部でhttp.ServeMuxを使ってくれる
-  http.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {</p>
-
-<pre><code>// r.URLには相対パスが含まれない形で渡ってくる
-http.ServeFile(w, r, r.URL.Path[1:])
-</code></pre>
-
-<p>  })
+  http.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {
+    // r.URLには相対パスが含まれない形で渡ってくる
+    http.ServeFile(w, r, r.URL.Path[1:])
+  })
   http.ListenAndServe(":3000", nil)
 }
-```</p>
+</code></pre>
 
 <p>相対パスを含んだリクエストを投げてもアクセスはできません。</p>
 
-<p>``` plain
-$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
+<pre><code class="plain">$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
 * About to connect() to localhost port 3000 (#0)
 *   Trying ::1... connected
-* Connected to localhost (::1) port 3000 (#0)</p>
-
-<blockquote><p>GET /static/../../../.ssh/id_rsa HTTP/1.1
-User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
-Host: localhost:3000
-Accept: <em>/</em></p>
-
-<p>&lt; HTTP/1.1 301 Moved Permanently
+* Connected to localhost (::1) port 3000 (#0)
+&gt; GET /static/../../../.ssh/id_rsa HTTP/1.1
+&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
+&gt; Host: localhost:3000
+&gt; Accept: */*
+&gt; 
+&lt; HTTP/1.1 301 Moved Permanently
 &lt; Location: /.ssh/id_rsa
 &lt; Date: Tue, 12 Apr 2016 18:14:49 GMT
 &lt; Content-Length: 47
 &lt; Content-Type: text/html; charset=utf-8
-&lt;
-<a href="http://shogo82148.github.io/.ssh/id_rsa">Moved Permanently</a>.</p></blockquote>
+&lt; 
+&lt;a href="https://shogo82148.github.io/.ssh/id_rsa"&gt;Moved Permanently&lt;/a&gt;.
 
-<ul>
-<li>Connection #0 to host localhost left intact</li>
-<li>Closing connection #0
-```</li>
-</ul>
-
+* Connection #0 to host localhost left intact
+* Closing connection #0
+</code></pre>
 
 <h3><code>http.FileServer</code>を使う</h3>
 
 <p><code>http.Dir</code>と<code>http.FileServer</code>を使うとルートディレクトリを指定でき、
 その外へはアクセスできなくなるので想定外のファイルが見えてしまうことはありません。</p>
 
-<p>``` go
-package main</p>
+<pre><code class="go">package main
 
-<p>import (
+import (
   "net/http"
   "strings"
-)</p>
+)
 
-<p>func main() {
+func main() {
   fileServer := http.StripPrefix("/static/", http.FileServer(http.Dir("static")))
-  http.ListenAndServe(":3000", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {</p>
-
-<pre><code>if strings.HasPrefix(r.URL.Path, "/static/") {
-  fileServer.ServeHTTP(w, r)
-} else {
-  http.NotFound(w, r)
+  http.ListenAndServe(":3000", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+    if strings.HasPrefix(r.URL.Path, "/static/") {
+      fileServer.ServeHTTP(w, r)
+    } else {
+      http.NotFound(w, r)
+    }
+  }))
 }
 </code></pre>
 
-<p>  }))
-}
-```</p>
-
 <p>相対パスを含んだURLにアクセスしても404になって見れません。</p>
 
-<p>``` plain
-$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
+<pre><code class="plain">$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
 * About to connect() to localhost port 3000 (#0)
 *   Trying ::1... connected
-* Connected to localhost (::1) port 3000 (#0)</p>
-
-<blockquote><p>GET /static/../../../.ssh/id_rsa HTTP/1.1
-User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
-Host: localhost:3000
-Accept: <em>/</em></p>
-
-<p>&lt; HTTP/1.1 404 Not Found
+* Connected to localhost (::1) port 3000 (#0)
+&gt; GET /static/../../../.ssh/id_rsa HTTP/1.1
+&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
+&gt; Host: localhost:3000
+&gt; Accept: */*
+&gt; 
+&lt; HTTP/1.1 404 Not Found
 &lt; Content-Type: text/plain; charset=utf-8
 &lt; X-Content-Type-Options: nosniff
 &lt; Date: Tue, 12 Apr 2016 18:39:34 GMT
 &lt; Content-Length: 19
-&lt;
+&lt; 
 404 page not found
 * Connection #0 to host localhost left intact
 * Closing connection #0
-```</p></blockquote>
+</code></pre>
 
 <h3><code>http.ServeFile</code>に定数を渡す</h3>
 
@@ -279,21 +251,17 @@ Serves the html file in static directory.</p>
 
 <p><code>http.Handle("/hello", http.FileServer(http.Dir("static/hello.html")))</code></p></blockquote>
 
-<p>``` go
-package main</p>
+<pre><code class="go">package main
 
-<p>import "net/http"</p>
+import "net/http"
 
-<p>func main() {
-  http.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {</p>
-
-<pre><code>http.ServeFile(w, r, "static/hello.html")
-</code></pre>
-
-<p>  })
+func main() {
+  http.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
+    http.ServeFile(w, r, "static/hello.html")
+  })
   http.ListenAndServe(":3000", nil)
 }
-```</p>
+</code></pre>
 
 <p>回答者がActually, do not do thatとコメントしているのは<code>http.ServeFile</code>に<code>r.URL.Path[1:]</code>を渡すことで、
 <code>http.ServeFile</code>自体が悪いわけではありません。
@@ -314,37 +282,35 @@ package main</p>
 
 <p><a href="https://golang.org/pkg/net/http/#example_FileServer">godocのexample</a>どおりにやるのが一番。</p>
 
-<p>``` go
-package main</p>
+<pre><code class="go">package main
 
-<p>import "net/http"</p>
+import "net/http"
 
-<p>func main() {
+func main() {
   http.HandleFunc("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
   http.ListenAndServe(":3000", nil)
 }
-```</p>
+</code></pre>
 ]]></content>
   </entry>
   
   <entry>
     <title type="html"><![CDATA[PerlでもGoでも実行できるQuine書いた]]></title>
-    <link href="http://shogo82148.github.io/blog/2016/04/06/ployglot-quine-of-golang-and-perl/"/>
+    <link href="https://shogo82148.github.io/blog/2016/04/06/ployglot-quine-of-golang-and-perl/"/>
     <updated>2016-04-06T10:07:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2016/04/06/ployglot-quine-of-golang-and-perl</id>
+    <id>https://shogo82148.github.io/blog/2016/04/06/ployglot-quine-of-golang-and-perl</id>
     <content type="html"><![CDATA[<p><a href="http://shogo82148.github.io/blog/2016/04/05/polyglot-of-perl-and-golang/">昨日のPolyglot</a>を元にPerlでもGoでも実行できるQuine書いた。</p>
 
 <!-- More -->
 
 
-<p><code>
-package main;import("fmt");var(q=`printf'package main;import("fmt");var(q%c%c%s%c/*%c);sub import{}sub var{$_%cshift%c~s!%c(.*)%c/\*!$1!gr;eval}%c__END__%c',61,96,$_,96,61,61,61,96,96,10,10;print&lt;DATA&gt;`/*=);sub import{}sub var{$_=shift=~s!`(.*)`/\*!$1!gr;eval}
+<pre><code>package main;import("fmt");var(q=`printf'package main;import("fmt");var(q%c%c%s%c/*%c);sub import{}sub var{$_%cshift%c~s!%c(.*)%c/\*!$1!gr;eval}%c__END__%c',61,96,$_,96,61,61,61,96,96,10,10;print&lt;DATA&gt;`/*=);sub import{}sub var{$_=shift=~s!`(.*)`/\*!$1!gr;eval}
 __END__
 */);func main(){s:=`package main;import("fmt");var(q=%c%s%c/*=);sub import{}sub var{$_=shift=~s!%c(.*)%c/\*!$1!gr;eval}
 __END__
 */);func main(){s:=%c%s%c;fmt.Printf(s,96,q,96,96,96,96,s,96)}
 `;fmt.Printf(s,96,q,96,96,96,96,s,96)}
-</code></p>
+</code></pre>
 
 <p>Perlで実行してもGoで実行しても自分自身を出力します。</p>
 ]]></content>
@@ -352,9 +318,9 @@ __END__
   
   <entry>
     <title type="html"><![CDATA[数値と文字列がごちゃ混ぜになっているJSONをよしなにParseするやつ作った]]></title>
-    <link href="http://shogo82148.github.io/blog/2016/03/23/go-weaktyping/"/>
+    <link href="https://shogo82148.github.io/blog/2016/03/23/go-weaktyping/"/>
     <updated>2016-03-23T20:44:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2016/03/23/go-weaktyping</id>
+    <id>https://shogo82148.github.io/blog/2016/03/23/go-weaktyping</id>
     <content type="html"><![CDATA[<p>Goは数値と文字列を厳格に区別しますが、他の言語もそうとは限りません。
 例えばPerlは数値と文字列を自動変換してくれるので、気をつけていないといつの間にか数値が文字列になっていたりします。
 その言語の中に閉じていいれば問題ないのですが、Goとやり取りしようとすると困ります。
@@ -389,39 +355,32 @@ JSONに変換すると文字列になってしまいます。
 適当にUnmarshalして欲しいところでbuiltinの型の代わりに指定するだけです。
 以下は整数型をUnmarshalする例です。</p>
 
-<p>``` go
-package main</p>
+<pre><code class="go">package main
 
-<p>import (</p>
+import (
+    "encoding/json"
+    "fmt"
+    "log"
 
-<pre><code>"encoding/json"
-"fmt"
-"log"
+    "github.com/shogo82148/go-weaktyping"
+)
 
-"github.com/shogo82148/go-weaktyping"
-</code></pre>
+func main() {
+    ptr := &amp;struct {
+        Foo weaktyping.Int `json:"foo"`
+    }{}
 
-<p>)</p>
+    if err := json.Unmarshal([]byte(`{"foo":123}`), ptr); err != nil {
+        log.Fatal(err)
+    }
+    fmt.Println("Foo:", ptr.Foo)
 
-<p>func main() {</p>
-
-<pre><code>ptr := &amp;struct {
-    Foo weaktyping.Int `json:"foo"`
-}{}
-
-if err := json.Unmarshal([]byte(`{"foo":123}`), ptr); err != nil {
-    log.Fatal(err)
+    if err := json.Unmarshal([]byte(`{"foo":"456"}`), ptr); err != nil {
+        log.Fatal(err)
+    }
+    fmt.Println("Foo:", ptr.Foo)
 }
-fmt.Println("Foo:", ptr.Foo)
-
-if err := json.Unmarshal([]byte(`{"foo":"456"}`), ptr); err != nil {
-    log.Fatal(err)
-}
-fmt.Println("Foo:", ptr.Foo)
 </code></pre>
-
-<p>}
-```</p>
 
 <p><code>{"foo":123}</code>が正常にUnmarshalできるのはもちろん、
 通常はエラーになってしまう<code>{"foo":"456"}</code>のUnmarshalも問題なく行えます。
@@ -466,9 +425,9 @@ go-weaktypingを使うとすべてのUnmarshal時に有効になってしまっ�
   
   <entry>
     <title type="html"><![CDATA[ngrokみたいなHTTPプロキシを書いてみた]]></title>
-    <link href="http://shogo82148.github.io/blog/2016/03/14/http2-over-websocket/"/>
+    <link href="https://shogo82148.github.io/blog/2016/03/14/http2-over-websocket/"/>
     <updated>2016-03-14T22:59:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2016/03/14/http2-over-websocket</id>
+    <id>https://shogo82148.github.io/blog/2016/03/14/http2-over-websocket</id>
     <content type="html"><![CDATA[<p>開発中のWebアプリをみんなに試してほしいけど、
 サーバなんてなくて開発環境がローカルにしか無くて公開できないということは、
 開発初期段階だとよくあることだと思います。
@@ -506,95 +465,79 @@ Golangならきっと上手いこと<code>interface</code>を実装すれば、�
 
 <p>そうしてできたのが以下のサーバです。</p>
 
-<p>``` go server.go
-package main</p>
+<pre><code class="go server.go">package main
 
-<p>import (</p>
+import (
+    "errors"
+    "log"
+    "net/http"
+    "net/http/httputil"
+    "sync"
 
-<pre><code>"errors"
-"log"
-"net/http"
-"net/http/httputil"
-"sync"
+    "golang.org/x/net/http2"
+    "golang.org/x/net/websocket"
+)
 
-"golang.org/x/net/http2"
-"golang.org/x/net/websocket"
-</code></pre>
-
-<p>)</p>
-
-<p>type transport struct {</p>
-
-<pre><code>m      sync.Mutex
-t      http.RoundTripper
-closed chan struct{}
-</code></pre>
-
-<p>}</p>
-
-<p>var t *transport</p>
-
-<p>func main() {</p>
-
-<pre><code>t = &amp;transport{}
-s := websocket.Server{Handler: websocket.Handler(Handler)}
-http.Handle("/", s)
-go http.ListenAndServe(":3000", nil)
-http.ListenAndServe(":3001", &amp;httputil.ReverseProxy{
-    Transport: t,
-    Director: func(req *http.Request) {
-    },
-})
-</code></pre>
-
-<p>}</p>
-
-<p>func Handler(ws *websocket.Conn) {</p>
-
-<pre><code>log.Println("start new connection")
-t2 := &amp;http2.Transport{}
-conn, err := t2.NewClientConn(ws)
-if err != nil {
-    log.Println(err)
-    return
+type transport struct {
+    m      sync.Mutex
+    t      http.RoundTripper
+    closed chan struct{}
 }
 
-t.m.Lock()
-if t.t != nil {
-    t.m.Unlock()
-    log.Println("already connected.")
-    return
+var t *transport
+
+func main() {
+    t = &amp;transport{}
+    s := websocket.Server{Handler: websocket.Handler(Handler)}
+    http.Handle("/", s)
+    go http.ListenAndServe(":3000", nil)
+    http.ListenAndServe(":3001", &amp;httputil.ReverseProxy{
+        Transport: t,
+        Director: func(req *http.Request) {
+        },
+    })
 }
-t.t = conn
-t.m.Unlock()
-&lt;-t.closed
-log.Println("close connection")
-</code></pre>
 
-<p>}</p>
+func Handler(ws *websocket.Conn) {
+    log.Println("start new connection")
+    t2 := &amp;http2.Transport{}
+    conn, err := t2.NewClientConn(ws)
+    if err != nil {
+        log.Println(err)
+        return
+    }
 
-<p>func (t <em>transport) RoundTrip(req </em>http.Request) (*http.Response, error) {</p>
-
-<pre><code>t.m.Lock()
-t2 := t.t
-t.m.Unlock()
-if t2 == nil {
-    return nil, errors.New("connection not found")
-}
-res, err := t2.RoundTrip(req)
-if err != nil {
-    log.Println(err)
     t.m.Lock()
-    t.t = nil
+    if t.t != nil {
+        t.m.Unlock()
+        log.Println("already connected.")
+        return
+    }
+    t.t = conn
     t.m.Unlock()
-    t.closed &lt;- struct{}{}
-    return nil, err
+    &lt;-t.closed
+    log.Println("close connection")
 }
-return res, nil
-</code></pre>
 
-<p>}
-```</p>
+func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
+    t.m.Lock()
+    t2 := t.t
+    t.m.Unlock()
+    if t2 == nil {
+        return nil, errors.New("connection not found")
+    }
+    res, err := t2.RoundTrip(req)
+    if err != nil {
+        log.Println(err)
+        t.m.Lock()
+        t.t = nil
+        t.m.Unlock()
+        t.closed &lt;- struct{}{}
+        return nil, err
+    }
+    return res, nil
+}
+</code></pre>
 
 <p>複数Websocketのコネクションが張られた場合の処理が少し煩雑ですが、思いのほか短くかけました。
 3001番ポートに来たリクエストをWebsocket経由で転送します。
@@ -602,40 +545,33 @@ Websocketは3000番ポートで待ち受けです。</p>
 
 <p>これにアクセスするためのクライアントがこちら。</p>
 
-<p>``` go client.go
-package main</p>
+<pre><code class="go client.go">package main
 
-<p>import (</p>
+import (
+    "log"
+    "net/http/httputil"
+    "net/url"
 
-<pre><code>"log"
-"net/http/httputil"
-"net/url"
+    "golang.org/x/net/http2"
+    "golang.org/x/net/websocket"
+)
 
-"golang.org/x/net/http2"
-"golang.org/x/net/websocket"
-</code></pre>
+func main() {
+    origin := "http://localhost:3000/"
+    u := "ws://localhost:3000/"
+    ws, err := websocket.Dial(u, "", origin)
+    if err != nil {
+        log.Fatal(err)
+    }
 
-<p>)</p>
+    target, _ := url.Parse("http://localhost:8000/")
 
-<p>func main() {</p>
-
-<pre><code>origin := "http://localhost:3000/"
-u := "ws://localhost:3000/"
-ws, err := websocket.Dial(u, "", origin)
-if err != nil {
-    log.Fatal(err)
+    s := &amp;http2.Server{}
+    s.ServeConn(ws, &amp;http2.ServeConnOpts{
+        Handler: httputil.NewSingleHostReverseProxy(target),
+    })
 }
-
-target, _ := url.Parse("http://localhost:8000/")
-
-s := &amp;http2.Server{}
-s.ServeConn(ws, &amp;http2.ServeConnOpts{
-    Handler: httputil.NewSingleHostReverseProxy(target),
-})
 </code></pre>
-
-<p>}
-```</p>
 
 <p>Websocket経由でリクエストを受け付け、それを8000番ポートに転送します。
 こちらも非常に短くかけました。
@@ -666,9 +602,9 @@ s.ServeConn(ws, &amp;http2.ServeConnOpts{
   
   <entry>
     <title type="html"><![CDATA[nginx-omniauth-adapterのGolangポート作った]]></title>
-    <link href="http://shogo82148.github.io/blog/2016/03/10/go-nginx-oauth2-adapter/"/>
+    <link href="https://shogo82148.github.io/blog/2016/03/10/go-nginx-oauth2-adapter/"/>
     <updated>2016-03-10T12:51:00+09:00</updated>
-    <id>http://shogo82148.github.io/blog/2016/03/10/go-nginx-oauth2-adapter</id>
+    <id>https://shogo82148.github.io/blog/2016/03/10/go-nginx-oauth2-adapter</id>
     <content type="html"><![CDATA[<p>「<a href="http://techlife.cookpad.com/entry/2015/10/16/080000">nginx で omniauth を利用してアクセス制御を行う</a>」という記事で、
 <a href="http://nginx.org/en/docs/http/ngx_http_auth_request_module.html">ngx_http_auth_request_module</a>の存在を知ったので、
 Golangで<a href="https://github.com/sorah/nginx_omniauth_adapter">nginx_omniauth_adapter</a>と似たようなものを作ってみました。</p>
@@ -701,20 +637,18 @@ gateが認証＋Proxyをやってしまうのに対して、認証だけRubyのo
 nginx_omniauth_adapterと同じ環境変数名で設定できるほか、YAML形式の設定ファイルを読みこませることができます。
 YAMLの形式はREADMEを参照してください。</p>
 
-<p><code>bash
-$ go get github.com/shogo82148/go-nginx-oauth2-adapter/cli/go-nginx-oauth2-adapter
+<pre><code class="bash">$ go get github.com/shogo82148/go-nginx-oauth2-adapter/cli/go-nginx-oauth2-adapter
 $ export NGX_OMNIAUTH_GOOGLE_KEY=YOUR_CLIENT_ID
 $ export NGX_OMNIAUTH_GOOGLE_SECRET=YOUR_CLIENT_SECRET
 $ go-nginx-oauth2-adapter
 $ go-nginx-oauth2-adapter -c conf.yaml # 設定ファイルでの指定も可能
-</code></p>
+</code></pre>
 
 <p>PerlでHTTPサーバ書いているひとにはおなじみのServer::Starterにも対応しているので、
 それ経由で立ち上げておくと設定の更新・プログラム自身の更新等が楽になると思います。</p>
 
-<p><code>bash
-start_server --port 18081 -- go-nginx-oauth2-adapter -c conf.yaml
-</code></p>
+<pre><code class="bash">start_server --port 18081 -- go-nginx-oauth2-adapter -c conf.yaml
+</code></pre>
 
 <p>nginx側の設定は<a href="https://github.com/shogo82148/go-nginx-oauth2-adapter/blob/master/examples/nginx/nginx-site.conf">examples</a>ディレクトリを参照してください。
 ヘッダ名・パス名等を合わせてあるので、nginx_omniauth_adapterと同じ設定で動くはずです。</p>
