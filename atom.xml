@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2016-11-24T18:41:51+09:00</updated>
+  <updated>2016-12-15T23:14:23+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,190 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[DateTime.pmにうるう秒の修正が入った話]]></title>
+    <link href="https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm/"/>
+    <updated>2016-12-15T22:17:47+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm</id>
+    <content type="html"><![CDATA[<p>こんにちは、<a href="https://metacpan.org/pod/DateTime">DateTime.pm</a> Watcherのいっちーです。
+本日面白いパッチがDateTime.pmに取り込まれたので、ご紹介したいと思います。</p>
+
+<!-- More -->
+
+
+<p>そのpullreqがこちらです。Closedになっていますが、該当コミットはmasterに取り込まれています。</p>
+
+<ul>
+<li><a href="https://github.com/houseabsolute/DateTime.pm/pull/48">The leap second in 2012 was on 2012-07-01 not 2012-06-01. #48</a></li>
+</ul>
+
+
+<blockquote><p>per <a href="https://confluence.qps.nl/display/KBE/UTC+to+GPS+Time+Correction">https://confluence.qps.nl/display/KBE/UTC+to+GPS+Time+Correction</a> the leap second in 2012 was on 2012-07-01 not 2012-06-01. It&rsquo;s is well known that leap seconds only occur directly before Jan 1st or July 1st.</p></blockquote>
+
+<p>適当な和訳「2012年に挿入されたうるう秒は2012年6月1日ではなく2012年7月1日です。よく知られているように、今までに挿入されたうるう秒は1月1日と7月1日の直前だけです。」</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class='diff'><span class='line'><span class="gh">diff --git a/lib/DateTime/LeapSecond.pm b/lib/DateTime/LeapSecond.pm</span>
+</span><span class='line'><span class="gh">index 66e1b2b..4a38be2 100644</span>
+</span><span class='line'><span class="gd">--- a/lib/DateTime/LeapSecond.pm</span>
+</span><span class='line'><span class="gi">+++ b/lib/DateTime/LeapSecond.pm</span>
+</span><span class='line'><span class="gu">@@ -108,7 +108,7 @@ sub _initialize {</span>
+</span><span class='line'>             1999  Jan. 1  +1
+</span><span class='line'>             2006  Jan. 1  +1
+</span><span class='line'>             2009  Jan. 1  +1
+</span><span class='line'><span class="gd">-            2012  Jun. 1  +1</span>
+</span><span class='line'><span class="gi">+            2012  Jul. 1  +1</span>
+</span><span class='line'>             2015  Jul. 1  +1
+</span><span class='line'>             2017  Jan. 1  +1
+</span><span class='line'>             )
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>なぜ4年間誰も気が付かなかった。</p>
+
+<h2>このバグの影響</h2>
+
+<p>結論から言うと、<strong>この修正によるDateTime.pmの挙動への影響はありません</strong>。
+これを書いている時点で最新版のver1.41には、上記の修正は取り込まれていませんが、
+うるう秒は2012年7月1日に正しく挿入されます。</p>
+
+<p>以前<a href="//shogo82148.github.io/blog/2015/12/09/perl-datetime/">Perl の DateTime 利用上の注意点</a>で
+うるう秒の確認をしたときと同様に検証してみましょう。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">feature</span> <span class="sx">qw(say)</span><span class="p">;</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$dt</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">use</span> <span class="n">DateTime</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="nv">$dt</span> <span class="o">=</span> <span class="n">DateTime</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span> <span class="n">year</span> <span class="o">=&gt;</span> <span class="mi">2012</span><span class="p">,</span> <span class="n">month</span> <span class="o">=&gt;</span> <span class="mi">7</span><span class="p">,</span> <span class="n">day</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span> <span class="n">hour</span> <span class="o">=&gt;</span> <span class="mi">9</span><span class="p">,</span> <span class="n">time_zone</span> <span class="o">=&gt;</span> <span class="s">&#39;Asia/Tokyo&#39;</span> <span class="p">);</span>
+</span><span class='line'><span class="n">say</span> <span class="nv">$dt</span><span class="o">-&gt;</span><span class="n">subtract</span><span class="p">(</span><span class="n">seconds</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="nv">$dt</span> <span class="o">=</span> <span class="n">DateTime</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span> <span class="n">year</span> <span class="o">=&gt;</span> <span class="mi">2012</span><span class="p">,</span> <span class="n">month</span> <span class="o">=&gt;</span> <span class="mi">6</span><span class="p">,</span> <span class="n">day</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span> <span class="n">hour</span> <span class="o">=&gt;</span> <span class="mi">9</span><span class="p">,</span> <span class="n">time_zone</span> <span class="o">=&gt;</span> <span class="s">&#39;Asia/Tokyo&#39;</span> <span class="p">);</span>
+</span><span class='line'><span class="n">say</span> <span class="nv">$dt</span><span class="o">-&gt;</span><span class="n">subtract</span><span class="p">(</span><span class="n">seconds</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ perl datetime.pl
+</span><span class='line'>2012-07-01T08:59:60
+</span><span class='line'>2012-06-01T08:59:59
+</span><span class='line'>
+</span><span class='line'>$ PERL_DATETIME_PP=1 perl datetime.pl
+</span><span class='line'>2012-07-01T08:59:60
+</span><span class='line'>2012-06-01T08:59:59</span></code></pre></td></tr></table></div></figure>
+
+
+<p>DateTime.pmにはXSの実装とPurePerlの実装が含まれていますが、
+どちらの実装でも2012年7月1日に正しくうるう秒が挿入され、2012年6月1日にはうるう秒はありません。</p>
+
+<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">プログラム書いてると「書いたとおりに動くんじゃなくて思った通りに動けよ」って思うけど、たまに「コード見たら絶対動かないはずなのになぜか思った通りにちゃんと動く」みたいな奴に出くわすと恐ろしくて夜も眠れなくなるのでやっぱり書いたとおりに動いて欲しい</p>&mdash; かずー (@kazoo04) <a href="https://twitter.com/kazoo04/status/808195587518578688">December 12, 2016</a></blockquote>
+
+
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+
+<p>まさに、「コード見たら絶対動かないはずなのになぜか思った通りにちゃんと動く」といった感じです。</p>
+
+<h2>なぜ正しく動くのか</h2>
+
+<p>なぜ正しく動くのか、その答えはうるう秒一覧の解析を行う部分にありました。</p>
+
+<ul>
+<li><a href="https://github.com/houseabsolute/DateTime.pm/blob/ff0e3780ea1c841eb17a0245f5f8061cf10c28d3/lib/DateTime/LeapSecond.pm#L40-L41">DateTime.pm/lib/DateTime/LeapSecond.pm</a></li>
+</ul>
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">my</span> <span class="nv">$utc_epoch</span>
+</span><span class='line'>    <span class="o">=</span> <span class="n">DateTime</span><span class="o">-&gt;</span><span class="n">_ymd2rd</span><span class="p">(</span> <span class="nv">$year</span><span class="p">,</span> <span class="p">(</span> <span class="nv">$mon</span> <span class="o">=~</span><span class="sr"> /Jan/i</span> <span class="p">?</span> <span class="mi">1</span> <span class="p">:</span> <span class="mi">7</span> <span class="p">),</span> <span class="nv">$mday</span> <span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>Jan.(1月)以外はすべて7月として扱っている！</strong></p>
+
+<p>Janか否かが重要なので、JunだろうがJulだろうが7月として扱われるので、結果的に正しく動くわけです。
+「バグを埋め込んでいたけど、実装が適当でたまたま動いていた」というよくあるパターンですね。
+将来3月末や9月末に挿入されるようになったとき大丈夫なんでしょうか・・・。
+まあ、必要になるのは数百年後とかなので、僕には関係ない・・・そう、関係ないのです・・・。</p>
+
+<h2>まとめ</h2>
+
+<ul>
+<li>DateTime.pmのうるう秒一覧にbug fix</li>
+<li>動作に影響は無いので、ユーザ側では特に気にする必要はない
+
+<ul>
+<li>うるう秒自体を気にしないといけないのは仕方がない・・・</li>
+</ul>
+</li>
+<li>JanとかJunとかJulとか似てて紛らわしいんだよ！！数字書け！！</li>
+</ul>
+
+
+<h2>ちなみに</h2>
+
+<p>最新版のver1.41は来年(2017年)の1月1日のうるう秒に対応済みです。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">feature</span> <span class="sx">qw(say)</span><span class="p">;</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$dt</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">use</span> <span class="n">DateTime</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="nv">$dt</span> <span class="o">=</span> <span class="n">DateTime</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span> <span class="n">year</span> <span class="o">=&gt;</span> <span class="mi">2017</span><span class="p">,</span> <span class="n">month</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span> <span class="n">day</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span> <span class="n">hour</span> <span class="o">=&gt;</span> <span class="mi">9</span><span class="p">,</span> <span class="n">time_zone</span> <span class="o">=&gt;</span> <span class="s">&#39;Asia/Tokyo&#39;</span> <span class="p">);</span>
+</span><span class='line'><span class="n">say</span> <span class="nv">$dt</span><span class="o">-&gt;</span><span class="n">subtract</span><span class="p">(</span><span class="n">seconds</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ perl datetime.pl
+</span><span class='line'>2017-01-01T08:59:60</span></code></pre></td></tr></table></div></figure>
+
+
+<p>みなさん準備は出来ていますか 😇</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Twitterの二次元コード問題と、QRコード・フレームQRの見分け方]]></title>
@@ -3816,314 +4000,6 @@ DBIx::Classが裏で再接続処理を自動的にやってくれるので、普
 <li>トランザクション外では自動的に再接続してくれるが、トランザクション内では行われない</li>
 <li>必ず再接続して欲しいところで <code>$schema-&gt;storage-&gt;ensure_connected;</code></li>
 <li>部分的なロールバックはやらないのが吉</li>
-</ul>
-
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Git-mergeの挙動をカスタマイズする]]></title>
-    <link href="https://shogo82148.github.io/blog/2015/12/16/customize-git-merge/"/>
-    <updated>2015-12-16T22:24:00+09:00</updated>
-    <id>https://shogo82148.github.io/blog/2015/12/16/customize-git-merge</id>
-    <content type="html"><![CDATA[<p>最近gitのコンフリクト解消職人みたいになっていてすごくつらいです。
-普通のプログラムであれば順番が重要なので手動でのコンフリクト解消は避けられないのですが、
-僕が相手にしているのは最終的にMySQLに食わせるデータなのでそこまで順番は重要ではありません。
-順番に挿入したところで、MySQLが順番にかえしてくれるとは限りませんからね。
-このようなケースではある程度機械的にマージできるのでは？と調べてみました。</p>
-
-<!-- More -->
-
-
-<h2>merge driver</h2>
-
-<p>いろいろググってみると<a href="http://git-scm.com/docs/gitattributes">gitattributes</a>でファイル毎にマージの細かい挙動を制御できるようです。
-通常マージの方法はgitがよしなに選択してくれますが、merge属性に以下の項目を指定することでマージの方法を強制することができます。</p>
-
-<ul>
-<li>text
-
-<ul>
-<li>テキストファイルとしてマージする。</li>
-<li>コンフリクトすると <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code>, <code>=======</code>, <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code>でコンフリクトした場所を教えてくれる。</li>
-</ul>
-</li>
-<li>binary
-
-<ul>
-<li>バイナリファイルとしてマージする。</li>
-<li>コンフリクトするとマージしようとしたファイルを残しておいてくれる。</li>
-</ul>
-</li>
-<li>union
-
-<ul>
-<li>テキストファイルとしてマージする。</li>
-<li>textと違ってコンフリクトしてもマーカを付けない。どちらの変更も残すように適当にマージしてくれる。</li>
-<li>適当なので <strong>コンフリクト時の行の順番は保証されない</strong></li>
-</ul>
-</li>
-</ul>
-
-
-<p>text, binaryはコンフリクトしたときによく見る挙動ですね。
-unionは初めて知ったので、簡単なレポジトリを作って挙動を確かめてみました。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-<span class='line-number'>37</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span><span class="c"># masterブランチ上でmembers.txtにAliceを追加する</span>
-</span><span class='line'><span class="nv">$ </span>git init
-</span><span class='line'><span class="nv">$ </span><span class="nb">echo </span>Alice &gt; members.txt
-</span><span class='line'><span class="nv">$ </span>git add members.txt
-</span><span class='line'><span class="nv">$ </span>git commit -m <span class="s1">&#39;add Alice&#39;</span>
-</span><span class='line'><span class="o">[</span>master <span class="o">(</span>root-commit<span class="o">)</span> 8c39714<span class="o">]</span> add Alice
-</span><span class='line'> 1 file changed, 1 insertion<span class="o">(</span>+<span class="o">)</span>
-</span><span class='line'>  create mode 100644 members.txt
-</span><span class='line'><span class="err">$</span>
-</span><span class='line'><span class="nv">$ </span><span class="c"># add-bobブランチ上でmembers.txtにBobを追加する</span>
-</span><span class='line'><span class="nv">$ </span>git checkout -b add-bob
-</span><span class='line'>Switched to a new branch <span class="s1">&#39;add-bob&#39;</span>
-</span><span class='line'><span class="nv">$ </span><span class="nb">echo</span> <span class="s1">&#39;Bob&#39;</span> &gt;&gt; members.txt
-</span><span class='line'><span class="nv">$ </span>git add members.txt
-</span><span class='line'><span class="nv">$ </span>git commit -m <span class="s1">&#39;add Bob&#39;</span>
-</span><span class='line'><span class="o">[</span>add-bob 9c406ae<span class="o">]</span> add Bob
-</span><span class='line'> 1 file changed, 1 insertion<span class="o">(</span>+<span class="o">)</span>
-</span><span class='line'><span class="err">$</span>
-</span><span class='line'><span class="nv">$ </span><span class="c"># masterブランチ上でmembers.txtにEveを追加する</span>
-</span><span class='line'><span class="nv">$ </span>git checkout -
-</span><span class='line'> Switched to branch <span class="s1">&#39;master&#39;</span>
-</span><span class='line'><span class="nv">$ </span><span class="nb">echo</span> <span class="s1">&#39;Eve&#39;</span> &gt;&gt; members.txt
-</span><span class='line'><span class="nv">$ </span>git add members.txt
-</span><span class='line'><span class="nv">$ </span>git commit -m <span class="s1">&#39;add Eve&#39;</span>
-</span><span class='line'><span class="o">[</span>master 9eabd8a<span class="o">]</span> add Eve
-</span><span class='line'> 1 file changed, 1 insertion<span class="o">(</span>+<span class="o">)</span>
-</span><span class='line'><span class="nv">$ </span>git merge add-bob
-</span><span class='line'> Auto-merging members.txt
-</span><span class='line'> CONFLICT <span class="o">(</span>content<span class="o">)</span>: Merge conflict in members.txt
-</span><span class='line'> Automatic merge failed; fix conflicts and <span class="k">then </span>commit the result.
-</span><span class='line'><span class="nv">$ </span>cat members.txt
-</span><span class='line'> Alice
-</span><span class='line'> <span class="o">&lt;&lt;&lt;&lt;&lt;&lt;</span>&lt; HEAD
-</span><span class='line'> <span class="nv">Eve</span>
-</span><span class='line'> <span class="o">=======</span>
-</span><span class='line'> Bob
-</span><span class='line'> &gt;&gt;&gt;&gt;&gt;&gt;&gt; add-bob
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>わざとコンフリクトを起こしてみるテストです。
-ファイル末尾にEveとBobをそれぞれ別々のブランチで追加したためコンフリクトしてしまっています。</p>
-
-<p>では次にgitattributeを追加して<code>merge=union</code>を指定した場合に挙動を確認してみましょう。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span><span class="c"># merge=union属性を追加</span>
-</span><span class='line'><span class="nv">$ </span><span class="nb">echo</span> <span class="s1">&#39;members.txt merge=union&#39;</span> &gt; .gitattributes
-</span><span class='line'><span class="nv">$ </span>git add -f .gitattributes
-</span><span class='line'><span class="nv">$ </span>git commit -m <span class="s1">&#39;add gitattributes&#39;</span>
-</span><span class='line'><span class="o">[</span>master 61d2cfc<span class="o">]</span> add gitattributes
-</span><span class='line'> 1 file changed, 1 insertion<span class="o">(</span>+<span class="o">)</span>
-</span><span class='line'>  create mode 100644 .gitattributes
-</span><span class='line'><span class="err">$</span>
-</span><span class='line'><span class="nv">$ </span><span class="c"># もう一度マージしてみる</span>
-</span><span class='line'><span class="nv">$ </span>git merge add-bob
-</span><span class='line'>Auto-merging members.txt
-</span><span class='line'>Merge made by the <span class="s1">&#39;recursive&#39;</span> strategy.
-</span><span class='line'> members.txt | 1 +
-</span><span class='line'>  1 file changed, 1 insertion<span class="o">(</span>+<span class="o">)</span>
-</span><span class='line'><span class="nv">$ </span>cat members.txt
-</span><span class='line'>Alice
-</span><span class='line'>Eve
-</span><span class='line'>Bob
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>通常はコンフリクトするケースですが、今度はうまくマージできました。</p>
-
-<h2>merge driverをカスタマイズする</h2>
-
-<p>デフォルトではtext, binary, unionしか用意されていないmerge driverですが、<code>.git/config</code>をいじることで自前のmerge driverを追加することができます。
-unionでは行の順番が不定になって不便なので、試しに「必ずソートされており重複がないファイルをマージする」ためのmerge driverを作ってみます。
-まずはマージするためのコマンド用意しましょう。</p>
-
-<figure class='code'><figcaption><span>merge-sorted-set.sh</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="c">#!/bin/bash</span>
-</span><span class='line'><span class="nv">A</span><span class="o">=</span><span class="s2">&quot;$1&quot;</span>
-</span><span class='line'><span class="nv">O</span><span class="o">=</span><span class="s2">&quot;$2&quot;</span>
-</span><span class='line'><span class="nv">B</span><span class="o">=</span><span class="s2">&quot;$3&quot;</span>
-</span><span class='line'><span class="nv">tmpfile</span><span class="o">=</span><span class="k">$(</span>mktemp temp.XXXXXX<span class="k">)</span>
-</span><span class='line'>cp <span class="s2">&quot;$A&quot;</span> <span class="s2">&quot;$tmpfile&quot;</span>
-</span><span class='line'>git merge-file -p -q --union <span class="s2">&quot;$tmpfile&quot;</span> <span class="s2">&quot;$O&quot;</span> <span class="s2">&quot;$B&quot;</span> | sort | uniq &gt; <span class="s2">&quot;$A&quot;</span>
-</span><span class='line'>rm <span class="s2">&quot;$tmpfile&quot;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>パスの通った場所にこのファイルを置き、<code>.git/config</code>にこれを呼び出す設定を書けば、gitattributeから使用できるようになります。</p>
-
-<figure class='code'><figcaption><span>.git/config</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>[merge "zset"]
-</span><span class='line'>        name = merge sorted set
-</span><span class='line'>        driver = merge-sorted-set.sh %A %O %B</span></code></pre></td></tr></table></div></figure>
-
-
-<ul>
-<li><code>%A</code>: 現在のブランチの状態</li>
-<li><code>%B</code>: マージしようとしているブランチの状態</li>
-<li><code>%O</code>: 共通の祖先の状態</li>
-<li><code>%L</code>: コンフリクトマーカの長さ。<a href="https://github.com/git/git/commit/23a64c9e771e3caf19cf2ee9a32c8942ddde4a81">1.7から使えるらしい</a></li>
-<li><code>%P</code>: ファイルのパス。<a href="https://github.com/git/git/commit/ef45bb1f8156030446658d5bfb3983ce214a9e16">2.5.0から使えるらしい</a></li>
-</ul>
-
-
-<p>このmerge driverを使ってマージすると、先の例ではAlice, Bob, Eveの順番で並ぶようになります。</p>
-
-<h2>theirs-oursの順番に並べてみる</h2>
-
-<p>僕のケースではtheirs-oursの順番で並んでくれると都合が良いので、こんなスクリプトを書いてみました。</p>
-
-<figure class='code'><figcaption><span>merge-theirs-ours.sh</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="c">#!/bin/bash</span>
-</span><span class='line'><span class="nv">A</span><span class="o">=</span><span class="s2">&quot;$1&quot;</span>
-</span><span class='line'><span class="nv">O</span><span class="o">=</span><span class="s2">&quot;$2&quot;</span>
-</span><span class='line'><span class="nv">B</span><span class="o">=</span><span class="s2">&quot;$3&quot;</span>
-</span><span class='line'><span class="nv">tmpfile</span><span class="o">=</span><span class="k">$(</span>mktemp temp.XXXXXX<span class="k">)</span>
-</span><span class='line'>cp <span class="s2">&quot;$A&quot;</span> <span class="s2">&quot;$tmpfile&quot;</span>
-</span><span class='line'>git merge-file -p -q --union <span class="s2">&quot;$B&quot;</span> <span class="s2">&quot;$O&quot;</span> <span class="s2">&quot;$tmpfile&quot;</span> &gt; <span class="s2">&quot;$A&quot;</span>
-</span><span class='line'>rm <span class="s2">&quot;$tmpfile&quot;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-
-
-<figure class='code'><figcaption><span>.git/config</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>[merge "theirsours"]
-</span><span class='line'>        name = theirs first
-</span><span class='line'>        driver = merge-theirs-ours.sh %A %O %B
-</span><span class='line'>        recursive = text</span></code></pre></td></tr></table></div></figure>
-
-
-<p>あとは勝手にコンフリクト解消して欲しいファイルに対して
-.gitattributesで<code>merge=theirsours</code>を指定すれば通常はコンフリクトする場合でもマージしてくれます。</p>
-
-<p>ただ、さすがに全自動だとちょっと怖いので、以下の様にコンフリクトするようであればユーザに確認(<code>exit 1</code>するとコンフリクトした扱いになる)
-したほうが無難な気もしますね。</p>
-
-<figure class='code'><figcaption><span>merge-theirs-ours.sh</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="c">#!/bin/bash</span>
-</span><span class='line'><span class="nv">A</span><span class="o">=</span><span class="s2">&quot;$1&quot;</span>
-</span><span class='line'><span class="nv">O</span><span class="o">=</span><span class="s2">&quot;$2&quot;</span>
-</span><span class='line'><span class="nv">B</span><span class="o">=</span><span class="s2">&quot;$3&quot;</span>
-</span><span class='line'><span class="k">if </span>git merge-file -p -q <span class="s2">&quot;$A&quot;</span> <span class="s2">&quot;$O&quot;</span> <span class="s2">&quot;$B&quot;</span> &gt; /dev/null; <span class="k">then</span>
-</span><span class='line'><span class="k">    </span>git merge-file <span class="s2">&quot;$A&quot;</span> <span class="s2">&quot;$O&quot;</span> <span class="s2">&quot;$B&quot;</span>;
-</span><span class='line'><span class="k">else</span>
-</span><span class='line'><span class="k">    </span><span class="nv">tmpfile</span><span class="o">=</span><span class="k">$(</span>mktemp temp.XXXXXX<span class="k">)</span>
-</span><span class='line'>    cp <span class="s2">&quot;$A&quot;</span> <span class="s2">&quot;$tmpfile&quot;</span>
-</span><span class='line'>    git merge-file -p -q --union <span class="s2">&quot;$B&quot;</span> <span class="s2">&quot;$O&quot;</span> <span class="s2">&quot;$tmpfile&quot;</span> &gt; <span class="s2">&quot;$A&quot;</span>
-</span><span class='line'>    rm <span class="s2">&quot;$tmpfile&quot;</span>
-</span><span class='line'>    <span class="nb">exit </span>1
-</span><span class='line'><span class="k">fi</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>まとめ</h2>
-
-<p>gitattribute便利。
-gitattributeを使って<a href="http://shogo82148.github.io/blog/2015/03/24/git-diff-csv/">Git Diffでcsvの差分を見やすく表示する</a>のもどうぞ。</p>
-
-<p>ただmerge driverからはファイルのメタ情報に触れないので、「コミット日時が新しい方を残す」みたいなことができないのが残念です。
-<a href="http://stackoverflow.com/questions/7607125/git-merge-conflict-to-always-take-the-newest-file">ブランチ決め打ちにする</a>のはちょっと怖いし、
-merge strategyのカスタマイズは大変そう・・・
-(一応 <code>git-merge-hogehoge</code> をいうコマンドを用意しておけば <code>git merge --strategy hogehoge</code> と使えるようです。が、<code>git-merge-hogehoge &lt;base&gt;... -- &lt;head&gt; &lt;remote&gt; ...</code> の形式で渡ってくるので、そこから再実装するのはつらい・・・)</p>
-
-<h2>参考</h2>
-
-<ul>
-<li><a href="http://git-scm.com/docs/gitattributes">gitattributes</a></li>
-<li><a href="http://stackoverflow.com/questions/23140240/git-how-do-i-add-a-custom-merge-strategy">git: How do I add a custom merge strategy?</a></li>
-<li><a href="http://stackoverflow.com/questions/7607125/git-merge-conflict-to-always-take-the-newest-file">Git merge conflict to always take the newest file</a></li>
 </ul>
 
 ]]></content>
