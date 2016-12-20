@@ -4,7 +4,7 @@
   <title><![CDATA[Category: perl | Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/blog/categories/perl/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2016-12-15T23:14:23+09:00</updated>
+  <updated>2016-12-20T22:46:21+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,80 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Redis::Fast 0.19リリースのお知らせ]]></title>
+    <link href="https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/"/>
+    <updated>2016-12-20T22:38:27+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released</id>
+    <content type="html"><![CDATA[<p><a href="https://metacpan.org/pod/Redis::Fast">Redis::Fast 0.19</a> をリリースしました。
+主な変更点は以下の通りです。</p>
+
+<ul>
+<li><code>reconnect_on_error</code> オプションの追加</li>
+<li>Sentinelのノード一覧が更新されない不具合の修正</li>
+<li>IPv6の実験的サポート</li>
+</ul>
+
+
+<!-- More -->
+
+
+<h2><code>reconnect_on_error</code> オプションの追加</h2>
+
+<p><a href="https://github.com/yoheimuta">@yoheimuta</a>さんからのプルリクエストです。
+今まではネットワークエラーが発生した時のみ再接続処理が走っていましたが、
+Redisがエラーを返した場合にも再接続を行うようになります。
+マスタースレーブ構成をしているときに、
+何らかの原因によりRedis::Fastからのコネクションを維持したまま、
+マスターがスレーブに降格してしまった場合に対処するための機能です。
+以下のように設定することで、新しいマスターに再接続を行うことが可能になります。</p>
+
+<pre><code class="perl">my $r = Redis::Fast-&gt;new(
+    reconnect          =&gt; 1, # 0以上で再接続有効
+    reconnect_on_error =&gt; sub {
+        my ($error, $ret, $command) = @_;
+        if ($error =~ /READONLY You can't write against a read only slave/) {
+            return 1; # 再接続を行う。次の再接続まで最低1秒空ける
+        }
+        return -1; # 再接続は行わない
+    },
+);
+</code></pre>
+
+<h2>Sentinelのノード一覧が更新されない不具合の修正</h2>
+
+<p>Redis::FastにはどれかひとつのSentinelノードに接続すると、
+他のノードの情報を自動的に収集する機能があります。
+この機能が最新のRedisでは動いていなかったので修正しました。
+具体的にいつからなのかまでは追ってないのですが、
+Redisのバージョン3.0.6から3.2.6の間のどこかで
+ノード一覧の形式が変わってしまったようです。</p>
+
+<p>(最近Sentinelの話題を聞かないけど、みんな使ってるのかな・・・)</p>
+
+<h2>IPv6の実験的サポート</h2>
+
+<p>サーバの指定にIPv6のアドレスが使えるようになりました。
+<code>Redis::Fast-&gt;new(server =&gt; "[::1]:6379")</code> のような指定ができます。</p>
+
+<p>バックエンドのhiredis自体は以前からIPv6に対応していたのですが、
+今までRedis::Fastでは正しく動きませんでした。</p>
+
+<p>とりあえずlocalhostに接続できることは確認しましたが、
+手元にIPv6のネットワークがなくて検証もできていないため、
+実験的サポートという扱いで・・・。
+ 誰かIPv6に詳しい方、検証お願いします。</p>
+
+<h2>感想</h2>
+
+<ul>
+<li>テストがなかなか通らず辛かった</li>
+<li>CPAN Autherを変な幾何学模様から変えたい</li>
+</ul>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[DateTime.pmにうるう秒の修正が入った話]]></title>
@@ -410,204 +484,6 @@ watch_multi_exec Redis-&gt;new, ['mykey'], 10, sub {
 トラブル発生時にも問題にならないようちゃんとした実装しようとすると、
 意外と考えることが多く面倒なものです(特にトランザクション周りとか)。
 適当に実装してしまったこころ当たりのある人は、ぜひ試してみてください。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Redisでスコアを複数設定できるランキングを作ってみた]]></title>
-    <link href="https://shogo82148.github.io/blog/2016/02/06/redis-leader-board-multi/"/>
-    <updated>2016-02-06T02:30:00+09:00</updated>
-    <id>https://shogo82148.github.io/blog/2016/02/06/redis-leader-board-multi</id>
-    <content type="html"><![CDATA[<p>ランキングを作っているとスコアを複数設定したいことがよくあると思います。
-例えば「得点が同じだったら早くその得点を出した人優先」とか「勝ち点が同じだったら得失点差が大きい方優先」とかのように、
-最初の基準で順位を決められなかった場合の第二基準が欲しいみたいな場合です。</p>
-
-<p>ランキングを作るのにはRedisのSorted Setを使うのが便利ですが、残念ながらSorted Setはひとつしかスコアを設定できません。
-少し前にどうやったら実装できるかと社内チャットで話題に上ったので、試しにRedis::LeaderBoardMulti(仮名)という名前で書いてみました。</p>
-
-<ul>
-<li><a href="https://github.com/shogo82148/p5-Redis-LeaderBoardMulti">shogo82148/p5-Redis-LeaderBoardMulti</a></li>
-</ul>
-
-
-<!-- More -->
-
-
-<h2>使い方</h2>
-
-<p>メソッドの名前は<a href="http://www.songmu.jp/riji/archives/2013/06/redisleaderboar.html">Redis::LeaderBoard</a>にあわせてありますが、
-スコアが複数指定できるようになった関係でちょっと変わってます。</p>
-
-<pre><code class="perl">use Redis;
-use Redis::LeaderBoard;
-my $redis = Redis-&gt;new;
-my $lb = Redis::LeaderBoardMulti-&gt;new(
-    redis =&gt; $redis,
-    key   =&gt; 'leader_board:1',
-    order =&gt; ['asc', 'desc'], # asc/desc, desc as default
-);
-$lb-&gt;set_score('one' =&gt; 100, time); # 第二基準は時間=得点が同じだったら早くその得点を出した人優先
-$lb-&gt;set_score('two' =&gt;  50, time);
-my ($rank, $score, $time) = $lb-&gt;get_rank_with_score('one');
-</code></pre>
-
-<p><code>set_score</code>の第二引数以降はすべてスコアとして扱われます。(そのためRedis::LeaderBoardと互換性はない)
-上の例では「得点が同じだったら早くその得点を出した人優先」になってます。</p>
-
-<h2>制限事項</h2>
-
-<p>実装の都合により、以下のような制限があります。</p>
-
-<ul>
-<li>スコアはすべて64bit符号付き整数です
-
-<ul>
-<li>Redis::LeaderBoardのスコアは倍精度浮動小数点型なので小数も扱えるが、Redis::LeaderBoardMultiは整数だけ</li>
-</ul>
-</li>
-<li>Redis 2.8.9以降のみで動きます</li>
-</ul>
-
-
-<h2>実装の仕組み</h2>
-
-<p>Sorted Setの同じスコアを持つメンバーは辞書順にソートされます(zaddの<a href="http://redis.io/commands/zadd#elements-with-the-same-score">同じスコアを持つ要素</a>の項を参照)。
-例えば以下の様にメンバー「a」「b」「c」を追加すると、必ず「abc」の順番になることが保証されています。</p>
-
-<pre><code class="plain">127.0.0.1:6379&gt; ZADD ranking 0 "a" 0 "b" 0 "c"
-(integer) 3
-127.0.0.1:6379&gt; ZRANK ranking "b"
-(integer) 1
-</code></pre>
-
-<p>これを利用して、メンバーの先頭にスコアをエンコードして付けておきます。
-もちろんエンコードしたあとでもスコアの大小関係が保たれている必要があります。
-以下はエンコード方式にビッグエンディアンの16bit整数を使った例です。
-Redis 2.8.9から辞書順比較に特化したコマンド(LEXがつくやつ)が追加されているので、
-ランクを求める処理は以下のように書くことができます。</p>
-
-<pre><code class="plain">127.0.0.1:6379&gt; ZADD ranking 0 "\x00\x02b"    (bをスコア2で追加)
-(integer) 1
-127.0.0.1:6379&gt; ZADD ranking 0 "\x00\x01a"    (aをスコア1で追加)
-(integer) 1
-127.0.0.1:6379&gt; ZLEXCOUNT ranking - "(\x00\x02"    (スコア2未満の個数=bのランク)
-(integer) 1
-</code></pre>
-
-<p>さすがに16bit符号なし整数だと範囲が狭いので、実際の実装は以下のようになっています。</p>
-
-<ul>
-<li>エンコードはビッグエンディアンの64bit符号付き整数</li>
-<li>負数も扱えるように下駄を履かせる
-
-<ul>
-<li>1と-1を単純にエンコードすると-1の方が大きくなってしまう</li>
-<li>0x8000000000000000を足して符号なし整数の範囲で比較できるように補正</li>
-</ul>
-</li>
-</ul>
-
-
-<h2>アトミック性について</h2>
-
-<p>この方法だとSorted Setだけでは現在のスコアを取得できないので、
-スコアだけ別管理にする必要があります。
-スコアの更新とランキングの更新があるので、
-片方だけ更新される状況がないようにアトミック性に注意する必要があります。
-更新途中の間違った結果を返すだけならすぐに復旧するのでまだマシですが、
-途中でネットワーク障害が起こって不整合なデータが残ってしまうと面倒です。</p>
-
-<p>アトミック性を確保するためのパターンをいくつか実装してみました。
-<code>use_script</code>と<code>use_hash</code>で制御が可能です。</p>
-
-<h3>トランザクションを使った方法</h3>
-
-<p>Redisには<a href="http://redis.io/topics/transactions">トランザクション</a>の仕組みがあるのでこれを使った方法です。
-<code>use_script=&gt;0</code>が指定されるとこの方法で更新を行います。</p>
-
-<pre><code class="plain">127.0.0.1:6379&gt; WATCH ranking:a   (他のクライアントが更新を行っていないか監視)
-OK
-127.0.0.1:6379&gt; GET ranking:a   (ranking:aに入っている現在のスコアを取得)
-"\x00\x01"
-127.0.0.1:6379&gt; MULTI
-OK
-127.0.0.1:6379&gt; ZREM ranking "\x00\x01a"
-QUEUED
-127.0.0.1:6379&gt; ZADD ranking 0 "\x00\x03a"
-QUEUED
-127.0.0.1:6379&gt; SET ranking:a "\x00\x03"
-QUEUED
-127.0.0.1:6379&gt; EXEC   (スコアの更新とランキングの更新をアトミックに行う)
-1) (integer) 1
-2) (integer) 1
-3) OK
-</code></pre>
-
-<p>Redisのトランザクションは楽観的ロックなので、他のクライアントがスコアを更新していると失敗する場合があります。
-失敗した場合はリトライが必要です。
-(この機構、いろいろと注意点があって毎回実装するのはつらすぎるので、別モジュールとして分離したいけど、いい名前とインターフェース募集中)</p>
-
-<p><code>use_hash=&gt;1</code>が指定されていると、スコアの記録にHashを使います。
-「Hashの特定のキーの更新をWATCHする」という命令はないため、ランキング全体を<code>WATCH</code>で監視します。
-(<code>use_hash=&gt;0</code>の場合、そのメンバのスコアだけ監視する)</p>
-
-<h3>Luaスクリプトを使った方法</h3>
-
-<p>RedisはLuaスクリプトを実行する機能があります。
-Luaスクリプト実行中は他の命令の実行をブロックするので、アトミック性が確保されます。</p>
-
-<pre><code class="lua">local s=redis.call('GET', 'ranking:a')
-if s then
-  redis.call('ZREM', 'ranking', s..'a')
-end
-redis.call('ZADD', 'ranking', 0, '\x00\x03a')
-redis.call('SET', 'ranking:a', '\x00\x03')
-</code></pre>
-
-<p>Luaスクリプトを実行するには<code>EVAL</code>と<code>EVALSHA</code>の二種類のコマンドがあります。
-<code>EVALSHA</code>は転送量を抑えられて便利ですが、事前に<code>SCRIPT LOAD</code>で使うスクリプトを登録しておく必要があります。
-(ココらへんも別モジュールに分離したいけど、いい名前とインターフェース募集中)
-<code>use_evalsha</code>オプションでどちらを使うか制御可能です。</p>
-
-<p>ちなみに<code>EVAL</code>で実行したスクリプトも<a href="http://redis.io/commands/eval#script-cache-semantics">永遠にキャッシュされる</a>らしいです。
-上の例はわかりやすいようにキー名や値を直接埋め込んでいますが、同じことをしようとLuaスクリプトの動的生成なんてすると死にます。
-スクリプト内で<code>KEYS</code>や<code>ARGV</code>を使うと<code>EVAL</code>時にパラメータを渡せるようになるので、これを活用しましょう。</p>
-
-<h3>諦める</h3>
-
-<p><a href="https://metacpan.org/pod/Redis::LeaderBoard">Redis::LeaderBoard</a>の実装を見て気がついたんですが、
-<code>get_rank</code>の実装は「スコアの取得」「スコアに対応するランクの取得」がアトミックでないため、
-以下の条件を満たすと実際のランクより1大きい結果を返します。</p>
-
-<ul>
-<li>同じメンバーのスコア更新とランク取得が同時に行われる</li>
-<li>ランクが上がるようにスコアが更新される</li>
-</ul>
-
-
-<p>確かに厳密性は欠けますがたかだか1結果が変わるだけですし、
-そもそも更新と取得が同時に行われないようにモジュールを使う側が排他制御するべきですね。
-こういうケースでは諦めるというのも一つの手かなと思いました。
-もちろんデータの整合性が壊れる場合は頑張ってアトミック性を確保するべきでしょう。</p>
-
-<h2>まとめ</h2>
-
-<ul>
-<li>Redisでランキングをつくる際に、スコアを複数設定する方法を紹介しました</li>
-<li>アトミック性を確保する方法を紹介しました
-
-<ul>
-<li>トランザクションを使った方法</li>
-<li>Luaスクリプトを使った方法</li>
-<li>諦める</li>
-</ul>
-</li>
-</ul>
-
-
-<p>もうちょっとドキュメントを整備したらCPANにあげてみますかね。
-トランザクション管理・Luaスクリプト管理も分離したい(いい名前を思いついたら)。
-「こんな名前がいい！」「こんなインターフェースがいい！」等あればコメントください。</p>
 ]]></content>
   </entry>
   

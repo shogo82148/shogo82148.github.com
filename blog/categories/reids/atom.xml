@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: reids | Shogo's Blog]]></title>
+  <link href="https://shogo82148.github.io/blog/categories/reids/atom.xml" rel="self"/>
+  <link href="https://shogo82148.github.io/"/>
+  <updated>2016-12-20T22:46:21+09:00</updated>
+  <id>https://shogo82148.github.io/</id>
+  <author>
+    <name><![CDATA[Shogo Ichinose]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Redis::Fast 0.19リリースのお知らせ]]></title>
+    <link href="https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/"/>
+    <updated>2016-12-20T22:38:27+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released</id>
+    <content type="html"><![CDATA[<p><a href="https://metacpan.org/pod/Redis::Fast">Redis::Fast 0.19</a> をリリースしました。
+主な変更点は以下の通りです。</p>
+
+<ul>
+<li><code>reconnect_on_error</code> オプションの追加</li>
+<li>Sentinelのノード一覧が更新されない不具合の修正</li>
+<li>IPv6の実験的サポート</li>
+</ul>
+
+
+<!-- More -->
+
+
+<h2><code>reconnect_on_error</code> オプションの追加</h2>
+
+<p><a href="https://github.com/yoheimuta">@yoheimuta</a>さんからのプルリクエストです。
+今まではネットワークエラーが発生した時のみ再接続処理が走っていましたが、
+Redisがエラーを返した場合にも再接続を行うようになります。
+マスタースレーブ構成をしているときに、
+何らかの原因によりRedis::Fastからのコネクションを維持したまま、
+マスターがスレーブに降格してしまった場合に対処するための機能です。
+以下のように設定することで、新しいマスターに再接続を行うことが可能になります。</p>
+
+<pre><code class="perl">my $r = Redis::Fast-&gt;new(
+    reconnect          =&gt; 1, # 0以上で再接続有効
+    reconnect_on_error =&gt; sub {
+        my ($error, $ret, $command) = @_;
+        if ($error =~ /READONLY You can't write against a read only slave/) {
+            return 1; # 再接続を行う。次の再接続まで最低1秒空ける
+        }
+        return -1; # 再接続は行わない
+    },
+);
+</code></pre>
+
+<h2>Sentinelのノード一覧が更新されない不具合の修正</h2>
+
+<p>Redis::FastにはどれかひとつのSentinelノードに接続すると、
+他のノードの情報を自動的に収集する機能があります。
+この機能が最新のRedisでは動いていなかったので修正しました。
+具体的にいつからなのかまでは追ってないのですが、
+Redisのバージョン3.0.6から3.2.6の間のどこかで
+ノード一覧の形式が変わってしまったようです。</p>
+
+<p>(最近Sentinelの話題を聞かないけど、みんな使ってるのかな・・・)</p>
+
+<h2>IPv6の実験的サポート</h2>
+
+<p>サーバの指定にIPv6のアドレスが使えるようになりました。
+<code>Redis::Fast-&gt;new(server =&gt; "[::1]:6379")</code> のような指定ができます。</p>
+
+<p>バックエンドのhiredis自体は以前からIPv6に対応していたのですが、
+今までRedis::Fastでは正しく動きませんでした。</p>
+
+<p>とりあえずlocalhostに接続できることは確認しましたが、
+手元にIPv6のネットワークがなくて検証もできていないため、
+実験的サポートという扱いで・・・。
+ 誰かIPv6に詳しい方、検証お願いします。</p>
+
+<h2>感想</h2>
+
+<ul>
+<li>テストがなかなか通らず辛かった</li>
+<li>CPAN Autherを変な幾何学模様から変えたい</li>
+</ul>
+
+]]></content>
+  </entry>
+  
+</feed>
