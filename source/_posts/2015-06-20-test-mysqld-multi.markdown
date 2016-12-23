@@ -9,6 +9,12 @@ categories: [perl]
 [Test::mysqld](https://metacpan.org/pod/Test::mysqld)のインスタンスを一度に大量に作りたい人向けに
 Test::mysqld::Multiというモジュールを書いてみました。
 
+**2016/12/22追記**: Test::mysqld::MultiはTest::mysqld 0.20 の一部として取り込まれました
+([p5-Test::mysqld#13](https://github.com/kazuho/p5-test-mysqld/pull/13))。
+APIは少し変わっているので、詳しくは[POD](https://metacpan.org/pod/Test::mysqld)を参照してください。
+合わせて[App::Prove::Plugin::MySQLPool](https://metacpan.org/pod/App::Prove::Plugin::MySQLPool) 0.06 より、
+本記事で紹介した高速化が利用できます。
+
 <!-- More -->
 
 ## 背景
