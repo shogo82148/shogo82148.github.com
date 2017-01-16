@@ -150,6 +150,15 @@ googleのsearchは302でリダイレクトがかかるので、<code>Client.Get<
 <strong>名前解決程度にこんなに時間がかかっていたらスプラトゥーンが出来ない！</strong>
 (mattnさんがスプラトゥーンをプレイしているかは知らない)</p>
 
+<p><strong>2017/01/16追記:</strong>
+mattnさんはスプラトゥーンをプレイしていないそうです。残念。</p>
+
+<blockquote class="twitter-tweet"><p lang="ja" dir="ltr"><a href="https://twitter.com/shogo82148">@shogo82148</a> あとスプラトゥーンしてません。。。</p>&mdash; おののいも夫 (@mattn_jp) <a href="https://twitter.com/mattn_jp/status/820236711149981696">January 14, 2017</a></blockquote>
+
+
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+
 <p>もちろん、ネットワークが混雑していたり、
 モバイルネットワークを利用していたり、という可能性もありますが、
 ちょっと不自然な印象を受けました。</p>
@@ -818,6 +827,51 @@ DNSレコード自体にTTLが設定されているはずなので、本来で�
 ようするにガーベージコレクションがない状態です。
 TTLが過ぎてもキャッシュから本当に消えるわけではないので、
 多くのドメインを相手にする場合、メモリを食い尽くす可能性があります。</p>
+
+<h3>2017/01/16追記: 同一ホストの名前解決の排他制御が甘い</h3>
+
+<p>fujiwaraさんからの返信を受けて、ちょっと考えたことがあったので追記。</p>
+
+<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">この前Goのhttp clientで名前解決結果をキャッシュしたかったの、ベンチマークしててシナリオ的に新規接続が多かったのとローカルに立てたdnsmasqの負荷が気になるほど名前引いてからなので、キャッシュするにしても数秒で実用的には充分だった(TTLの心配するほどではない</p>&mdash; fujiwara (@fujiwara) <a href="https://twitter.com/fujiwara/status/820232828231163904">January 14, 2017</a></blockquote>
+
+
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+
+
+
+<blockquote class="twitter-tweet"><p lang="ja" dir="ltr"><a href="https://twitter.com/shogo82148">@shogo82148</a> アプリのcacheは(dnsが1段目として)2段目のcacheになるから、dnsに負荷掛けないためにするだけなら数秒で問題ないはずなので、そこまで短くするならちゃんとやる意味がなくて、TTLは専門家(dns)に任せるべきかなあと</p>&mdash; fujiwara (@fujiwara) <a href="https://twitter.com/fujiwara/status/820255789944143876">January 14, 2017</a></blockquote>
+
+
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+
+<p>名前解決をキャッシュしたい理由は「用途はベンチマーク」「キャッシュは数秒で充分」とのことです。</p>
+
+<p>ちょっとここからは推測になりますが・・・
+リソースを徐々に消費してしばらくして突然死というパターンもあるので、
+ベンチマークは短くとも1分以上続けるのが普通だと思います(Mackerel等の監視間隔も最小1分ですしね)。
+にも関わらず、名前解決の負荷が数秒で落ち着くということは、Keep-Aliveは有効になっていたと推測できます。
+それでも名前解決の負荷が問題になるということは、それなりに高い並列度だったのではないかと。</p>
+
+<p>ここで問題になってくるのが、<strong>nettは同一ホストの問い合わせを排他制御していない</strong>という点です。
+複数クライアントが同時にキャッシュの有無を確認→ほぼ同時にDNSに問い合わせ→キャッシュ更新(ここだけは排他制御される)
+というケースが考えられます。
+通常用途ならさほど問題にならないかなーと思ったのですが、
+ベンチマークのように極端に並列度が高い場合、TTLが切れた瞬間だけDNSの負荷があがることになります。</p>
+
+<p>ここは、<a href="https://twitter.com/methane">methane</a>さんがGo Conference 2016 Springで発表されていた
+<a href="https://docs.google.com/presentation/d/1pSywpKera0huKCHDVGPVA2jQMvy-Pk8IR9s7AAVojDM/edit#slide=id.p">zero time cache pattern</a>
+を使うのが賢い気がします。
+(同じくmethaneさんの<a href="http://dsas.blog.klab.org/archives/cat_50043510.html">ISUCON6の予選参戦記事</a>も参照)</p>
+
+<p>・・・と書きましたが、あくまでも推測です。
+本来はnettを導入する前後でベンチマークを取って検証するべきなのですが、
+さすがにこれをpublicなネットワークでやるとDOS攻撃になってしまいます。
+DNSよくわからない・・・検証環境構築つらい・・・ので、とりあえずメモとして残しておきます。
+だれか詳しい人の検証求む。</p>
+
+<p>(以上、追記終わり)</p>
 
 <h2>解決策は？</h2>
 
