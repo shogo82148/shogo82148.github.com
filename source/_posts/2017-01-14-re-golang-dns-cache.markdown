@@ -525,6 +525,6 @@ http.Clientで名前解決結果cacheする楽な方法、現在も絶賛募集�
 ## おまけ
 
 この記事書くのにnetパッケージの中を探っていたら、
-ソースコードの中に[Gopther君を見つけた](https://github.com/golang/go/blob/ecc4474341504f5893c8333dbb68c520dbe93ca5/src/net/lookup.go#L39)。
+ソースコードの中に[Gopher君を見つけた](https://github.com/golang/go/blob/ecc4474341504f5893c8333dbb68c520dbe93ca5/src/net/lookup.go#L39)。
 
 ʕ◔ϖ◔ʔʕ◔ϖ◔ʔʕ◔ϖ◔ʔ
