@@ -4,7 +4,7 @@
   <title><![CDATA[Category: golang | Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/blog/categories/golang/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2017-01-16T12:20:41+09:00</updated>
+  <updated>2017-01-22T22:46:38+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,508 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Go1.8のGraceful Shutdownとgo-gracedownの対応]]></title>
+    <link href="https://shogo82148.github.io/blog/2017/01/21/golang-1-dot-8-graceful-shutdown/"/>
+    <updated>2017-01-21T12:44:32+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2017/01/21/golang-1-dot-8-graceful-shutdown</id>
+    <content type="html"><![CDATA[<p>Go1.8beta1が出た時に、Go1.8で追加される予定のGraceful Shutdownについて書く！
+とTwitterに書き込んで早1ヶ月。
+この前の金曜日に<a href="https://twitter.com/golang/status/822201571928731648">Go1.8rc2がリリースされ</a>、正式リリースも間近になってきて、
+さすがに書かねばという気持ちになって来たので、がんばって検証してみます。</p>
+
+<!-- More -->
+
+
+<h2>公式サポートで増える予定の機能</h2>
+
+<p>以前<a href="https://shogo82148.github.io/blog/2015/11/23/golang-graceful-restart-2nd/">Go言語でGraceful Restartをするときに取りこぼしを少なくする</a>で
+紹介したように<a href="https://github.com/shogo82148/go-gracedown">shogo82148/go-gracedown</a>というものを書きました。
+あれから時は経ち、ついにGo1.8からは<a href="https://github.com/golang/go/issues/4674">Graceful Shudownがbuild-inの機能として提供</a>される予定です。
+公式サポートが入ることによって、以下のような機能を使えるようになります。</p>
+
+<h3>HTTP/2のGraceful Shutdownができる</h3>
+
+<p>HTTP/2ではGOAWAYフレームという接続を切ることを通知する機能があります。
+Go1.8からはシャットダウン時にこのGOAWAYフレームを送ってくれるようになります。
+GOAWAYフレームはサーバ側から任意のタイミングで送ることができ、
+どこまで正常に処理できたかをクライアントに伝えられるという利点があります。</p>
+
+<p>余談ですが、この機能は<a href="https://github.com/golang/go/issues/18471">x/net/http2を利用している場合は動かない</a>らしいです。
+<a href="https://github.com/golang/net/blob/8fd7f25955530b92e73e9e1932a41b522b22ccd9/http2/server.go#L2716-L2736">importしたときには動かないけどbundleしたときにだけ動く黒魔術</a>が使われているためです。
+覚えておいても今後絶対使うことはなさそう。というか使いたくない・・・。</p>
+
+<h3>contextが使える</h3>
+
+<p>go-gracedownを作った頃は、contextはまだ標準パッケージに取り込まれていなかったので対応していませんでした。
+(1.7のリリース時に対応を怠っていただけとも言える)
+net/httpのシャットダウンはもちろんcontextに対応しています。
+これにより、Graceful Shutdownを中断して強制終了する、
+ということが簡単にできるようになります。</p>
+
+<h2>公式サポートで変更になる予定の挙動</h2>
+
+<p>Keep-Aliveでのリクエストの挙動が少し変わります。
+1.7以前のgo-gracedownでは、クライアントにKeep-Aliveが無効になったのを伝え、
+クライアント側から接続を切るのを待つように実装してしました。
+多少接続時間が延びたとしてもクライアント側でよくわからないエラーになるよりはマシだろ、との考えからです。</p>
+
+<p>1.8からはシャットダウン時にIdle状態(TCP接続は有効だけど、リクエストは処理していない状態)な接続は切断されます。
+内部で使っている<a href="https://golang.org/pkg/net/http/#Server.SetKeepAlivesEnabled">Server.SetKeepAlivesEnabled</a>の
+挙動が<a href="https://github.com/golang/go/issues/9478">変更になった</a>ためです。</p>
+
+<p>Goの中の人的には「この挙動が原因で万が一トラブルになっても、クライアントがリトライしてくれるから大丈夫でしょ」とのことのようです。
+サーバシャットダウン以外にもネットワークトラブル等でも接続は切れるので、
+クライアント側で頑張ってというのは正論ですが、
+どの程度エラーが増えるのかは気になるところです。</p>
+
+<h3>go-gracedownの対応</h3>
+
+<p>go-gracedownはGo1.8でコンパイルされたときはbuild-inの機能を直接使うようになります。
+中身はほとんどがインターフェースの互換性を保つためのコードなので、
+機能的なメリットは完全になくなってしまいました・・・。
+HTTP/2サポートも問題なく動くはずです。
+逆にパッケージの依存が増えること以外はデメリットはないともいえます。</p>
+
+<p>Go1.7以下では今までの方法にフォールバックしてくれます。
+というわけで、以下のような人には有用です。</p>
+
+<ul>
+<li>深淵な理由でGo1.7以下しか使えない人</li>
+<li>Go1.8とGo1.7以下のサポートがどうしても必要な人</li>
+<li>Go1.8にアップグレードしたけど、graceful shutdownの処理を書き換えるのがめんどくさい人</li>
+</ul>
+
+
+<p>ところで、環境が悪いときに性能を落としたり機能を制限することをフォールバック(fall back)というわけですが、
+逆に環境が良いときに性能を上げたり機能を拡張することはなんていうんですかね？
+モデムでは通信環境が良いときに高速な通信方式に切り変えることを「フォールフォワード(fall forward)」というらしいです。
+「Go1.8ではbild-inのGraceful Shutdownにフォールフォワードする」で使い方あってます？</p>
+
+<h2>使い方</h2>
+
+<h3>Server.Shutdownを使う</h3>
+
+<p><a href="http://qiita.com/advent-calendar/2016/go3">Go(その3) Advent Calendar</a>の
+<a href="http://qiita.com/najeira/items/806cacb9bba96ff06ec4">最終日の記事</a>でも扱ってますが改めて。</p>
+
+<pre><code class="go">package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    "net"
+    "net/http"
+    "os"
+    "os/signal"
+    "syscall"
+
+    "github.com/lestrrat/go-server-starter/listener"
+)
+
+func main() {
+    log.Printf("start pid %d\n", os.Getpid())
+
+    listeners, err := listener.ListenAll()
+    if err != nil &amp;&amp; err != listener.ErrNoListeningTarget {
+        panic(err)
+    }
+    var l net.Listener
+    if err == listener.ErrNoListeningTarget {
+        // Fallback if not running under Server::Starter
+        l, err = net.Listen("tcp", ":8080")
+        if err != nil {
+            panic("Failed to listen to port 8080")
+        }
+    } else {
+        l = listeners[0]
+    }
+
+    // 別goroutineでServeしていることに注意！
+    srv := &amp;http.Server{Handler: newHandler()}
+    go func() {
+        srv.Serve(l)
+    }()
+
+    // mainの中でシグナルの待受をしていることに注意！
+    signal_chan := make(chan os.Signal)
+    signal.Notify(signal_chan, syscall.SIGTERM)
+    for {
+        s := &lt;-signal_chan
+        if s == syscall.SIGTERM {
+            log.Printf("SIGTERM!!!!\n")
+            srv.Shutdown(context.Background())
+            return
+        }
+    }
+}
+
+func newHandler() http.Handler {
+    mux := http.NewServeMux()
+    mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+        fmt.Fprintf(w, "from pid %d.\n", os.Getpid())
+    })
+    return mux
+}
+</code></pre>
+
+<p>go-gracedownからの移行するさいの注意点は以下の通りです。</p>
+
+<ul>
+<li><code>Server.Shutdown</code>を使う(<code>Serer.Close</code>もあるけど、そっちはGracefulではない)</li>
+<li><code>Server.Serve</code>は<strong>シャットダウンが始まる</strong>とすぐに制御を返す(<strong>シャットダウンが終わる</strong>とではない)</li>
+<li><code>Server.Shutdown</code>は<strong>シャットダウンが終わる</strong>と制御を返す(<strong>シャットダウンが始まる</strong>とではない)</li>
+</ul>
+
+
+<h3>go-gracedownを使う</h3>
+
+<p>go-gracedownの使い方も再掲しておきます。
+Go1.6から利用方法は一切変更はないですが、
+Go1.8でコンパイルすると<code>Server.Shutdown</code>を利用してくれます。</p>
+
+<pre><code class="go">package main
+
+import (
+    "fmt"
+    "log"
+    "net"
+    "net/http"
+    "os"
+    "os/signal"
+    "syscall"
+
+    "github.com/lestrrat/go-server-starter/listener"
+    "github.com/shogo82148/go-gracedown"
+)
+
+func main() {
+    log.Printf("start pid %d\n", os.Getpid())
+
+    signal_chan := make(chan os.Signal)
+    signal.Notify(signal_chan, syscall.SIGTERM)
+    go func() {
+        for {
+            s := &lt;-signal_chan
+            if s == syscall.SIGTERM {
+                log.Printf("SIGTERM!!!!\n")
+                gracedown.Close()
+            }
+        }
+    }()
+
+    listeners, err := listener.ListenAll()
+    if err != nil &amp;&amp; err != listener.ErrNoListeningTarget {
+        panic(err)
+    }
+    var l net.Listener
+    if err == listener.ErrNoListeningTarget {
+        // Fallback if not running under Server::Starter
+        l, err = net.Listen("tcp", ":8080")
+        if err != nil {
+            panic("Failed to listen to port 8080")
+        }
+    } else {
+        l = listeners[0]
+    }
+
+    gracedown.Serve(l, newHandler())
+}
+
+func newHandler() http.Handler {
+    mux := http.NewServeMux()
+    mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+        fmt.Fprintf(w, "from pid %d.\n", os.Getpid())
+    })
+    return mux
+}
+</code></pre>
+
+<h3>HTTP/2を使う</h3>
+
+<p>せっかくHTTP/2にも対応したことなので、
+Server::Starterを使ってHTTP/2サーバのGraceful Restartをする例も書いてみました。</p>
+
+<pre><code class="go">package main
+
+import (
+    "context"
+    "crypto/tls"
+    "fmt"
+    "log"
+    "net"
+    "net/http"
+    "os"
+    "os/signal"
+    "syscall"
+
+    "github.com/lestrrat/go-server-starter/listener"
+)
+
+// net/http/internal/testcert.go から拝借
+var localhostCert = []byte(`-----BEGIN CERTIFICATE-----
+MIICEzCCAXygAwIBAgIQMIMChMLGrR+QvmQvpwAU6zANBgkqhkiG9w0BAQsFADAS
+MRAwDgYDVQQKEwdBY21lIENvMCAXDTcwMDEwMTAwMDAwMFoYDzIwODQwMTI5MTYw
+MDAwWjASMRAwDgYDVQQKEwdBY21lIENvMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCB
+iQKBgQDuLnQAI3mDgey3VBzWnB2L39JUU4txjeVE6myuDqkM/uGlfjb9SjY1bIw4
+iA5sBBZzHi3z0h1YV8QPuxEbi4nW91IJm2gsvvZhIrCHS3l6afab4pZBl2+XsDul
+rKBxKKtD1rGxlG4LjncdabFn9gvLZad2bSysqz/qTAUStTvqJQIDAQABo2gwZjAO
+BgNVHQ8BAf8EBAMCAqQwEwYDVR0lBAwwCgYIKwYBBQUHAwEwDwYDVR0TAQH/BAUw
+AwEB/zAuBgNVHREEJzAlggtleGFtcGxlLmNvbYcEfwAAAYcQAAAAAAAAAAAAAAAA
+AAAAATANBgkqhkiG9w0BAQsFAAOBgQCEcetwO59EWk7WiJsG4x8SY+UIAA+flUI9
+tyC4lNhbcF2Idq9greZwbYCqTTTr2XiRNSMLCOjKyI7ukPoPjo16ocHj+P3vZGfs
+h1fIw3cSS2OolhloGw/XM6RWPWtPAlGykKLciQrBru5NAPvCMsb/I1DAceTiotQM
+fblo6RBxUQ==
+-----END CERTIFICATE-----`)
+
+var localhostKey = []byte(`-----BEGIN RSA PRIVATE KEY-----
+MIICXgIBAAKBgQDuLnQAI3mDgey3VBzWnB2L39JUU4txjeVE6myuDqkM/uGlfjb9
+SjY1bIw4iA5sBBZzHi3z0h1YV8QPuxEbi4nW91IJm2gsvvZhIrCHS3l6afab4pZB
+l2+XsDulrKBxKKtD1rGxlG4LjncdabFn9gvLZad2bSysqz/qTAUStTvqJQIDAQAB
+AoGAGRzwwir7XvBOAy5tM/uV6e+Zf6anZzus1s1Y1ClbjbE6HXbnWWF/wbZGOpet
+3Zm4vD6MXc7jpTLryzTQIvVdfQbRc6+MUVeLKwZatTXtdZrhu+Jk7hx0nTPy8Jcb
+uJqFk541aEw+mMogY/xEcfbWd6IOkp+4xqjlFLBEDytgbIECQQDvH/E6nk+hgN4H
+qzzVtxxr397vWrjrIgPbJpQvBsafG7b0dA4AFjwVbFLmQcj2PprIMmPcQrooz8vp
+jy4SHEg1AkEA/v13/5M47K9vCxmb8QeD/asydfsgS5TeuNi8DoUBEmiSJwma7FXY
+fFUtxuvL7XvjwjN5B30pNEbc6Iuyt7y4MQJBAIt21su4b3sjXNueLKH85Q+phy2U
+fQtuUE9txblTu14q3N7gHRZB4ZMhFYyDy8CKrN2cPg/Fvyt0Xlp/DoCzjA0CQQDU
+y2ptGsuSmgUtWj3NM9xuwYPm+Z/F84K6+ARYiZ6PYj013sovGKUFfYAqVXVlxtIX
+qyUBnu3X9ps8ZfjLZO7BAkEAlT4R5Yl6cGhaJQYZHOde3JEMhNRcVFMO8dJDaFeo
+f9Oeos0UUothgiDktdQHxdNEwLjQf7lJJBzV+5OtwswCWA==
+-----END RSA PRIVATE KEY-----`)
+
+func main() {
+    log.Printf("start pid %d\n", os.Getpid())
+
+    listeners, err := listener.ListenAll()
+    if err != nil &amp;&amp; err != listener.ErrNoListeningTarget {
+        panic(err)
+    }
+    var l net.Listener
+    if err == listener.ErrNoListeningTarget {
+        // Fallback if not running under Server::Starter
+        l, err = net.Listen("tcp", ":8080")
+        if err != nil {
+            panic("Failed to listen to port 8080")
+        }
+    } else {
+        l = listeners[0]
+    }
+    cert, err := tls.X509KeyPair(localhostCert, localhostKey)
+    if err != nil {
+        panic(err)
+    }
+    tlsConfig := &amp;tls.Config{
+        NextProtos:   []string{"h2"},
+        Certificates: []tls.Certificate{cert},
+    }
+
+    srv := &amp;http.Server{
+        Handler:   newHandler(),
+        TLSConfig: tlsConfig,
+    }
+    l = tls.NewListener(l, tlsConfig)
+    go func() {
+        srv.Serve(l)
+    }()
+
+    signal_chan := make(chan os.Signal)
+    signal.Notify(signal_chan, syscall.SIGTERM)
+    for {
+        s := &lt;-signal_chan
+        if s == syscall.SIGTERM {
+            log.Printf("SIGTERM!!!!\n")
+            srv.Shutdown(context.Background())
+            return
+        }
+    }
+}
+
+func newHandler() http.Handler {
+    mux := http.NewServeMux()
+    mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+        fmt.Fprintf(w, "from pid %d.\n", os.Getpid())
+    })
+    return mux
+}
+</code></pre>
+
+<p><code>NextProtos</code>へ明示的に<code>h2</code>を指定する必要があるのがポイントです。
+net/httpはデフォルトでHTTP/2を有効にしてくれますが、
+<code>TLSConfig</code>が指定されているときは自前でやる必要があります。</p>
+
+<h2>実験</h2>
+
+<p>HTTP/2に対応していて証明書の検証もスキップできて・・・という条件で
+ベンチマークソフトを探すのが面倒だったので、Goで自作です。
+あまり詳しい統計情報は要らないので、負荷をかけるのにリソースを割きたかったというのもあります。</p>
+
+<pre><code class="go">package main
+
+import (
+    "crypto/tls"
+    "flag"
+    "io"
+    "io/ioutil"
+    "log"
+    "net"
+    "net/http"
+    "time"
+
+    "github.com/kayac/parallel-benchmark/benchmark"
+    "golang.org/x/net/http2"
+)
+
+type myWorker struct {
+    URL    string
+    client *http.Client
+    buf    []byte
+}
+
+func (w *myWorker) Setup() {
+    tr := &amp;http.Transport{
+        Proxy: http.ProxyFromEnvironment,
+        DialContext: (&amp;net.Dialer{
+            Timeout:   30 * time.Second,
+            KeepAlive: 30 * time.Second,
+        }).DialContext,
+        MaxIdleConns:        1,
+        IdleConnTimeout:     90 * time.Second,
+        TLSHandshakeTimeout: 10 * time.Second,
+        TLSClientConfig: &amp;tls.Config{
+            // テストなので証明書の検証はスキップ
+            // プロダクションでは必ず有効にしてください！
+            InsecureSkipVerify: true,
+        },
+        ExpectContinueTimeout: 1 * time.Second,
+    }
+    if err := http2.ConfigureTransport(tr); err != nil {
+        panic(err)
+    }
+    w.client = &amp;http.Client{
+        Transport: tr,
+    }
+    w.buf = make([]byte, 1024)
+}
+
+func (w *myWorker) Teardown() {
+}
+
+func (w *myWorker) Process() (subscore int) {
+    resp, err := w.client.Get(w.URL)
+    if err != nil {
+        log.Printf("ERROR: %v", err)
+        return 0
+    }
+    _, err = io.CopyBuffer(ioutil.Discard, resp.Body, w.buf)
+    resp.Body.Close()
+    if err != nil &amp;&amp; err != io.EOF {
+        log.Printf("ERROR: %v", err)
+        return 0
+    }
+    if resp.StatusCode != http.StatusOK {
+        log.Printf("Invalid Status: %d", resp.StatusCode)
+        return 0
+    }
+    return 1
+}
+
+func main() {
+    var (
+        conn     int
+        duration time.Duration
+    )
+    flag.IntVar(&amp;conn, "c", 1, "connections to keep open")
+    flag.DurationVar(&amp;duration, "d", time.Second, "duration of benchmark")
+    flag.Parse()
+    url := flag.Args()[0]
+    workers := make([]benchmark.Worker, conn)
+    for i, _ := range workers {
+        workers[i] = &amp;myWorker{URL: url}
+    }
+    benchmark.Run(workers, duration)
+}
+</code></pre>
+
+<p>前回記事同様、Server::Starterを使って1秒毎に再起動を繰り返しながらベンチを回します。
+AWSのc4.largeインスタンス上で実行しました。</p>
+
+<pre><code class="bash">$ start_server --port 8080 --pid-file app.pid -- ./main
+$ while true; do kill -HUP `cat app.pid`; sleep 1; done
+$ ./bin/bench -c 10 -d=1m http://localhost:8080/
+</code></pre>
+
+<h2>結果</h2>
+
+<h3>Server.Shutdownを使った場合</h3>
+
+<p>Server.Shutdownを使った場合の結果です。</p>
+
+<pre><code class="plain">$ ./bin/bench -c 10 -d=1m http://localhost:8080/
+2017/01/22 12:20:51 starting benchmark: concurrency: 10, time: 1m0s, GOMAXPROCS: 2
+2017/01/22 12:21:51 done benchmark: score 1174412, elapsed 1m0.002557914s = 19572.698912 / sec
+</code></pre>
+
+<p>先程紹介したKeepAliveの挙動変更の影響で多少はエラーがでるのでは？と予想していたものの、
+まったく影響はありませんでした。</p>
+
+<h3>go-gracedownを使った場合</h3>
+
+<p>go-gracedownを使った場合の結果です。</p>
+
+<pre><code class="plain">$ ./bin/bench -c 10 -d=1m http://localhost:8080/
+2017/01/22 12:22:26 starting benchmark: concurrency: 10, time: 1m0s, GOMAXPROCS: 2
+2017/01/22 12:23:26 done benchmark: score 1160878, elapsed 1m0.009764419s = 19344.818485 / sec
+</code></pre>
+
+<p>中身は<code>Server.Shutdown</code>なので、当然ながら同じ結果です。</p>
+
+<h3>HTTP/2でアクセスした場合</h3>
+
+<p>HTTP/2でアクセスした場合の結果です。
+GoのHTTP/2サポートはHTTPSで通信したときにしか有効にならないので、他のベンチとURLが違うことに注意。</p>
+
+<pre><code class="plain">$ ./bin/bench -c 10 -d=1m https://localhost:8080/
+2017/01/22 12:30:04 starting benchmark: concurrency: 10, time: 1m0s, GOMAXPROCS: 2
+2017/01/22 12:31:04 done benchmark: score 666801, elapsed 1m0.001842465s = 11113.008745 / sec
+</code></pre>
+
+<p>特にエラーもなく、全く問題ありませんでした。</p>
+
+<h2>まとめ</h2>
+
+<ul>
+<li>Go1.8からサポートされる予定のHTTPサーバのGraceful Shutdownについて検証しました
+
+<ul>
+<li>HTTP/1.1とHTTP/2で検証しましたが、特に問題は見つかりませんでした</li>
+</ul>
+</li>
+<li>go-gracedownはGo1.8でコンパイルされたときはbuild-inの機能を使うようになります
+
+<ul>
+<li>機能的にはbuild-inの機能を直接使う場合とまったく変わりありません</li>
+</ul>
+</li>
+</ul>
+
+
+<p>Go1.8の正式リリース楽しみですね！</p>
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="https://shogo82148.github.io/blog/2015/05/03/golang-graceful-restart/">Go言語でGraceful Restartをする</a></li>
+<li><a href="https://shogo82148.github.io/blog/2015/11/23/golang-graceful-restart-2nd/">Go言語でGraceful Restartをするときに取りこぼしを少なくする</a></li>
+<li><a href="https://github.com/golang/go/issues/4674">net/http: add built-in graceful shutdown support to Server #4674</a></li>
+<li><a href="https://github.com/golang/go/issues/9478">net/http: make Server.SetKeepAlivesEnabled(false) drop currently-open connections #9478</a></li>
+<li><a href="http://qiita.com/najeira/items/806cacb9bba96ff06ec4">Go 1.8 の HTTP Server Graceful Shutdown を試す</a></li>
+</ul>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Re:golang の http.Client を速くする]]></title>
@@ -535,7 +1037,7 @@ DNSよくわからない・・・検証環境構築つらい・・・ので、�
 <h2>おまけ</h2>
 
 <p>この記事書くのにnetパッケージの中を探っていたら、
-ソースコードの中に<a href="https://github.com/golang/go/blob/ecc4474341504f5893c8333dbb68c520dbe93ca5/src/net/lookup.go#L39">Gopther君を見つけた</a>。</p>
+ソースコードの中に<a href="https://github.com/golang/go/blob/ecc4474341504f5893c8333dbb68c520dbe93ca5/src/net/lookup.go#L39">Gopher君を見つけた</a>。</p>
 
 <p>ʕ◔ϖ◔ʔʕ◔ϖ◔ʔʕ◔ϖ◔ʔ</p>
 ]]></content>
@@ -944,10 +1446,14 @@ func newHandler() http.Handler {
 <code>go run main.go</code>だと自分で書いたプログラムがシグナルを受け取れなくなってしまうので、
 <code>go build main.go</code>とコンパイルしてから実行するところがポイントです。</p>
 
-<pre><code class="bash">$ start_server --port 8080 --pid app.pid -- ./main
+<pre><code class="bash">$ start_server --port 8080 --pid-file app.pid -- ./main
 $ while true; do kill -HUP `cat app.pid`; sleep 1; done
 $ ab -r -n 1000000 -c 10 http://localhost:8080/
 </code></pre>
+
+<p><strong>2017-01-22追記</strong>: 上記コマンド、<code>start_server</code>の引数が<code>--pid app.pid</code>となっていましたが、<code>--pid-file app.pid</code>でした。
+Perl版のServer::Starterは一番名前の近いオプションに勝手に解釈してくれる(ちょっとお節介過ぎると思う)ので、
+間違っていても動きますが、Go版では動きません。</p>
 
 <p><a href="https://gist.github.com/shogo82148/a1524f31292202ec34f3#file-manners">mannersを使った場合の実験結果</a>へのリンクを貼っておきます。
 「Failed requests:        122」となっており、残念ながら取りこぼしが発生してしまいました。
@@ -1035,70 +1541,6 @@ HTTP/1.0だと「Connection: Close」を送る方法が使えないので、<a h
 </ul>
 </li>
 <li>Graceful Restartむずかしい</li>
-</ul>
-
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Goオールスターズで登壇してきました]]></title>
-    <link href="https://shogo82148.github.io/blog/2015/10/14/go-all-stars/"/>
-    <updated>2015-10-14T08:11:00+09:00</updated>
-    <id>https://shogo82148.github.io/blog/2015/10/14/go-all-stars</id>
-    <content type="html"><![CDATA[<p>先週の日曜日に登壇してきました。</p>
-
-<p><a href="http://www.slideshare.net/shogo82148/go-go-53787565">http://www.slideshare.net/shogo82148/go-go-53787565</a>">http://www.slideshare.net/shogo82148/go-go-53787565">http://www.slideshare.net/shogo82148/go-go-53787565</a></a></p>
-
-<ul>
-<li><a href="http://www.slideshare.net/shogo82148/go-go-53787565">過去に自作したGoプロダクトの紹介 - Goオールスタース</a></li>
-</ul>
-
-
-<!-- More -->
-
-
-<p>発表の10日くらい前にsongmuさんがKAYACのIRCに現われオールスターを募集に来てくださったものの、
-弊社スターの都合がつかないため僕が代わりに発表してきました。</p>
-
-<p>KAYACではGoプロダクトたくさん動いていますが説明は作者にお任せしたほうがいいかなと思い、
-自作のGoプロダクトをメインに発表してきました。</p>
-
-<ul>
-<li><a href="https://github.com/shogo82148/go-rgba4444">go-rgba4444</a></li>
-<li><a href="https://github.com/shogo82148/androidbinary">androidbinary</a> - <a href="http://shogo82148.github.io/blog/2014/05/07/androidbinary/">Androidのバイナリファイルを解析するgoのライブラリ</a></li>
-<li><a href="https://github.com/shogo82148/go-sql-proxy">go-sql-proxy</a> - <a href="http://shogo82148.github.io/blog/2015/05/13/golang-sql-proxy/">Go言語でSQLのトレースをする</a></li>
-<li><a href="https://github.com/shogo82148/go-dithering">go-dithering</a> - <a href="http://shogo82148.github.io/blog/2015/04/25/quantize-image-in-golang/">Go言語で画像の減色を行う</a></li>
-<li><a href="https://github.com/shogo82148/go-prove">go-prove</a>/<a href="https://github.com/shogo82148/go-tap">go-tap</a> - <a href="http://shogo82148.github.io/blog/2015/09/19/faster-perl-test-with-go-lang/">Go言語でPerlのテストを早くする</a></li>
-<li><a href="https://github.com/shogo82148/go-webtail">go-webtail</a>/<a href="https://github.com/shogo82148/go-tail">go-webtail</a> - <a href="http://shogo82148.github.io/blog/2015/06/21/go-webtail/">Go-webtailってのを書いた</a></li>
-</ul>
-
-
-<p><a href="https://twitter.com/songmu/status/653100524296736768">https://twitter.com/songmu/status/653100524296736768</a>">https://twitter.com/songmu/status/653100524296736768">https://twitter.com/songmu/status/653100524296736768</a></a></p>
-
-<p>Perl Archive Network とはいったい・・・</p>
-
-<p>KAYACではいろんなGoプロダクトが動いているのでこちらもどうぞ。</p>
-
-<ul>
-<li><a href="https://github.com/kayac/go-katsubushi">go-katsubushi</a> snowﬂake-likeなIDジェネレータ</li>
-<li><a href="https://github.com/fujiwara/stretcher">stretcher</a> Consul/Surfと連携したデプロイツール</li>
-<li><a href="https://github.com/fujiwara/Rin">rin</a> AWS-S3に出力されたログをRedshiftへインポートするツール</li>
-<li><a href="https://github.com/acidlemon/mirage">mirage</a> Dockerを使ったテスト用環境構築</li>
-<li><a href="https://github.com/kayac/alphawing">alphawing</a> Android/iOSアプリの社内配信ツール</li>
-</ul>
-
-
-<p>スライドにちょこちょこ修正いれててGopherくん人形もらうの忘れてたけどもらっておけばよかった。</p>
-
-<p>他の人の発表はこちら。</p>
-
-<ul>
-<li><a href="http://eventdots.jp/event/571126">Goオールスターズ</a></li>
-<li><a href="http://togetter.com/li/885585">GoオールスターズToggetterまとめ</a></li>
-<li><a href="http://www.songmu.jp/riji/entry/2015-10-12-go-all-stars.html">Goオールスターズで登壇してきました - おそらくはそれさえも平凡な日々</a></li>
-<li><a href="http://ymotongpoo.hatenablog.com/entry/2015/10/13/104247">Goオールスターズでpackage managementについて話してきました - YAMAGUCHI::weblog</a></li>
-<li><a href="http://www.slideshare.net/takuyaueda967/go-53785408">Goだけでモバイルアプリを作ろう</a></li>
-<li><a href="http://bokko.hatenablog.com/entry/2015/10/12/151641">Goオールスターズ - 考える人、コードを書く人</a></li>
 </ul>
 
 ]]></content>
