@@ -18,6 +18,9 @@ Goでもちゃんと動くのかな？と気になったので
 [Go言語でGraceful Restartをする](http://shogo82148.github.io/blog/2015/05/03/golang-graceful-restart/)で紹介した
 プログラムに同じテストをやってみました。
 
+**2017-01-22追記**: Go1.8以降でGraceful Shutdownがbuild-inになるので、この記事で紹介したライブラリは不要となりました。
+詳しくは[Go1.8のGraceful Shutdownとgo-gracedownの対応](https://shogo82148.github.io/blog/2017/01/21/golang-1-dot-8-graceful-shutdown/)を参照。
+
 <!-- More -->
 
 ## mannersでテストしてみる
