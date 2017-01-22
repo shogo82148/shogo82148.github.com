@@ -98,10 +98,14 @@ func newHandler() http.Handler {
 `go build main.go`とコンパイルしてから実行するところがポイントです。
 
 ``` bash
-$ start_server --port 8080 --pid app.pid -- ./main
+$ start_server --port 8080 --pid-file app.pid -- ./main
 $ while true; do kill -HUP `cat app.pid`; sleep 1; done
 $ ab -r -n 1000000 -c 10 http://localhost:8080/
 ```
+
+**2017-01-22追記**: 上記コマンド、`start_server`の引数が`--pid app.pid`となっていましたが、`--pid-file app.pid`でした。
+Perl版のServer::Starterは一番名前の近いオプションに勝手に解釈してくれる(ちょっとお節介過ぎると思う)ので、
+間違っていても動きますが、Go版では動きません。
 
 [mannersを使った場合の実験結果](https://gist.github.com/shogo82148/a1524f31292202ec34f3#file-manners)へのリンクを貼っておきます。
 「Failed requests:        122」となっており、残念ながら取りこぼしが発生してしまいました。
