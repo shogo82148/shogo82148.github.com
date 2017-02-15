@@ -21,7 +21,7 @@ mattnさんが紹介しているように、Go1.8ではdatabase/sqlにいくつ�
 
 特に大きなのがcontextのサポートでしょう。以下のようなコードでクエリのキャンセルが可能になります。
 
-``` golang
+``` go
 ctx, cancel := context.WithCancel(context.Background())
 go func() {
     // 1秒待ってからキャンセル
