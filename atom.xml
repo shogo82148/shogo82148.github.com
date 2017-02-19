@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2017-02-16T07:57:14+09:00</updated>
+  <updated>2017-02-19T09:17:03+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,333 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Go言語でコンパイル時フィボナッチ数列計算]]></title>
+    <link href="https://shogo82148.github.io/blog/2017/02/19/golang-compile-time-fib/"/>
+    <updated>2017-02-19T09:06:05+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2017/02/19/golang-compile-time-fib</id>
+    <content type="html"><![CDATA[<p><a href="http://postd.cc/fibonacci/">整数の公式でフィボナッチ数列を求める</a>という記事を読んで、
+「これコンパイル時ならGoでも簡単に計算できるのでは？」と思いやってみたメモ。</p>
+
+<!-- More -->
+
+
+<h2>背景</h2>
+
+<p>みんな大好きフィボナッチ数列(要出典)。
+漸化式で定義されているため、再帰やループを使って書くことが多いと思いますが、
+閉じた式で書くことが知られています。
+ただし、この一般式には無理数の演算が入るので、コンピュータで厳密に扱うことはできません。
+ところが、さきほど紹介した記事で紹介された方法を使うと、整数の演算のみで実現できるそうです。</p>
+
+<p>原理などはネタ元の記事を参照してもらうとして、
+Python3では以下のように書けるらしいです。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="k">def</span> <span class="nf">fib</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+</span><span class='line'>    <span class="k">return</span> <span class="p">(</span><span class="mi">4</span> <span class="o">&lt;&lt;</span> <span class="n">n</span><span class="o">*</span><span class="p">(</span><span class="mi">3</span><span class="o">+</span><span class="n">n</span><span class="p">))</span> <span class="o">//</span> <span class="p">((</span><span class="mi">4</span> <span class="o">&lt;&lt;</span> <span class="mi">2</span><span class="o">*</span><span class="n">n</span><span class="p">)</span> <span class="o">-</span> <span class="p">(</span><span class="mi">2</span> <span class="o">&lt;&lt;</span> <span class="n">n</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">((</span><span class="mi">2</span> <span class="o">&lt;&lt;</span> <span class="n">n</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>ある程度大きなフィボナッチ数を求める場合、
+計算途中の値が非常に大きくなるため、多倍長整数が必要となります。
+Python3は多倍長整数に組み込みで対応していますが、
+Goでは<a href="https://golang.org/pkg/math/big/">math/bigパッケージ</a>を利用する必要があります。</p>
+
+<p>なんか面倒だなGolangと思っていたのですが、
+<a href="http://qiita.com/sonatard/items/464a9d45c689386edfe1">Better C - Go言語と整数 #golang</a>を読んで、
+「Goの定数には型がない(場合がある)」「任意の精度で計算してくれる」ということを知り、
+「つまりコンパイル時に定数として計算すれば楽にいけるのでは！！」と考えたわけです。</p>
+
+<h2>結果</h2>
+
+<p>ちょっと複雑な式ですが、個々の演算自体はPython3もGoも変わらないので、
+翻訳は簡単ですね。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="s">&quot;fmt&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">const</span> <span class="nx">Fib0</span> <span class="p">=</span> <span class="mi">1</span> <span class="c1">// 0だけはうまくいかない</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">const</span> <span class="p">(</span>
+</span><span class='line'>  <span class="nx">_</span>    <span class="p">=</span> <span class="p">(</span><span class="mi">4</span> <span class="o">&lt;&lt;</span> <span class="p">(</span><span class="kc">iota</span> <span class="o">*</span> <span class="p">(</span><span class="mi">3</span> <span class="o">+</span> <span class="kc">iota</span><span class="p">)))</span> <span class="o">/</span> <span class="p">((</span><span class="mi">4</span> <span class="o">&lt;&lt;</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="kc">iota</span><span class="p">))</span> <span class="o">-</span> <span class="p">(</span><span class="mi">2</span> <span class="o">&lt;&lt;</span> <span class="kc">iota</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">((</span><span class="mi">2</span> <span class="o">&lt;&lt;</span> <span class="kc">iota</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+</span><span class='line'>  <span class="nx">Fib1</span>
+</span><span class='line'>  <span class="nx">Fib2</span>
+</span><span class='line'>  <span class="nx">Fib3</span>
+</span><span class='line'>  <span class="nx">Fib4</span>
+</span><span class='line'>  <span class="nx">Fib5</span>
+</span><span class='line'>  <span class="nx">Fib6</span>
+</span><span class='line'>  <span class="nx">Fib7</span>
+</span><span class='line'>  <span class="nx">Fib8</span>
+</span><span class='line'>  <span class="nx">Fib9</span>
+</span><span class='line'>  <span class="nx">Fib10</span>
+</span><span class='line'>  <span class="nx">Fib11</span>
+</span><span class='line'>  <span class="nx">Fib12</span>
+</span><span class='line'>  <span class="nx">Fib13</span>
+</span><span class='line'>  <span class="nx">Fib14</span>
+</span><span class='line'>  <span class="nx">Fib15</span>
+</span><span class='line'>  <span class="nx">Fib16</span>
+</span><span class='line'>  <span class="nx">Fib17</span>
+</span><span class='line'>  <span class="nx">Fib18</span>
+</span><span class='line'>  <span class="nx">Fib19</span>
+</span><span class='line'>  <span class="nx">Fib20</span>
+</span><span class='line'>  <span class="nx">Fib21</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">fibs</span> <span class="o">:=</span> <span class="p">[]</span><span class="kt">int</span><span class="p">{</span>
+</span><span class='line'>      <span class="nx">Fib0</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib1</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib2</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib3</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib4</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib5</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib6</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib7</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib8</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib9</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib10</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib11</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib12</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib13</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib14</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib15</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib16</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib17</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib18</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib19</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib20</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib21</span><span class="p">,</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">for</span> <span class="nx">i</span><span class="p">,</span> <span class="nx">fib</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">fibs</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="nx">i</span><span class="p">,</span> <span class="nx">fib</span><span class="p">)</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>実行結果です。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ go run fibconst.go
+</span><span class='line'>0 1
+</span><span class='line'>1 1
+</span><span class='line'>2 2
+</span><span class='line'>3 3
+</span><span class='line'>4 5
+</span><span class='line'>5 8
+</span><span class='line'>6 13
+</span><span class='line'>7 21
+</span><span class='line'>8 34
+</span><span class='line'>9 55
+</span><span class='line'>10 89
+</span><span class='line'>11 144
+</span><span class='line'>12 233
+</span><span class='line'>13 377
+</span><span class='line'>14 610
+</span><span class='line'>15 987
+</span><span class='line'>16 1597
+</span><span class='line'>17 2584
+</span><span class='line'>18 4181
+</span><span class='line'>19 6765
+</span><span class='line'>20 10946
+</span><span class='line'>21 17711</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>Fibxxx</code>をたくさん書くのはつらかったので、ソースコードはPerlで自動生成しました。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">print</span> <span class="s">&lt;&lt;EOF;</span>
+</span><span class='line'><span class="s">package main</span>
+</span><span class='line'>
+</span><span class='line'><span class="s">import &quot;fmt&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="s">const Fib0 = 1</span>
+</span><span class='line'>
+</span><span class='line'><span class="s">const (</span>
+</span><span class='line'><span class="s">    _    = (4 &lt;&lt; (iota * (3 + iota))) / ((4 &lt;&lt; (2 * iota)) - (2 &lt;&lt; iota) - 1) &amp; ((2 &lt;&lt; iota) - 1)</span>
+</span><span class='line'><span class="s">EOF</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">print</span> <span class="s">&quot;    Fib$_\n&quot;</span> <span class="k">for</span> <span class="mi">1</span><span class="o">..</span><span class="mi">21</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">print</span> <span class="s">&lt;&lt;EOF;</span>
+</span><span class='line'><span class="s">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="s">func main() {</span>
+</span><span class='line'><span class="s">    fibs := []int{</span>
+</span><span class='line'><span class="s">        Fib0,</span>
+</span><span class='line'><span class="s">EOF</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">print</span> <span class="s">&quot;        Fib$_,\n&quot;</span> <span class="k">for</span> <span class="mi">1</span><span class="o">..</span><span class="mi">21</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">print</span> <span class="s">&lt;&lt;EOF</span>
+</span><span class='line'><span class="s">    }</span>
+</span><span class='line'><span class="s">    for i, fib := range fibs {</span>
+</span><span class='line'><span class="s">        fmt.Println(i, fib)</span>
+</span><span class='line'><span class="s">    }</span>
+</span><span class='line'><span class="s">}</span>
+</span><span class='line'><span class="s">EOF</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>21までしかないのは、
+22以降を求めようとしたらコンパイルが通らなかったためです。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ go run fibconst.go
+</span><span class='line'># command-line-arguments
+</span><span class='line'>./fibconst.go:29: shift count too large: 550</span></code></pre></td></tr></table></div></figure>
+
+
+<p>どうやら512bitまでしか扱えないらしい。
+任意精度扱えるって書いてあったのに！！！</p>
+
+<ul>
+<li><a href="https://github.com/golang/go/blob/go1.8/src/cmd/compile/internal/gc/mpint.go#L211">mpint.go</a></li>
+<li><a href="https://github.com/golang/go/blob/go1.8/src/cmd/compile/internal/gc/mpfloat.go#L18">mpfloat.go</a></li>
+</ul>
+
+
+<p>おとなしく多倍長整数が組込の言語でやれっている話ではありますが、
+なんとなくやってみたかったんです。</p>
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="http://postd.cc/fibonacci/">整数の公式でフィボナッチ数列を求める</a>
+
+<ul>
+<li>Source: <a href="http://paulhankin.github.io/Fibonacci/">An integer formula for Fibonacci numbers</a></li>
+</ul>
+</li>
+<li><a href="http://qiita.com/sonatard/items/464a9d45c689386edfe1">Better C - Go言語と整数 #golang</a></li>
+</ul>
+
+
+<p>ネタ元にある「母関数」という概念は、数学ガールを読んで知りました。</p>
+
+<iframe style="width:120px;height:240px;" marginwidth="0" marginheight="0" scrolling="no" frameborder="0" src="//rcm-fe.amazon-adsystem.com/e/cm?lt1=_blank&bc1=000000&IS2=1&bg1=FFFFFF&fc1=000000&lc1=0000FF&t=shogo82148-22&o=9&p=8&l=as4&m=amazon&f=ifr&ref=as_ss_li_til&asins=4797341378&linkId=be2c6011ca1a5f15d96c370e494b0f95"></iframe>
+
+
+<p>フィボナッチ数列に触れている部分はWebでも公開されているので、そちらもどうぞ(<a href="http://www.hyuki.com/story/genfunc.html">ミルカさんとフィボナッチ数列</a>)</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Go-sql-proxyがcontextに対応しました]]></title>
@@ -4583,249 +4910,6 @@ API Gatewayなどで外部に公開した場合、第三者が何でもし放題
 <li><a href="http://dev.classmethod.jp/cloud/improved-aws-lambda-with-mecab/">【改】AWS Lambda で MeCab を動かす</a></li>
 </ul>
 
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Redisでスコアを複数設定できるランキングを作ってみた]]></title>
-    <link href="https://shogo82148.github.io/blog/2016/02/06/redis-leader-board-multi/"/>
-    <updated>2016-02-06T02:30:00+09:00</updated>
-    <id>https://shogo82148.github.io/blog/2016/02/06/redis-leader-board-multi</id>
-    <content type="html"><![CDATA[<p>ランキングを作っているとスコアを複数設定したいことがよくあると思います。
-例えば「得点が同じだったら早くその得点を出した人優先」とか「勝ち点が同じだったら得失点差が大きい方優先」とかのように、
-最初の基準で順位を決められなかった場合の第二基準が欲しいみたいな場合です。</p>
-
-<p>ランキングを作るのにはRedisのSorted Setを使うのが便利ですが、残念ながらSorted Setはひとつしかスコアを設定できません。
-少し前にどうやったら実装できるかと社内チャットで話題に上ったので、試しにRedis::LeaderBoardMulti(仮名)という名前で書いてみました。</p>
-
-<ul>
-<li><a href="https://github.com/shogo82148/p5-Redis-LeaderBoardMulti">shogo82148/p5-Redis-LeaderBoardMulti</a></li>
-</ul>
-
-
-<!-- More -->
-
-
-<h2>使い方</h2>
-
-<p>メソッドの名前は<a href="http://www.songmu.jp/riji/archives/2013/06/redisleaderboar.html">Redis::LeaderBoard</a>にあわせてありますが、
-スコアが複数指定できるようになった関係でちょっと変わってます。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">Redis</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="nn">Redis::</span><span class="n">LeaderBoard</span><span class="p">;</span>
-</span><span class='line'><span class="k">my</span> <span class="nv">$redis</span> <span class="o">=</span> <span class="n">Redis</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">;</span>
-</span><span class='line'><span class="k">my</span> <span class="nv">$lb</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">LeaderBoardMulti</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span>
-</span><span class='line'>    <span class="n">redis</span> <span class="o">=&gt;</span> <span class="nv">$redis</span><span class="p">,</span>
-</span><span class='line'>    <span class="n">key</span>   <span class="o">=&gt;</span> <span class="s">&#39;leader_board:1&#39;</span><span class="p">,</span>
-</span><span class='line'>    <span class="n">order</span> <span class="o">=&gt;</span> <span class="p">[</span><span class="s">&#39;asc&#39;</span><span class="p">,</span> <span class="s">&#39;desc&#39;</span><span class="p">],</span> <span class="c1"># asc/desc, desc as default</span>
-</span><span class='line'><span class="p">);</span>
-</span><span class='line'><span class="nv">$lb</span><span class="o">-&gt;</span><span class="n">set_score</span><span class="p">(</span><span class="s">&#39;one&#39;</span> <span class="o">=&gt;</span> <span class="mi">100</span><span class="p">,</span> <span class="nb">time</span><span class="p">);</span> <span class="c1"># 第二基準は時間=得点が同じだったら早くその得点を出した人優先</span>
-</span><span class='line'><span class="nv">$lb</span><span class="o">-&gt;</span><span class="n">set_score</span><span class="p">(</span><span class="s">&#39;two&#39;</span> <span class="o">=&gt;</span>  <span class="mi">50</span><span class="p">,</span> <span class="nb">time</span><span class="p">);</span>
-</span><span class='line'><span class="k">my</span> <span class="p">(</span><span class="nv">$rank</span><span class="p">,</span> <span class="nv">$score</span><span class="p">,</span> <span class="nv">$time</span><span class="p">)</span> <span class="o">=</span> <span class="nv">$lb</span><span class="o">-&gt;</span><span class="n">get_rank_with_score</span><span class="p">(</span><span class="s">&#39;one&#39;</span><span class="p">);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p><code>set_score</code>の第二引数以降はすべてスコアとして扱われます。(そのためRedis::LeaderBoardと互換性はない)
-上の例では「得点が同じだったら早くその得点を出した人優先」になってます。</p>
-
-<h2>制限事項</h2>
-
-<p>実装の都合により、以下のような制限があります。</p>
-
-<ul>
-<li>スコアはすべて64bit符号付き整数です
-
-<ul>
-<li>Redis::LeaderBoardのスコアは倍精度浮動小数点型なので小数も扱えるが、Redis::LeaderBoardMultiは整数だけ</li>
-</ul>
-</li>
-<li>Redis 2.8.9以降のみで動きます</li>
-</ul>
-
-
-<h2>実装の仕組み</h2>
-
-<p>Sorted Setの同じスコアを持つメンバーは辞書順にソートされます(zaddの<a href="http://redis.io/commands/zadd#elements-with-the-same-score">同じスコアを持つ要素</a>の項を参照)。
-例えば以下の様にメンバー「a」「b」「c」を追加すると、必ず「abc」の順番になることが保証されています。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>127.0.0.1:6379&gt; ZADD ranking 0 "a" 0 "b" 0 "c"
-</span><span class='line'>(integer) 3
-</span><span class='line'>127.0.0.1:6379&gt; ZRANK ranking "b"
-</span><span class='line'>(integer) 1</span></code></pre></td></tr></table></div></figure>
-
-
-<p>これを利用して、メンバーの先頭にスコアをエンコードして付けておきます。
-もちろんエンコードしたあとでもスコアの大小関係が保たれている必要があります。
-以下はエンコード方式にビッグエンディアンの16bit整数を使った例です。
-Redis 2.8.9から辞書順比較に特化したコマンド(LEXがつくやつ)が追加されているので、
-ランクを求める処理は以下のように書くことができます。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>127.0.0.1:6379&gt; ZADD ranking 0 "\x00\x02b"    (bをスコア2で追加)
-</span><span class='line'>(integer) 1
-</span><span class='line'>127.0.0.1:6379&gt; ZADD ranking 0 "\x00\x01a"    (aをスコア1で追加)
-</span><span class='line'>(integer) 1
-</span><span class='line'>127.0.0.1:6379&gt; ZLEXCOUNT ranking - "(\x00\x02"    (スコア2未満の個数=bのランク)
-</span><span class='line'>(integer) 1</span></code></pre></td></tr></table></div></figure>
-
-
-<p>さすがに16bit符号なし整数だと範囲が狭いので、実際の実装は以下のようになっています。</p>
-
-<ul>
-<li>エンコードはビッグエンディアンの64bit符号付き整数</li>
-<li>負数も扱えるように下駄を履かせる
-
-<ul>
-<li>1と-1を単純にエンコードすると-1の方が大きくなってしまう</li>
-<li>0x8000000000000000を足して符号なし整数の範囲で比較できるように補正</li>
-</ul>
-</li>
-</ul>
-
-
-<h2>アトミック性について</h2>
-
-<p>この方法だとSorted Setだけでは現在のスコアを取得できないので、
-スコアだけ別管理にする必要があります。
-スコアの更新とランキングの更新があるので、
-片方だけ更新される状況がないようにアトミック性に注意する必要があります。
-更新途中の間違った結果を返すだけならすぐに復旧するのでまだマシですが、
-途中でネットワーク障害が起こって不整合なデータが残ってしまうと面倒です。</p>
-
-<p>アトミック性を確保するためのパターンをいくつか実装してみました。
-<code>use_script</code>と<code>use_hash</code>で制御が可能です。</p>
-
-<h3>トランザクションを使った方法</h3>
-
-<p>Redisには<a href="http://redis.io/topics/transactions">トランザクション</a>の仕組みがあるのでこれを使った方法です。
-<code>use_script=&gt;0</code>が指定されるとこの方法で更新を行います。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>127.0.0.1:6379&gt; WATCH ranking:a   (他のクライアントが更新を行っていないか監視)
-</span><span class='line'>OK
-</span><span class='line'>127.0.0.1:6379&gt; GET ranking:a   (ranking:aに入っている現在のスコアを取得)
-</span><span class='line'>"\x00\x01"
-</span><span class='line'>127.0.0.1:6379&gt; MULTI
-</span><span class='line'>OK
-</span><span class='line'>127.0.0.1:6379&gt; ZREM ranking "\x00\x01a"
-</span><span class='line'>QUEUED
-</span><span class='line'>127.0.0.1:6379&gt; ZADD ranking 0 "\x00\x03a"
-</span><span class='line'>QUEUED
-</span><span class='line'>127.0.0.1:6379&gt; SET ranking:a "\x00\x03"
-</span><span class='line'>QUEUED
-</span><span class='line'>127.0.0.1:6379&gt; EXEC   (スコアの更新とランキングの更新をアトミックに行う)
-</span><span class='line'>1) (integer) 1
-</span><span class='line'>2) (integer) 1
-</span><span class='line'>3) OK</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Redisのトランザクションは楽観的ロックなので、他のクライアントがスコアを更新していると失敗する場合があります。
-失敗した場合はリトライが必要です。
-(この機構、いろいろと注意点があって毎回実装するのはつらすぎるので、別モジュールとして分離したいけど、いい名前とインターフェース募集中)</p>
-
-<p><code>use_hash=&gt;1</code>が指定されていると、スコアの記録にHashを使います。
-「Hashの特定のキーの更新をWATCHする」という命令はないため、ランキング全体を<code>WATCH</code>で監視します。
-(<code>use_hash=&gt;0</code>の場合、そのメンバのスコアだけ監視する)</p>
-
-<h3>Luaスクリプトを使った方法</h3>
-
-<p>RedisはLuaスクリプトを実行する機能があります。
-Luaスクリプト実行中は他の命令の実行をブロックするので、アトミック性が確保されます。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="kd">local</span> <span class="n">s</span><span class="o">=</span><span class="n">redis</span><span class="p">.</span><span class="n">call</span><span class="p">(</span><span class="s1">&#39;</span><span class="s">GET&#39;</span><span class="p">,</span> <span class="s1">&#39;</span><span class="s">ranking:a&#39;</span><span class="p">)</span>
-</span><span class='line'><span class="k">if</span> <span class="n">s</span> <span class="k">then</span>
-</span><span class='line'>  <span class="n">redis</span><span class="p">.</span><span class="n">call</span><span class="p">(</span><span class="s1">&#39;</span><span class="s">ZREM&#39;</span><span class="p">,</span> <span class="s1">&#39;</span><span class="s">ranking&#39;</span><span class="p">,</span> <span class="n">s</span><span class="o">..</span><span class="s1">&#39;</span><span class="s">a&#39;</span><span class="p">)</span>
-</span><span class='line'><span class="k">end</span>
-</span><span class='line'><span class="n">redis</span><span class="p">.</span><span class="n">call</span><span class="p">(</span><span class="s1">&#39;</span><span class="s">ZADD&#39;</span><span class="p">,</span> <span class="s1">&#39;</span><span class="s">ranking&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="s1">&#39;</span><span class="s">\x00\x03a&#39;</span><span class="p">)</span>
-</span><span class='line'><span class="n">redis</span><span class="p">.</span><span class="n">call</span><span class="p">(</span><span class="s1">&#39;</span><span class="s">SET&#39;</span><span class="p">,</span> <span class="s1">&#39;</span><span class="s">ranking:a&#39;</span><span class="p">,</span> <span class="s1">&#39;</span><span class="s">\x00\x03&#39;</span><span class="p">)</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Luaスクリプトを実行するには<code>EVAL</code>と<code>EVALSHA</code>の二種類のコマンドがあります。
-<code>EVALSHA</code>は転送量を抑えられて便利ですが、事前に<code>SCRIPT LOAD</code>で使うスクリプトを登録しておく必要があります。
-(ココらへんも別モジュールに分離したいけど、いい名前とインターフェース募集中)
-<code>use_evalsha</code>オプションでどちらを使うか制御可能です。</p>
-
-<p>ちなみに<code>EVAL</code>で実行したスクリプトも<a href="http://redis.io/commands/eval#script-cache-semantics">永遠にキャッシュされる</a>らしいです。
-上の例はわかりやすいようにキー名や値を直接埋め込んでいますが、同じことをしようとLuaスクリプトの動的生成なんてすると死にます。
-スクリプト内で<code>KEYS</code>や<code>ARGV</code>を使うと<code>EVAL</code>時にパラメータを渡せるようになるので、これを活用しましょう。</p>
-
-<h3>諦める</h3>
-
-<p><a href="https://metacpan.org/pod/Redis::LeaderBoard">Redis::LeaderBoard</a>の実装を見て気がついたんですが、
-<code>get_rank</code>の実装は「スコアの取得」「スコアに対応するランクの取得」がアトミックでないため、
-以下の条件を満たすと実際のランクより1大きい結果を返します。</p>
-
-<ul>
-<li>同じメンバーのスコア更新とランク取得が同時に行われる</li>
-<li>ランクが上がるようにスコアが更新される</li>
-</ul>
-
-
-<p>確かに厳密性は欠けますがたかだか1結果が変わるだけですし、
-そもそも更新と取得が同時に行われないようにモジュールを使う側が排他制御するべきですね。
-こういうケースでは諦めるというのも一つの手かなと思いました。
-もちろんデータの整合性が壊れる場合は頑張ってアトミック性を確保するべきでしょう。</p>
-
-<h2>まとめ</h2>
-
-<ul>
-<li>Redisでランキングをつくる際に、スコアを複数設定する方法を紹介しました</li>
-<li>アトミック性を確保する方法を紹介しました
-
-<ul>
-<li>トランザクションを使った方法</li>
-<li>Luaスクリプトを使った方法</li>
-<li>諦める</li>
-</ul>
-</li>
-</ul>
-
-
-<p>もうちょっとドキュメントを整備したらCPANにあげてみますかね。
-トランザクション管理・Luaスクリプト管理も分離したい(いい名前を思いついたら)。
-「こんな名前がいい！」「こんなインターフェースがいい！」等あればコメントください。</p>
 ]]></content>
   </entry>
   
