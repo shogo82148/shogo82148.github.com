@@ -3,7 +3,7 @@ layout: post
 title: "Go言語でコンパイル時フィボナッチ数列計算"
 date: 2017-02-19 09:06:05 +0900
 comments: true
-categories: 
+categories: golang
 ---
 
 [整数の公式でフィボナッチ数列を求める](http://postd.cc/fibonacci/)という記事を読んで、
