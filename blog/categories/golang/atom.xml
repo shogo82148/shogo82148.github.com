@@ -4,7 +4,7 @@
   <title><![CDATA[Category: golang | Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/blog/categories/golang/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2017-02-19T09:17:03+09:00</updated>
+  <updated>2017-02-23T18:37:45+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,212 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Go言語でコンパイル時フィボナッチ数列計算]]></title>
+    <link href="https://shogo82148.github.io/blog/2017/02/19/golang-compile-time-fib/"/>
+    <updated>2017-02-19T09:06:05+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2017/02/19/golang-compile-time-fib</id>
+    <content type="html"><![CDATA[<p><a href="http://postd.cc/fibonacci/">整数の公式でフィボナッチ数列を求める</a>という記事を読んで、
+「これコンパイル時ならGoでも簡単に計算できるのでは？」と思いやってみたメモ。</p>
+
+<!-- More -->
+
+
+<h2>背景</h2>
+
+<p>みんな大好きフィボナッチ数列(要出典)。
+漸化式で定義されているため、再帰やループを使って書くことが多いと思いますが、
+閉じた式で書くことが知られています。
+ただし、この一般式には無理数の演算が入るので、コンピュータで厳密に扱うことはできません。
+ところが、さきほど紹介した記事で紹介された方法を使うと、整数の演算のみで実現できるそうです。</p>
+
+<p>原理などはネタ元の記事を参照してもらうとして、
+Python3では以下のように書けるらしいです。</p>
+
+<pre><code class="python">def fib(n):
+    return (4 &lt;&lt; n*(3+n)) // ((4 &lt;&lt; 2*n) - (2 &lt;&lt; n) - 1) &amp; ((2 &lt;&lt; n) - 1)
+</code></pre>
+
+<p>ある程度大きなフィボナッチ数を求める場合、
+計算途中の値が非常に大きくなるため、多倍長整数が必要となります。
+Python3は多倍長整数に組み込みで対応していますが、
+Goでは<a href="https://golang.org/pkg/math/big/">math/bigパッケージ</a>を利用する必要があります。</p>
+
+<p>なんか面倒だなGolangと思っていたのですが、
+<a href="http://qiita.com/sonatard/items/464a9d45c689386edfe1">Better C - Go言語と整数 #golang</a>を読んで、
+「Goの定数には型がない(場合がある)」「任意の精度で計算してくれる」ということを知り、
+「つまりコンパイル時に定数として計算すれば楽にいけるのでは！！」と考えたわけです。</p>
+
+<h2>結果</h2>
+
+<p>ちょっと複雑な式ですが、個々の演算自体はPython3もGoも変わらないので、
+翻訳は簡単ですね。</p>
+
+<pre><code class="go">package main
+
+import "fmt"
+
+const Fib0 = 1 // 0だけはうまくいかない
+
+const (
+    _    = (4 &lt;&lt; (iota * (3 + iota))) / ((4 &lt;&lt; (2 * iota)) - (2 &lt;&lt; iota) - 1) &amp; ((2 &lt;&lt; iota) - 1)
+    Fib1
+    Fib2
+    Fib3
+    Fib4
+    Fib5
+    Fib6
+    Fib7
+    Fib8
+    Fib9
+    Fib10
+    Fib11
+    Fib12
+    Fib13
+    Fib14
+    Fib15
+    Fib16
+    Fib17
+    Fib18
+    Fib19
+    Fib20
+    Fib21
+)
+
+func main() {
+    fibs := []int{
+        Fib0,
+        Fib1,
+        Fib2,
+        Fib3,
+        Fib4,
+        Fib5,
+        Fib6,
+        Fib7,
+        Fib8,
+        Fib9,
+        Fib10,
+        Fib11,
+        Fib12,
+        Fib13,
+        Fib14,
+        Fib15,
+        Fib16,
+        Fib17,
+        Fib18,
+        Fib19,
+        Fib20,
+        Fib21,
+    }
+    for i, fib := range fibs {
+        fmt.Println(i, fib)
+    }
+}
+</code></pre>
+
+<p>実行結果です。</p>
+
+<pre><code class="plain">$ go run fibconst.go
+0 1
+1 1
+2 2
+3 3
+4 5
+5 8
+6 13
+7 21
+8 34
+9 55
+10 89
+11 144
+12 233
+13 377
+14 610
+15 987
+16 1597
+17 2584
+18 4181
+19 6765
+20 10946
+21 17711
+</code></pre>
+
+<p><code>Fibxxx</code>をたくさん書くのはつらかったので、ソースコードはPerlで自動生成しました。</p>
+
+<pre><code class="perl">print &lt;&lt;EOF;
+package main
+
+import "fmt"
+
+const Fib0 = 1
+
+const (
+    _    = (4 &lt;&lt; (iota * (3 + iota))) / ((4 &lt;&lt; (2 * iota)) - (2 &lt;&lt; iota) - 1) &amp; ((2 &lt;&lt; iota) - 1)
+EOF
+
+print "    Fib$_\n" for 1..21;
+
+print &lt;&lt;EOF;
+)
+
+func main() {
+    fibs := []int{
+        Fib0,
+EOF
+
+print "        Fib$_,\n" for 1..21;
+
+print &lt;&lt;EOF
+    }
+    for i, fib := range fibs {
+        fmt.Println(i, fib)
+    }
+}
+EOF
+</code></pre>
+
+<p>21までしかないのは、
+22以降を求めようとしたらコンパイルが通らなかったためです。</p>
+
+<pre><code class="plain">$ go run fibconst.go
+# command-line-arguments
+./fibconst.go:29: shift count too large: 550
+</code></pre>
+
+<p>どうやら512bitまでしか扱えないらしい。
+任意精度扱えるって書いてあったのに！！！</p>
+
+<ul>
+<li><a href="https://github.com/golang/go/blob/go1.8/src/cmd/compile/internal/gc/mpint.go#L211">mpint.go</a></li>
+<li><a href="https://github.com/golang/go/blob/go1.8/src/cmd/compile/internal/gc/mpfloat.go#L18">mpfloat.go</a></li>
+</ul>
+
+
+<p>おとなしく多倍長整数が組込の言語でやれっている話ではありますが、
+なんとなくやってみたかったんです。</p>
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="http://postd.cc/fibonacci/">整数の公式でフィボナッチ数列を求める</a>
+
+<ul>
+<li>Source: <a href="http://paulhankin.github.io/Fibonacci/">An integer formula for Fibonacci numbers</a></li>
+</ul>
+</li>
+<li><a href="http://qiita.com/sonatard/items/464a9d45c689386edfe1">Better C - Go言語と整数 #golang</a></li>
+</ul>
+
+
+<p>ネタ元にある「母関数」という概念は、数学ガールを読んで知りました。</p>
+
+<iframe style="width:120px;height:240px;" marginwidth="0" marginheight="0" scrolling="no" frameborder="0" src="//rcm-fe.amazon-adsystem.com/e/cm?lt1=_blank&bc1=000000&IS2=1&bg1=FFFFFF&fc1=000000&lc1=0000FF&t=shogo82148-22&o=9&p=8&l=as4&m=amazon&f=ifr&ref=as_ss_li_til&asins=4797341378&linkId=be2c6011ca1a5f15d96c370e494b0f95"></iframe>
+
+
+<p>フィボナッチ数列に触れている部分はWebでも公開されているので、そちらもどうぞ(<a href="http://www.hyuki.com/story/genfunc.html">ミルカさんとフィボナッチ数列</a>)</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[go-sql-proxyがcontextに対応しました]]></title>
@@ -1279,217 +1485,6 @@ func main() { fmt.Println("Hello macotasu") }
 <li><a href="http://d.hatena.ne.jp/sugyan/20110306/1299418878">polyglot 基礎の基礎</a></li>
 </ul>
 
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[MeCabのGolangバインディングを書いてみた]]></title>
-    <link href="https://shogo82148.github.io/blog/2016/02/11/golang-mecab-binding/"/>
-    <updated>2016-02-11T19:32:00+09:00</updated>
-    <id>https://shogo82148.github.io/blog/2016/02/11/golang-mecab-binding</id>
-    <content type="html"><![CDATA[<p>Golangから<a href="http://taku910.github.io/mecab/">MeCab</a>を呼び出すライブラリ探せばあるにはあるのですが、
-なんだかどれもメモリ管理がちょっと怪しいんですよね・・・。</p>
-
-<ul>
-<li><a href="http://yukihir0.hatenablog.jp/entry/2015/01/18/164446">GolangでMeCabを使う。</a>
-
-<ul>
-<li><a href="https://github.com/yukihir0/mecab-go">yukihir0/mecab-go</a></li>
-</ul>
-</li>
-<li><a href="http://qiita.com/rerofumi/items/2bb1e49b20f2175ecaac">Go言語から mecab を使う - Qiita</a>
-
-<ul>
-<li><a href="https://bitbucket.org/rerofumi/mecab">rerofumi/mecab</a></li>
-</ul>
-</li>
-<li><a href="http://d.hatena.ne.jp/gtaka555/20091116/p2">Go で Mecab を使ってみた</a></li>
-</ul>
-
-
-<p>メモリ管理は<a href="https://github.com/bluele/mecab-golang">bluele/mecab-golang</a>が一番しっかりしているっぽいですが、
-libmecabの一番高機能だけど面倒な使い方しか対応していなくて、ちょっとカジュアルに遊ぶにはつらい。</p>
-
-<p>というわけで、カジュアルな用途から高度な使い方まで対応したWrapperを書いてみました。</p>
-
-<ul>
-<li><a href="https://github.com/shogo82148/go-mecab">shogo82148/go-mecab</a></li>
-</ul>
-
-
-<!-- More -->
-
-
-<h2>使い方</h2>
-
-<p>READMEと<a href="https://godoc.org/github.com/shogo82148/go-mecab#pkg-examples">godocのexamples</a>からのコピペになってしまいますが、
-簡単に使い方の紹介です。</p>
-
-<h3>インストール</h3>
-
-<p><code>go get</code>で取ってくることはできますが、事前にlibmecabとリンクするための設定が必要です。</p>
-
-<pre><code class="bash">$ export CGO_LDFLAGS="-L/path/to/lib -lmecab -lstdc++"
-$ export CGO_CFLAGS="-I/path/to/include"
-$ go get github.com/shogo82148/go-mecab
-</code></pre>
-
-<p><code>mecab</code>コマンドと一緒に<code>mecab-config</code>がインストールされているはずなので、
-それを使うのが楽でしょう。</p>
-
-<pre><code class="bash">$ export CGO_LDFLAGS="`mecab-config --libs`"
-$ export CGO_FLAGS="`mecab-config --inc-dir`"
-$ go get github.com/shogo82148/go-mecab
-</code></pre>
-
-<p>MeCabはデフォルトで<code>/usr/local/</code>以下に入るので、他の実装では決め打ちしている例が多いですが、
-100%とは言い切れないので面倒ですが都度指定にしてあります。
-cgoはpkg-configに対応しているで、MeCab側が対応してくれると環境変数の設定が不要になってもっと楽なんですけどね。</p>
-
-<h3>カジュアルに使う</h3>
-
-<p><code>Parse</code>を使うと<code>mecab</code>コマンドと同等の結果を文字列として受け取れます。</p>
-
-<pre><code class="go">tagger, err := mecab.New(map[string]string{})
-if err != nil {
-    panic(err)
-}
-defer tagger.Destroy()
-
-result, err := tagger.Parse("こんにちは世界")
-if err != nil {
-    panic(err)
-}
-fmt.Println(result)
-</code></pre>
-
-<p>オプションの渡し方ですが、いろいろ考えた結果<code>map</code>で渡すようにしてみました。
-(Perlの<a href="https://metacpan.org/release/Text-MeCab">Text::MeCab</a>からのインスパイア)
-例えば、<code>mecab.New(map[string]string{"output-format-type": "wakati"})</code>のようにすると、分かち書きで出力されます。</p>
-
-<h3>ノードの詳細情報にアクセスする</h3>
-
-<p><code>ParseToNode</code>を使うと表層表現と品詞が最初から分かれた形で取得できます。
-生起コストのようなより詳細な情報も取れます。</p>
-
-<pre><code class="go">tagger, err := mecab.New(map[string]string{})
-if err != nil {
-    panic(err)
-}
-defer tagger.Destroy()
-
-// XXX: avoid GC problem with MeCab 0.996 (see https://github.com/taku910/mecab/pull/24)
-tagger.Parse("")
-
-node, err := tagger.ParseToNode("こんにちは世界")
-if err != nil {
-    panic(err)
-}
-
-for ; node != (mecab.Node{}); node = node.Next() {
-    fmt.Printf("%s\t%s\n", node.Surface(), node.Feature())
-}
-</code></pre>
-
-<p>以前紹介した<a href="http://shogo82148.github.io/blog/2015/12/20/mecab-in-python3-final/">MeCabをPython3から使う(続報)</a>の件、
-実はPythonに限ったことではなく、公式で提供されている全ての言語バインディングで発生します。
-(例えばRubyでも発生するっぽい: <a href="http://qiita.com/Salinger/items/3448d481b5b1e6cd2efb">Ruby + MeCab で Segmentation fault が発生した場合の対処</a>)
-Pythonが参照カウント方式のGCを採用しているので、たまたま発見されるのが早かったというだけですね(Rubyだとメモリを圧迫するまで落ちないらしい)。</p>
-
-<p>そして、公式で提供されているバインディングを参考に書いたので、今回のGo版でも発生します。
-<a href="https://github.com/taku910/mecab/pull/24">MeCab側で対応してもらった</a>のでわざわざバインディング側で対応することもないだろうとの考えから、go-mecabでは特に対策をとっていません。
-MeCab 0.996以下を使っている方は注意してください。(残念ながら0.996がまだ最新リリースだけど・・・)</p>
-
-<h3>Modelを共有する</h3>
-
-<p><a href="http://taku910.github.io/mecab/libmecab.html">MeCab ライブラリ</a>で紹介されている、マルチスレッド環境の場合での使い方にも対応しています。</p>
-
-<pre><code class="go">model, err := mecab.NewModel(map[string]string{})
-if err != nil {
-    panic(err)
-}
-defer model.Destroy()
-
-tagger, err := model.NewMeCab()
-if err != nil {
-    panic(err)
-}
-defer tagger.Destroy()
-
-lattice, err := mecab.NewLattice()
-if err != nil {
-    panic(err)
-}
-defer lattice.Destroy()
-
-lattice.SetSentence("こんにちは世界")
-err = tagger.ParseLattice(lattice)
-if err != nil {
-    panic(err)
-}
-fmt.Println(lattice.String())
-</code></pre>
-
-<p>複数のゴルーチンから<code>model</code>や<code>tagger</code>を共有できると思います。<code>lattice</code>だけはゴルーチン毎に生成してください。
-(へいれつへーこーしょりとかよくわかってないですが、スレッドセーフならゴルーチンセーフという認識であってますよね？)
-メモリ効率もいいのでは(未検証なので誰か確かめて・・・)。</p>
-
-<h2>GoからCへ文字列を渡す方法について</h2>
-
-<h3>一般的な方法</h3>
-
-<p>GoからCへ文字列を渡すには、Goの文字列を<code>C.CString</code>を使ってCの文字列に変換する必要があります。</p>
-
-<pre><code class="go">cstring := C.CString(gostring)
-defer C.free(unsafe.Pointer(cstring))
-
-C.some_useful_function(cstring)
-</code></pre>
-
-<p>ここで注意が必要なのは<code>C.CString</code>の戻り値はGoのガーベージコレクションの対象から外れるということです。
-C側での使用状況をGoのランタイムが把握しきれないからですね。
-<code>C.free</code>を使って明示的に開放してあげないとメモリーリークになります。
-巷にあふれているMeCabバインディングはここがちょっと甘いものがほとんどでした。</p>
-
-<h3>黒魔術を使う</h3>
-
-<p>別に<code>C.CString</code>でも十分だとは思ったのですが、
-<a href="http://qiita.com/mattn/items/176459728ff4f854b165">golang で string を []byte にキャストしてもメモリコピーが走らない方法を考えてみる</a>を見て、つい魔が差してしまいました。
-Goの<code>string</code>をメモリーコピーを避けて<code>[]byte</code>にできるのなら、Cの文字列型(<code>*C.char</code>)でも同じことができるはず・・・！</p>
-
-<pre><code class="go">cstring := *(**C.char)(unsafe.Pointer(&amp;gostring))
-C.some_useful_function2(cstring, len(gostring))
-</code></pre>
-
-<p>通常C言語の文字列は末尾に<code>'\0'</code>が番兵としてついており、<code>C.CString</code>はそこら辺の事情を考慮してくれます。
-しかし、この方法は番兵がいないため、文字列の長さを別途渡してあげる必要があります。
-幸いMeCabは文字列長さを明示するインターフェースを備えているので、そちらを使えばOKでした。</p>
-
-<p>Goの<code>string</code>はもちろんGCの対象なので、GCには要注意です。
-関数内で閉じた状態にするのが無難ですね。
-また、空文字が渡されるとヌルポで死んでしまうようなので、そこにも注意しましょう。</p>
-
-<h2>まとめ</h2>
-
-<ul>
-<li>カジュアルな用途から高度な使い方まで対応したMeCabのWrapperを書いてみました
-
-<ul>
-<li><a href="https://github.com/shogo82148/go-mecab">shogo82148/go-mecab</a></li>
-</ul>
-</li>
-<li>MeCab 0.996 と一緒に使う場合はGCに注意しましょう</li>
-<li>GoからCへの文字列の渡し方を紹介しました
-
-<ul>
-<li><code>C.CString</code>を使った方法</li>
-<li><code>unsafe.Ponter</code>を使った方法</li>
-</ul>
-</li>
-</ul>
-
-
-<p>ピンポーン <strong>unsafe をご使用になる時は、用法・用量を守り正しくお使い下さい。</strong></p>
 ]]></content>
   </entry>
   
