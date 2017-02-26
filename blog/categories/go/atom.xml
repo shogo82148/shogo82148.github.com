@@ -4,7 +4,7 @@
   <title><![CDATA[Category: go | Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/blog/categories/go/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2017-02-25T17:08:27+09:00</updated>
+  <updated>2017-02-26T19:47:59+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,338 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Redisを使ってユニーク名IDを配布する]]></title>
+    <link href="https://shogo82148.github.io/blog/2017/02/26/unique-id-supplier-using-redis/"/>
+    <updated>2017-02-26T19:37:45+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2017/02/26/unique-id-supplier-using-redis</id>
+    <content type="html"><![CDATA[<p>スケーラブルにIDを生成する方法として
+Twitterの<a href="https://github.com/twitter/snowflake">snowflake</a>が有名です。
+1024台までスケールすることが出来ますが、各snowflakeのサーバにユニークなWoker IDを割り振る必要があります。
+IDを振るためのサーバにIDを振るのが問題になるとは難しいですね。</p>
+
+<p>各snowflakeサーバにIDを振る親玉Worker ID配布サーバを作るというアイデアはあったのですが、
+Worker IDサーバの可用性を考えるのが大変で手を付けていませんでした。
+最近になってWorker IDサーバとしてRedisを使い、ソート済みセット型で管理すれば楽できるのでは？
+と思いついたので、やってみたというお話です。</p>
+
+<!-- More -->
+
+
+<h2>概要</h2>
+
+<p>レポジトリはこちらです。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/yaraus">shogo82148/yaraus</a></li>
+</ul>
+
+
+<p>他の<a href="https://github.com/twitter/snowflake">snowflake</a>-likeなID発番サーバの実装として
+<a href="http://techblog.kayac.com/katsubushi-introduction.html">katsubushi</a>や
+<a href="https://github.com/sony/sonyflake">sonyflake</a>なんていうのもあります。
+これらのID発番サーバにRedisを使ってWorker IDを割り振るコマンドです。
+Redis3.2以上推奨です。</p>
+
+<h2>使い方</h2>
+
+<p>Go製なので<code>go get</code>でインストールできます。</p>
+
+<pre><code class="bash">go get github.com/shogo82148/yaraus/cmd/yaraus
+</code></pre>
+
+<pre><code class="bash"># 1から1023までのIDが使えるようにRedisを初期化
+$ yaraus init -min 1 -max 1023
+
+# ユニークなIDが必要な処理を実行する
+$ yaraus run -- echo {}
+2017/02/25 17:19:16 getting new id...
+2017/02/25 17:19:16 client id: YourHostName-1488010756.738-1, id: 1
+2017/02/25 17:19:16 sleep 2s for making sure that other generates which has same id expire.
+2017/02/25 17:19:18 starting...
+1
+2017/02/25 17:19:18 releasing id...
+
+# katsubushiと一緒に使う例
+$ yaraus run -- ./katsubushi -worker-id={} -port=7238
+
+# ステータス情報もとれます
+$ yaraus stats
+{
+    "client_id_count": 4,
+    "client_get_id_count": 4,
+    "client_get_id_success": 4,
+    "get_id_no_available_id": 0,
+    "extend_ttl_count": 8,
+    "extend_ttl_success": 8,
+    "extend_ttl_ownership_error": 0,
+    "extend_ttl_expire_warning": 0,
+    "unusing_ids": 1023,
+    "using_ids": 0,
+    "using_ttl_max": 0,
+    "using_ttl_mid": 0,
+    "using_ttl_min": 0
+}
+</code></pre>
+
+<p>ステータスの意味は以下の通りです。</p>
+
+<ul>
+<li><code>client_id_count</code>: 今までに接続してきたクライアントの延べ数</li>
+<li><code>client_get_id_count</code>: ID取得を試みた回数</li>
+<li><code>client_get_id_success</code>: ID取得に成功した回数</li>
+<li><code>get_id_no_available_id</code>: 利用可能なIDが無くて失敗した回数</li>
+<li><code>extend_ttl_count</code>: Expireを伸ばそうと試みた回数</li>
+<li><code>extend_ttl_success</code>: Expireを伸ばすのに成功した回数</li>
+<li><code>extend_ttl_ownership_error</code>: IDが横取りされた回数</li>
+<li><code>extend_ttl_expire_warning</code>: IDが横取りになりそうだったのを不正だ回数</li>
+<li><code>unusing_ids</code>: 未使用のIDの数</li>
+<li><code>using_ids</code>: 使用中のIDの数</li>
+<li><code>using_ttl_max</code>: IDの寿命の最大値(秒単位)</li>
+<li><code>using_ttl_mid</code>: IDの寿命の中央値(秒単位)</li>
+<li><code>using_ttl_min</code>: IDの寿命の最小値(秒単位)</li>
+</ul>
+
+
+<h2>実装アイデア</h2>
+
+<p>Redisのセット型を使えば、ID配布自体は簡単です。
+Perlでの実装は以下のようになります。(Go実装なのに例がPerlなのは、僕が一番慣れているので・・・)</p>
+
+<pre><code class="perl"># あらかじめPoolにIDを蓄えておく
+$redis-&gt;sadd('pool', "id$_") for 1..10;
+
+# ランダムに選ぶ
+my $id = $redis-&gt;spop('pool');
+
+# 使い終わったら戻す
+$redis-&gt;sadd('pool', $id);
+</code></pre>
+
+<p>多めに見積もって1IDあたり1kB使うと仮定しても、1000個のIDで約1MBです。
+余裕で全部メモリにのるので、オンメモリのRedisでも全く問題ありません。</p>
+
+<p>しかし、この方法では、IDを受け取ったクライアントが突然死してしまった場合に
+永遠にIDが開放されないため、そのうちIDが枯渇してしまいます。</p>
+
+<p>そこで思いついたのが、ソート済みセット型を使ったExpire付き機能付きID配布です。
+「ソート済みセットのスコアにExpireの予定時刻を入れる」というルールでIDを管理します。
+ソート済みセットを使えば、「スコアが一番小さいID＝Expireしている可能性が一番高いID」
+を簡単に取得できます。
+現在時刻と比較して実際にExpireしているかをチェックし、ExpireしていたらID取得成功です。
+Perlのコードに起こすと以下のようになります。</p>
+
+<pre><code class="perl"># PoolにID追加
+$redis-&gt;zadd('pool', time, "id$_") for 1..10;
+
+# IDを取得
+RETRY:
+my ($id, $score) = $redis-&gt;zrange('pool', 0, 0, "WITHSCORE");
+
+# expireしているかチェック
+if $score &lt; time {
+    # ID取得失敗、しばらく待ってID取得やり直し
+    sleep 1;
+    goto RETRY
+}
+
+# expireの期間延長
+my $expire = 10; # 10秒でexpire
+$redis-&gt;zadd('pool', time + $expire, $id);
+
+# $idを使ったなにかの処理
+
+# 使い終わったらExpire扱い
+$redis-&gt;zadd('pool', time, $id);
+</code></pre>
+
+<p>クライアントが突然死していまうと、Expireが更新されないため
+どんどんRankがあがっていき、最終的には別のクライアントに再利用されます。</p>
+
+<p>この方法であれば、Expireしてからの期間が長いIDから再利用されるというのも利点です。
+どうしてもサーバとクライアントで時刻のズレが生じてしまうので、
+サーバはExpireした！と思っても、クライアントがまだ使用中ということは十分に考えられます。
+そのためExpireしたIDをすぐに再利用してしまうと、多重使用になってしまう可能性があります。
+Expireしてからの期間が長いIDから再利用することで、この問題を緩和できるというわけです。</p>
+
+<p>(Googleさんみたいに分散データベース管理に原子時計を導入していれば話は別ですが・・・)</p>
+
+<p>ソート済みセット型のScoreは64bitの浮動小数点型なので、
+scoreにunix timestampを使うとマイクロ秒程度の精度になってしまいますが、
+この用途であれば十分足りるでしょう。</p>
+
+<h2>実装上の工夫</h2>
+
+<p>このアイデアなら楽できる！と思ったものの、
+実際にコードに起こすとなると考慮すべきことがたくさんあって大変でした。</p>
+
+<h3>ID取得とExpire期間延長をアトミックにする</h3>
+
+<p>先のコード例をそのまま実装すると同時アクセスがあった場合にIDプールが壊れます。
+それを防ぐために
+「IDを取得」「expireしているかチェック」「expireの期間延長」はアトミックに実行する必要があります。</p>
+
+<p>Redisの場合、Luaスクリプトを使えば簡単ですね。
+慣れないLuaに少し手こずりましたが、一度覚えてしまうと全部Luaにしたくなってしまう麻薬ですね、あれは。</p>
+
+<h3>Luaスクリプト内で時刻を取得する</h3>
+
+<p>このアイデアは時刻が肝なので、可能であれば時刻の管理もRedisサーバに一任したいところです。
+しかし、Luaスクリプト内ではOS機能のモジュールが無効化されており、時刻の取得はできません。
+ファイルもいじれる危ないモジュールなので仕方ないですね。</p>
+
+<p>ではどうするかというと、LuaからRedisのTIMEコマンドを呼び出して時刻を取得します。
+しかしながら、この方法も一筋縄ではいかず、何もせずに呼び出すとコマンドの実行に失敗してしまいます。</p>
+
+<p>TIMEコマンドが失敗する原因はLuaスクリプトのレプリケーションの方法にあります。
+Redisのレプリケーション方法は、マスターからスクリプトをまるごとスレーブに送り、スレーブ側でスクリプト再実行する方式です。
+そのため、TIMEコマンドのように実行するタイミングによって結果が変わるコマンドは、
+マスターとスレーブで不整合が起きてしまう可能性があるため実行できないのです。</p>
+
+<p>この問題を解決するため、Redis3.2から <code>redis.replicate_commands</code> が追加されました。
+この関数を呼び出すと、Luaスクリプト内で実行したRedisへの書き込みコマンドを転送するレプリケーション方式に変わります。
+実行結果だけを送るのでTIMEコマンドも安全に実行できるというわけです。</p>
+
+<pre><code class="lua">redis.replicate_commands()
+local t = redis.call("TIME")
+time = t[1] + t[2]*1e-6 -- 秒単位に変換
+</code></pre>
+
+<p>なお、<code>redis.replicate_commands</code>が使えない場合は、クライアントの時刻を使うようフォールバックするので、
+3.2よりまえのRedisでも動作はします。</p>
+
+<p>ちなみにレプリケーションの挙動を変えるコマンドは他にもあって、
+<code>redis.set_repl</code>を使うとレプリケーション自体を止めることも出来るらしいです。
+怖い。</p>
+
+<h3>若い番号のIDから配布する</h3>
+
+<p>これはあまり重要ではないんですが、Expireまでの期間が同じだった場合、
+若い番号のIDから順に配布するようにしました。
+「エライ人順にIPアドレスを設定しろ」みたいなアレなので、
+別に考慮しなくてもいいんですが、数字を見ると順番に並べたくなってしまうのが人間というものです。</p>
+
+<p>Redisのソート済みセットはスコアが同じ場合、メンバーの辞書順に並びます。
+<code>Itoa(id)</code>した結果をそのまま辞書順ソートすると</p>
+
+<pre><code class="plain">1, 10, 11, 12, ..., 2, 20, 21, ...
+</code></pre>
+
+<p>のようなおかしな順番になってしまいます。
+そこで、「1桁のときは頭にAを付ける」「2桁のときはB」「3桁のときはC」&hellip;
+と先頭の文字で数字の桁数が分かるようにしました。</p>
+
+<pre><code class="plain">A1, A2, A3, ..., A9, B10, B11, B12, ... B99, C100, C101, C102, ...
+</code></pre>
+
+<p>この規則はRFC2550をヒントにしました。
+RFC2550にはZまで使い切ったあとのことも書いてあるんですが、そこまではしていません。
+可読性にこだわらなければ他にも方法はあるのですが、redis-cliで見れたほうが嬉しいじゃないですか。</p>
+
+<ul>
+<li><a href="https://tools.ietf.org/html/rfc2550">RFC 2550 Y10K and Beyond</a></li>
+<li><a href="http://www.cam.hi-ho.ne.jp/mendoxi/rfc/rfc2550j.html">参考日本語訳 RFC 2550 Y10K とその先</a></li>
+</ul>
+
+
+<h3>レプリケーション完了を待つ</h3>
+
+<p>可用性を求めるならば、Redisサーバー自体が突然死する可能性も考えなければなりません。
+この問題に対応するにはマスタースレーブ構成を取るのが一般的でしょう。
+マスタースレーブ構成ではフェールオーバー時に多少のデータ消失が起こる可能性があります。
+レプリケーションが終わっていない分のデータが消失するためです。</p>
+
+<p>キャッシュ用途であれば許容できるかもしれませんが、
+ID配布でこれが起こるのは致命的です。
+配布したIDをもとにデータベースへの書き込みを行うので、整合性が崩れ、修復困難なダメージを与えてしまう可能性があります。</p>
+
+<p>この問題を最小限に抑えるために、2.8からWAITコマンドが追加されています。
+WAITコマンドを使うと、今まで書き込んだデータがレプリケーションされたかを検出できます。</p>
+
+<pre><code># ROLEコマンドでスレーブの台数を確認
+127.0.0.1:6379&gt; ROLE
+1) "master"
+2) (integer) 83
+3) 1) 1) "::1"     # 一台スレーブ
+      2) "6378"
+      3) "83"
+
+# 適当に書き込み
+127.0.0.1:6379&gt; SET foo bar
+OK
+
+# 1つのスレーブのレプリケーションが完了するのを待つ(Timeout 1000ms)
+127.0.0.1:6379&gt; WAIT 1 1000
+(integer) 1 # レプリケーションが完了したスレーブの台数
+</code></pre>
+
+<p>レプリケーションの完了＝コマンドの実行完了と解釈すれば、
+データの消失を最小限に抑えることができます。</p>
+
+<p>ちなみに、WAITコマンドのtimeoutはミリ秒ですが、今回使用した<a href="https://godoc.org/gopkg.in/redis.v5">go-redis/redis</a>は
+これを秒として扱っていました。
+(こういうのRedis::Fast開発時にもあった気がする)
+単位重要ですね。
+time.ParseDurationで時間指定をすると、毎回単位指定が必要になって面倒ですが、
+こういうミスを防ぐためには有用そうです。
+積極的に使っていきたい。</p>
+
+<h3>横取り検出</h3>
+
+<p>WAITコマンドでデータの消失を最小限にしたとしても、0にできるわけではありません。
+消失が起こった場合の対応も必要です。
+ID配布した記録が消えて横取りが出来る可能性があるので、
+IDに所有者(貸出先の方が正しかったかも)を一緒に記録しておくことにしました。</p>
+
+<p>各クライアントにクライアントIDを付与しておきます。(現状の実装はhostname+timestamp+連番)
+横取りされた方は、自分のクライアントIDとIDの所有者を比較し、横取りが分かった時点で速やかにID開放します。
+横取りした方は、ID取得からID使用までしばらく時間を開けます(-delayでこの時間は変更可能)
+これは横取りされた方のID開放が終わるまで、猶予時間を与えるためです。</p>
+
+<h2>動作条件等</h2>
+
+<p>何度か書いていますが、このアイデアは時刻が肝です。
+各サーバ間の時刻同期が正しく行われている必要があります。
+普通にNTPを使っていればmsのオーダーで同期が取れるので問題ないでしょう。</p>
+
+<p>・・・ただし、みんな大嫌いなうるう秒があります。
+うるう秒の対応の仕方がまちまちなので、ことなった対応方針が適用されたサーバーが混ざると大変です。</p>
+
+<p>例えば、マネージドなRedisとしてElastiCacheを使うと、
+うるう秒挿入のタイミングでElastiCacheは<a href="http://aws.typepad.com/aws_japan/2015/05/look-before-you-leap-the-coming-leap-second-and-aws.html">AWS調整時刻</a>で動作します。
+残念ながらAWS調整時刻を返すNTPは提供されていないようです。</p>
+
+<p>デフォルトの設定はこの辺を考慮してマージンを取っているので大丈夫なはず・・・。
+使う人がいるかはわかりませんが、検証頑張って！</p>
+
+<h2>名前について</h2>
+
+<p>「Yet Another Ranged Unique id Supplier」の略です。
+いい名前が思いつかなかったので、fujiwaraさん製のRanged Unique id Supplierが既にあったのでそこから拝借しました。
+Yet Anatherは、こう付けると流行ると「言語のしくみ」に書いてあったからです。</p>
+
+<iframe style="width:120px;height:240px;" marginwidth="0" marginheight="0" scrolling="no" frameborder="0" src="//rcm-fe.amazon-adsystem.com/e/cm?lt1=_blank&bc1=000000&IS2=1&bg1=FFFFFF&fc1=000000&lc1=0000FF&t=shogo82148-22&o=9&p=8&l=as4&m=amazon&f=ifr&ref=as_ss_li_til&asins=B01N7JZXMD&linkId=8ee3d3dfb649430b1d0abd35881e5f56"></iframe>
+
+
+<h2>まとめ</h2>
+
+<ul>
+<li>RedisをID発番サーバID配布サーバとして活用する方法を考えてみました</li>
+<li>可用性を求めていったらレプリケーションの高度な使い方がわかってきた
+
+<ul>
+<li><code>redis.replicate_commands</code>でスクリプトのレプリケーション方式を変更する</li>
+<li>WAITコマンドでレプリケーションを待つ</li>
+</ul>
+</li>
+<li>フェールオーバのこととか考えると全然楽じゃなかった・・・</li>
+</ul>
+
+
+<p>思いつきを試したかっただけなのですが、勉強になったので良しとしましょう。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[net/httpで安全に静的ファイルを返す]]></title>
@@ -597,90 +929,6 @@ func main() {
 たったあれだけのコードで、ヘッダの圧縮転送、リクエストの並行処理等のHTTP2の機能が使えるのは面白いですね。</p>
 
 <p>もうちょっと手を加えて多少は使えるものにしてみたいですね。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[nginx-omniauth-adapterのGolangポート作った]]></title>
-    <link href="https://shogo82148.github.io/blog/2016/03/10/go-nginx-oauth2-adapter/"/>
-    <updated>2016-03-10T12:51:00+09:00</updated>
-    <id>https://shogo82148.github.io/blog/2016/03/10/go-nginx-oauth2-adapter</id>
-    <content type="html"><![CDATA[<p>「<a href="http://techlife.cookpad.com/entry/2015/10/16/080000">nginx で omniauth を利用してアクセス制御を行う</a>」という記事で、
-<a href="http://nginx.org/en/docs/http/ngx_http_auth_request_module.html">ngx_http_auth_request_module</a>の存在を知ったので、
-Golangで<a href="https://github.com/sorah/nginx_omniauth_adapter">nginx_omniauth_adapter</a>と似たようなものを作ってみました。</p>
-
-<ul>
-<li><a href="https://github.com/shogo82148/go-nginx-oauth2-adapter">shogo82148/go-nginx-oauth2-adapter</a></li>
-</ul>
-
-
-<!-- More -->
-
-
-<h2>背景</h2>
-
-<p><a href="https://github.com/typester/gate">typester/gate</a>は単体でも動くようになっていますが、
-例えばIP制限などちょっと高度なことをしたい場合には結局nginxを前段に置く必要があります。
-nginxとgateの設定を同時にいじる必要があって煩雑だと感じていました。</p>
-
-<p>そんな中「<a href="http://techlife.cookpad.com/entry/2015/10/16/080000">nginx で omniauth を利用してアクセス制御を行う</a>」という記事で、
-<a href="http://nginx.org/en/docs/http/ngx_http_auth_request_module.html">ngx_http_auth_request_module</a>の存在を知りました。
-gateが認証＋Proxyをやってしまうのに対して、認証だけRubyのomniauthモジュールで行いProxyはnginxに任せるという方法です。</p>
-
-<p>以前から記事の存在は知っていたのですが、Rubyの実行環境をそろえるのが億劫で手を出せずにいました。
-小さなアプリなので自分の慣れた言語で実装しても大したことないのではと思い、Goで実装してみることにしました。</p>
-
-<h2>使い方</h2>
-
-<p><code>go get</code>で落として来れます。
-最低限client_idとclient_secretの指定が必要です。
-nginx_omniauth_adapterと同じ環境変数名で設定できるほか、YAML形式の設定ファイルを読みこませることができます。
-YAMLの形式はREADMEを参照してください。</p>
-
-<pre><code class="bash">$ go get github.com/shogo82148/go-nginx-oauth2-adapter/cli/go-nginx-oauth2-adapter
-$ export NGX_OMNIAUTH_GOOGLE_KEY=YOUR_CLIENT_ID
-$ export NGX_OMNIAUTH_GOOGLE_SECRET=YOUR_CLIENT_SECRET
-$ go-nginx-oauth2-adapter
-$ go-nginx-oauth2-adapter -c conf.yaml # 設定ファイルでの指定も可能
-</code></pre>
-
-<p>PerlでHTTPサーバ書いているひとにはおなじみのServer::Starterにも対応しているので、
-それ経由で立ち上げておくと設定の更新・プログラム自身の更新等が楽になると思います。</p>
-
-<pre><code class="bash">start_server --port 18081 -- go-nginx-oauth2-adapter -c conf.yaml
-</code></pre>
-
-<p>nginx側の設定は<a href="https://github.com/shogo82148/go-nginx-oauth2-adapter/blob/master/examples/nginx/nginx-site.conf">examples</a>ディレクトリを参照してください。
-ヘッダ名・パス名等を合わせてあるので、nginx_omniauth_adapterと同じ設定で動くはずです。</p>
-
-<p>また、<a href="https://h2o.examp1e.net/">h2o</a>の設定はプログラマブルだからh2oでもちゃんと設定ファイルを書けば動くのではと考え、
-<a href="https://github.com/shogo82148/go-nginx-oauth2-adapter/blob/master/examples/h2o/oauth.rb">h2oの設定</a>も書いてみました。
-mrubyからproxyに渡るリクエストを書き換える方法がない(？)っぽいので、アプリ側で認証情報をとることはできないですが、一応制限はできます。
-basic認証の実装を見る限りremote-userヘッダだけは渡せるようなので、これを使えばなんとかなるかもしれないですが、未確認です。
-(Ruby慣れてないからってGoで実装したけど、結局Rubyを書いていて面白い)</p>
-
-<h2>nginx_omniauth_adapterとの違い</h2>
-
-<p>厳密に同じ挙動を実装するのが面倒だったため、挙動に若干の違いがあります。
-一番大きなものは認証後のリダイレクト先です。</p>
-
-<p>nginx_omniauth_adapterは認証後、一度adapterのURLにリダイレクトしてから、アプリサーバの<code>/_auth/callback</code>にリダイレクトします。
-それに対してgo-nginx-oauth2-adapterは認証後、アプリサーバの<code>/_auth/callback</code>に直接リダイレクトします。
-この違いのため、Google Developers Consoleの「承認済みのリダイレクト URI」に設定するべきURIが異なることに注意してください。
-nginx_omniauth_adapterはadapter自身のURI、go-nginx-oauth2-adapterはアプリサーバの<code>/_auth/callbak</code>を指定します。</p>
-
-<p>この挙動のため、go-nginx-oauth2-adapterはアプリの追加のたびにnginxの設定に加え「承認済みのリダイレクト URI」に正しいURIを追加する必要があります。
-もちろん設定箇所がGoogle Developers Consoleではないだけで、nginx_omniauth_adapterもリダイレクト先の設定は必要です。
-GoogleでもFacebookでも認証できるようにしたいという場合、nginx_omniauth_adapterは設定を一箇所変えればOKですが、go-nginx-oauth2-adapterは各サービスに登録し直す必要があります。
-現状、認証に使うサービスをユーザが選ぶ仕組みがないので、そのまま放置してあります。</p>
-
-<h2>まとめ</h2>
-
-<p><a href="https://github.com/sorah/nginx_omniauth_adapter">nginx_omniauth_adapter</a>のGolangポート
-<a href="https://github.com/shogo82148/go-nginx-oauth2-adapter">shogo82148/go-nginx-oauth2-adapter</a>を紹介しました。</p>
-
-<p>adapter自身の公開設定をしなくて良い分簡単にセットアップできます。
-nginx_omniauth_adapter互換ですぐに乗り換えもできるので、ぜひお気軽にお試し下さい。</p>
 ]]></content>
   </entry>
   
