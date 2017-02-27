@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Redisを使ってユニーク名IDを配布する"
+title: "Redisを使ってユニークなIDを配布する"
 date: 2017-02-26 19:37:45 +0900
 comments: true
 categories: [go, redis]
@@ -84,7 +84,7 @@ $ yaraus stats
 - `extend_ttl_count`: Expireを伸ばそうと試みた回数
 - `extend_ttl_success`: Expireを伸ばすのに成功した回数
 - `extend_ttl_ownership_error`: IDが横取りされた回数
-- `extend_ttl_expire_warning`: IDが横取りになりそうだったのを不正だ回数
+- `extend_ttl_expire_warning`: IDが横取りされそうだったのを防いだ回数
 - `unusing_ids`: 未使用のIDの数
 - `using_ids`: 使用中のIDの数
 - `using_ttl_max`: IDの寿命の最大値(秒単位)
