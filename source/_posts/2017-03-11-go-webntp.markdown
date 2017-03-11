@@ -1,0 +1,144 @@
+---
+layout: post
+title: "HTTP/WebSocketで時刻同期するWebNTPを書いた"
+date: 2017-03-11 18:48:09 +0900
+comments: true
+categories: [golang]
+---
+
+Go1.8から[http/httpgtrace](https://golang.org/pkg/net/http/httptrace/)が追加され、
+HTTP通信にフックを差し込めるようになりました。
+以前触った時は[パフォーマンス測定に利用](https://shogo82148.github.io/blog/2017/01/14/re-golang-dns-cache/)しましたが、
+他に面白い活用法はないかとWebNTPというのを作ってみました。
+
+- [webntp](https://github.com/shogo82148/go-webntp)
+
+HTTP/HTTPS/Websocket上でNTP(Network Time Protocol)っぽいことをするプログラムです。
+
+<!-- More -->
+
+## HTTP/HTTPSで時刻同期
+
+日本標準時はNICTの管理する原子時計が基準になっており、
+NICTでは原子時計に直結したNTPサーバー(ntp.nict.jp)の提供を行っています。
+それに加えて、[https/httpサービス](http://www.nict.go.jp/JST/http.html)も提供しており、
+ブラウザを使って現在時刻を取得できます。
+
+APIは簡単でミリ秒単位のtimestampを返してくれるだけです。
+その情報からサーバーとクライアント間の時間のズレを算出するわけですが、
+HTTP通信では、DNSの名前解決、TCPハンドシェイク、TLSハンドシェイク等々の時間が入ってしまうため、
+正確なズレを求めることは困難です。
+
+そこでhttp/httpgtraceを使って、ハンドシェイクを除いたリクエストの送信時刻、レスポンスを最初に受信した時刻から、
+より正確なズレを知ることができるのではと作ったのがWebNTPです。
+NICTの[JSON形式のAPI](https://ntp-a1.nict.go.jp/cgi-bin/json)に対応しており、
+以下のように時刻を取得できます。
+
+``` plain
+$ go get github.com/shogo82148/go-webntp/cmd/webntp
+$ webntp https://ntp-a1.nict.go.jp/cgi-bin/json
+server https://ntp-a1.nict.go.jp/cgi-bin/json, offset -0.006376, delay 0.024411
+2017-03-11 16:08:06.150393313 +0900 JST, server https://ntp-a1.nict.go.jp/cgi-bin/json, offset -0.006376
+```
+
+WebNTPはNICTのAPIと同様の内容を返すサーバーにもなれます。
+本家のフォーマットにしたがい、しっかりとうるう秒の情報も返すようになっているので、
+ntpdのSLEWモードを切った状態でお試しください。
+
+``` plain
+$ webntp -serve :8080
+
+$ curl -s http://localhost:8080/ | jq .
+{
+  "id": "localhost:8080",
+  "it": 0,
+  "st": 1489217288.328757,
+  "time": 1489217288.328757,
+  "leap": 36,
+  "next": 1483228800, // 今年の1/1にあったうるう秒の情報
+  "step": 1
+}
+```
+
+ところで、URLにcgi-binが入っているのは、過去との互換性を保つためにそうなっているのか、
+今もCGIで動いているのか、気になる・・・
+(少なくとも初期実装はPerlのCGIだったみたいですね)。
+
+
+## Websocketで時刻同期
+
+HTTPで取れるのは便利ですが、これではブラウザ等や他のクライアントで正確な時間を知るのが難しいです。
+今ならWebSocketが使えるのでは？と、WebSocketにも対応してみました。
+時刻取得時にws/wssスキーマを指定するとWebSocketモードになります。
+
+``` plain
+$ webntp ws://localhost:8080/
+server ws://localhost:8080/, offset 0.000031, delay 0.000671
+2017-03-11 16:19:29.850452219 +0900 JST, server ws://localhost:8080/, offset 0.000031
+```
+
+ブラウザからもJavaScriptを使ってアクセスできるというのが大きな利点ですね。
+TCP上での通信のためNTPに比べればもちろん精度は落ちますが、
+スプラトゥーンができる程度のネットワーク環境であれば±十数ミリ秒程度の誤差に収まるのではないでしょうか。
+
+
+## ntpdの参照クロックとして使う
+
+実装している最中にいろいろと調べてみたところ、
+ntpdはNTPでネットワークから時刻を取得する以外に、コンピュータに直結したデバイスからも時刻情報を取得できることがわかりました。
+たとえばGPSモジュールを繋いで、GPSに積まれている原子時計と同期をとることができるらしいです。
+
+同期方法はたくさんあるのですが、Shared Memory [driver28](http://doc.ntp.org/4.2.8/drivers/driver28.html)というのが
+比較的ポピュラーなようです。
+Python+SWIGの実装([python-ntpdshm](https://github.com/mjuenema/python-ntpdshm))があったので、
+それを参考にGoに移植しました。
+
+`ntpd.conf`にShared Memoryと同期する設定を追加します。
+アドレス部分に`127.127.28.x`を指定するとShared Memoryになるそうです。
+
+``` plain
+server 127.127.28.2 noselect
+fudge 127.127.28.2 refid PYTH stratum 10
+```
+
+`-shm x`をオプションにつけると、ntpdとの同期モードになり、
+HTTP等で取得した時刻情報をntpdに送信します。
+デフォルトだと4回連続でAPIを叩いて怒られそうなので、`-p 1`も一緒につけています。
+
+``` plain
+$ webntp -p 1 -shm 2 https://ntp-a1.nict.go.jp/cgi-bin/json https://ntp-b1.nict.go.jp/cgi-bin/json
+server https://ntp-a1.nict.go.jp/cgi-bin/json, offset -0.003258, delay 0.018910
+server https://ntp-b1.nict.go.jp/cgi-bin/json, offset -0.003570, delay 0.021652
+```
+
+しばらくしてから、ntpdのステータスを確認すると、
+remote:SHM(2)にoffset情報が表示されるはずです。
+
+``` plain
+$ ntpq -p
+     remote           refid      st t when poll reach   delay   offset  jitter
+==============================================================================
+ SHM(2)          .PYTH.          10 l    2   64   17    0.000   -3.331   0.384
+*ntp-a2.nict.go. .NICT.           1 u   58   64   37   10.280    1.494   2.028
+```
+
+
+## その他類似プロジェクト
+
+HTTPで時刻同期というアイデア自体はすでにあったようで、
+[htptime](http://www.htptime.org/index.html)というものがありました。
+WebNTPはhtptimeのサーバーとも同期できます。
+AWS Lambdaで動いているhtptimeサーバーも公開されているのですが、Internal Server Errorしか帰ってこない・・・。
+
+[htp](http://www.vervest.org/htp/)はhtptimeの元ネタらしいです。
+HTTPのDateヘッダーで時刻合わせするので、秒単位でしか同期できません。
+WebNTPでは未対応です。
+
+
+## まとめ
+
+- http/httpgtraceの活用法としてWebNTPというのを作ってみた
+- HTTP/HTTPS/WebSocketでの同期が可能(UDP通信を禁止されている環境でも大丈夫！)
+- 取得した時刻をntpdに反映することも可能
+
+UDP/123が禁止されている環境って今はどの程度あるんですかね？
