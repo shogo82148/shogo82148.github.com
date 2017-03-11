@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2017-03-05T16:49:57+09:00</updated>
+  <updated>2017-03-11T18:51:45+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,176 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[HTTP/WebSocketで時刻同期するWebNTPを書いた]]></title>
+    <link href="https://shogo82148.github.io/blog/2017/03/11/go-webntp/"/>
+    <updated>2017-03-11T18:48:09+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2017/03/11/go-webntp</id>
+    <content type="html"><![CDATA[<p>Go1.8から<a href="https://golang.org/pkg/net/http/httptrace/">http/httpgtrace</a>が追加され、
+HTTP通信にフックを差し込めるようになりました。
+以前触った時は<a href="https://shogo82148.github.io/blog/2017/01/14/re-golang-dns-cache/">パフォーマンス測定に利用</a>しましたが、
+他に面白い活用法はないかとWebNTPというのを作ってみました。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/go-webntp">webntp</a></li>
+</ul>
+
+
+<p>HTTP/HTTPS/Websocket上でNTP(Network Time Protocol)っぽいことをするプログラムです。</p>
+
+<!-- More -->
+
+
+<h2>HTTP/HTTPSで時刻同期</h2>
+
+<p>日本標準時はNICTの管理する原子時計が基準になっており、
+NICTでは原子時計に直結したNTPサーバー(ntp.nict.jp)の提供を行っています。
+それに加えて、<a href="http://www.nict.go.jp/JST/http.html">https/httpサービス</a>も提供しており、
+ブラウザを使って現在時刻を取得できます。</p>
+
+<p>APIは簡単でミリ秒単位のtimestampを返してくれるだけです。
+その情報からサーバーとクライアント間の時間のズレを算出するわけですが、
+HTTP通信では、DNSの名前解決、TCPハンドシェイク、TLSハンドシェイク等々の時間が入ってしまうため、
+正確なズレを求めることは困難です。</p>
+
+<p>そこでhttp/httpgtraceを使って、ハンドシェイクを除いたリクエストの送信時刻、レスポンスを最初に受信した時刻から、
+より正確なズレを知ることができるのではと作ったのがWebNTPです。
+NICTの<a href="https://ntp-a1.nict.go.jp/cgi-bin/json">JSON形式のAPI</a>に対応しており、
+以下のように時刻を取得できます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ go get github.com/shogo82148/go-webntp/cmd/webntp
+</span><span class='line'>$ webntp https://ntp-a1.nict.go.jp/cgi-bin/json
+</span><span class='line'>server https://ntp-a1.nict.go.jp/cgi-bin/json, offset -0.006376, delay 0.024411
+</span><span class='line'>2017-03-11 16:08:06.150393313 +0900 JST, server https://ntp-a1.nict.go.jp/cgi-bin/json, offset -0.006376</span></code></pre></td></tr></table></div></figure>
+
+
+<p>WebNTPはNICTのAPIと同様の内容を返すサーバーにもなれます。
+本家のフォーマットにしたがい、しっかりとうるう秒の情報も返すようになっているので、
+ntpdのSLEWモードを切った状態でお試しください。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ webntp -serve :8080
+</span><span class='line'>
+</span><span class='line'>$ curl -s http://localhost:8080/ | jq .
+</span><span class='line'>{
+</span><span class='line'>  "id": "localhost:8080",
+</span><span class='line'>  "it": 0,
+</span><span class='line'>  "st": 1489217288.328757,
+</span><span class='line'>  "time": 1489217288.328757,
+</span><span class='line'>  "leap": 36,
+</span><span class='line'>  "next": 1483228800, // 今年の1/1にあったうるう秒の情報
+</span><span class='line'>  "step": 1
+</span><span class='line'>}</span></code></pre></td></tr></table></div></figure>
+
+
+<p>ところで、URLにcgi-binが入っているのは、過去との互換性を保つためにそうなっているのか、
+今もCGIで動いているのか、気になる・・・
+(少なくとも初期実装はPerlのCGIだったみたいですね)。</p>
+
+<h2>Websocketで時刻同期</h2>
+
+<p>HTTPで取れるのは便利ですが、これではブラウザ等や他のクライアントで正確な時間を知るのが難しいです。
+今ならWebSocketが使えるのでは？と、WebSocketにも対応してみました。
+時刻取得時にws/wssスキーマを指定するとWebSocketモードになります。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ webntp ws://localhost:8080/
+</span><span class='line'>server ws://localhost:8080/, offset 0.000031, delay 0.000671
+</span><span class='line'>2017-03-11 16:19:29.850452219 +0900 JST, server ws://localhost:8080/, offset 0.000031</span></code></pre></td></tr></table></div></figure>
+
+
+<p>ブラウザからもJavaScriptを使ってアクセスできるというのが大きな利点ですね。
+TCP上での通信のためNTPに比べればもちろん精度は落ちますが、
+スプラトゥーンができる程度のネットワーク環境であれば±十数ミリ秒程度の誤差に収まるのではないでしょうか。</p>
+
+<h2>ntpdの参照クロックとして使う</h2>
+
+<p>実装している最中にいろいろと調べてみたところ、
+ntpdはNTPでネットワークから時刻を取得する以外に、コンピュータに直結したデバイスからも時刻情報を取得できることがわかりました。
+たとえばGPSモジュールを繋いで、GPSに積まれている原子時計と同期をとることができるらしいです。</p>
+
+<p>同期方法はたくさんあるのですが、Shared Memory <a href="http://doc.ntp.org/4.2.8/drivers/driver28.html">driver28</a>というのが
+比較的ポピュラーなようです。
+Python+SWIGの実装(<a href="https://github.com/mjuenema/python-ntpdshm">python-ntpdshm</a>)があったので、
+それを参考にGoに移植しました。</p>
+
+<p><code>ntpd.conf</code>にShared Memoryと同期する設定を追加します。
+アドレス部分に<code>127.127.28.x</code>を指定するとShared Memoryになるそうです。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>server 127.127.28.2 noselect
+</span><span class='line'>fudge 127.127.28.2 refid PYTH stratum 10</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>-shm x</code>をオプションにつけると、ntpdとの同期モードになり、
+HTTP等で取得した時刻情報をntpdに送信します。
+デフォルトだと4回連続でAPIを叩いて怒られそうなので、<code>-p 1</code>も一緒につけています。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ webntp -p 1 -shm 2 https://ntp-a1.nict.go.jp/cgi-bin/json https://ntp-b1.nict.go.jp/cgi-bin/json
+</span><span class='line'>server https://ntp-a1.nict.go.jp/cgi-bin/json, offset -0.003258, delay 0.018910
+</span><span class='line'>server https://ntp-b1.nict.go.jp/cgi-bin/json, offset -0.003570, delay 0.021652</span></code></pre></td></tr></table></div></figure>
+
+
+<p>しばらくしてから、ntpdのステータスを確認すると、
+remote:SHM(2)にoffset情報が表示されるはずです。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ ntpq -p
+</span><span class='line'>     remote           refid      st t when poll reach   delay   offset  jitter
+</span><span class='line'>==============================================================================
+</span><span class='line'> SHM(2)          .PYTH.          10 l    2   64   17    0.000   -3.331   0.384
+</span><span class='line'>*ntp-a2.nict.go. .NICT.           1 u   58   64   37   10.280    1.494   2.028</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>その他類似プロジェクト</h2>
+
+<p>HTTPで時刻同期というアイデア自体はすでにあったようで、
+<a href="http://www.htptime.org/index.html">htptime</a>というものがありました。
+WebNTPはhtptimeのサーバーとも同期できます。
+AWS Lambdaで動いているhtptimeサーバーも公開されているのですが、Internal Server Errorしか帰ってこない・・・。</p>
+
+<p><a href="http://www.vervest.org/htp/">htp</a>はhtptimeの元ネタらしいです。
+HTTPのDateヘッダーで時刻合わせするので、秒単位でしか同期できません。
+WebNTPでは未対応です。</p>
+
+<h2>まとめ</h2>
+
+<ul>
+<li>http/httpgtraceの活用法としてWebNTPというのを作ってみた</li>
+<li>HTTP/HTTPS/WebSocketでの同期が可能(UDP通信を禁止されている環境でも大丈夫！)</li>
+<li>取得した時刻をntpdに反映することも可能</li>
+</ul>
+
+
+<p>UDP/123が禁止されている環境って今はどの程度あるんですかね？</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[go-JSONStoreの高速化と機能追加]]></title>
@@ -5307,98 +5477,6 @@ Websocketは3000番ポートで待ち受けです。</p>
 たったあれだけのコードで、ヘッダの圧縮転送、リクエストの並行処理等のHTTP2の機能が使えるのは面白いですね。</p>
 
 <p>もうちょっと手を加えて多少は使えるものにしてみたいですね。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[nginx-omniauth-adapterのGolangポート作った]]></title>
-    <link href="https://shogo82148.github.io/blog/2016/03/10/go-nginx-oauth2-adapter/"/>
-    <updated>2016-03-10T12:51:00+09:00</updated>
-    <id>https://shogo82148.github.io/blog/2016/03/10/go-nginx-oauth2-adapter</id>
-    <content type="html"><![CDATA[<p>「<a href="http://techlife.cookpad.com/entry/2015/10/16/080000">nginx で omniauth を利用してアクセス制御を行う</a>」という記事で、
-<a href="http://nginx.org/en/docs/http/ngx_http_auth_request_module.html">ngx_http_auth_request_module</a>の存在を知ったので、
-Golangで<a href="https://github.com/sorah/nginx_omniauth_adapter">nginx_omniauth_adapter</a>と似たようなものを作ってみました。</p>
-
-<ul>
-<li><a href="https://github.com/shogo82148/go-nginx-oauth2-adapter">shogo82148/go-nginx-oauth2-adapter</a></li>
-</ul>
-
-
-<!-- More -->
-
-
-<h2>背景</h2>
-
-<p><a href="https://github.com/typester/gate">typester/gate</a>は単体でも動くようになっていますが、
-例えばIP制限などちょっと高度なことをしたい場合には結局nginxを前段に置く必要があります。
-nginxとgateの設定を同時にいじる必要があって煩雑だと感じていました。</p>
-
-<p>そんな中「<a href="http://techlife.cookpad.com/entry/2015/10/16/080000">nginx で omniauth を利用してアクセス制御を行う</a>」という記事で、
-<a href="http://nginx.org/en/docs/http/ngx_http_auth_request_module.html">ngx_http_auth_request_module</a>の存在を知りました。
-gateが認証＋Proxyをやってしまうのに対して、認証だけRubyのomniauthモジュールで行いProxyはnginxに任せるという方法です。</p>
-
-<p>以前から記事の存在は知っていたのですが、Rubyの実行環境をそろえるのが億劫で手を出せずにいました。
-小さなアプリなので自分の慣れた言語で実装しても大したことないのではと思い、Goで実装してみることにしました。</p>
-
-<h2>使い方</h2>
-
-<p><code>go get</code>で落として来れます。
-最低限client_idとclient_secretの指定が必要です。
-nginx_omniauth_adapterと同じ環境変数名で設定できるほか、YAML形式の設定ファイルを読みこませることができます。
-YAMLの形式はREADMEを参照してください。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>go get github.com/shogo82148/go-nginx-oauth2-adapter/cli/go-nginx-oauth2-adapter
-</span><span class='line'><span class="nv">$ </span><span class="nb">export </span><span class="nv">NGX_OMNIAUTH_GOOGLE_KEY</span><span class="o">=</span>YOUR_CLIENT_ID
-</span><span class='line'><span class="nv">$ </span><span class="nb">export </span><span class="nv">NGX_OMNIAUTH_GOOGLE_SECRET</span><span class="o">=</span>YOUR_CLIENT_SECRET
-</span><span class='line'><span class="nv">$ </span>go-nginx-oauth2-adapter
-</span><span class='line'><span class="nv">$ </span>go-nginx-oauth2-adapter -c conf.yaml <span class="c"># 設定ファイルでの指定も可能</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>PerlでHTTPサーバ書いているひとにはおなじみのServer::Starterにも対応しているので、
-それ経由で立ち上げておくと設定の更新・プログラム自身の更新等が楽になると思います。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>start_server --port 18081 -- go-nginx-oauth2-adapter -c conf.yaml
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>nginx側の設定は<a href="https://github.com/shogo82148/go-nginx-oauth2-adapter/blob/master/examples/nginx/nginx-site.conf">examples</a>ディレクトリを参照してください。
-ヘッダ名・パス名等を合わせてあるので、nginx_omniauth_adapterと同じ設定で動くはずです。</p>
-
-<p>また、<a href="https://h2o.examp1e.net/">h2o</a>の設定はプログラマブルだからh2oでもちゃんと設定ファイルを書けば動くのではと考え、
-<a href="https://github.com/shogo82148/go-nginx-oauth2-adapter/blob/master/examples/h2o/oauth.rb">h2oの設定</a>も書いてみました。
-mrubyからproxyに渡るリクエストを書き換える方法がない(？)っぽいので、アプリ側で認証情報をとることはできないですが、一応制限はできます。
-basic認証の実装を見る限りremote-userヘッダだけは渡せるようなので、これを使えばなんとかなるかもしれないですが、未確認です。
-(Ruby慣れてないからってGoで実装したけど、結局Rubyを書いていて面白い)</p>
-
-<h2>nginx_omniauth_adapterとの違い</h2>
-
-<p>厳密に同じ挙動を実装するのが面倒だったため、挙動に若干の違いがあります。
-一番大きなものは認証後のリダイレクト先です。</p>
-
-<p>nginx_omniauth_adapterは認証後、一度adapterのURLにリダイレクトしてから、アプリサーバの<code>/_auth/callback</code>にリダイレクトします。
-それに対してgo-nginx-oauth2-adapterは認証後、アプリサーバの<code>/_auth/callback</code>に直接リダイレクトします。
-この違いのため、Google Developers Consoleの「承認済みのリダイレクト URI」に設定するべきURIが異なることに注意してください。
-nginx_omniauth_adapterはadapter自身のURI、go-nginx-oauth2-adapterはアプリサーバの<code>/_auth/callbak</code>を指定します。</p>
-
-<p>この挙動のため、go-nginx-oauth2-adapterはアプリの追加のたびにnginxの設定に加え「承認済みのリダイレクト URI」に正しいURIを追加する必要があります。
-もちろん設定箇所がGoogle Developers Consoleではないだけで、nginx_omniauth_adapterもリダイレクト先の設定は必要です。
-GoogleでもFacebookでも認証できるようにしたいという場合、nginx_omniauth_adapterは設定を一箇所変えればOKですが、go-nginx-oauth2-adapterは各サービスに登録し直す必要があります。
-現状、認証に使うサービスをユーザが選ぶ仕組みがないので、そのまま放置してあります。</p>
-
-<h2>まとめ</h2>
-
-<p><a href="https://github.com/sorah/nginx_omniauth_adapter">nginx_omniauth_adapter</a>のGolangポート
-<a href="https://github.com/shogo82148/go-nginx-oauth2-adapter">shogo82148/go-nginx-oauth2-adapter</a>を紹介しました。</p>
-
-<p>adapter自身の公開設定をしなくて良い分簡単にセットアップできます。
-nginx_omniauth_adapter互換ですぐに乗り換えもできるので、ぜひお気軽にお試し下さい。</p>
 ]]></content>
   </entry>
   
