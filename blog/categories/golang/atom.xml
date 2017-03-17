@@ -4,7 +4,7 @@
   <title><![CDATA[Category: golang | Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/blog/categories/golang/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2017-03-11T18:51:45+09:00</updated>
+  <updated>2017-03-17T22:20:12+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,202 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Go言語のchanはいったいいくつ付けられるのか試してみた]]></title>
+    <link href="https://shogo82148.github.io/blog/2017/03/17/how-many-chan-can-i-write-in-golang/"/>
+    <updated>2017-03-17T21:10:25+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2017/03/17/how-many-chan-can-i-write-in-golang</id>
+    <content type="html"><![CDATA[<p>pecoに入った修正をみて、果たして<code>chan</code>はいくつまで付けられるのか気になったので、
+雑に試してみました。
+先に断っておきますが、全く有用ではないですよ。</p>
+
+<!-- More -->
+
+
+<h2>背景</h2>
+
+<p>pecoに入った修正はこちら(一部抜粋)。</p>
+
+<ul>
+<li><a href="https://github.com/peco/peco/pull/411">Make Resume a blocking operation #411</a></li>
+</ul>
+
+
+<pre><code class="diff">diff --git a/interface.go b/interface.go
+index 3d4472f..fff446c 100644
+--- a/interface.go
++++ b/interface.go
+@@ -162,8 +162,8 @@ type Screen interface {
+ // Termbox just hands out the processing to the termbox library
+ type Termbox struct {
+    mutex     sync.Mutex
+-   resumeCh  chan (struct{})
+-   suspendCh chan (struct{})
++   resumeCh  chan chan struct{}
++   suspendCh chan struct{}
+ }
+
+ // View handles the drawing/updating the screen
+diff --git a/screen.go b/screen.go
+index edbce87..f6dd71e 100644
+--- a/screen.go
++++ b/screen.go
+@@ -21,7 +21,7 @@ func (t *Termbox) Init() error {
+ func NewTermbox() *Termbox {
+    return &amp;Termbox{
+        suspendCh: make(chan struct{}),
+-       resumeCh:  make(chan struct{}),
++       resumeCh:  make(chan chan struct{}),
+    }
+ }
+</code></pre>
+
+<p>channelを使ってchannelをやり取りすることができるので、
+<code>chan struct{}</code>をやり取りする<code>chan chan struct{}</code>という型が使えます。
+同じ要領で、channelをやり取りするchannelをやり取りするchannelをやり取り&hellip;するchannelが
+無限に作れるはずです(少なくとも構文上は)。
+ということで、実際にやってみました。</p>
+
+<h2>実験</h2>
+
+<p>雑なPerlスクリプトを準備して、大量の<code>chan</code>を付けたGoのコードを自動生成します。</p>
+
+<pre><code class="perl">print &lt;&lt;EOF;
+package main
+
+import (
+    "fmt"
+)
+
+type Foo @{['chan ' x 4096]} struct{}
+
+func main() {
+    fmt.Printf("Hello, %#v\\n", make(Foo))
+}
+EOF
+</code></pre>
+
+<p><code>chan</code>の個数を変えて何度かビルドを繰り返します。</p>
+
+<pre><code class="bash">time go build -o main main.go
+</code></pre>
+
+<h2>結果</h2>
+
+<p>chanの個数とビルドにかかった時間をまとめてみました。</p>
+
+<table>
+    <tr><th>chanの個数</th><th>ビルド時間</th></tr>
+    <tr><td>1</td><td>0.236s</td></tr>
+    <tr><td>2</td><td>0.240s</td></tr>
+    <tr><td>4</td><td>0.226s</td></tr>
+    <tr><td>8</td><td>0.234s</td></tr>
+    <tr><td>16</td><td>0.240s</td></tr>
+    <tr><td>32</td><td>0.250s</td></tr>
+    <tr><td>64</td><td>0.281s</td></tr>
+    <tr><td>128</td><td>0.258s</td></tr>
+    <tr><td>256</td><td>0.360s</td></tr>
+    <tr><td>512</td><td>0.775s</td></tr>
+    <tr><td>1024</td><td>3.228s</td></tr>
+    <tr><td>2048</td><td>18.605s</td></tr>
+    <tr><td>4096</td><td>1m53.614s</td></tr>
+    <tr><td>8192</td><td>13m46.018s(ビルド失敗したので参考記録)</td></tr>
+</table>
+
+
+<p>8192個付けたら以下のようなエラーを吐いてビルドが失敗してしまったので、
+8192個の時の記録は参考記録です。</p>
+
+<pre><code class="plain"># command-line-arguments
+too much data in section SDWARFINFO (over 2000000000 bytes)
+</code></pre>
+
+<p>何かビルドの設定をいじればもっと行けるかもしれませんが、
+デフォルトの設定では4096から8192の間に限界があるようです。
+4096個<code>chan</code>を付けたときのソースコードは20KB程度なのにバイナリサイズは524MBまで膨らんでいました。</p>
+
+<p>256個当たりからビルド時間に影響が出ているので、
+ビルド時間を考える256個以下に抑えるのがよさそうです。
+それ以上だと$O(n<sup>2</sup>.6)$程度のオーダーでビルド時間が延びます。
+とはいえ、256個も<code>chan</code>を付いたコードを人間が読めるとは思えないので、
+2個が限度でしょうね・・・。
+3個以上必要になるケースは余りないと思います。</p>
+
+<h2>型定義を再帰的にして無限chanを実現する</h2>
+
+<p>そもそも、<code>chan</code>を大量に並べなくとも、
+型定義を再帰的に行えば無限の<code>chan</code>を付けたときと同等のことができます。
+例えば以下のコードで"Goroutine 1"と"Goroutine 2"を交互に表示することが可能です。</p>
+
+<pre><code class="go">package main
+
+import (
+    "fmt"
+)
+
+type Foo chan Foo
+
+func main() {
+    ch := make(Foo)
+    go func() {
+        ch := ch
+        for {
+            done := &lt;-ch
+            fmt.Println("Goroutine 2")
+            done &lt;- ch
+        }
+    }()
+
+    for i := 0; i &lt; 100; i++ {
+        fmt.Println("Goroutine 1")
+        done := make(Foo)
+        ch &lt;- done
+        ch = &lt;-done
+    }
+    fmt.Println("Hello, playground")
+}
+</code></pre>
+
+<p>channelでのやり取りが複雑になるので実用性があるかは不明ですが・・・。
+例えば先程の例だと、普通にループを書いたほうが圧倒的にシンプルです。</p>
+
+<pre><code class="go">package main
+
+import (
+    "fmt"
+)
+
+func main() {
+    for i := 0; i &lt; 100; i++ {
+        fmt.Println("Goroutine 1")
+        fmt.Println("Goroutine 2")
+    }
+    fmt.Println("Hello, playground")
+}
+</code></pre>
+
+<p>無限<code>chan</code>が必要になる多くのケースは、このような書き換えができるような気がします。
+(そもそも必要になったことがない)</p>
+
+<h2>まとめ</h2>
+
+<ul>
+<li><code>chan</code>の個数の上限は4096から8192の間のどこか</li>
+<li>256個あたりからビルド時間に影響が出始める
+
+<ul>
+<li>プログラムを読む人の精神力に多大な影響を与えるので、実際は2個までに留めるべきだと思う</li>
+</ul>
+</li>
+<li>再帰的に型を定義することで、無限に<code>chan</code>を付けた時と同等のことが可能</li>
+</ul>
+
+
+<p><code>chan</code>を大量に付けたいケースには今までに僕自身は遭遇したことがないです。
+有用な例を見つけた人は教えてください。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[HTTP/WebSocketで時刻同期するWebNTPを書いた]]></title>
@@ -857,149 +1053,6 @@ EOF
 
 
 <p>フィボナッチ数列に触れている部分はWebでも公開されているので、そちらもどうぞ(<a href="http://www.hyuki.com/story/genfunc.html">ミルカさんとフィボナッチ数列</a>)</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[go-sql-proxyがcontextに対応しました]]></title>
-    <link href="https://shogo82148.github.io/blog/2017/02/16/go-sql-proxy-in-go18/"/>
-    <updated>2017-02-16T07:16:44+09:00</updated>
-    <id>https://shogo82148.github.io/blog/2017/02/16/go-sql-proxy-in-go18</id>
-    <content type="html"><![CDATA[<p>Go1.8ではdatabase/sqlのcontextサポートが入ります。
-(きっと今日の<a href="https://eventdots.jp/event/611405">Go 1.8 Release Party</a>で詳しく説明があるはず、たぶん)
-それにともない<a href="https://shogo82148.github.io/blog/2015/05/13/golang-sql-proxy/">Go言語でSQLのトレースをする</a>で紹介した
-<a href="https://github.com/shogo82148/go-sql-proxy">shogo82148/go-sql-proxy</a>でもcontextを扱えるようにしました。</p>
-
-<!-- More -->
-
-
-<h2>Go1.8新機能のサポート</h2>
-
-<p><a href="http://mattn.kaoriya.net/software/lang/go/20161106232834.htm">Golang 1.8 でやってくる database/sql の変更点</a>で
-mattnさんが紹介しているように、Go1.8ではdatabase/sqlにいくつか新機能が追加されます。
-(mattnさんの対応が早すぎて、メソッド名とか微妙に変更が入っているので注意)</p>
-
-<p>特に大きなのがcontextのサポートでしょう。以下のようなコードでクエリのキャンセルが可能になります。</p>
-
-<pre><code class="go">ctx, cancel := context.WithCancel(context.Background())
-go func() {
-    // 1秒待ってからキャンセル
-    time.Sleep(1 * time.Second)
-    cancel()
-}()
-
-rows, err := db.QueryContext(ctx, "SELECT name FROM test where id = ?", id)
-if err != nil {
-    log.Fatal(err)
-}
-</code></pre>
-
-<p>go-sql-proxyでもcontext対応を行ったので、
-proxyを経由した場合でも、キャンセルが可能になります。
-(もちろん、originとなるドライバの対応も必要です)</p>
-
-<p>Go1.8ではcontextサポート以外にもいくつか新機能が追加される予定です。
-これらについても、originとなるドライバが対応していれば、go-sql-proxy経由でも全く同じように扱えます。</p>
-
-<h2>contextとHookの関連付け</h2>
-
-<p>contextにHookを関連付けて、一部のクエリにだけHookを付けることができるようになりました。
-例えば以下のようなコードでctxに関連したクエリだけログを出力できます。</p>
-
-<pre><code class="go">package main
-
-import (
-    "context"
-    "database/sql"
-
-    "github.com/shogo82148/go-sql-proxy"
-)
-
-var tracer = proxy.NewTraceHooks(proxy.TracerOptions{})
-
-func main() {
-    // 何もしないproxyをインストール
-    proxy.RegisterProxy()
-
-    // 末尾に":proxy"がついた名前でアクセス
-    db, _ := sql.Open("origin:proxy", "data source")
-
-    // このコンテキストに関連したクエリだけでログが有効になります
-    ctx := proxy.WithHooks(context.Background(), tracer)
-    db.ExecContext(ctx, "CREATE TABLE t1 (id INTEGER PRIMARY KEY)")
-}
-</code></pre>
-
-<p>グローバルなproxyに既にHookが設定してあった場合は上書きされます。
-上書きされたHookは実行されないので注意してください。</p>
-
-<p>「トレースの負荷が気になるから、全体の1%だけ出力したい！」とか
-「このAPIだけ重たいから、この部分だけトレースしたい！」とか
-そういう場合に便利ではないでしょうか。</p>
-
-<h2>トレースオプションの追加</h2>
-
-<p>Tracerに色々オプションをつけたいなと思ったので、<code>proxy.TracerOptions</code>を追加しました。
-例えばSlowQueryに時間を設定すると、この時間以上経ったクエリだけ表示されます。</p>
-
-<pre><code class="go">var tracer = proxy.NewTraceHooks(proxy.TracerOptions{
-    SlowQuery: 10 * time.Second,
-})
-</code></pre>
-
-<p>ちなみに初期のトレーサーは<code>logger.Output(6, "Begin")</code>みたいな感じで書いてたので、
-案の定Go1.8の変更でぶっ壊れました。
-頑張ってスタックトレースを辿って、関数名をパースしてパッケージ名を取得(ダイレクトにパッケージ名だけ取る機能は見つからなかった)して、
-フィルタリングするようにしたので、もう大丈夫なはず。
-その代わりにパフォーマンスが犠牲になったので、
-あまり高負荷のところに突っ込まないでくださいね。</p>
-
-<h2>フック関数の変更</h2>
-
-<p>context対応に伴い、Hookの差し込み方も変わっています。
-<code>proxy.Hooks</code>は非推奨の扱いで、<code>proxy.HooksContext</code>を使って下さい。
-以下の例のようにcontext.Contextが第一引数に追加されています。
-デバッグ情報の受け渡しに使えるかも？</p>
-
-<pre><code class="go">package main
-
-import (
-    "database/sql"
-    "database/sql/driver"
-    "log"
-    "time"
-
-    "github.com/mattn/go-sqlite3"
-    "github.com/shogo82148/go-sql-proxy"
-)
-
-func main() {
-    sql.Register("sqlite3-proxy", proxy.NewProxyContext(&amp;sqlite3.SQLiteDriver{}, &amp;proxy.HooksContext{
-        PreExec: func(_ context.Context, _ *proxy.Stmt, _ []driver.NamedValue) (interface{}, error) {
-            // The first return value(time.Now()) is passed to both `Hooks.Exec` and `Hook.ExecPost` callbacks.
-            return time.Now(), nil
-        },
-        PostExec: func(_ context.Context, ctx interface{}, stmt *proxy.Stmt, args []driver.NamedValue, _ driver.Result, _ error) error {
-            // The `ctx` parameter is the return value supplied from the `Hooks.PreExec` method, and may be nil.
-            log.Printf("Query: %s; args = %v (%s)\n", stmt.QueryString, args, time.Since(ctx.(time.Time)))
-            return nil
-        },
-    }))
-
-    db, err := sql.Open("sqlite3-proxy", ":memory:")
-    if err != nil {
-        log.Fatalf("Open filed: %v", err)
-    }
-    defer db.Close()
-
-    _, err = db.Exec(
-        "CREATE TABLE t1 (id INTEGER PRIMARY KEY)",
-    )
-    if err != nil {
-        log.Fatal(err)
-    }
-}
-</code></pre>
 ]]></content>
   </entry>
   
