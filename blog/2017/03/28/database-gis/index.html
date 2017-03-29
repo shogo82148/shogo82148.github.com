@@ -422,110 +422,101 @@ Google Maps, OpenStreetMap, Bing 等でよく見る地図は平面ですが、�
 <span class='line-number'>4</span>
 <span class='line-number'>5</span>
 <span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>     name          |          st_astext          |     dist
+</span><span class='line'>-----------------------+-----------------------------+---------------
+</span><span class='line'> 上野駅             | POINT(139.777254 35.713768) |             0
+</span><span class='line'> 国立西洋美術館 | POINT(139.775803 35.71542)  | 225.468916585
+</span><span class='line'> 上野の森美術館 | POINT(139.774744 35.712737) | 254.308127877
+</span><span class='line'> 国立科学博物館 | POINT(139.776544 35.716319) | 290.242707221</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>ST_</code>で始まる関数は<a href="http://www.opengeospatial.org/standards/sfs">OpenGIS</a>やSQL/MMで標準化されているものらしいです。</p>
+
+<h3>MySQL</h3>
+
+<p>MySQLに関しては以下の記事を見つけました。
+この記事が書かれた頃はMyISAMでしか空間インデックスをサポートしていませんでしたが、
+5.7からInnoDBでもサポートされるようになったので、
+InnoDBでも同様のことができるはずです。</p>
+
+<ul>
+<li><a href="http://qiita.com/kochizufan/items/a68b30ba74849483f75c">mysql空間テーブルの作り方</a></li>
+</ul>
+
+
+<p>MySQL5.7で入った機能についてはこちらを参照。
+空間インデックス以外にも大量に変更があるので、アップグレードする人は確認をおすすめします。</p>
+
+<iframe style="width:120px;height:240px;" marginwidth="0" marginheight="0" scrolling="no" frameborder="0" src="//rcm-fe.amazon-adsystem.com/e/cm?lt1=_blank&bc1=000000&IS2=1&bg1=FFFFFF&fc1=000000&lc1=0000FF&t=shogo82148-22&o=9&p=8&l=as4&m=amazon&f=ifr&ref=as_ss_li_til&asins=B01LCJRCYE&linkId=ac9d8d9e348bd97dc858337c94e82696"></iframe>
+
+
+<p>MySQLもPostgreSQLもOpenGISに準拠する方針みたいなので、
+PostgreSQLと同じ感じでSQLが書けると信じたいところですが、
+当然ながらそうは行きません。</p>
+
+<p>一番大きな違いは<code>geography</code>型には対応しておらず<code>geometry</code>型しか使えないということです。
+<code>geography</code>型は測地系の情報を持っている(つまり地球が回転楕円体だということを知っている)のですが、
+<code>geometry</code>型は測地系の情報が無いため、平面しか扱えません。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='sql'><span class='line'><span class="k">CREATE</span> <span class="k">DATABASE</span> <span class="n">test</span><span class="p">;</span> <span class="c1">-- 5.6以前は勝手に作ってくれたけど、5.7からは無いらしい</span>
+</span><span class='line'><span class="n">USE</span> <span class="n">test</span><span class="p">;</span>
+</span><span class='line'><span class="k">CREATE</span> <span class="k">TABLE</span> <span class="n">IF</span> <span class="k">NOT</span> <span class="k">EXISTS</span> <span class="o">`</span><span class="n">geotable</span><span class="o">`</span> <span class="p">(</span>
+</span><span class='line'>  <span class="o">`</span><span class="n">id</span><span class="o">`</span>   <span class="nb">int</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span> <span class="n">UNSIGNED</span> <span class="k">NOT</span> <span class="k">NULL</span> <span class="n">AUTO_INCREMENT</span><span class="p">,</span>
+</span><span class='line'>  <span class="o">`</span><span class="n">name</span><span class="o">`</span> <span class="nb">VARCHAR</span> <span class="p">(</span><span class="mi">255</span><span class="p">)</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+</span><span class='line'>  <span class="o">`</span><span class="n">geom</span><span class="o">`</span> <span class="n">geometry</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+</span><span class='line'>  <span class="k">PRIMARY</span> <span class="k">KEY</span> <span class="p">(</span><span class="o">`</span><span class="n">id</span><span class="o">`</span><span class="p">),</span>
+</span><span class='line'>  <span class="n">SPATIAL</span> <span class="k">KEY</span> <span class="o">`</span><span class="n">geom</span><span class="o">`</span> <span class="p">(</span><span class="o">`</span><span class="n">geom</span><span class="o">`</span><span class="p">)</span>
+</span><span class='line'><span class="p">)</span> <span class="n">ENGINE</span><span class="o">=</span><span class="n">InnoDB</span> <span class="k">DEFAULT</span> <span class="n">CHARSET</span><span class="o">=</span><span class="n">utf8mb4</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>座標の指定も<code>ST_GeographyFromText</code>ではなく<code>ST_GeomFromText</code>を使います。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
 <span class='line-number'>7</span>
 <span class='line-number'>8</span>
 <span class='line-number'>9</span>
 <span class='line-number'>10</span>
 <span class='line-number'>11</span>
 <span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>     name          |          st_astext          |     dist
-</span><span class='line'>-----------------------+-----------------------------+---------------
-</span><span class='line'> 上野駅             | POINT(139.777254 35.713768) |             0
-</span><span class='line'> 国立西洋美術館 | POINT(139.775803 35.71542)  | 225.468916585
-</span><span class='line'> 上野の森美術館 | POINT(139.774744 35.712737) | 254.308127877
-</span><span class='line'> 国立科学博物館 | POINT(139.776544 35.716319) | 290.242707221
-</span><span class='line'> ```
-</span><span class='line'>
-</span><span class='line'>`ST_`で始まる関数は[OpenGIS](http://www.opengeospatial.org/standards/sfs)やSQL/MMで標準化されているものらしいです。
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>### MySQL
-</span><span class='line'>
-</span><span class='line'>MySQLに関しては以下の記事を見つけました。
-</span><span class='line'>この記事が書かれた頃はMyISAMでしか空間インデックスをサポートしていませんでしたが、
-</span><span class='line'>5.7からInnoDBでもサポートされるようになったので、
-</span><span class='line'>InnoDBでも同様のことができるはずです。
-</span><span class='line'>
-</span><span class='line'>- [mysql空間テーブルの作り方](http://qiita.com/kochizufan/items/a68b30ba74849483f75c)
-</span><span class='line'>
-</span><span class='line'>MySQL5.7で入った機能についてはこちらを参照。
-</span><span class='line'>空間インデックス以外にも大量に変更があるので、アップグレードする人は確認をおすすめします。
-</span><span class='line'>
-</span><span class='line'>&lt;iframe style="width:120px;height:240px;" marginwidth="0" marginheight="0" scrolling="no" frameborder="0" src="//rcm-fe.amazon-adsystem.com/e/cm?lt1=_blank&bc1=000000&IS2=1&bg1=FFFFFF&fc1=000000&lc1=0000FF&t=shogo82148-22&o=9&p=8&l=as4&m=amazon&f=ifr&ref=as_ss_li_til&asins=B01LCJRCYE&linkId=ac9d8d9e348bd97dc858337c94e82696"&gt;&lt;/iframe&gt;
-</span><span class='line'>
-</span><span class='line'>MySQLもPostgreSQLもOpenGISに準拠する方針みたいなので、
-</span><span class='line'>PostgreSQLと同じ感じでSQLが書けると信じたいところですが、
-</span><span class='line'>当然ながらそうは行きません。
-</span><span class='line'>
-</span><span class='line'>一番大きな違いは`geography`型には対応しておらず`geometry`型しか使えないということです。
-</span><span class='line'>`geography`型は測地系の情報を持っている(つまり地球が回転楕円体だということを知っている)のですが、
-</span><span class='line'>`geometry`型は測地系の情報が無いため、平面しか扱えません。
+</pre></td><td class='code'><pre><code class='sql'><span class='line'><span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">geotable</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">geom</span><span class="p">)</span> <span class="k">VALUES</span>
+</span><span class='line'><span class="p">(</span><span class="s1">&#39;上野駅&#39;</span><span class="p">,</span> <span class="n">ST_GeomFromText</span><span class="p">(</span><span class="s1">&#39;POINT(139.777254 35.713768)&#39;</span><span class="p">)),</span>
+</span><span class='line'><span class="p">(</span><span class="s1">&#39;西郷隆盛像&#39;</span><span class="p">,</span> <span class="n">ST_GeomFromText</span><span class="p">(</span><span class="s1">&#39;POINT(139.774029 35.711846)&#39;</span><span class="p">)),</span>
+</span><span class='line'><span class="p">(</span><span class="s1">&#39;上野の森美術館&#39;</span><span class="p">,</span> <span class="n">ST_GeomFromText</span><span class="p">(</span><span class="s1">&#39;POINT(139.774744 35.712737)&#39;</span><span class="p">)),</span>
+</span><span class='line'><span class="p">(</span><span class="s1">&#39;不忍池弁財天&#39;</span><span class="p">,</span> <span class="n">ST_GeomFromText</span><span class="p">(</span><span class="s1">&#39;POINT(139.770872 35.712351)&#39;</span><span class="p">)),</span>
+</span><span class='line'><span class="p">(</span><span class="s1">&#39;野口英世博士像&#39;</span><span class="p">,</span> <span class="n">ST_GeomFromText</span><span class="p">(</span><span class="s1">&#39;POINT(139.775696 35.716293)&#39;</span><span class="p">)),</span>
+</span><span class='line'><span class="p">(</span><span class="s1">&#39;国立西洋美術館&#39;</span><span class="p">,</span> <span class="n">ST_GeomFromText</span><span class="p">(</span><span class="s1">&#39;POINT(139.775803 35.71542)&#39;</span><span class="p">)),</span>
+</span><span class='line'><span class="p">(</span><span class="s1">&#39;国立科学博物館&#39;</span><span class="p">,</span> <span class="n">ST_GeomFromText</span><span class="p">(</span><span class="s1">&#39;POINT(139.776544 35.716319)&#39;</span><span class="p">)),</span>
+</span><span class='line'><span class="p">(</span><span class="s1">&#39;東京都美術館&#39;</span><span class="p">,</span> <span class="n">ST_GeomFromText</span><span class="p">(</span><span class="s1">&#39;POINT(139.772776 35.717186)&#39;</span><span class="p">)),</span>
+</span><span class='line'><span class="p">(</span><span class="s1">&#39;東京国立博物館&#39;</span><span class="p">,</span> <span class="n">ST_GeomFromText</span><span class="p">(</span><span class="s1">&#39;POINT(139.776462 35.718883)&#39;</span><span class="p">)),</span>
+</span><span class='line'><span class="p">(</span><span class="s1">&#39;花やしき&#39;</span><span class="p">,</span> <span class="n">ST_GeomFromText</span><span class="p">(</span><span class="s1">&#39;POINT(139.794547 35.71528)&#39;</span><span class="p">)),</span>
+</span><span class='line'><span class="p">(</span><span class="s1">&#39;雷門&#39;</span><span class="p">,</span> <span class="n">ST_GeomFromText</span><span class="p">(</span><span class="s1">&#39;POINT(139.792692 35.710635)&#39;</span><span class="p">));</span>
 </span></code></pre></td></tr></table></div></figure>
 
 
-<p> sql
-CREATE DATABASE test; &ndash; 5.6以前は勝手に作ってくれたけど、5.7からは無いらしい
-USE test;
-CREATE TABLE IF NOT EXISTS <code>geotable</code> (
-  <code>id</code>   int(10) UNSIGNED NOT NULL AUTO_INCREMENT,
-  <code>name</code> VARCHAR (255) NOT NULL,
-  <code>geom</code> geometry NOT NULL,
-  PRIMARY KEY (<code>id</code>),
-  SPATIAL KEY <code>geom</code> (<code>geom</code>)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;</p>
+<p>PostgreSQLと同様にGeohashを求める<a href="https://dev.mysql.com/doc/refman/5.7/en/spatial-geohash-functions.html"><code>ST_GeoHash</code>があります</a>が、
+桁数を指定する必要があるという違いがあります。</p>
 
 <figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>
-</span><span class='line'>座標の指定も`ST_GeographyFromText`ではなく`ST_GeomFromText`を使います。
+</pre></td><td class='code'><pre><code class='sql'><span class='line'><span class="k">SELECT</span> <span class="n">name</span><span class="p">,</span> <span class="n">ST_AsText</span><span class="p">(</span><span class="n">geom</span><span class="p">),</span> <span class="n">ST_GeoHash</span><span class="p">(</span><span class="n">geom</span><span class="p">,</span> <span class="mi">11</span><span class="p">)</span> <span class="k">FROM</span> <span class="n">geotable</span><span class="p">;</span>
 </span></code></pre></td></tr></table></div></figure>
 
 
-<p> sql
-INSERT INTO geotable (name, geom) VALUES
-(&lsquo;上野駅&rsquo;, ST_GeomFromText(&lsquo;POINT(139.777254 35.713768)&rsquo;)),
-(&lsquo;西郷隆盛像&rsquo;, ST_GeomFromText(&lsquo;POINT(139.774029 35.711846)&rsquo;)),
-(&lsquo;上野の森美術館&rsquo;, ST_GeomFromText(&lsquo;POINT(139.774744 35.712737)&rsquo;)),
-(&lsquo;不忍池弁財天&rsquo;, ST_GeomFromText(&lsquo;POINT(139.770872 35.712351)&rsquo;)),
-(&lsquo;野口英世博士像&rsquo;, ST_GeomFromText(&lsquo;POINT(139.775696 35.716293)&rsquo;)),
-(&lsquo;国立西洋美術館&rsquo;, ST_GeomFromText(&lsquo;POINT(139.775803 35.71542)&rsquo;)),
-(&lsquo;国立科学博物館&rsquo;, ST_GeomFromText(&lsquo;POINT(139.776544 35.716319)&rsquo;)),
-(&lsquo;東京都美術館&rsquo;, ST_GeomFromText(&lsquo;POINT(139.772776 35.717186)&rsquo;)),
-(&lsquo;東京国立博物館&rsquo;, ST_GeomFromText(&lsquo;POINT(139.776462 35.718883)&rsquo;)),
-(&lsquo;花やしき&rsquo;, ST_GeomFromText(&lsquo;POINT(139.794547 35.71528)&rsquo;)),
-(&lsquo;雷門&rsquo;, ST_GeomFromText(&lsquo;POINT(139.792692 35.710635)&rsquo;));</p>
 
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>
-</span><span class='line'>PostgreSQLと同様にGeohashを求める[`ST_GeoHash`があります](https://dev.mysql.com/doc/refman/5.7/en/spatial-geohash-functions.html)が、
-</span><span class='line'>桁数を指定する必要があるという違いがあります。
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p> sql
-SELECT name, ST_AsText(geom), ST_GeoHash(geom, 11) FROM geotable;</p>
 
 <figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
@@ -543,11 +534,7 @@ SELECT name, ST_AsText(geom), ST_GeoHash(geom, 11) FROM geotable;</p>
 <span class='line-number'>14</span>
 <span class='line-number'>15</span>
 <span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>
-</span><span class='line'>``` plain
-</span><span class='line'>+-----------------------+-----------------------------+----------------------+
+</pre></td><td class='code'><pre><code class=''><span class='line'>+-----------------------+-----------------------------+----------------------+
 </span><span class='line'>| name                  | ST_AsText(geom)             | ST_GeoHash(geom, 11) |
 </span><span class='line'>+-----------------------+-----------------------------+----------------------+
 </span><span class='line'>| 上野駅                | POINT(139.777254 35.713768) | xn77htqxy0f          |
