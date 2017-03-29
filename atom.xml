@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2017-03-17T22:26:36+09:00</updated>
+  <updated>2017-03-30T07:57:07+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,563 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Redis、PostgreSQL、MySQLで近傍検索]]></title>
+    <link href="https://shogo82148.github.io/blog/2017/03/28/database-gis/"/>
+    <updated>2017-03-28T19:59:49+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2017/03/28/database-gis</id>
+    <content type="html"><![CDATA[<p>「<a href="http://techblog.kayac.com/serverside-geohash">サーバーで付近の情報を通知するサービスのつくり方</a>」
+という、Geohashを使って近傍検索を実現する記事をみつけました。
+最近<a href="https://shogo82148.github.io/blog/2017/02/23/perl-webdb-vol97/">Redisに関する記事</a>を書いた関係で、
+この記事をみて「GeohashはRedisと一緒に使うともっと便利だよ！」と思わず宣伝したくなったのですが、
+MySQL5.7でInnoDBに空間インデックス(Spatial Index)のサポートが入ったので
+「MySQLでももっと簡単にできるのでは？」と思い、
+RedisやMySQLを含めたいろんなDBで近傍検索を実現する方法を調べてみました。</p>
+
+<p>以前、<a href="https://shogo82148.github.io/blog/2012/08/02/fireworks/">スマートフォンのセンサを活用して花火の打ち上げ場所を推定するアプリ</a>を作った関係で、
+地球上での距離計算の実装も気になったので、それについても調査してみました。</p>
+
+<!-- More -->
+
+
+<h2>関連知識</h2>
+
+<h3>GeoHash</h3>
+
+<p><a href="https://ja.wikipedia.org/wiki/%E3%82%B8%E3%82%AA%E3%83%8F%E3%83%83%E3%82%B7%E3%83%A5">Geohash（ジオハッシュ）</a>
+は緯度・経度を短い文字列に変換する方法です。
+距離が近い2地点のGeohashは似たような文字列になるという特徴があります(一部例外あり)。
+この特徴を利用すると、文字列検索だけで近傍検索が実現できます。</p>
+
+<h3>地球上の二点間の距離</h3>
+
+<p>地球は完全な球体ではなく、回転楕円体であることが知られています。
+地球の形がわからないと緯度・経度などを決められないので、
+<a href="https://ja.wikipedia.org/wiki/%E5%9C%B0%E7%90%83%E6%A5%95%E5%86%86%E4%BD%93">地球楕円体</a>が定義されています。
+近似方法によっていくつか種類があるのですが、GPSなどで使われているWGS84がよく使われているようです。</p>
+
+<p>国土地理院が提供している<a href="http://vldb.gsi.go.jp/sokuchi/surveycalc/main.html">測量計算サイト</a>では
+<a href="http://vldb.gsi.go.jp/sokuchi/surveycalc/surveycalc/bl2stf.html">距離と方位角の計算</a>を使って緯度・経度から距離を計算できます。
+回転楕円体上の距離の厳密解は求められない(要出典)ので、
+<a href="http://vldb.gsi.go.jp/sokuchi/surveycalc/surveycalc/algorithm/bl2st/bl2st.htm">数値計算</a>によって求めることになります。
+計算式を見て分かる通り非常に複雑なので、なんらかの近似をしている実装がほとんどです。</p>
+
+<h2>各種DBでの実現方法</h2>
+
+<h3>Redis</h3>
+
+<p>Redisでは3.2から<a href="https://redis.io/commands#geo">GEO</a>関連の機能をサポートしています。
+ソート済みセットにGeohashを組み合わせて実現しています。</p>
+
+<p>簡単に試してみました。データは以下の記事から拝借したものを使用します。</p>
+
+<ul>
+<li><a href="http://d.hatena.ne.jp/ilo/20090212/1234448136">MySQLで指定した緯度経度から半径nメートル内検索っぽいのを実現するSQL</a></li>
+<li><a href="https://www.infoscoop.org/blogjp/2015/01/21/tutorial_for_geodb/">PostgreSQLとOracleで緯度経度から半径nメートル内検索を実行してみる。</a></li>
+</ul>
+
+
+<p><a href="https://redis.io/commands/geoadd"><code>GEOADD</code></a>でデータ挿入です。
+ちなみにデータを削除する<code>GEODEL</code>は用意されていないとのこと。
+中身はソート済みセットなので、<a href="https://redis.io/commands/zrem">ZREM</a>でいいんですね。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ cat command.txt
+</span><span class='line'>GEOADD geotable 139.777254 35.713768 上野駅         139.774029 35.711846 西郷隆盛像
+</span><span class='line'>GEOADD geotable 139.774744 35.712737 上野の森美術館 139.770872 35.712351 不忍池弁財天
+</span><span class='line'>GEOADD geotable 139.775696 35.716293 野口英世博士像 139.775803 35.715420 国立西洋美術館
+</span><span class='line'>GEOADD geotable 139.776544 35.716319 国立科学博物館 139.772776 35.717186 東京都美術館
+</span><span class='line'>GEOADD geotable 139.776462 35.718883 東京国立博物館 139.794547 35.715280 花やしき
+</span><span class='line'>GEOADD geotable 139.792692 35.710635 雷門
+</span><span class='line'>$ redis-cli &lt; command.txt
+</span><span class='line'>(integer) 2
+</span><span class='line'>(integer) 2
+</span><span class='line'>(integer) 2
+</span><span class='line'>(integer) 2
+</span><span class='line'>(integer) 2
+</span><span class='line'>(integer) 1</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>GEOHASH</code>で各地点のGeohashを取得できます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ redis-cli
+</span><span class='line'>127.0.0.1:6379&gt; GEOHASH geotable 上野駅 西郷隆盛像 上野の森美術館
+</span><span class='line'>1) "xn77htqxy10"
+</span><span class='line'>2) "xn77hthkdf0"
+</span><span class='line'>3) "xn77htkcg80"</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>GEORADIUS</code>で近傍検索ができます。
+上野駅から半径300m以内の地点を求める例です。
+データに日本語を使ったので非常にわかりにくいですが、
+上野駅から近い順に「上野駅」「国立西洋美術館」「上野の森美術館」「国立科学博物館」の距離と座標を返してくれました。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ redis-cli
+</span><span class='line'>127.0.0.1:6379&gt; GEORADIUS geotable 139.777254 35.713768 300 m WITHCOORD WITHDIST ASC
+</span><span class='line'>1) 1) "\xe4\xb8\x8a\xe9\x87\x8e\xe9\xa7\x85"
+</span><span class='line'>   2) "0.1203"
+</span><span class='line'>   3) 1) "139.77725297212600708"
+</span><span class='line'>      2) "35.71376868735887911"
+</span><span class='line'>2) 1) "\xe5\x9b\xbd\xe7\xab\x8b\xe8\xa5\xbf\xe6\xb4\x8b\xe7\xbe\x8e\xe8\xa1\x93\xe9\xa4\xa8"
+</span><span class='line'>   2) "225.4920"
+</span><span class='line'>   3) 1) "139.77580457925796509"
+</span><span class='line'>      2) "35.71541879083360271"
+</span><span class='line'>3) 1) "\xe4\xb8\x8a\xe9\x87\x8e\xe3\x81\xae\xe6\xa3\xae\xe7\xbe\x8e\xe8\xa1\x93\xe9\xa4\xa8"
+</span><span class='line'>   2) "254.1580"
+</span><span class='line'>   3) 1) "139.77474242448806763"
+</span><span class='line'>      2) "35.71273705584702896"
+</span><span class='line'>4) 1) "\xe5\x9b\xbd\xe7\xab\x8b\xe7\xa7\x91\xe5\xad\xa6\xe5\x8d\x9a\xe7\x89\xa9\xe9\xa4\xa8"
+</span><span class='line'>   2) "290.8339"
+</span><span class='line'>   3) 1) "139.77654486894607544"
+</span><span class='line'>      2) "35.71631861684517872"</span></code></pre></td></tr></table></div></figure>
+
+
+<p>上野駅と上野駅の距離は当然0mなはずですが、ちょっとだけズレてます。
+これはソート済みセットの制約で緯度・経度それぞれ53bitを26bitにまるめているからです(たぶん)。
+距離の計算は<a href="https://github.com/antirez/redis/blob/4.0/src/geohash_helper.c#L52">半径6372797.560856mの完全な球体</a>で近似し、
+<a href="https://en.wikipedia.org/wiki/Haversine_formula">Haversine formula</a>というのを使っています。</p>
+
+<p>ちなみに扱える緯度・経度には以下の制限があり、極付近の座標は扱えません。</p>
+
+<ul>
+<li>経度 -180度から180度</li>
+<li>緯度 -85.05112878度から85.05112878度</li>
+</ul>
+
+
+<p>これは Spherical Mercator(球面メルカトル図法) の制限らしいです。
+Google Maps, OpenStreetMap, Bing 等でよく見る地図は平面ですが、本来の地球は丸いので、うまく平面にマッピングする必要があります。
+このときにどうしても本来の地形から歪んでしまうわけですが、
+極付近では歪みが無限大になってしまいうまく平面の地図にできないのです。</p>
+
+<p>ただ、Redis自体は平面へのマッピングをしないので、別にこの制限要らな気もします。
+まあ、コーナーケースなので他にも問題がありそうですし、
+そもそも北極・南極向けにサービス作らないので気にしないでおきましょう。</p>
+
+<h3>PostgreSQL</h3>
+
+<p>日本語で書かれた先行事例を見つけたので、PostgreSQLの紹介から。
+以下の記事にあるように、PostGISというオプション機能をインストールすると簡単に実現できます。</p>
+
+<ul>
+<li><a href="https://www.infoscoop.org/blogjp/2015/01/21/tutorial_for_geodb/">PostgreSQLとOracleで緯度経度から半径nメートル内検索を実行してみる。</a></li>
+</ul>
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+</pre></td><td class='code'><pre><code class='sql'><span class='line'><span class="c1">-- PostGISを有効化</span>
+</span><span class='line'><span class="k">CREATE</span> <span class="n">EXTENSION</span> <span class="n">postgis</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">-- テーブルの作成</span>
+</span><span class='line'><span class="k">CREATE</span> <span class="k">TABLE</span> <span class="n">geotable</span> <span class="p">(</span>
+</span><span class='line'>    <span class="n">id</span>   <span class="nb">SERIAL</span> <span class="k">NOT</span> <span class="k">NULL</span> <span class="k">PRIMARY</span> <span class="k">KEY</span><span class="p">,</span>
+</span><span class='line'>    <span class="n">name</span> <span class="nb">varchar</span> <span class="p">(</span><span class="mi">255</span><span class="p">)</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+</span><span class='line'>    <span class="n">geom</span> <span class="n">geography</span><span class="p">(</span><span class="n">POINT</span><span class="p">,</span> <span class="mi">4326</span><span class="p">)</span> <span class="k">NOT</span> <span class="k">NULL</span>
+</span><span class='line'><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">-- データの挿入</span>
+</span><span class='line'><span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">geotable</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">geom</span><span class="p">)</span> <span class="k">VALUES</span>
+</span><span class='line'><span class="p">(</span><span class="s1">&#39;上野駅&#39;</span><span class="p">,</span> <span class="n">ST_GeographyFromText</span><span class="p">(</span><span class="s1">&#39;SRID=4326;POINT(139.777254 35.713768)&#39;</span><span class="p">)),</span>
+</span><span class='line'><span class="p">(</span><span class="s1">&#39;西郷隆盛像&#39;</span><span class="p">,</span> <span class="n">ST_GeographyFromText</span><span class="p">(</span><span class="s1">&#39;SRID=4326;POINT(139.774029 35.711846)&#39;</span><span class="p">)),</span>
+</span><span class='line'><span class="p">(</span><span class="s1">&#39;上野の森美術館&#39;</span><span class="p">,</span> <span class="n">ST_GeographyFromText</span><span class="p">(</span><span class="s1">&#39;SRID=4326;POINT(139.774744 35.712737)&#39;</span><span class="p">)),</span>
+</span><span class='line'><span class="p">(</span><span class="s1">&#39;不忍池弁財天&#39;</span><span class="p">,</span> <span class="n">ST_GeographyFromText</span><span class="p">(</span><span class="s1">&#39;SRID=4326;POINT(139.770872 35.712351)&#39;</span><span class="p">)),</span>
+</span><span class='line'><span class="p">(</span><span class="s1">&#39;野口英世博士像&#39;</span><span class="p">,</span> <span class="n">ST_GeographyFromText</span><span class="p">(</span><span class="s1">&#39;SRID=4326;POINT(139.775696 35.716293)&#39;</span><span class="p">)),</span>
+</span><span class='line'><span class="p">(</span><span class="s1">&#39;国立西洋美術館&#39;</span><span class="p">,</span> <span class="n">ST_GeographyFromText</span><span class="p">(</span><span class="s1">&#39;SRID=4326;POINT(139.775803 35.71542)&#39;</span><span class="p">)),</span>
+</span><span class='line'><span class="p">(</span><span class="s1">&#39;国立科学博物館&#39;</span><span class="p">,</span> <span class="n">ST_GeographyFromText</span><span class="p">(</span><span class="s1">&#39;SRID=4326;POINT(139.776544 35.716319)&#39;</span><span class="p">)),</span>
+</span><span class='line'><span class="p">(</span><span class="s1">&#39;東京都美術館&#39;</span><span class="p">,</span> <span class="n">ST_GeographyFromText</span><span class="p">(</span><span class="s1">&#39;SRID=4326;POINT(139.772776 35.717186)&#39;</span><span class="p">)),</span>
+</span><span class='line'><span class="p">(</span><span class="s1">&#39;東京国立博物館&#39;</span><span class="p">,</span> <span class="n">ST_GeographyFromText</span><span class="p">(</span><span class="s1">&#39;SRID=4326;POINT(139.776462 35.718883)&#39;</span><span class="p">)),</span>
+</span><span class='line'><span class="p">(</span><span class="s1">&#39;花やしき&#39;</span><span class="p">,</span> <span class="n">ST_GeographyFromText</span><span class="p">(</span><span class="s1">&#39;SRID=4326;POINT(139.794547 35.71528)&#39;</span><span class="p">)),</span>
+</span><span class='line'><span class="p">(</span><span class="s1">&#39;雷門&#39;</span><span class="p">,</span> <span class="n">ST_GeographyFromText</span><span class="p">(</span><span class="s1">&#39;SRID=4326;POINT(139.792692 35.710635)&#39;</span><span class="p">));</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">-- 空間インデックスの作成</span>
+</span><span class='line'><span class="k">CREATE</span> <span class="k">INDEX</span> <span class="n">gist_geotable</span> <span class="k">on</span> <span class="n">geotable</span> <span class="k">USING</span> <span class="n">GIST</span> <span class="p">(</span><span class="n">geom</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>ST_GeoHash</code>でGeohashを求めることができます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='sql'><span class='line'><span class="k">SELECT</span> <span class="n">name</span><span class="p">,</span> <span class="n">ST_AsText</span><span class="p">(</span><span class="n">geom</span><span class="p">),</span> <span class="n">ST_GeoHash</span><span class="p">(</span><span class="n">geom</span><span class="p">)</span> <span class="k">FROM</span> <span class="n">geotable</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>     name          |          st_astext          |      st_geohash
+</span><span class='line'>-----------------------+-----------------------------+----------------------
+</span><span class='line'> 上野駅             | POINT(139.777254 35.713768) | xn77htqxy0fu2t0y69sv
+</span><span class='line'> 西郷隆盛像       | POINT(139.774029 35.711846) | xn77hthkdfw51p8cmr68
+</span><span class='line'> 上野の森美術館 | POINT(139.774744 35.712737) | xn77htkcg8enm86bp3j7
+</span><span class='line'> 不忍池弁財天    | POINT(139.770872 35.712351) | xn77ht4p92sp8jdqkjzf
+</span><span class='line'> 野口英世博士像 | POINT(139.775696 35.716293) | xn77htvw3z9495yr4dxd
+</span><span class='line'> 国立西洋美術館 | POINT(139.775803 35.71542)  | xn77htv9kkbffr4ptjcy
+</span><span class='line'> 国立科学博物館 | POINT(139.776544 35.716319) | xn77htynts3mer092t8v
+</span><span class='line'> 東京都美術館    | POINT(139.772776 35.717186) | xn77hw57twp9x63n6vus
+</span><span class='line'> 東京国立博物館 | POINT(139.776462 35.718883) | xn77hwqjedkhwdmmwp0n
+</span><span class='line'> 花やしき          | POINT(139.794547 35.71528)  | xn77jjg2949rgdfxbrjp
+</span><span class='line'> 雷門                | POINT(139.792692 35.710635) | xn77jhcvtbf5mdcexf85
+</span><span class='line'>(11 rows)</span></code></pre></td></tr></table></div></figure>
+
+
+<p>近傍検索には<a href="http://cse.naro.affrc.go.jp/yellow/pgisman/2.0.0/ST_DWithin.html"><code>ST_DWithin</code></a>を使います。
+<a href="http://cse.naro.affrc.go.jp/yellow/pgisman/2.0.0/ST_Distance.html"><code>ST_Distance</code></a>や
+<a href="http://cse.naro.affrc.go.jp/yellow/pgisman/2.0.0/ST_Distance_Sphere.html"><code>ST_Distance_Sphere</code></a>、
+<a href="http://cse.naro.affrc.go.jp/yellow/pgisman/2.0.0/ST_Distance_Spheroid.html"><code>ST_Distance_Spheroid</code></a>等
+を使って距離を計算して絞り込むことも出来ますが、これらの関数はインデックスを使ってくれません。
+<code>ST_DWithin</code>は
+<a href="http://cse.naro.affrc.go.jp/yellow/pgisman/2.0.0/using_postgis_dbmanagement.html#id286995989">GiSTインデックス</a>
+を利用してくれるので高速に処理してくれます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='sql'><span class='line'><span class="k">SELECT</span>
+</span><span class='line'>    <span class="n">name</span><span class="p">,</span>
+</span><span class='line'>    <span class="n">ST_AsText</span><span class="p">(</span><span class="n">geom</span><span class="p">),</span>
+</span><span class='line'>    <span class="n">ST_Distance</span><span class="p">(</span><span class="s1">&#39;SRID=4326;POINT(139.777254 35.713768)&#39;</span><span class="p">,</span> <span class="n">geom</span><span class="p">)</span> <span class="k">as</span> <span class="n">dist</span>
+</span><span class='line'><span class="k">FROM</span> <span class="n">geotable</span>
+</span><span class='line'><span class="k">WHERE</span> <span class="n">ST_DWithin</span><span class="p">(</span><span class="n">geom</span><span class="p">,</span> <span class="n">ST_GeographyFromText</span><span class="p">(</span><span class="s1">&#39;SRID=4326;POINT(139.777254 35.713768)&#39;</span><span class="p">),</span> <span class="mi">300</span><span class="p">.</span><span class="mi">0</span><span class="p">)</span>
+</span><span class='line'><span class="k">ORDER</span> <span class="k">BY</span> <span class="n">dist</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>     name          |          st_astext          |     dist
+</span><span class='line'>-----------------------+-----------------------------+---------------
+</span><span class='line'> 上野駅             | POINT(139.777254 35.713768) |             0
+</span><span class='line'> 国立西洋美術館 | POINT(139.775803 35.71542)  | 225.468916585
+</span><span class='line'> 上野の森美術館 | POINT(139.774744 35.712737) | 254.308127877
+</span><span class='line'> 国立科学博物館 | POINT(139.776544 35.716319) | 290.242707221
+</span><span class='line'> ```
+</span><span class='line'>
+</span><span class='line'>`ST_`で始まる関数は[OpenGIS](http://www.opengeospatial.org/standards/sfs)やSQL/MMで標準化されているものらしいです。
+</span><span class='line'>
+</span><span class='line'>
+</span><span class='line'>### MySQL
+</span><span class='line'>
+</span><span class='line'>MySQLに関しては以下の記事を見つけました。
+</span><span class='line'>この記事が書かれた頃はMyISAMでしか空間インデックスをサポートしていませんでしたが、
+</span><span class='line'>5.7からInnoDBでもサポートされるようになったので、
+</span><span class='line'>InnoDBでも同様のことができるはずです。
+</span><span class='line'>
+</span><span class='line'>- [mysql空間テーブルの作り方](http://qiita.com/kochizufan/items/a68b30ba74849483f75c)
+</span><span class='line'>
+</span><span class='line'>MySQL5.7で入った機能についてはこちらを参照。
+</span><span class='line'>空間インデックス以外にも大量に変更があるので、アップグレードする人は確認をおすすめします。
+</span><span class='line'>
+</span><span class='line'>&lt;iframe style="width:120px;height:240px;" marginwidth="0" marginheight="0" scrolling="no" frameborder="0" src="//rcm-fe.amazon-adsystem.com/e/cm?lt1=_blank&bc1=000000&IS2=1&bg1=FFFFFF&fc1=000000&lc1=0000FF&t=shogo82148-22&o=9&p=8&l=as4&m=amazon&f=ifr&ref=as_ss_li_til&asins=B01LCJRCYE&linkId=ac9d8d9e348bd97dc858337c94e82696"&gt;&lt;/iframe&gt;
+</span><span class='line'>
+</span><span class='line'>MySQLもPostgreSQLもOpenGISに準拠する方針みたいなので、
+</span><span class='line'>PostgreSQLと同じ感じでSQLが書けると信じたいところですが、
+</span><span class='line'>当然ながらそうは行きません。
+</span><span class='line'>
+</span><span class='line'>一番大きな違いは`geography`型には対応しておらず`geometry`型しか使えないということです。
+</span><span class='line'>`geography`型は測地系の情報を持っている(つまり地球が回転楕円体だということを知っている)のですが、
+</span><span class='line'>`geometry`型は測地系の情報が無いため、平面しか扱えません。
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p> sql
+CREATE DATABASE test; &ndash; 5.6以前は勝手に作ってくれたけど、5.7からは無いらしい
+USE test;
+CREATE TABLE IF NOT EXISTS <code>geotable</code> (
+  <code>id</code>   int(10) UNSIGNED NOT NULL AUTO_INCREMENT,
+  <code>name</code> VARCHAR (255) NOT NULL,
+  <code>geom</code> geometry NOT NULL,
+  PRIMARY KEY (<code>id</code>),
+  SPATIAL KEY <code>geom</code> (<code>geom</code>)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>
+</span><span class='line'>座標の指定も`ST_GeographyFromText`ではなく`ST_GeomFromText`を使います。
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p> sql
+INSERT INTO geotable (name, geom) VALUES
+(&lsquo;上野駅&rsquo;, ST_GeomFromText(&lsquo;POINT(139.777254 35.713768)&rsquo;)),
+(&lsquo;西郷隆盛像&rsquo;, ST_GeomFromText(&lsquo;POINT(139.774029 35.711846)&rsquo;)),
+(&lsquo;上野の森美術館&rsquo;, ST_GeomFromText(&lsquo;POINT(139.774744 35.712737)&rsquo;)),
+(&lsquo;不忍池弁財天&rsquo;, ST_GeomFromText(&lsquo;POINT(139.770872 35.712351)&rsquo;)),
+(&lsquo;野口英世博士像&rsquo;, ST_GeomFromText(&lsquo;POINT(139.775696 35.716293)&rsquo;)),
+(&lsquo;国立西洋美術館&rsquo;, ST_GeomFromText(&lsquo;POINT(139.775803 35.71542)&rsquo;)),
+(&lsquo;国立科学博物館&rsquo;, ST_GeomFromText(&lsquo;POINT(139.776544 35.716319)&rsquo;)),
+(&lsquo;東京都美術館&rsquo;, ST_GeomFromText(&lsquo;POINT(139.772776 35.717186)&rsquo;)),
+(&lsquo;東京国立博物館&rsquo;, ST_GeomFromText(&lsquo;POINT(139.776462 35.718883)&rsquo;)),
+(&lsquo;花やしき&rsquo;, ST_GeomFromText(&lsquo;POINT(139.794547 35.71528)&rsquo;)),
+(&lsquo;雷門&rsquo;, ST_GeomFromText(&lsquo;POINT(139.792692 35.710635)&rsquo;));</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>
+</span><span class='line'>PostgreSQLと同様にGeohashを求める[`ST_GeoHash`があります](https://dev.mysql.com/doc/refman/5.7/en/spatial-geohash-functions.html)が、
+</span><span class='line'>桁数を指定する必要があるという違いがあります。
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p> sql
+SELECT name, ST_AsText(geom), ST_GeoHash(geom, 11) FROM geotable;</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>
+</span><span class='line'>``` plain
+</span><span class='line'>+-----------------------+-----------------------------+----------------------+
+</span><span class='line'>| name                  | ST_AsText(geom)             | ST_GeoHash(geom, 11) |
+</span><span class='line'>+-----------------------+-----------------------------+----------------------+
+</span><span class='line'>| 上野駅                | POINT(139.777254 35.713768) | xn77htqxy0f          |
+</span><span class='line'>| 西郷隆盛像            | POINT(139.774029 35.711846) | xn77hthkdfw          |
+</span><span class='line'>| 上野の森美術館        | POINT(139.774744 35.712737) | xn77htkcg8e          |
+</span><span class='line'>| 不忍池弁財天          | POINT(139.770872 35.712351) | xn77ht4p92s          |
+</span><span class='line'>| 野口英世博士像        | POINT(139.775696 35.716293) | xn77htvw3z9          |
+</span><span class='line'>| 国立西洋美術館        | POINT(139.775803 35.71542)  | xn77htv9kkb          |
+</span><span class='line'>| 国立科学博物館        | POINT(139.776544 35.716319) | xn77htynts3          |
+</span><span class='line'>| 東京都美術館          | POINT(139.772776 35.717186) | xn77hw57twp          |
+</span><span class='line'>| 東京国立博物館        | POINT(139.776462 35.718883) | xn77hwqjedk          |
+</span><span class='line'>| 花やしき              | POINT(139.794547 35.71528)  | xn77jjg2949          |
+</span><span class='line'>| 雷門                  | POINT(139.792692 35.710635) | xn77jhcvtbf          |
+</span><span class='line'>+-----------------------+-----------------------------+----------------------+
+</span><span class='line'>11 rows in set (0.00 sec)</span></code></pre></td></tr></table></div></figure>
+
+
+<p>MySQLにも距離を求める<code>ST_Distance</code>はあるのですが、これは平面専用です。
+地球上での距離を求めるには<a href="https://dev.mysql.com/doc/refman/5.7/en/spatial-convenience-functions.html"><code>ST_Distance_Sphere</code>を使います</a>。
+MySQL5.7から追加された関数で、これを使うと半径6370986mの球体で近似したときの距離を計算できます。</p>
+
+<p>そして残念なことにPostgreSQLにはあった<code>ST_DWithin</code>はMySQLにはありません。
+<code>ST_Distance_Sphere</code>を使えばクエリは書けるのですが、インデックスを使ってくれないので非効率です。
+そのため、矩形の範囲指定で大雑把に絞り込んだあとで<code>ST_Distance_Sphere</code>を使って詳細に絞り込むことになります。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='sql'><span class='line'><span class="k">SET</span> <span class="o">@</span><span class="n">ueno</span> <span class="o">=</span> <span class="n">ST_GeomFromText</span><span class="p">(</span><span class="s1">&#39;POINT(139.777254 35.713768)&#39;</span><span class="p">);</span>
+</span><span class='line'><span class="k">SELECT</span>
+</span><span class='line'>    <span class="n">name</span><span class="p">,</span>
+</span><span class='line'>    <span class="n">ST_AsText</span><span class="p">(</span><span class="n">geom</span><span class="p">),</span>
+</span><span class='line'>    <span class="n">ST_Distance_Sphere</span><span class="p">(</span><span class="o">@</span><span class="n">ueno</span><span class="p">,</span> <span class="n">geom</span><span class="p">)</span> <span class="k">AS</span> <span class="n">dist</span>
+</span><span class='line'><span class="k">FROM</span> <span class="n">geotable</span>
+</span><span class='line'><span class="k">WHERE</span> <span class="n">ST_Distance_Sphere</span><span class="p">(</span><span class="o">@</span><span class="n">ueno</span><span class="p">,</span> <span class="n">geom</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">300</span>
+</span><span class='line'><span class="k">AND</span> <span class="n">ST_Within</span><span class="p">(</span><span class="n">geom</span><span class="p">,</span> <span class="n">ST_Buffer</span><span class="p">(</span><span class="o">@</span><span class="n">ueno</span><span class="p">,</span> <span class="n">DEGREES</span><span class="p">(</span><span class="mi">300</span><span class="o">/</span><span class="p">(</span><span class="mi">6370986</span><span class="o">*</span><span class="n">COS</span><span class="p">(</span><span class="n">RADIANS</span><span class="p">(</span><span class="n">ST_Y</span><span class="p">(</span><span class="o">@</span><span class="n">ueno</span><span class="p">))))),</span> <span class="n">ST_Buffer_Strategy</span><span class="p">(</span><span class="s1">&#39;point_square&#39;</span><span class="p">)))</span>
+</span><span class='line'><span class="k">ORDER</span> <span class="k">BY</span> <span class="n">dist</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>+-----------------------+-----------------------------+--------------------+
+</span><span class='line'>| name                  | ST_AsText(geom)             | dist               |
+</span><span class='line'>+-----------------------+-----------------------------+--------------------+
+</span><span class='line'>| 上野駅                | POINT(139.777254 35.713768) |                  0 |
+</span><span class='line'>| 国立西洋美術館        | POINT(139.775803 35.71542)  | 225.62014319497658 |
+</span><span class='line'>| 上野の森美術館        | POINT(139.774744 35.712737) | 253.96163316266237 |
+</span><span class='line'>| 国立科学博物館        | POINT(139.776544 35.716319) | 290.81011310408957 |
+</span><span class='line'>+-----------------------+-----------------------------+--------------------+
+</span><span class='line'>4 rows in set (0.00 sec)</span></code></pre></td></tr></table></div></figure>
+
+
+<p>緯度によって経度1度あたりの長さが違うので、矩形選択の範囲に補正を入れてあります。
+本当は緯度の補正は無くても良いはずですが、広めならいいだろ！ってことで雑に書いています。
+本番で使いたい人は補正＆バリデーション頑張ってください(特に極の辺りで大変なことになるので)。</p>
+
+<h3>その他DB</h3>
+
+<p>力尽きたので簡単に。</p>
+
+<p>SQLiteは<a href="https://www.gaia-gis.it/fossil/libspatialite/index">SpatiaLite</a>という拡張モジュールで空間データを扱えるようです。</p>
+
+<p>全文検索エンジンの<a href="http://groonga.org/ja/">Groonga</a>も近傍検索に対応していて、
+距離の計算方法は以下の3つから選べるようです。
+(<a href="http://groonga.org/ja/docs/reference/functions/geo_distance.html"><code>geo_distance</code></a>)</p>
+
+<ul>
+<li><code>rectangle</code>: 方形近似して距離を計算</li>
+<li><code>sphere</code>: <a href="https://github.com/groonga/groonga/blob/v7.0.0/lib/grn_geo.h#L42">半径6357303m</a>の完全な球体と仮定して計算</li>
+<li><code>ellipsoid</code>: WGS84地球楕円体を<a href="http://yamadarake.jp/trdi/report000001.html">ヒュベニの距離計算式</a>で近似</li>
+</ul>
+
+
+<p>ヒュベニの距離計算式というのが出てきましたが、<code>ellipsoid</code>で使っているのは簡易版で、
+<a href="http://www.amano-tec.com/apps/paceruler.html">本来のヒュベニの距離計算式</a>は非常に複雑で難しい・・・。</p>
+
+<h2>まとめ</h2>
+
+<p>Redis、PostgreSQL、MySQLで近傍検索をやってみました。</p>
+
+<ul>
+<li>Redisは近傍検索だけならお手軽</li>
+<li>PostgreSQL+PostGISは今回触った中では最強。地理データを真面目に扱うならいいかも</li>
+<li>MySQLは5.6以前よりは扱いやすくなったものの、空間インデックスを効果的に使うには一工夫必要</li>
+</ul>
+
+
+<p>PostgreSQL+PostGISと比べると、どうしてもMySQL5.7は見劣りしますね。
+しかし、検索をSQLで書けるという利点は大きいので、利用を検討する価値はあると思います。</p>
+
+<p>ところで、大体のDBで地球を完全な球で近似する実装が入ってるんですが、
+半径が微妙に違うんですよね。</p>
+
+<ul>
+<li>Redis: 6 372 797.560 856m</li>
+<li>PostgreSQL: 6 370 986m</li>
+<li>MySQL: 6 370 986m</li>
+<li>Groonga: 6 357 303m</li>
+<li>赤道半径: 6 378 137m</li>
+<li>極半径: 6 356 752.314 245m</li>
+</ul>
+
+
+<p>0.24%しか違わないので、実用上は全く問題ないんですが、
+出典がよくわからないし気になります。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Go言語のchanはいったいいくつ付けられるのか試してみた]]></title>
@@ -5282,208 +5839,6 @@ Marshal時は通常のint型と同様に振る舞います。</p>
 go-weaktypingを使うとすべてのUnmarshal時に有効になってしまって怖いなと考えたためです。</p>
 
 <p>今後もなるべく go-weaktyping を使わずに済むよう祈ってます。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Redisのトランザクション・スクリプト・ランキングを扱うPerlモジュールを公開しました]]></title>
-    <link href="https://shogo82148.github.io/blog/2016/03/18/releaes-redis-modules/"/>
-    <updated>2016-03-18T22:16:00+09:00</updated>
-    <id>https://shogo82148.github.io/blog/2016/03/18/releaes-redis-modules</id>
-    <content type="html"><![CDATA[<p>以前<a href="http://shogo82148.github.io/blog/2016/02/06/redis-leader-board-multi/">Redisでスコアを複数設定できるランキングを作ってみた</a>けど、
-Githubの肥やしになっていてもあれなので、CPANizeしました。
-あわせて、この実装のために作ったユーティリティモジュールも別モジュールとして公開しました。</p>
-
-<ul>
-<li><a href="https://metacpan.org/pod/Redis::LeaderBoardMulti">Redis::LeaderBoardMulti</a></li>
-<li><a href="https://metacpan.org/pod/Redis::Script">Redis::Script</a></li>
-<li><a href="https://metacpan.org/pod/Redis::Transaction">Redis::Transaction</a></li>
-</ul>
-
-
-<!-- More -->
-
-
-<h2>Redis::LeaderBoardMulti</h2>
-
-<p>最初の基準で順位を決められなかった場合の第二基準が欲しいというときに使うモジュールです。
-インターフェースがRedis::LeaderBoard互換になるように調整したので、
-前回とインターフェースがちょっと変わっています。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="n">se</span> <span class="n">Redis</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="nn">Redis::</span><span class="n">LeaderBoard</span><span class="p">;</span>
-</span><span class='line'><span class="k">my</span> <span class="nv">$redis</span> <span class="o">=</span> <span class="n">Redis</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">;</span>
-</span><span class='line'><span class="k">my</span> <span class="nv">$lb</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">LeaderBoardMulti</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span>
-</span><span class='line'>    <span class="n">redis</span> <span class="o">=&gt;</span> <span class="nv">$redis</span><span class="p">,</span>
-</span><span class='line'>    <span class="n">key</span>   <span class="o">=&gt;</span> <span class="s">&#39;leader_board:1&#39;</span><span class="p">,</span>
-</span><span class='line'>    <span class="n">order</span> <span class="o">=&gt;</span> <span class="p">[</span><span class="s">&#39;asc&#39;</span><span class="p">,</span> <span class="s">&#39;desc&#39;</span><span class="p">],</span> <span class="c1"># asc/desc, desc as default</span>
-</span><span class='line'><span class="p">);</span>
-</span><span class='line'><span class="c1"># Redis::LeaderBoardに合わせて複数指定できるようになりました</span>
-</span><span class='line'><span class="nv">$lb</span><span class="o">-&gt;</span><span class="n">set_score</span><span class="p">(</span>
-</span><span class='line'>    <span class="s">&#39;one&#39;</span> <span class="o">=&gt;</span> <span class="p">[</span><span class="mi">100</span><span class="p">,</span> <span class="nb">time</span><span class="p">],</span>
-</span><span class='line'>    <span class="s">&#39;two&#39;</span> <span class="o">=&gt;</span> <span class="p">[</span> <span class="mi">50</span><span class="p">,</span> <span class="nb">time</span><span class="p">],</span>
-</span><span class='line'><span class="p">);</span>
-</span><span class='line'><span class="k">my</span> <span class="p">(</span><span class="nv">$rank</span><span class="p">,</span> <span class="nv">$score</span><span class="p">,</span> <span class="nv">$time</span><span class="p">)</span> <span class="o">=</span> <span class="nv">$lb</span><span class="o">-&gt;</span><span class="n">get_rank_with_score</span><span class="p">(</span><span class="s">&#39;one&#39;</span><span class="p">);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Redis::LeaderBoard互換なのでそのまま入れ替えられるはずですが、以下のような実装上の制限があります。</p>
-
-<ul>
-<li>スコアはすべて64bit符号付き整数
-
-<ul>
-<li>Redis::LeaderBoardのスコアは倍精度浮動小数点型なので小数も扱えるが、Redis::LeaderBoardMultiは整数だけ</li>
-</ul>
-</li>
-<li>Redis 2.8.9以降のみで動きます</li>
-<li>同順の場合の出現順
-
-<ul>
-<li>Redis::LeaderBoard は ZRANK, ZREVRANK を使い分けているので、orderパラメータによって昇順/降順が変わります</li>
-<li>Redis::LaederBoardMulti は ZRANK しか使わないので、必ず昇順になります</li>
-</ul>
-</li>
-</ul>
-
-
-<p>一応 Lua Script を使わないオプションもそのまま残してありますが、特に理由がない限りデフォルト(Lua Script を使う)で使うといいと思います。
-どうしてもロックの範囲が広くなってしまう場合があり、楽観的ロックでは効率が悪いケースがあるためです。</p>
-
-<h2>Redis::Script</h2>
-
-<p>EVALSHAを簡単に使うためのモジュールです。
-EVALコマンドを使うとLua Scriptの実装ができますが、毎回毎回実行するスクリプト全体を送る必要があります。
-EVALSHAコマンドはその代わりにスクリプトのSHA1ハッシュを送ることで、帯域の節約ができるというコマンドです。
-しかしEVALSHAはSHA1ハッシュを事前に登録する必要があり、どのタイミングで登録を行うかが問題になってきます。</p>
-
-<p><a href="http://redis.io/commands/eval">EVALコマンドのドキュメント</a>によると、
-「EVALSHAで実行してみて <code>NOSCRIPT No matching script</code> で失敗したらEVALでやり直す」というのがおすすめらしいです。
-EVALコマンドはSHA1ハッシュの登録も行ってくれるので、初回 <code>NOSCRIPT</code> になっても次回からはEVALSHAが成功します。</p>
-
-<p>そんなに複雑なことではないのですが、毎回書くのも大変なのでモジュールとして切り出したのが Redis::Script です。
-以下のようにスクリプトオブジェクトを作っておいて、パラメータを渡して実行します。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">Redis</span><span class="p">;</span>
-</span><span class='line'><span class="k">use</span> <span class="nn">Redis::</span><span class="n">Script</span><span class="p">;</span>
-</span><span class='line'><span class="k">my</span> <span class="nv">$script</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">Script</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span><span class="n">script</span> <span class="o">=&gt;</span> <span class="s">&quot;return {KEYS[1],KEYS[2],ARGV[1],ARGV[2]}&quot;</span><span class="p">);</span>
-</span><span class='line'><span class="k">my</span> <span class="p">(</span><span class="nv">$key1</span><span class="p">,</span> <span class="nv">$key2</span><span class="p">,</span> <span class="nv">$arg1</span><span class="p">,</span> <span class="nv">$arg2</span><span class="p">)</span> <span class="o">=</span> <span class="nv">$script</span><span class="o">-&gt;</span><span class="nb">eval</span><span class="p">(</span><span class="n">Redis</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">,</span> <span class="p">[</span><span class="s">&#39;key1&#39;</span><span class="p">,</span> <span class="s">&#39;key2&#39;</span><span class="p">],</span> <span class="p">[</span><span class="s">&#39;arg1&#39;</span><span class="p">,</span> <span class="s">&#39;arg2&#39;</span><span class="p">]);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p><code>$script</code> が計算済みのSHA1ハッシュを保存しておいてくれるので、計算リソースの節約にもなるはずです。
-(ベンチとってみたところ、スクリプトのサイズが1kBから10kBくらいにならないと効果なさそうでしたが・・・)</p>
-
-<h2>Redis::Transaction</h2>
-
-<p>Redisのトランザクションを簡単に行うためのモジュールです。</p>
-
-<p>MULTI-EXECは単に実行するだけなら、MULTIとEXECで囲うだけでよいので簡単です。
-例えば、 <code>foo</code> と <code>bar</code> を同時にインクリメントしたい場合、以下のようにすると実現できます。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">multi</span><span class="p">;</span>
-</span><span class='line'><span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">incr</span><span class="p">(</span><span class="s">&#39;foo&#39;</span><span class="p">);</span>
-</span><span class='line'><span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">incr</span><span class="p">(</span><span class="s">&#39;bar&#39;</span><span class="p">);</span>
-</span><span class='line'><span class="nv">$redis</span><span class="o">-&gt;</span><span class="nb">exec</span><span class="p">;</span> <span class="c1"># 他のクライアントからはfooとbarが全く同時にインクリメントされたように見える</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>ただ、このような素朴な実装だと、途中でネットワークが不調になった場合などに再接続処理が止まったままになる可能性があります。
-例えば以下のようにトランザクションの中で例外が発生すると、以後そのコネクションを使おうとしたときにエラーになります。
-コネクションの永続化をしている場合はしばらくエラーが出続けることになり問題です。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="nb">eval</span> <span class="p">{</span>
-</span><span class='line'>    <span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">multi</span><span class="p">;</span> <span class="c1"># トランザクション開始</span>
-</span><span class='line'>    <span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">incr</span><span class="p">(</span><span class="s">&#39;foo&#39;</span><span class="p">);</span>
-</span><span class='line'>    <span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">incr</span><span class="p">(</span><span class="s">&#39;bar&#39;</span><span class="p">);</span>
-</span><span class='line'>    <span class="nb">die</span> <span class="s">&quot;ネットワークトラブル！&quot;</span>
-</span><span class='line'>    <span class="nv">$redis</span><span class="o">-&gt;</span><span class="nb">exec</span><span class="p">;</span>
-</span><span class='line'><span class="p">};</span>
-</span><span class='line'><span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">ping</span><span class="p">;</span> <span class="c1"># 繋がらなくなる</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Redis::Transaction はこのような問題を防ぐためのモジュールです。
-トランザクションが失敗したときの後始末をよしなにやってくれるので、万が一エラーになっても安心です。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="n">multi_exec</span> <span class="n">Redis</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="k">sub </span><span class="p">{</span> <span class="c1"># 1は失敗したときのリトライ回数</span>
-</span><span class='line'>    <span class="k">my</span> <span class="nv">$redis</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
-</span><span class='line'>    <span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">incr</span><span class="p">(</span><span class="s">&#39;foo&#39;</span><span class="p">);</span>
-</span><span class='line'>    <span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">incr</span><span class="p">(</span><span class="s">&#39;bar&#39;</span><span class="p">);</span>
-</span><span class='line'>    <span class="nb">die</span> <span class="s">&quot;ネットワークトラブル！&quot;</span>
-</span><span class='line'><span class="p">};</span>
-</span><span class='line'><span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">ping</span><span class="p">;</span> <span class="c1"># 繋がる！</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>WATCH-MULTI-EXECを使った楽観的ロックも扱えます。
-Redisのトランザクションは楽観的ロックなので、
-処理中に他のクライアントが書き換えを行った場合に失敗する可能性があります。
-その場合でもリトライを行ってくれて便利です。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="c1"># $redis-&gt;incr(&#39;mykey&#39;) をトランザクションを使って実現する</span>
-</span><span class='line'><span class="n">watch_multi_exec</span> <span class="n">Redis</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">,</span> <span class="p">[</span><span class="s">&#39;mykey&#39;</span><span class="p">],</span> <span class="mi">10</span><span class="p">,</span> <span class="k">sub </span><span class="p">{</span>
-</span><span class='line'>    <span class="k">my</span> <span class="nv">$redis</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
-</span><span class='line'>    <span class="k">return</span> <span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;mykey&#39;</span><span class="p">);</span>
-</span><span class='line'><span class="p">},</span> <span class="k">sub </span><span class="p">{</span>
-</span><span class='line'>    <span class="k">my</span> <span class="p">(</span><span class="nv">$redis</span><span class="p">,</span> <span class="nv">$value</span><span class="p">)</span> <span class="o">=</span> <span class="nv">@_</span><span class="p">;</span>
-</span><span class='line'>    <span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;mykey&#39;</span><span class="p">,</span> <span class="nv">$value</span> <span class="o">+</span> <span class="mi">1</span><span class="p">);</span>
-</span><span class='line'><span class="p">};</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>まとめ</h2>
-
-<p>Redisのトランザクション・スクリプト・ランキングを扱うPerlモジュールを紹介しました。
-それぞれは小さなモジュールですが、
-トラブル発生時にも問題にならないようちゃんとした実装しようとすると、
-意外と考えることが多く面倒なものです(特にトランザクション周りとか)。
-適当に実装してしまったこころ当たりのある人は、ぜひ試してみてください。</p>
 ]]></content>
   </entry>
   
