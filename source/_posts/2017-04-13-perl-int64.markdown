@@ -1,0 +1,193 @@
+---
+layout: post
+title: "Perl+List::Utilの64bit整数の罠にはまった話"
+date: 2017-04-13 19:52:13 +0900
+comments: true
+categories: ["perl"]
+---
+
+先日 [Google Code Jam Qualification Round 2017](https://code.google.com/codejam/contest/3264486/dashboard) が開催されました
+(って何？というひとは[About](https://code.google.com/codejam/about)のページを確認。本題では無いので説明略)。
+
+僕もこれに参加して、D以外の問題A,B,Cを解いて、無事Round1へ進むことができました。
+しかしPerlで解いたC-largeだけ何故か間違いの判定。
+原因を探ってみたところ、PerlおよびList::Utilの64bit整数の罠にはまっていたことに気が付いたので、その備忘録として残しておきます。
+
+<!-- More -->
+
+## 問題が発生したコード
+
+問題が発生するのは以下の計算をするコードです。
+
+- max: 250000000000000000と249999999999999999で大きい方を返す
+- div: 249999999999999999を2で割った商を求める
+
+この計算をそれぞれ二通りの計算方法で実装してみます。
+
+``` perl
+use 5.24.0;
+use List::Util qw(max);
+
+say "max:";
+say max(250000000000000000, 249999999999999999);
+say max(249999999999999999, 250000000000000000);
+
+say "div:";
+say int(249999999999999999/2);
+say 249999999999999999 >> 1;
+```
+
+- max: 順番を変えただけなので、同じ結果をになるはず
+- div: 割り算と等価なビットシフトに置き換えたので、同じ結果になるはず
+
+僕は「同じ結果になるはず」と期待していました。
+しかし、これを実行してみると以下のようになります。
+
+- [Wandbox]三へ( へ՞ਊ ՞)へ ﾊｯﾊｯ <https://wandbox.org/permlink/5fUBzLmBCRKUo4xZ>
+
+``` plain
+max:
+249999999999999999
+250000000000000000
+div:
+125000000000000000
+124999999999999999
+```
+
+## 原因
+
+250000000000000000は大体2^57.8なので、64bitの整数で十分表現できます。
+しかし倍精度浮動小数点数として扱われると、精度が53bit分しかないので正確に表現できないのです。
+
+例えば以下のコードは"true"を出力します(ここだけ何故かGo)。
+
+``` go
+package main
+
+import (
+	"fmt"
+)
+
+func main() {
+	fmt.Println(float64(250000000000000000) == float64(250000000000000000-1))
+}
+```
+
+いわゆる[情報落ち](https://ja.wikipedia.org/wiki/%E8%AA%A4%E5%B7%AE#.E6.83.85.E5.A0.B1.E8.90.BD.E3.81.A1)ってやつです。
+Perlが演算の途中で倍精度浮動小数点数に変換してしまうので、250000000000000000と249999999999999999を区別できないんですね。
+
+
+## maxの解決策1 Reduceを使う
+
+最大値を求める`max`は`reduce`を使っても簡単に作ることが出来ます。
+この実装方だと、順番にかかわらず同じ結果を返します。
+
+``` perl
+use 5.24.0;
+use List::Util qw(reduce);
+
+say "reduce:";
+say reduce { $a > $b ? $a : $b } 250000000000000000, 249999999999999999;
+say reduce { $a > $b ? $a : $b } 249999999999999999, 250000000000000000;
+```
+
+- [Wandbox]三へ( へ՞ਊ ՞)へ ﾊｯﾊｯ <https://wandbox.org/permlink/lzKkOXzqx2fXlr69>
+
+個人的には`max`を使っても`reduce`を使っても同じ結果が変えるのが正しいのでは、と思うのですがどうでしょう？
+
+- [Bug #95902 for Scalar-List-Utils: sum, min, and max use NV, truncating integers on 64-bit machines](https://rt.cpan.org/Public/Bug/Display.html?id=95902)
+
+(なんかそれっぽいチケットを見つけたけど、英語の議論についていける気がしないので、静かに見守る・・・)
+
+
+## maxの解決策2 bigintを使う
+
+`max`の引数に`bigint`を渡してやると、正しい結果を返してくれます。
+
+``` perl
+use 5.24.0;
+use bigint;
+use List::Util qw(max);
+
+say "max:";
+say max(250000000000000000, 249999999999999999);
+say max(249999999999999999, 250000000000000000);
+```
+
+- [Wandbox]三へ( へ՞ਊ ՞)へ ﾊｯﾊｯ <https://wandbox.org/permlink/QTnEkQJ2698VWkgG>
+
+ただし、今回の僕のケースでは「ハッシュのキーの中で一番大きいものを取得する」処理が必要だったので、`bigint`だけでは解決しません。
+
+``` perl
+use 5.24.0;
+use bigint;
+use List::Util qw(max);
+
+for (1..10) {
+    my %h = (250000000000000000 => 1, 249999999999999999 => 1);
+    say max(keys %h);
+}
+```
+
+- [Wandbox]三へ( へ՞ਊ ՞)へ ﾊｯﾊｯ <https://wandbox.org/permlink/af0YXdjRlVzYvm0u>
+
+Perlのハッシュは文字列しか使えないので、強制的に文字列にされてしまうんですね。
+さらにややこしいことに[hash randomization](http://akiym.hateblo.jp/entry/2013/05/22/122438)によって、
+時々正しい結果を返すというのも面倒なところです。
+
+そのため今回のケースでは、`bigint`に戻す操作を明示的に書いてあげる必要があります。
+
+``` perl
+use 5.24.0;
+use bigint;
+use List::Util qw(max);
+
+for (1..10) {
+    my %h = (250000000000000000 => 1, 249999999999999999 => 1);
+    say max(map {$_+0} keys %h);
+}
+```
+
+- [Wandbox]三へ( へ՞ਊ ՞)へ ﾊｯﾊｯ <https://wandbox.org/permlink/zeKfT7TrYaogz00g>
+
+
+## divの解決策1: bignumを使う
+
+`bignum`を使った方法は割り算の計算でも有効です。
+ちなみに影響範囲はスコープで制限できるので、全体への影響を避けたい時は`{}`で囲ってあげましょう。
+
+``` perl
+use 5.24.0;
+{
+    use bigint;
+    say 249999999999999999/2;
+}
+
+say 249999999999999999/2;
+```
+
+- [Wandbox]三へ( へ՞ਊ ՞)へ ﾊｯﾊｯ <https://wandbox.org/permlink/yIGEXqwtuG9CmR0h>
+
+
+## divの解決策2: integerを使う
+
+64bit環境で動くことがわかっているときは`bignum`の代わりに`integer`が使えます
+(扱えるbit数以外にも違いがあるので、詳細は[bigintのpod](http://perldoc.jp/docs/modules/bignum-0.23/bigint.pod)を参照)。
+`bignum`と同様に影響範囲はスコープ内に限定されます。
+
+``` perl
+use 5.24.0;
+say do { use integer; 249999999999999999/2 };
+say 249999999999999999/2;
+```
+
+- [Wandbox]三へ( へ՞ਊ ՞)へ ﾊｯﾊｯ <https://wandbox.org/permlink/P0ijy2i9qVcY614L>
+
+Pythonみたいに `249999999999999999 // 2` と書かせて欲しい・・・
+(しかし `//` は既に別の用途で使われているのであった)
+
+
+## まとめ
+
+- Perlで64bitの整数を扱うときは割り算と`min`と`max`と`sum`に注意
+- 次のRound1ではPerlは使わない
