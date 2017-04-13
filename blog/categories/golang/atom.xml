@@ -4,7 +4,7 @@
   <title><![CDATA[Category: golang | Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/blog/categories/golang/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2017-04-06T19:41:59+09:00</updated>
+  <updated>2017-04-13T09:14:41+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,214 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Go言語のヒープに確保するデータの初期化コストについて調べてみた(Go1.8.1版)]]></title>
+    <link href="https://shogo82148.github.io/blog/2017/04/13/go1-8-allocation/"/>
+    <updated>2017-04-13T08:23:08+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2017/04/13/go1-8-allocation</id>
+    <content type="html"><![CDATA[<p><a href="https://twitter.com/kaoriya/status/851983856966283265">https://twitter.com/kaoriya/status/851983856966283265</a>">https://twitter.com/kaoriya/status/851983856966283265">https://twitter.com/kaoriya/status/851983856966283265</a></a></p>
+
+<p>こちらのツイートに対して、以下のベンチ結果が紹介されていました。</p>
+
+<ul>
+<li><a href="http://ryochack.hatenablog.com/entry/2014/06/08/225606">Go言語のヒープに確保するデータの初期化コストについて調べてみた</a></li>
+</ul>
+
+
+<p>しかし<a href="https://twitter.com/hnakamur2">hnakamur2</a>さんも言及しているように、
+これはGo1.2.2時の結果。
+その後、GoのコンパイラがGo実装になったり、SSAが導入されたりと、
+今のコンパイラの実装は当時とは全く違うものになっています。</p>
+
+<p>というわけで、現時点での最新のバージョン(Go1.8.1)で、同様の検証をおこなってみました。</p>
+
+<!-- More -->
+
+
+<h2>検証コード</h2>
+
+<p>検証に使用したコードはGo1.2.2のときと全く同じものです。</p>
+
+<pre><code class="go">// alloc_overhead.go
+
+package main
+
+type container struct {
+    v [64]byte
+}
+
+func MakeContainer() *container {
+    c := container{}
+    return &amp;c
+}
+
+func MakeContainerOneLine() *container {
+    return &amp;container{}
+}
+
+func MakeContainerNew() *container {
+    return new(container)
+}
+
+func main() {
+    _ = MakeContainer()
+    _ = MakeContainerOneLine()
+    _ = MakeContainerNew()
+}
+</code></pre>
+
+<pre><code class="go">// alloc_overhead_test.go
+
+package main
+
+import (
+    "testing"
+)
+
+func BenchmarkMakeContainer(b *testing.B) {
+    for i := 0; i &lt; b.N; i++ {
+        _ = MakeContainer()
+    }
+}
+
+func BenchmarkMakeContainerOneLine(b *testing.B) {
+    for i := 0; i &lt; b.N; i++ {
+        _ = MakeContainerOneLine()
+    }
+}
+
+func BenchmarkMakeContainerNew(b *testing.B) {
+    for i := 0; i &lt; b.N; i++ {
+        _ = MakeContainerNew()
+    }
+}
+</code></pre>
+
+<h2>ベンチマーク結果</h2>
+
+<p>Go1.8.1でベンチマークを実行した結果がこちら。</p>
+
+<pre><code class="plain">$ go test -bench . -benchmem
+BenchmarkMakeContainer-4            1000000000           2.79 ns/op        0 B/op          0 allocs/op
+BenchmarkMakeContainerOneLine-4     1000000000           2.84 ns/op        0 B/op          0 allocs/op
+BenchmarkMakeContainerNew-4         1000000000           2.83 ns/op        0 B/op          0 allocs/op
+PASS
+ok      _/Users/shogo/workspace/tmp/2017-04-13-alloc    9.345s
+</code></pre>
+
+<p>ベンチマークの結果、ほとんど速度の差はありませんでした。</p>
+
+<p>しかし、「ヒープに置かれるデータの初期化」を検証したかったのに、アロケーションが0なのはおかしいですね？
+どうやら最適化の結果、スタックに置かれるようになってしまったようです。</p>
+
+<h2>再検証</h2>
+
+<p>Go1.7から追加された<a href="https://golang.org/pkg/runtime/#KeepAlive">runtime.KeepAlive</a>を使ってベンチマークを修正しました。
+<code>runtime.KeepAlive</code>が呼ばれるまで確保した領域は解放されることが無いので、
+データがヒープに乗ってくれるはずです(たぶん)。</p>
+
+<pre><code class="go">// alloc_overhead_test.go
+
+package main
+
+import (
+    "runtime"
+    "testing"
+)
+
+func BenchmarkMakeContainer(b *testing.B) {
+    for i := 0; i &lt; b.N; i++ {
+        runtime.KeepAlive(MakeContainer())
+    }
+}
+
+func BenchmarkMakeContainerOneLine(b *testing.B) {
+    for i := 0; i &lt; b.N; i++ {
+        runtime.KeepAlive(MakeContainerOneLine())
+    }
+}
+
+func BenchmarkMakeContainerNew(b *testing.B) {
+    for i := 0; i &lt; b.N; i++ {
+        runtime.KeepAlive(MakeContainerNew())
+    }
+}
+</code></pre>
+
+<p>修正版のベンチマークはこちら。</p>
+
+<pre><code class="plain">$ go test -bench . -benchmem
+BenchmarkMakeContainer-4            50000000            34.7 ns/op        64 B/op          1 allocs/op
+BenchmarkMakeContainerOneLine-4     30000000            34.4 ns/op        64 B/op          1 allocs/op
+BenchmarkMakeContainerNew-4         50000000            35.9 ns/op        64 B/op          1 allocs/op
+PASS
+ok      _/Users/shogo/workspace/tmp/2017-04-13-alloc    4.690s
+</code></pre>
+
+<p>意図したとおりアロケーションが発生しています。
+速度差もほとんどありません。</p>
+
+<h2>最適化の結果を見てみる</h2>
+
+<p><a href="http://shinpei.github.io/blog/2016/08/13/what-ssa-brings-to-go-17/">Go1.7からSSAが導入された</a>ことにより、
+以下のようなコマンドで最適化の様子を簡単に知ることができるようになりました。</p>
+
+<pre><code class="bash">GOSSAFUNC=MakeContainer go build alloc_overhead.go
+</code></pre>
+
+<p>この機能を使って、各関数が最終的にどのように最適化されたのかを確認してみます。</p>
+
+<p>以下は<code>MakeContainer</code>の結果(<a href="/files/2017-04-13-go1-8-allocation/MakeContainer.html">ssa.html</a>)。</p>
+
+<pre><code class="plain">v1 = InitMem &lt;mem&gt;
+v2 = SP &lt;uintptr&gt; : SP
+v3 = SB &lt;uintptr&gt; : SB
+v10 = LEAQ &lt;*uint8&gt; {type."".container} v3 : AX
+v8 = MOVQstore &lt;mem&gt; v2 v10 v1
+v9 = CALLstatic &lt;mem&gt; {runtime.newobject} [16] v8
+v11 = MOVQload &lt;*container&gt; [8] v2 v9 : AX
+v13 = VarDef &lt;mem&gt; {~r0} v9
+v14 = MOVQstore &lt;mem&gt; {~r0} v2 v11 v13
+</code></pre>
+
+<p><code>MakeContainerOneLine</code>の結果(<a href="/files/2017-04-13-go1-8-allocation/MakeContainerOneLine.html">ssa.html</a>)。</p>
+
+<pre><code class="plain">v1 = InitMem &lt;mem&gt;
+v2 = SP &lt;uintptr&gt; : SP
+v3 = SB &lt;uintptr&gt; : SB
+v10 = LEAQ &lt;*uint8&gt; {type."".container} v3 : AX
+v8 = MOVQstore &lt;mem&gt; v2 v10 v1
+v9 = CALLstatic &lt;mem&gt; {runtime.newobject} [16] v8
+v11 = MOVQload &lt;*container&gt; [8] v2 v9 : AX
+v14 = VarDef &lt;mem&gt; {~r0} v9
+v15 = MOVQstore &lt;mem&gt; {~r0} v2 v11 v14
+</code></pre>
+
+<p><code>MakeContainerNew</code>の結果(<a href="/files/2017-04-13-go1-8-allocation/MakeContainerNew.html">ssa.html</a>)。</p>
+
+<pre><code class="plain">v1 = InitMem &lt;mem&gt;
+v2 = SP &lt;uintptr&gt; : SP
+v3 = SB &lt;uintptr&gt; : SB
+v10 = LEAQ &lt;*uint8&gt; {type."".container} v3 : AX
+v8 = MOVQstore &lt;mem&gt; v2 v10 v1
+v9 = CALLstatic &lt;mem&gt; {runtime.newobject} [16] v8
+v11 = MOVQload &lt;*container&gt; [8] v2 v9 : AX
+v12 = VarDef &lt;mem&gt; {~r0} v9
+v13 = MOVQstore &lt;mem&gt; {~r0} v2 v11 v12
+</code></pre>
+
+<p>変数名の割り当てが異なるだけで実質同じ内容ですね。</p>
+
+<h2>まとめ</h2>
+
+<ul>
+<li>Go1.8.1の最適化強い</li>
+<li>Go1.8.1では<code>new(Type)</code>と<code>&amp;Type{}</code>の差はない(少なくとも性能面では)</li>
+</ul>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Go言語のchanはいったいいくつ付けられるのか試してみた]]></title>
@@ -847,212 +1055,6 @@ Polyglotにする言語には相性があります。
 <li><a href="https://github.com/medimatrix/rust-plus-golang">medimatrix/rust-plus-golang</a></li>
 </ul>
 
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Go言語でコンパイル時フィボナッチ数列計算]]></title>
-    <link href="https://shogo82148.github.io/blog/2017/02/19/golang-compile-time-fib/"/>
-    <updated>2017-02-19T09:06:05+09:00</updated>
-    <id>https://shogo82148.github.io/blog/2017/02/19/golang-compile-time-fib</id>
-    <content type="html"><![CDATA[<p><a href="http://postd.cc/fibonacci/">整数の公式でフィボナッチ数列を求める</a>という記事を読んで、
-「これコンパイル時ならGoでも簡単に計算できるのでは？」と思いやってみたメモ。</p>
-
-<!-- More -->
-
-
-<h2>背景</h2>
-
-<p>みんな大好きフィボナッチ数列(要出典)。
-漸化式で定義されているため、再帰やループを使って書くことが多いと思いますが、
-閉じた式で書くことが知られています。
-ただし、この一般式には無理数の演算が入るので、コンピュータで厳密に扱うことはできません。
-ところが、さきほど紹介した記事で紹介された方法を使うと、整数の演算のみで実現できるそうです。</p>
-
-<p>原理などはネタ元の記事を参照してもらうとして、
-Python3では以下のように書けるらしいです。</p>
-
-<pre><code class="python">def fib(n):
-    return (4 &lt;&lt; n*(3+n)) // ((4 &lt;&lt; 2*n) - (2 &lt;&lt; n) - 1) &amp; ((2 &lt;&lt; n) - 1)
-</code></pre>
-
-<p>ある程度大きなフィボナッチ数を求める場合、
-計算途中の値が非常に大きくなるため、多倍長整数が必要となります。
-Python3は多倍長整数に組み込みで対応していますが、
-Goでは<a href="https://golang.org/pkg/math/big/">math/bigパッケージ</a>を利用する必要があります。</p>
-
-<p>なんか面倒だなGolangと思っていたのですが、
-<a href="http://qiita.com/sonatard/items/464a9d45c689386edfe1">Better C - Go言語と整数 #golang</a>を読んで、
-「Goの定数には型がない(場合がある)」「任意の精度で計算してくれる」ということを知り、
-「つまりコンパイル時に定数として計算すれば楽にいけるのでは！！」と考えたわけです。</p>
-
-<h2>結果</h2>
-
-<p>ちょっと複雑な式ですが、個々の演算自体はPython3もGoも変わらないので、
-翻訳は簡単ですね。</p>
-
-<pre><code class="go">package main
-
-import "fmt"
-
-const Fib0 = 1 // 0だけはうまくいかない
-
-const (
-    _    = (4 &lt;&lt; (iota * (3 + iota))) / ((4 &lt;&lt; (2 * iota)) - (2 &lt;&lt; iota) - 1) &amp; ((2 &lt;&lt; iota) - 1)
-    Fib1
-    Fib2
-    Fib3
-    Fib4
-    Fib5
-    Fib6
-    Fib7
-    Fib8
-    Fib9
-    Fib10
-    Fib11
-    Fib12
-    Fib13
-    Fib14
-    Fib15
-    Fib16
-    Fib17
-    Fib18
-    Fib19
-    Fib20
-    Fib21
-)
-
-func main() {
-    fibs := []int{
-        Fib0,
-        Fib1,
-        Fib2,
-        Fib3,
-        Fib4,
-        Fib5,
-        Fib6,
-        Fib7,
-        Fib8,
-        Fib9,
-        Fib10,
-        Fib11,
-        Fib12,
-        Fib13,
-        Fib14,
-        Fib15,
-        Fib16,
-        Fib17,
-        Fib18,
-        Fib19,
-        Fib20,
-        Fib21,
-    }
-    for i, fib := range fibs {
-        fmt.Println(i, fib)
-    }
-}
-</code></pre>
-
-<p>実行結果です。</p>
-
-<pre><code class="plain">$ go run fibconst.go
-0 1
-1 1
-2 2
-3 3
-4 5
-5 8
-6 13
-7 21
-8 34
-9 55
-10 89
-11 144
-12 233
-13 377
-14 610
-15 987
-16 1597
-17 2584
-18 4181
-19 6765
-20 10946
-21 17711
-</code></pre>
-
-<p><code>Fibxxx</code>をたくさん書くのはつらかったので、ソースコードはPerlで自動生成しました。</p>
-
-<pre><code class="perl">print &lt;&lt;EOF;
-package main
-
-import "fmt"
-
-const Fib0 = 1
-
-const (
-    _    = (4 &lt;&lt; (iota * (3 + iota))) / ((4 &lt;&lt; (2 * iota)) - (2 &lt;&lt; iota) - 1) &amp; ((2 &lt;&lt; iota) - 1)
-EOF
-
-print "    Fib$_\n" for 1..21;
-
-print &lt;&lt;EOF;
-)
-
-func main() {
-    fibs := []int{
-        Fib0,
-EOF
-
-print "        Fib$_,\n" for 1..21;
-
-print &lt;&lt;EOF
-    }
-    for i, fib := range fibs {
-        fmt.Println(i, fib)
-    }
-}
-EOF
-</code></pre>
-
-<p>21までしかないのは、
-22以降を求めようとしたらコンパイルが通らなかったためです。</p>
-
-<pre><code class="plain">$ go run fibconst.go
-# command-line-arguments
-./fibconst.go:29: shift count too large: 550
-</code></pre>
-
-<p>どうやら512bitまでしか扱えないらしい。
-任意精度扱えるって書いてあったのに！！！</p>
-
-<ul>
-<li><a href="https://github.com/golang/go/blob/go1.8/src/cmd/compile/internal/gc/mpint.go#L211">mpint.go</a></li>
-<li><a href="https://github.com/golang/go/blob/go1.8/src/cmd/compile/internal/gc/mpfloat.go#L18">mpfloat.go</a></li>
-</ul>
-
-
-<p>おとなしく多倍長整数が組込の言語でやれっている話ではありますが、
-なんとなくやってみたかったんです。</p>
-
-<h2>参考</h2>
-
-<ul>
-<li><a href="http://postd.cc/fibonacci/">整数の公式でフィボナッチ数列を求める</a>
-
-<ul>
-<li>Source: <a href="http://paulhankin.github.io/Fibonacci/">An integer formula for Fibonacci numbers</a></li>
-</ul>
-</li>
-<li><a href="http://qiita.com/sonatard/items/464a9d45c689386edfe1">Better C - Go言語と整数 #golang</a></li>
-</ul>
-
-
-<p>ネタ元にある「母関数」という概念は、数学ガールを読んで知りました。</p>
-
-<iframe style="width:120px;height:240px;" marginwidth="0" marginheight="0" scrolling="no" frameborder="0" src="//rcm-fe.amazon-adsystem.com/e/cm?lt1=_blank&bc1=000000&IS2=1&bg1=FFFFFF&fc1=000000&lc1=0000FF&t=shogo82148-22&o=9&p=8&l=as4&m=amazon&f=ifr&ref=as_ss_li_til&asins=4797341378&linkId=be2c6011ca1a5f15d96c370e494b0f95"></iframe>
-
-
-<p>フィボナッチ数列に触れている部分はWebでも公開されているので、そちらもどうぞ(<a href="http://www.hyuki.com/story/genfunc.html">ミルカさんとフィボナッチ数列</a>)</p>
 ]]></content>
   </entry>
   
