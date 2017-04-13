@@ -4,7 +4,7 @@
   <title><![CDATA[Category: perl | Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/blog/categories/perl/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2017-04-13T09:43:47+09:00</updated>
+  <updated>2017-04-13T21:15:54+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,219 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Perl+List::Utilの64bit整数の罠にはまった話]]></title>
+    <link href="https://shogo82148.github.io/blog/2017/04/13/perl-int64/"/>
+    <updated>2017-04-13T19:52:13+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2017/04/13/perl-int64</id>
+    <content type="html"><![CDATA[<p>先日 <a href="https://code.google.com/codejam/contest/3264486/dashboard">Google Code Jam Qualification Round 2017</a> が開催されました
+(って何？というひとは<a href="https://code.google.com/codejam/about">About</a>のページを確認。本題では無いので説明略)。</p>
+
+<p>僕もこれに参加して、D以外の問題A,B,Cを解いて、無事Round1へ進むことができました。
+しかしPerlで解いたC-largeだけ何故か間違いの判定。
+原因を探ってみたところ、PerlおよびList::Utilの64bit整数の罠にはまっていたことに気が付いたので、その備忘録として残しておきます。</p>
+
+<!-- More -->
+
+
+<h2>問題が発生したコード</h2>
+
+<p>問題が発生するのは以下の計算をするコードです。</p>
+
+<ul>
+<li>max: 250000000000000000と249999999999999999で大きい方を返す</li>
+<li>div: 249999999999999999を2で割った商を求める</li>
+</ul>
+
+
+<p>この計算をそれぞれ二通りの計算方法で実装してみます。</p>
+
+<pre><code class="perl">use 5.24.0;
+use List::Util qw(max);
+
+say "max:";
+say max(250000000000000000, 249999999999999999);
+say max(249999999999999999, 250000000000000000);
+
+say "div:";
+say int(249999999999999999/2);
+say 249999999999999999 &gt;&gt; 1;
+</code></pre>
+
+<ul>
+<li>max: 順番を変えただけなので、同じ結果をになるはず</li>
+<li>div: 割り算と等価なビットシフトに置き換えたので、同じ結果になるはず</li>
+</ul>
+
+
+<p>僕は「同じ結果になるはず」と期待していました。
+しかし、これを実行してみると以下のようになります。</p>
+
+<ul>
+<li>[Wandbox]三へ( へ՞ਊ ՞)へ ﾊｯﾊｯ <a href="https://wandbox.org/permlink/5fUBzLmBCRKUo4xZ">https://wandbox.org/permlink/5fUBzLmBCRKUo4xZ</a></li>
+</ul>
+
+
+<pre><code class="plain">max:
+249999999999999999
+250000000000000000
+div:
+125000000000000000
+124999999999999999
+</code></pre>
+
+<h2>原因</h2>
+
+<p>250000000000000000は大体2<sup>57</sup>.8なので、64bitの整数で十分表現できます。
+しかし倍精度浮動小数点数として扱われると、精度が53bit分しかないので正確に表現できないのです。</p>
+
+<p>例えば以下のコードは"true"を出力します(ここだけ何故かGo)。</p>
+
+<pre><code class="go">package main
+
+import (
+    "fmt"
+)
+
+func main() {
+    fmt.Println(float64(250000000000000000) == float64(250000000000000000-1))
+}
+</code></pre>
+
+<p>いわゆる<a href="https://ja.wikipedia.org/wiki/%E8%AA%A4%E5%B7%AE#.E6.83.85.E5.A0.B1.E8.90.BD.E3.81.A1">情報落ち</a>ってやつです。
+Perlが演算の途中で倍精度浮動小数点数に変換してしまうので、250000000000000000と249999999999999999を区別できないんですね。</p>
+
+<h2>maxの解決策1 Reduceを使う</h2>
+
+<p>最大値を求める<code>max</code>は<code>reduce</code>を使っても簡単に作ることが出来ます。
+この実装方だと、順番にかかわらず同じ結果を返します。</p>
+
+<pre><code class="perl">use 5.24.0;
+use List::Util qw(reduce);
+
+say "reduce:";
+say reduce { $a &gt; $b ? $a : $b } 250000000000000000, 249999999999999999;
+say reduce { $a &gt; $b ? $a : $b } 249999999999999999, 250000000000000000;
+</code></pre>
+
+<ul>
+<li>[Wandbox]三へ( へ՞ਊ ՞)へ ﾊｯﾊｯ <a href="https://wandbox.org/permlink/lzKkOXzqx2fXlr69">https://wandbox.org/permlink/lzKkOXzqx2fXlr69</a></li>
+</ul>
+
+
+<p>個人的には<code>max</code>を使っても<code>reduce</code>を使っても同じ結果が変えるのが正しいのでは、と思うのですがどうでしょう？</p>
+
+<ul>
+<li><a href="https://rt.cpan.org/Public/Bug/Display.html?id=95902">Bug #95902 for Scalar-List-Utils: sum, min, and max use NV, truncating integers on 64-bit machines</a></li>
+</ul>
+
+
+<p>(なんかそれっぽいチケットを見つけたけど、英語の議論についていける気がしないので、静かに見守る・・・)</p>
+
+<h2>maxの解決策2 bigintを使う</h2>
+
+<p><code>max</code>の引数に<code>bigint</code>を渡してやると、正しい結果を返してくれます。</p>
+
+<pre><code class="perl">use 5.24.0;
+use bigint;
+use List::Util qw(max);
+
+say "max:";
+say max(250000000000000000, 249999999999999999);
+say max(249999999999999999, 250000000000000000);
+</code></pre>
+
+<ul>
+<li>[Wandbox]三へ( へ՞ਊ ՞)へ ﾊｯﾊｯ <a href="https://wandbox.org/permlink/QTnEkQJ2698VWkgG">https://wandbox.org/permlink/QTnEkQJ2698VWkgG</a></li>
+</ul>
+
+
+<p>ただし、今回の僕のケースでは「ハッシュのキーの中で一番大きいものを取得する」処理が必要だったので、<code>bigint</code>だけでは解決しません。</p>
+
+<pre><code class="perl">use 5.24.0;
+use bigint;
+use List::Util qw(max);
+
+for (1..10) {
+    my %h = (250000000000000000 =&gt; 1, 249999999999999999 =&gt; 1);
+    say max(keys %h);
+}
+</code></pre>
+
+<ul>
+<li>[Wandbox]三へ( へ՞ਊ ՞)へ ﾊｯﾊｯ <a href="https://wandbox.org/permlink/af0YXdjRlVzYvm0u">https://wandbox.org/permlink/af0YXdjRlVzYvm0u</a></li>
+</ul>
+
+
+<p>Perlのハッシュは文字列しか使えないので、強制的に文字列にされてしまうんですね。
+さらにややこしいことに<a href="http://akiym.hateblo.jp/entry/2013/05/22/122438">hash randomization</a>によって、
+時々正しい結果を返すというのも面倒なところです。</p>
+
+<p>そのため今回のケースでは、<code>bigint</code>に戻す操作を明示的に書いてあげる必要があります。</p>
+
+<pre><code class="perl">use 5.24.0;
+use bigint;
+use List::Util qw(max);
+
+for (1..10) {
+    my %h = (250000000000000000 =&gt; 1, 249999999999999999 =&gt; 1);
+    say max(map {$_+0} keys %h);
+}
+</code></pre>
+
+<ul>
+<li>[Wandbox]三へ( へ՞ਊ ՞)へ ﾊｯﾊｯ <a href="https://wandbox.org/permlink/zeKfT7TrYaogz00g">https://wandbox.org/permlink/zeKfT7TrYaogz00g</a></li>
+</ul>
+
+
+<h2>divの解決策1: bignumを使う</h2>
+
+<p><code>bignum</code>を使った方法は割り算の計算でも有効です。
+ちなみに影響範囲はスコープで制限できるので、全体への影響を避けたい時は<code>{}</code>で囲ってあげましょう。</p>
+
+<pre><code class="perl">use 5.24.0;
+{
+    use bigint;
+    say 249999999999999999/2;
+}
+
+say 249999999999999999/2;
+</code></pre>
+
+<ul>
+<li>[Wandbox]三へ( へ՞ਊ ՞)へ ﾊｯﾊｯ <a href="https://wandbox.org/permlink/yIGEXqwtuG9CmR0h">https://wandbox.org/permlink/yIGEXqwtuG9CmR0h</a></li>
+</ul>
+
+
+<h2>divの解決策2: integerを使う</h2>
+
+<p>64bit環境で動くことがわかっているときは<code>bignum</code>の代わりに<code>integer</code>が使えます
+(扱えるbit数以外にも違いがあるので、詳細は<a href="http://perldoc.jp/docs/modules/bignum-0.23/bigint.pod">bigintのpod</a>を参照)。
+<code>bignum</code>と同様に影響範囲はスコープ内に限定されます。</p>
+
+<pre><code class="perl">use 5.24.0;
+say do { use integer; 249999999999999999/2 };
+say 249999999999999999/2;
+</code></pre>
+
+<ul>
+<li>[Wandbox]三へ( へ՞ਊ ՞)へ ﾊｯﾊｯ <a href="https://wandbox.org/permlink/P0ijy2i9qVcY614L">https://wandbox.org/permlink/P0ijy2i9qVcY614L</a></li>
+</ul>
+
+
+<p>Pythonみたいに <code>249999999999999999 // 2</code> と書かせて欲しい・・・
+(しかし <code>//</code> は既に別の用途で使われているのであった)</p>
+
+<h2>まとめ</h2>
+
+<ul>
+<li>Perlで64bitの整数を扱うときは割り算と<code>min</code>と<code>max</code>と<code>sum</code>に注意</li>
+<li>次のRound1ではPerlは使わない</li>
+</ul>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[WEB+DB PRESS Vol.97にPerlとRedisの記事を寄稿しました]]></title>
@@ -332,102 +545,6 @@ __END__
 </code></pre>
 
 <p>Perlで実行してもGoで実行しても自分自身を出力します。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[PerlとGolangで実行できるPolyglot書いてみた]]></title>
-    <link href="https://shogo82148.github.io/blog/2016/04/05/polyglot-of-perl-and-golang/"/>
-    <updated>2016-04-05T12:27:00+09:00</updated>
-    <id>https://shogo82148.github.io/blog/2016/04/05/polyglot-of-perl-and-golang</id>
-    <content type="html"><![CDATA[<p>Rubyの会社をPerlの会社に変えてしまおう計画。
-Golangのフリをして忍び込ませれば行けるのではという話になったので、
-GoでもPerlでも実行できるコードを書いてみた。</p>
-
-<!-- More -->
-
-
-<p>出来上がったのがこちら。</p>
-
-<pre><code class="plain">package main;
-import ("fmt");
-var (s=0/*==);
-sub import {}
-sub var { print "Hello macotasu"; }
-__END__
-*/)
-func main() { fmt.Println("Hello macotasu") }
-</code></pre>
-
-<p>一番のポイントは<code>var (s=0/*==);</code>の行ですね。
-Perlで解釈すると正規表現置換<code>s///</code>として解釈され、<code>/*</code>が無視されます。
-Goで解釈すると変数<code>s</code>への代入として解釈され、<code>/*</code>がコメントとして扱われます。</p>
-
-<p>あとはGoのキーワードをPerlが解釈できないので、ちょっと書き方を工夫します。</p>
-
-<ul>
-<li><code>package main</code> はGoでもPerlでも似たような意味で解釈されるのでそのまま</li>
-<li>Goの <code>import</code>, <code>var</code> はPerlで解釈できないので、()を省略せずに書いてPerlの関数呼び出しっぽくする</li>
-<li>省略可能なセミコロンをちゃんと書く</li>
-</ul>
-
-
-<p>GoとPerlのコードは分かれているのでどんな処理でも自由に書くことができますが、
-<code>import</code> だけGoでもPerlでも解釈されてしまうというという制限があります。
-<code>import</code> するパッケージが一個だけなら問題ないんですが、
-複数書く場合は以下のように２個め以降をすべてドットインポートする必要があって男気あふれる感じです。
-(Perlでは文字列結合として解釈される。Goでは<code>var</code>のあとに<code>import</code>かけないっぽいので、ここに押し込むしかない。)</p>
-
-<pre><code class="plain">package main;
-import (
-  "fmt"
-  . "math"
-);
-var (s=0/*==);
-sub import {}
-sub var { print "Hello macotasu"; }
-__END__
-*/)
-func main() { fmt.Println("Hello macotasu", Pi) }
-</code></pre>
-
-<p>もっと簡潔にかけないかな。</p>
-
-<h2>追記</h2>
-
-<p>シンタックスハイライトしてみたらわかりやすいかなと思ってやってみた。</p>
-
-<p>Perlのシンタックスハイライト。</p>
-
-<pre><code class="perl">package main;
-import ("fmt");
-var (s=0/*==);
-sub import {}
-sub var { print "Hello macotasu"; }
-__END__
-*/)
-func main() { fmt.Println("Hello macotasu") }
-</code></pre>
-
-<p>Goのシンタックスハイライト。</p>
-
-<pre><code class="go">package main;
-import ("fmt");
-var (s=0/*==);
-sub import {}
-sub var { print "Hello macotasu"; }
-__END__
-*/)
-func main() { fmt.Println("Hello macotasu") }
-</code></pre>
-
-<h2>参考</h2>
-
-<ul>
-<li><a href="https://golang.org/ref/spec">The Go Programming Language Specification</a></li>
-<li><a href="http://d.hatena.ne.jp/sugyan/20110306/1299418878">polyglot 基礎の基礎</a></li>
-</ul>
-
 ]]></content>
   </entry>
   
