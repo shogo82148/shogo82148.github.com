@@ -92,6 +92,23 @@ SELECT * FROM schedule
 
 予想通り検索結果は0件になりましたね。
 
+そして、2017-04-16 12:30:00の直前と直後はスケジュールが埋まっています。
+
+``` plain
+demo=# SELECT * FROM schedule
+          WHERE reservation_time @> '2017-04-16 12:29:59.999999'::timestamp;
+ schedule_id |  room_name  |               reservation_time
+-------------+-------------+-----------------------------------------------
+           4 | soudai_room | ["2017-04-16 12:00:00","2017-04-16 12:30:00")
+(1 row)
+
+demo=# SELECT * FROM schedule
+          WHERE reservation_time @> '2017-04-16 12:30:00.000001'::timestamp;
+ schedule_id |  room_name  |               reservation_time
+-------------+-------------+-----------------------------------------------
+           5 | soudai_room | ("2017-04-16 12:30:00","2017-04-16 12:40:00")
+(1 row)
+```
 
 ### 排他制約を有効にする
 
