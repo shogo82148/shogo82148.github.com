@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2017-04-13T21:15:54+09:00</updated>
+  <updated>2017-04-22T19:14:21+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,379 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Re: PostgreSQLで排他制約がめっちゃ便利！！]]></title>
+    <link href="https://shogo82148.github.io/blog/2017/04/22/postgresql-exclusion-constraint/"/>
+    <updated>2017-04-22T19:10:21+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2017/04/22/postgresql-exclusion-constraint</id>
+    <content type="html"><![CDATA[<p><a href="http://soudai.hatenablog.com/entry/2017/04/16/152905">PostgreSQLで排他制約がめっちゃ便利！！</a>を拝見したのですが、
+とても些細なミスがあるのに気がついてしまいました。
+本題とは関係ない重箱の隅をつつくような話なので、わざわざコメントするほどのことでもないかと考えていたのですが、
+どうしても試してみたいクエリを思いつき、
+偶然にも<a href="http://shogo82148.github.io/blog/2017/03/28/database-gis/">Redis、PostgreSQL、MySQLで近傍検索</a>したときに
+セットアップしたPostgreSQL環境が残っていたのでやってみました。</p>
+
+<!-- More -->
+
+
+<h2>試したかったこと</h2>
+
+<p>そーだいさんの記事からSQLの実行結果を一部引用します。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>demo=# SELECT * FROM schedule;
+</span><span class='line'>
+</span><span class='line'> schedule_id |  room_name  |               reservation_time
+</span><span class='line'>-------------+-------------+-----------------------------------------------
+</span><span class='line'>           1 | soudai_room | ["2017-04-16 11:30:00","2017-04-16 12:00:00")
+</span><span class='line'>           4 | soudai_room | ["2017-04-16 12:00:00","2017-04-16 12:30:00")
+</span><span class='line'>           5 | soudai_room | ("2017-04-16 12:30:00","2017-04-16 12:40:00")
+</span><span class='line'>           8 | soudai_room | ["2017-04-16 14:30:00","2017-04-16 16:00:00")
+</span><span class='line'>(4 行)</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>schedule_id</code>の<strong>5</strong>をよく見て下さい。
+他のスケジュールは<strong>半開区間</strong><code>[)</code>(開始時刻は期間に<strong>含む</strong>が、終了時刻は期間に<strong>含まない</strong>)になっているのですが、
+<code>schedule_id</code>の5だけ<strong>開区間</strong><code>()</code>(開始時刻も終了時刻も期間に<strong>含まない</strong>)になっています。
+つまり 2017-04-16 12:30:00 ジャストに空き時間があるのです。</p>
+
+<p><strong>ここに予約を入れてみたい！！！</strong></p>
+
+<h2>試してみた</h2>
+
+<h3>環境再現</h3>
+
+<p>以下のSQLを実行して、そーだいさんの記事と同じ内容を含んだテーブルを作成します。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class='sql'><span class='line'><span class="k">CREATE</span> <span class="k">TABLE</span> <span class="n">schedule</span>
+</span><span class='line'><span class="p">(</span>
+</span><span class='line'>    <span class="n">schedule_id</span> <span class="nb">SERIAL</span> <span class="k">PRIMARY</span> <span class="k">KEY</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+</span><span class='line'>    <span class="n">room_name</span> <span class="nb">TEXT</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+</span><span class='line'>    <span class="n">reservation_time</span> <span class="n">tsrange</span> <span class="k">NOT</span> <span class="k">NULL</span>
+</span><span class='line'><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">schedule</span> <span class="p">(</span><span class="n">schedule_id</span><span class="p">,</span> <span class="n">room_name</span><span class="p">,</span> <span class="n">reservation_time</span><span class="p">)</span> <span class="k">VALUES</span>
+</span><span class='line'>    <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="s1">&#39;soudai_room&#39;</span><span class="p">,</span> <span class="s1">&#39;[&quot;2017-04-16 11:30:00&quot;,&quot;2017-04-16 12:00:00&quot;)&#39;</span><span class="p">),</span>
+</span><span class='line'>    <span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="s1">&#39;soudai_room&#39;</span><span class="p">,</span> <span class="s1">&#39;[&quot;2017-04-16 12:00:00&quot;,&quot;2017-04-16 12:30:00&quot;)&#39;</span><span class="p">),</span>
+</span><span class='line'>    <span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="s1">&#39;soudai_room&#39;</span><span class="p">,</span> <span class="s1">&#39;(&quot;2017-04-16 12:30:00&quot;,&quot;2017-04-16 12:40:00&quot;)&#39;</span><span class="p">),</span>
+</span><span class='line'>    <span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="s1">&#39;soudai_room&#39;</span><span class="p">,</span> <span class="s1">&#39;[&quot;2017-04-16 14:30:00&quot;,&quot;2017-04-16 16:00:00&quot;)&#39;</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">-- schedule_idが1から始まってしまい、INSERTした内容と重複してしまうので調整</span>
+</span><span class='line'><span class="k">SELECT</span> <span class="n">setval</span> <span class="p">(</span><span class="s1">&#39;schedule_schedule_id_seq&#39;</span><span class="p">,</span> <span class="mi">8</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>SELECTを実行すると同じ内容になっていることを確認できます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>demo=# SELECT * FROM schedule;
+</span><span class='line'> schedule_id |  room_name  |               reservation_time
+</span><span class='line'>-------------+-------------+-----------------------------------------------
+</span><span class='line'>           1 | soudai_room | ["2017-04-16 11:30:00","2017-04-16 12:00:00")
+</span><span class='line'>           4 | soudai_room | ["2017-04-16 12:00:00","2017-04-16 12:30:00")
+</span><span class='line'>           5 | soudai_room | ("2017-04-16 12:30:00","2017-04-16 12:40:00")
+</span><span class='line'>           8 | soudai_room | ["2017-04-16 14:30:00","2017-04-16 16:00:00")
+</span><span class='line'>(4 rows)</span></code></pre></td></tr></table></div></figure>
+
+
+<p>さて、ちょうど 2017-04-16 12:30:00 は空き時間になっているので、
+以下のクエリは0件になるはずです。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='sql'><span class='line'><span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">schedule</span>
+</span><span class='line'>          <span class="k">WHERE</span> <span class="n">reservation_time</span> <span class="o">@&gt;</span> <span class="s1">&#39;2017-04-16 12:30:00&#39;</span><span class="p">::</span><span class="k">timestamp</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'> schedule_id | room_name | reservation_time
+</span><span class='line'>-------------+-----------+------------------
+</span><span class='line'>(0 rows)</span></code></pre></td></tr></table></div></figure>
+
+
+<p>予想通り検索結果は0件になりましたね。</p>
+
+<h3>排他制約を有効にする</h3>
+
+<p>予約を入れるまえに排他制約を有効にしておきましょう。
+すでにテーブルを作成しているので、<code>ALTER TABLE</code>文でテーブルの定義を変更します。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='sql'><span class='line'><span class="k">ALTER</span> <span class="k">TABLE</span> <span class="n">schedule</span> <span class="k">ADD</span> <span class="n">EXCLUDE</span> <span class="k">USING</span> <span class="n">GIST</span> <span class="p">(</span><span class="n">reservation_time</span> <span class="k">WITH</span> <span class="o">&amp;&amp;</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>排他制約が有効になっているか、そーだいさんの記事と同じクエリを実行してみましょう。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='sql'><span class='line'><span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">schedule</span>
+</span><span class='line'>  <span class="p">(</span><span class="n">room_name</span><span class="p">,</span> <span class="n">reservation_time</span><span class="p">)</span>
+</span><span class='line'>     <span class="k">VALUES</span>
+</span><span class='line'>  <span class="p">(</span><span class="s1">&#39;soudai_room&#39;</span><span class="p">,</span> <span class="s1">&#39;[2017-04-16 15:30, 2017-04-16 17:00)&#39;</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>demo=# INSERT INTO schedule
+</span><span class='line'>demo-#   (room_name, reservation_time)
+</span><span class='line'>demo-#      VALUES
+</span><span class='line'>demo-#   ('soudai_room', '[2017-04-16 15:30, 2017-04-16 17:00)');
+</span><span class='line'>ERROR:  conflicting key value violates exclusion constraint "schedule_reservation_time_excl"
+</span><span class='line'>DETAIL:  Key (reservation_time)=(["2017-04-16 15:30:00","2017-04-16 17:00:00")) conflicts with existing key (reservation_time)=(["2017-04-16 14:30:00","2017-04-16 16:00:00")).</span></code></pre></td></tr></table></div></figure>
+
+
+<p>期待通り排他制約により実行に失敗してくれました。</p>
+
+<h3>予約を入れてみる</h3>
+
+<p>さあ、ここからが本題です。
+ちょうど 2017-04-16 12:30:00 の時間に予約を入れてみましょう。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='sql'><span class='line'><span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">schedule</span>
+</span><span class='line'>  <span class="p">(</span><span class="n">room_name</span><span class="p">,</span> <span class="n">reservation_time</span><span class="p">)</span>
+</span><span class='line'>     <span class="k">VALUES</span>
+</span><span class='line'>  <span class="p">(</span><span class="s1">&#39;soudai_room&#39;</span><span class="p">,</span> <span class="s1">&#39;[2017-04-16 12:30:00, 2017-04-16 12:30:00]&#39;</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>demo=# INSERT INTO schedule
+</span><span class='line'>demo-#   (room_name, reservation_time)
+</span><span class='line'>demo-#      VALUES
+</span><span class='line'>demo-#   ('soudai_room', '[2017-04-16 12:30:00, 2017-04-16 12:30:00]');
+</span><span class='line'>INSERT 0 1</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>demo=# SELECT * FROM schedule;
+</span><span class='line'> schedule_id |  room_name  |               reservation_time
+</span><span class='line'>-------------+-------------+-----------------------------------------------
+</span><span class='line'>           1 | soudai_room | ["2017-04-16 11:30:00","2017-04-16 12:00:00")
+</span><span class='line'>           4 | soudai_room | ["2017-04-16 12:00:00","2017-04-16 12:30:00")
+</span><span class='line'>           5 | soudai_room | ("2017-04-16 12:30:00","2017-04-16 12:40:00")
+</span><span class='line'>           8 | soudai_room | ["2017-04-16 14:30:00","2017-04-16 16:00:00")
+</span><span class='line'>          10 | soudai_room | ["2017-04-16 12:30:00","2017-04-16 12:30:00"]
+</span><span class='line'>(5 rows)</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>やった予約成功！</strong></p>
+
+<p>PostreSQLのドキュメントによるとtimestamp型の精度は1マイクロ秒らしいので、
+部屋を利用できるのは1マイクロ秒だけですが・・・。</p>
+
+<h2>インデックスの使われ方について</h2>
+
+<p>インデックスの使われ方について気になったので、少し検証を続行してみます。
+僕自身はMySQLを扱う事が多いのですが、MySQLではユニーク制約を設定すると、設定したカラムに自動的にインデックスが張られて、
+それが検索時にも使用されます。
+PostreSQLの排他制約でもそうなのかな？と疑問に思ったので、実行計画を確認してみました。</p>
+
+<p>今回用意したテーブルだと行数が少なすぎて、
+インデックスが利用可能な場合でもフルスキャンが選択されてしまいます。
+データを大量に用意するのも面倒ですし、どうやらフルスキャンを無効化するオプション(厳密には、フルスキャン以外に選択肢がない場合があるので、なるべく使わない)があるらしいので、
+その状態で実行計画を確認してみましょう。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>demo=# SET enable_seqscan = OFF;
+</span><span class='line'>SET
+</span><span class='line'>demo=# EXPLAIN SELECT * FROM schedule
+</span><span class='line'>          WHERE reservation_time @&gt; '2017-04-16 12:30:00'::timestamp;
+</span><span class='line'>                                           QUERY PLAN
+</span><span class='line'>------------------------------------------------------------------------------------------------
+</span><span class='line'> Index Scan using schedule_reservation_time_excl on schedule  (cost=0.13..8.15 rows=1 width=68)
+</span><span class='line'>   Index Cond: (reservation_time @&gt; '2017-04-16 12:30:00'::timestamp without time zone)
+</span><span class='line'>(2 rows)</span></code></pre></td></tr></table></div></figure>
+
+
+<p>(読み方よくわかってないけど)Index Scanとあるので、きっとインデックスを使ってくれているのでしょう。</p>
+
+<p>排他制約に<code>room_name</code>を入れた場合も試してみました。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='sql'><span class='line'><span class="k">CREATE</span> <span class="n">EXTENSION</span> <span class="n">btree_gist</span><span class="p">;</span>
+</span><span class='line'><span class="k">ALTER</span> <span class="k">TABLE</span> <span class="n">schedule</span> <span class="k">ADD</span> <span class="n">EXCLUDE</span> <span class="k">USING</span> <span class="n">GIST</span> <span class="p">(</span><span class="n">room_name</span> <span class="k">WITH</span> <span class="o">=</span><span class="p">,</span> <span class="n">reservation_time</span> <span class="k">WITH</span> <span class="o">&amp;&amp;</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>demo=# SET enable_seqscan = OFF;
+</span><span class='line'>SET
+</span><span class='line'>demo=# EXPLAIN SELECT * FROM schedule
+</span><span class='line'>          WHERE room_name = 'soudai_room' AND reservation_time @&gt; '2017-04-16 12:30:00'::timestamp;
+</span><span class='line'>                                                           QUERY PLAN
+</span><span class='line'>--------------------------------------------------------------------------------------------------------------------------------
+</span><span class='line'> Index Scan using schedule_room_name_reservation_time_excl on schedule  (cost=0.14..8.16 rows=1 width=68)
+</span><span class='line'>   Index Cond: ((room_name = 'soudai_room'::text) AND (reservation_time @&gt; '2017-04-16 12:30:00'::timestamp without time zone))
+</span><span class='line'>(2 rows)</span></code></pre></td></tr></table></div></figure>
+
+
+<p>(やっぱり読み方よくわかってないけど)Index Scanとあるので、きっとインデックスを使ってくれているのでしょう。</p>
+
+<p>今回はフルスキャンを手動で無効化しましたが、大量にデータがあれば自動的にインデックスを使ってくれそうです。</p>
+
+<h2>再発防止策を考えてみる</h2>
+
+<p>試したいことを試せたのでここで終わりでもいいんですが、
+エンジニアとしてはやはり再発防止策を入れておきたいところです。
+色々な範囲関数があるので、それを使えばCHECK制約をかけられるのでは、と書いてみたのがこちら。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='sql'><span class='line'><span class="k">CREATE</span> <span class="n">EXTENSION</span> <span class="n">btree_gist</span><span class="p">;</span>
+</span><span class='line'><span class="k">CREATE</span> <span class="k">TABLE</span> <span class="n">schedule</span>
+</span><span class='line'><span class="p">(</span>
+</span><span class='line'>    <span class="n">schedule_id</span> <span class="nb">SERIAL</span> <span class="k">PRIMARY</span> <span class="k">KEY</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+</span><span class='line'>    <span class="n">room_name</span> <span class="nb">TEXT</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+</span><span class='line'>    <span class="n">reservation_time</span> <span class="n">tsrange</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+</span><span class='line'>    <span class="k">CHECK</span> <span class="p">(</span>    <span class="n">lower_inc</span><span class="p">(</span><span class="n">reservation_time</span><span class="p">)),</span>
+</span><span class='line'>    <span class="k">CHECK</span> <span class="p">(</span><span class="k">NOT</span> <span class="n">upper_inc</span><span class="p">(</span><span class="n">reservation_time</span><span class="p">)),</span>
+</span><span class='line'>    <span class="n">EXCLUDE</span> <span class="k">USING</span> <span class="n">GIST</span> <span class="p">(</span><span class="n">room_name</span> <span class="k">WITH</span> <span class="o">=</span><span class="p">,</span> <span class="n">reservation_time</span> <span class="k">WITH</span> <span class="o">&amp;&amp;</span><span class="p">)</span>
+</span><span class='line'><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>さあ、データを投入してみましょう。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='sql'><span class='line'><span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">schedule</span> <span class="p">(</span><span class="n">room_name</span><span class="p">,</span> <span class="n">reservation_time</span><span class="p">)</span> <span class="k">VALUES</span>
+</span><span class='line'>    <span class="p">(</span><span class="s1">&#39;soudai_room&#39;</span><span class="p">,</span> <span class="s1">&#39;[&quot;2017-04-16 11:30:00&quot;,&quot;2017-04-16 12:00:00&quot;)&#39;</span><span class="p">);</span>
+</span><span class='line'><span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">schedule</span> <span class="p">(</span><span class="n">room_name</span><span class="p">,</span> <span class="n">reservation_time</span><span class="p">)</span> <span class="k">VALUES</span>
+</span><span class='line'>    <span class="p">(</span><span class="s1">&#39;soudai_room&#39;</span><span class="p">,</span> <span class="s1">&#39;(&quot;2017-04-16 12:30:00&quot;,&quot;2017-04-16 12:40:00&quot;)&#39;</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>期間が半区間<code>[)</code>になっている最初のクエリは成功しますが、
+開区間<code>()</code>になっている二番目のクエリは以下のようなエラーを吐いて挿入に失敗します。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>demo=# INSERT INTO schedule (room_name, reservation_time) VALUES
+</span><span class='line'>demo-#     ('soudai_room', '("2017-04-16 12:30:00","2017-04-16 12:40:00")');
+</span><span class='line'>ERROR:  new row for relation "schedule" violates check constraint "schedule_reservation_time_check"
+</span><span class='line'>DETAIL:  Failing row contains (2, soudai_room, ("2017-04-16 12:30:00","2017-04-16 12:40:00")).</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>まとめ</h2>
+
+<p>制約はユニーク制約くらいしか使ったことがないのですが、いろんな制約があって便利ですね。
+(と書いたところで外部キー制約を使った経験を思い出したけど、<a href="http://songmu.github.io/slides/fk-night/#0">MySQLユーザにはいろいろ事情があってね・・・</a>)</p>
+
+<p>特に、時間指定が半区間<code>[)</code>か閉区間<code>[]</code>かで苦しめられた身からすると、これを制約に入れられるのは非常に魅力的です(ちなみに僕は半区間<code>[)</code>推進派です)。
+PostgreSQLを利用することがあれば使っていきたい機能ですね(使う機会あるかな・・・)。</p>
+
+<h2>参考文献</h2>
+
+<ul>
+<li><a href="http://soudai.hatenablog.com/entry/2017/04/16/152905">PostgreSQLで排他制約がめっちゃ便利！！</a></li>
+<li><a href="https://www.postgresql.jp/document/9.6/html/datatype-datetime.html">8.5. 日付/時刻データ型  - PostgreSQL 9.6.2文書</a></li>
+<li><a href="https://www.postgresql.jp/document/9.6/html/rangetypes.html">8.17. 範囲型 - PostgreSQL 9.6.2文書</a></li>
+<li><a href="https://www.postgresql.jp/document/9.6/html/sql-altertable.html">ALTER TABLE - PostgreSQL 9.6.2文書</a></li>
+<li><a href="https://www.postgresql.jp/document/9.6/html/functions-range.html">9.19. 範囲関数と演算子 - PostgreSQL 9.6.2文書</a></li>
+<li><a href="https://www.postgresql.jp/document/9.6/html/using-explain.html">14.1. EXPLAINの利用 - PostgreSQL 9.6.2文書</a></li>
+<li><a href="https://www.postgresql.jp/document/9.6/html/runtime-config-query.html#runtime-config-query-enable">19.7. 問い合わせ計画 - PostgreSQL 9.6.2文書</a></li>
+<li><a href="http://songmu.github.io/slides/fk-night/#0">我々(主語が大きい)は何故MySQLで外部キーを使わないのか</a></li>
+</ul>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Perl+List::Utilの64bit整数の罠にはまった話]]></title>
@@ -6119,139 +6492,6 @@ Serves the html file in static directory.</p>
 
 
 <p>Perlで実行してもGoで実行しても自分自身を出力します。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[PerlとGolangで実行できるPolyglot書いてみた]]></title>
-    <link href="https://shogo82148.github.io/blog/2016/04/05/polyglot-of-perl-and-golang/"/>
-    <updated>2016-04-05T12:27:00+09:00</updated>
-    <id>https://shogo82148.github.io/blog/2016/04/05/polyglot-of-perl-and-golang</id>
-    <content type="html"><![CDATA[<p>Rubyの会社をPerlの会社に変えてしまおう計画。
-Golangのフリをして忍び込ませれば行けるのではという話になったので、
-GoでもPerlでも実行できるコードを書いてみた。</p>
-
-<!-- More -->
-
-
-<p>出来上がったのがこちら。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>package main;
-</span><span class='line'>import ("fmt");
-</span><span class='line'>var (s=0/*==);
-</span><span class='line'>sub import {}
-</span><span class='line'>sub var { print "Hello macotasu"; }
-</span><span class='line'>__END__
-</span><span class='line'>*/)
-</span><span class='line'>func main() { fmt.Println("Hello macotasu") }</span></code></pre></td></tr></table></div></figure>
-
-
-<p>一番のポイントは<code>var (s=0/*==);</code>の行ですね。
-Perlで解釈すると正規表現置換<code>s///</code>として解釈され、<code>/*</code>が無視されます。
-Goで解釈すると変数<code>s</code>への代入として解釈され、<code>/*</code>がコメントとして扱われます。</p>
-
-<p>あとはGoのキーワードをPerlが解釈できないので、ちょっと書き方を工夫します。</p>
-
-<ul>
-<li><code>package main</code> はGoでもPerlでも似たような意味で解釈されるのでそのまま</li>
-<li>Goの <code>import</code>, <code>var</code> はPerlで解釈できないので、()を省略せずに書いてPerlの関数呼び出しっぽくする</li>
-<li>省略可能なセミコロンをちゃんと書く</li>
-</ul>
-
-
-<p>GoとPerlのコードは分かれているのでどんな処理でも自由に書くことができますが、
-<code>import</code> だけGoでもPerlでも解釈されてしまうというという制限があります。
-<code>import</code> するパッケージが一個だけなら問題ないんですが、
-複数書く場合は以下のように２個め以降をすべてドットインポートする必要があって男気あふれる感じです。
-(Perlでは文字列結合として解釈される。Goでは<code>var</code>のあとに<code>import</code>かけないっぽいので、ここに押し込むしかない。)</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>package main;
-</span><span class='line'>import (
-</span><span class='line'>  "fmt"
-</span><span class='line'>  . "math"
-</span><span class='line'>);
-</span><span class='line'>var (s=0/*==);
-</span><span class='line'>sub import {}
-</span><span class='line'>sub var { print "Hello macotasu"; }
-</span><span class='line'>__END__
-</span><span class='line'>*/)
-</span><span class='line'>func main() { fmt.Println("Hello macotasu", Pi) }</span></code></pre></td></tr></table></div></figure>
-
-
-<p>もっと簡潔にかけないかな。</p>
-
-<h2>追記</h2>
-
-<p>シンタックスハイライトしてみたらわかりやすいかなと思ってやってみた。</p>
-
-<p>Perlのシンタックスハイライト。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="nb">package</span> <span class="n">main</span><span class="p">;</span>
-</span><span class='line'><span class="nb">import</span> <span class="p">(</span><span class="s">&quot;fmt&quot;</span><span class="p">);</span>
-</span><span class='line'><span class="n">var</span> <span class="p">(</span><span class="n">s</span><span class="o">=</span><span class="mi">0</span><span class="o">/*==</span><span class="p">);</span>
-</span><span class='line'><span class="k">sub </span><span class="nf">import</span> <span class="p">{}</span>
-</span><span class='line'><span class="k">sub </span><span class="nf">var</span> <span class="p">{</span> <span class="k">print</span> <span class="s">&quot;Hello macotasu&quot;</span><span class="p">;</span> <span class="p">}</span>
-</span><span class='line'><span class="cp">__END__</span>
-</span><span class='line'><span class="cp">*/)</span>
-</span><span class='line'><span class="cp">func main() { fmt.Println(&quot;Hello macotasu&quot;) }</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Goのシンタックスハイライト。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span><span class="p">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="p">(</span><span class="s">&quot;fmt&quot;</span><span class="p">);</span>
-</span><span class='line'><span class="kd">var</span> <span class="p">(</span><span class="nx">s</span><span class="p">=</span><span class="mi">0</span><span class="cm">/*==);</span>
-</span><span class='line'><span class="cm">sub import {}</span>
-</span><span class='line'><span class="cm">sub var { print &quot;Hello macotasu&quot;; }</span>
-</span><span class='line'><span class="cm">__END__</span>
-</span><span class='line'><span class="cm">*/</span><span class="p">)</span>
-</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span> <span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;Hello macotasu&quot;</span><span class="p">)</span> <span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>参考</h2>
-
-<ul>
-<li><a href="https://golang.org/ref/spec">The Go Programming Language Specification</a></li>
-<li><a href="http://d.hatena.ne.jp/sugyan/20110306/1299418878">polyglot 基礎の基礎</a></li>
-</ul>
-
 ]]></content>
   </entry>
   
