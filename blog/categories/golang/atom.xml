@@ -4,7 +4,7 @@
   <title><![CDATA[Category: golang | Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/blog/categories/golang/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2017-04-22T19:22:21+09:00</updated>
+  <updated>2017-05-04T11:03:30+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,256 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[String::RandomのGo移植を書いてみた]]></title>
+    <link href="https://shogo82148.github.io/blog/2017/05/04/go-rerand/"/>
+    <updated>2017-05-04T10:57:37+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2017/05/04/go-rerand</id>
+    <content type="html"><![CDATA[<p>golangkyotoで<a href="http://blog.yux3.net/entry/2017/05/01/014200">String::RandomのGo移植についての発表</a>があったと聞き、
+これに対抗して以前途中まで書いていたString::RandomのGo移植をちょっといじって公開しました。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/go-rerand">shogo82148/go-rerand</a></li>
+</ul>
+
+
+<!-- More -->
+
+
+<h2>背景</h2>
+
+<h3>ナイーブな実装の問題点</h3>
+
+<p>実はgolangkyoto以前にもGoの正規表現エンジンを使ってランダムな文字列を生成する試みはあって、
+たしかにこれは面白そうだと記事を読んでいました。</p>
+
+<ul>
+<li>「<a href="http://ymotongpoo.hatenablog.com/entry/2014/12/21/192304">Goの正規表現エンジンを使ってファジング用ツールを書いてみる</a>」</li>
+</ul>
+
+
+<p>しかし、gocha同様、この実装では文字列の長さが幾何分布に従うため、短い文字が多めにでてしまいます。</p>
+
+<pre><code class="plain">% gocha -n 100000 'a*' | sort | uniq -c
+50054
+24894 a
+12633 aa
+6278 aaa
+2994 aaaa
+1517 aaaaa
+ 809 aaaaaa
+ 400 aaaaaaa
+ 206 aaaaaaaa
+ 109 aaaaaaaaa
+  54 aaaaaaaaaa
+  22 aaaaaaaaaaa
+  15 aaaaaaaaaaaa
+   7 aaaaaaaaaaaaa
+   4 aaaaaaaaaaaaaa
+   3 aaaaaaaaaaaaaaa
+   1 aaaaaaaaaaaaaaaa
+</code></pre>
+
+<h3>正規表現のパターンを数え上げとその問題点</h3>
+
+<p>この問題を解決するために
+「この先何パターンあるかを調べておけば、正規表現が表す文字列の集合からランダムに文字列を取り出せるのでは？」
+と考え、golangkyoto以前からちょこちょこ実装を進め、不完全ながらも一応動作するところまでは書いていたのです。
+有向グラフの経路数えあげ問題なので、メモ化再帰を使って頑張れば解けます。
+少々面倒ですが、<a href="https://www.youtube.com/watch?v=Q4gTV4r0zRs">おねえさんの問題</a>と比べれば簡単です。</p>
+
+<p>パターンを数え上げる都合上、組み合わせが無限にある <code>a*</code> ような正規表現は扱えません。
+<code>a{1,10}</code> のように明示的に範囲を指定する必要があります。
+たとえば <code>a{1,10}</code> は10パターン組み合わせがあるので、20万個ランダムに生成すると、それぞれのパターンがおおよそ2万個ずつ生成されます。
+(<code>-d</code> オプションについては後述)</p>
+
+<pre><code class="plain">$ rerand -d -n 200000 'a{1,10}' | sort | uniq -c
+20153 a
+19863 aa
+19899 aaa
+19908 aaaa
+19975 aaaaa
+20000 aaaaaa
+20081 aaaaaaa
+20021 aaaaaaaa
+20072 aaaaaaaaa
+20028 aaaaaaaaaa
+</code></pre>
+
+<p><code>[ab]{1,3}</code>のような正規表現でも、それぞれのパターンがおおよそ同じ数だけ生成されます。</p>
+
+<pre><code class="plain">$ rerand -d -n 200000 '[ab]{1,3}' | sort | uniq -c
+14299 a
+14249 aa
+14215 aaa
+14257 aab
+14192 ab
+14340 aba
+14317 abb
+14209 b
+14213 ba
+14332 baa
+14228 bab
+14355 bb
+14634 bba
+14160 bbb
+</code></pre>
+
+<p>これはこれで意図した挙動なのですが、
+1文字のパターン数に比べて、3文字のパターン数が非常に多いため、相対的に短い文字列が出現しにくくなってしまいます。
+「これは本当にユーザーが望んだものなのだろうか・・・？」と疑問に思ってしまい、
+うまい解決策が思いつかないままずっと放置していました。</p>
+
+<h2>文字グループの同一視</h2>
+
+<p>ここまで実装では正規表現の定義に厳密に従い「<code>[ab]</code>は<code>a</code>と<code>b</code>にマッチするので2パターン」と解釈していましたが、
+「<code>[ab]</code>のような1文字にマッチするパターンは全部1パターン」と緩い解釈にするようにしました。
+<code>-d</code>オプションはこの挙動を制御するためのオプションです。</p>
+
+<p>デフォルトの挙動は「1文字にマッチするパターンは全部1パターン」です。
+さきほどと同じ<code>[ab]{1,3}</code>で、<code>-d</code>オプションを外しデフォルトの設定で文字列生成すると以下のようになります。</p>
+
+<pre><code class="plain">$ rerand -n 200000 '[ab]{1,3}' | sort | uniq -c
+33463 a
+16432 aa
+8392 aaa
+8206 aab
+16806 ab
+8334 aba
+8403 abb
+33242 b
+16549 ba
+8393 baa
+8372 bab
+16644 bb
+8376 bba
+8388 bbb
+</code></pre>
+
+<p><code>a</code>や<code>b</code>が多めに出ているような気がしますが、
+文字列長別に集計するとおおよそ同じ回数だけ出現していることが確認できます。</p>
+
+<pre><code class="plain">$ rerand -n 200000 '[ab]{1,3}' | perl -nE 'chomp; say length' | sort -n | uniq -c
+66769 1
+67036 2
+66195 3
+</code></pre>
+
+<p>これで少しはユーザーフレンドリーになったはず(？)</p>
+
+<h2>ベンチマーク</h2>
+
+<p>ベンチマークの結果も貼っておきます。
+coffeescriptは <a href="https://cho45.stfuawsc.com/String_random.js/demo.html#%5B%E3%82%AB%E3%82%B3%E3%83%B5%E3%81%8B%5D%5B%E3%83%83%E3%83%BC%5D%7B1%2C3%7D%3F%5B%E3%83%95%E3%83%92%E3%81%B5%E3%81%B2%5D%7B1%2C3%7D%5B%E3%82%A3%E3%82%A7%E3%83%BC%5D%7B1%2C3%7D%5B%E3%82%BA%E3%82%B9%5D%5B%E3%83%89%E3%82%AF%E3%82%B0%E3%83%A5%5D%5B%E3%83%AA%E3%82%A4%5D%5B%E3%83%97%E3%83%96%E3%81%B7%E3%81%B6%5D%7B1%2C3%7D%5B%E3%83%88%E3%83%89%E3%82%A9%5D%7B1%2C2%7D">コーフィースクリップトの発音を生成する</a>ベンチマーク、
+telephoneは<code>\d{2,3}-\d{3,4}-\d{3,4}</code>で電話番号っぽい文字列を生成するベンチです。</p>
+
+<pre><code class="plain">$ go test -run none -bench . -benchmem ./...
+BenchmarkGenerator/coffeescript-4            1000000          1737 ns/op          81 B/op          2 allocs/op
+BenchmarkGenerator/[あ-お]{10}-4               2000000           845 ns/op          80 B/op          2 allocs/op
+BenchmarkGenerator/[[:alpha:]]-4             5000000           274 ns/op          36 B/op          2 allocs/op
+BenchmarkGenerator/\S-4                      5000000           292 ns/op          40 B/op          2 allocs/op
+BenchmarkGenerator/\S{10}-4                  1000000          1568 ns/op          80 B/op          2 allocs/op
+BenchmarkGenerator/\pN-4                     5000000           304 ns/op          39 B/op          2 allocs/op
+BenchmarkGenerator/\p{Greek}-4               5000000           299 ns/op          39 B/op          2 allocs/op
+BenchmarkGenerator/telephone-4               2000000           886 ns/op          48 B/op          2 allocs/op
+BenchmarkRuneGenerator/[a]-4                300000000            4.24 ns/op        0 B/op          0 allocs/op
+BenchmarkRuneGenerator/[a-z]-4              30000000            42.7 ns/op         0 B/op          0 allocs/op
+BenchmarkRuneGenerator/[a-zA-Z0-9]-4        10000000           118 ns/op           0 B/op          0 allocs/op
+PASS
+ok      github.com/shogo82148/go-rerand 20.013s
+?       github.com/shogo82148/go-rerand/cmd/rerand  [no test files]
+BenchmarkGocha/coffeescript-4             300000          3967 ns/op        1090 B/op         34 allocs/op
+BenchmarkGocha/[あ-お]{10}-4               1000000          1951 ns/op         328 B/op         15 allocs/op
+BenchmarkGocha/[[:alpha:]]-4             5000000           323 ns/op          64 B/op          4 allocs/op
+BenchmarkGocha/\S-4                      5000000           394 ns/op         128 B/op          5 allocs/op
+BenchmarkGocha/\S{10}-4                   500000          3353 ns/op        1288 B/op         35 allocs/op
+BenchmarkGocha/\pN-4                     1000000          1988 ns/op        4096 B/op         10 allocs/op
+BenchmarkGocha/\p{Greek}-4               1000000          1122 ns/op        2048 B/op          9 allocs/op
+BenchmarkGocha/telephone-4               1000000          1998 ns/op         288 B/op         14 allocs/op
+PASS
+ok      github.com/shogo82148/go-rerand/gocha_test  14.405s
+BenchmarkStrRand/coffeescript-4              1000000          1828 ns/op         262 B/op         11 allocs/op
+BenchmarkStrRand/[あ-お]{10}-4                 1000000          1189 ns/op         208 B/op          9 allocs/op
+BenchmarkStrRand/\S-4                       20000000            72.9 ns/op         0 B/op          0 allocs/op
+BenchmarkStrRand/\S{10}-4                    1000000          1097 ns/op          64 B/op          9 allocs/op
+BenchmarkStrRand/telephone-4                 1000000          1409 ns/op          58 B/op         10 allocs/op
+PASS
+ok      github.com/shogo82148/go-rerand/strrand_test    7.136s
+</code></pre>
+
+<p>テストケースにもよりますが、Songmuさんのstrrandと同等かちょっと速い程度の性能です(シンプルな正規表現ではstrrandが速いこともある)。
+Twitterには「Gocha速い！」みたいなことが流れてましたが、僕の手元での検証ではstrrandの方が高速でした。
+どうも<a href="https://github.com/t-mrt/gocha/pull/3">ベンチマークの使い方間違っていた</a>っぽいですね・・・。</p>
+
+<p>ちなみにこのベンチマークには正規表現をパースする処理は入っていません。
+(どう考えてもstrrandに負けるのは目に見えている)
+たいていのケースで初期化一回なので気にしない気にしない。</p>
+
+<h2>グローバルなmath/rand関数の扱い</h2>
+
+<p>go-rerandを作る際、他の実装も参考にしたのですが、
+Seedの初期化のタイミングがまちまちで、少し気になりました。</p>
+
+<ul>
+<li>fuzzingo: <code>rand.Intn</code>を使う直前(！)</li>
+<li>strrand: init関数内</li>
+<li>gocha: Newの中</li>
+</ul>
+
+
+<p>Seedの初期化は本来一回だけでいいので、「<code>rand.Intn</code>を使う直前」や「Newの中」で行うのは無駄です。
+init関数内でやる方法がベターですが、<code>math/rand</code>を使うライブラリを複数importしている場合、
+結局何度もSeedの初期化が行われてしまいます。
+ライブラリ利用者の手間は増えますが、ライブラリの中ではなく<code>main.go</code>の中でやってほしい！というのが僕の意見です。</p>
+
+<pre><code class="go">// main.goの中でやってほしい！
+func init() {
+    rand.Seed(time.Now().UnixNano())
+}
+</code></pre>
+
+<p>ベストなのは <strong>ライブラリではグローバルなmath/rand関数を使わない！</strong> ことです。
+rerandでは以下のように<code>rand.New</code>を使って、グローバルな関数は使っていません。</p>
+
+<pre><code class="go">r = rand.New(rand.NewSource(time.Now().UnixNano()))
+</code></pre>
+
+<p>goroutine-unsafeになってしまうので、同期処理を自前で書く必要があるのが難点です。
+その代わり、ロックの粒度が細かく調整できるので、並列処理の効率は上がるはずです(たぶん)。</p>
+
+<p>また、テストの際にSeedを固定できるので便利です。</p>
+
+<pre><code class="go">r = rand.New(rand.NewSource(1))
+</code></pre>
+
+<h2>gocha互換オプション</h2>
+
+<p><code>-prob 0.5</code>でGochaと同じ挙動になるはずです。
+<code>a*</code>のような無限長の正規表現も扱えます。
+数値をいじることで文字列の長さの分布を調整可能です。</p>
+
+<h2>まとめ</h2>
+
+<ul>
+<li>Go版String::Randomを作った</li>
+<li><strong>ライブラリではグローバルなmath/rand関数をなるべく使わないでほしい！</strong></li>
+</ul>
+
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="http://ymotongpoo.hatenablog.com/entry/2014/12/21/192304">Goの正規表現エンジンを使ってファジング用ツールを書いてみる</a></li>
+<li><a href="https://github.com/ymotongpoo/fuzzingo">ymotongpoo/fuzzingo</a></li>
+<li><a href="http://www.songmu.jp/riji/entry/2015-03-28-strrand.html">String::Randomのgolang移植書いた</a></li>
+<li><a href="https://github.com/Songmu/strrand">Songmu/strrand</a></li>
+<li><a href="http://blog.yux3.net/entry/2017/05/01/014200">golangkyoto 「そうだ、 Go 京都」で「Go に String::Random を移植した話」というタイトルで発表した</a></li>
+<li><a href="https://github.com/t-mrt/gocha">t-mrt/gocha</a></li>
+</ul>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Go言語のヒープに確保するデータの初期化コストについて調べてみた(Go1.8.1版)]]></title>
@@ -904,157 +1154,6 @@ defer ks.StopAutoSave()
 
 <p>プロセス間でデータ共有できない問題はありますが・・・
 まあ、そういうときは素直にRedisとかSQLiteとかboltdbとか使って下さい。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Rust vs Go の終戦へ向けてPolyglotを作ってみた]]></title>
-    <link href="https://shogo82148.github.io/blog/2017/02/25/rust-and-go-ploygolot/"/>
-    <updated>2017-02-25T16:58:27+09:00</updated>
-    <id>https://shogo82148.github.io/blog/2017/02/25/rust-and-go-ploygolot</id>
-    <content type="html"><![CDATA[<p>「Golang Rust」とググると、関連項目は「Rust vs Go」のように
-GolangとRustが対立しているような項目ばかりです。
-まあまあ、もっと仲良くやろうじゃないですか、ということで、
-どうしたら仲良くなれるかを考えました。
-Polyglotにして同じソースコードの中に閉じ込めてやれば、
-そのうち仲良くなるのではないかと考え、
-RustとGoのPloyglotを作ってみました。</p>
-
-<!-- More -->
-
-
-<h2>結果</h2>
-
-<pre><code class="rust polyglot.rs">/*/*/
-package main
-
-import "fmt"
-
-func main() {
-    fmt.Print("Hello Go!!")
-    _ = `*/*/
-fn main() {
-    println!("Hello Rust!!");
-//`
-}
-</code></pre>
-
-<pre><code class="go polyglot.go">/*/*/
-package main
-
-import "fmt"
-
-func main() {
-    fmt.Print("Hello Go!!")
-    _ = `*/*/
-fn main() {
-    println!("Hello Rust!!");
-//`
-}
-</code></pre>
-
-<h2>仕組み</h2>
-
-<p>一番のポイントは最初の行の <code>/*/*/</code> です。
-RustもGoも<code>/* */</code>形式の複数行コメントに対応していますが、
-Rustはネストに対応しており、Goはネストはできないという違いがあります。
-この違いにより、Rustは<code>/*/*/</code>を<code>/* /* /</code>のように「二重にネストしたコメントの開始部分」として扱いますが、
-Goは<code>/* / */</code>のように「<code>/</code>をコメントアウトしたもの」と見なします。
-これにより2行目<code>package main</code>以降はGoには普通のコードに見えますが、
-Rustからは単なるコメントとして認識されます。</p>
-
-<p>次はGoからRustへの切り替えです。
-Goではバッククオートで複数行文字列を定義できるので、その中にRustのコードを書きます。
-この中ではバッククオートさえ使わなければ自由にRustのコードを書くことが出来るので、
-あとはGoのコードだけ上手くコメントアウトされるよう調整すれば完成です。</p>
-
-<h2>せっかくなのでリンクしてみた</h2>
-
-<p>GoからRustのコードを呼び出すサンプルコードを見つけたので、
-せっかくなのでリンクしてみました。</p>
-
-<ul>
-<li><a href="https://github.com/medimatrix/rust-plus-golang">medimatrix/rust-plus-golang</a></li>
-</ul>
-
-
-<p><code>main.go</code>と<code>lib.go</code>を以下のように置き換えます。
-内容は一緒なので、シンボリックリンクにすると編集が楽でいいかもしれませんね。</p>
-
-<pre><code class="go main.go">/*golang code starts from here/*/
-package main
-
-/*
-#cgo LDFLAGS: -L./lib -lhello
-void hello(char *name);
-*/
-import "C"
-
-func main() {
-    C.hello(C.CString("John Smith"))
-
-    _ = `rustlang code starts from here */*/
-extern crate libc;
-use std::ffi::CStr;
-
-#[no_mangle]
-pub extern "C" fn hello(name: *const libc::c_char) {
-    let buf_name = unsafe { CStr::from_ptr(name).to_bytes() };
-    let str_name = String::from_utf8(buf_name.to_vec()).unwrap();
-    println!("Hello {}!", str_name);
-//`
-}
-</code></pre>
-
-<pre><code class="rust lib.rs">/*golang code starts from here/*/
-package main
-
-/*
-#cgo LDFLAGS: -L./lib -lhello
-void hello(char *name);
-*/
-import "C"
-
-func main() {
-    C.hello(C.CString("John Smith"))
-
-    _ = `rustlang code starts from here */*/
-extern crate libc;
-use std::ffi::CStr;
-
-#[no_mangle]
-pub extern "C" fn hello(name: *const libc::c_char) {
-    let buf_name = unsafe { CStr::from_ptr(name).to_bytes() };
-    let str_name = String::from_utf8(buf_name.to_vec()).unwrap();
-    println!("Hello {}!", str_name);
-//`
-}
-</code></pre>
-
-<p>呼び出し元と呼び出し先のコードが一度に確認できて便利(？)</p>
-
-<h2>まとめ</h2>
-
-<p>Goの最初に<code>package main</code>を書かなければいけない制限が意外と厳しいため、
-Polyglotにする言語には相性があります。
-つまりRustとGoは相性バツグンということですね！(？？？)
-みなさんもRustとGoを仲良く使っていきましょう！！！！！</p>
-
-<p>(※ジョークなので本気にしないでくださいね、念のため)</p>
-
-<h2>参考</h2>
-
-<ul>
-<li><a href="https://doc.rust-lang.org/reference.html#comments">The Rust Reference#comment</a></li>
-<li><a href="https://shogo82148.github.io/blog/2016/04/05/polyglot-of-perl-and-golang/">PerlとGolangで実行できるPolyglot書いてみた</a>
-
-<ul>
-<li>どうやらGoはPerlとも相性がいいようです</li>
-</ul>
-</li>
-<li><a href="https://github.com/medimatrix/rust-plus-golang">medimatrix/rust-plus-golang</a></li>
-</ul>
-
 ]]></content>
   </entry>
   
