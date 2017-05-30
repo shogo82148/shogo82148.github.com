@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2017-05-04T11:03:30+09:00</updated>
+  <updated>2017-05-30T18:03:42+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,570 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Re: GoとPythonとGrumpyの速度ベンチマーク]]></title>
+    <link href="https://shogo82148.github.io/blog/2017/05/30/grumpy/"/>
+    <updated>2017-05-30T17:53:32+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2017/05/30/grumpy</id>
+    <content type="html"><![CDATA[<p><a href="http://qiita.com/kotauchisunsun/items/db28d14f7f13fb29e5f9">GoとPythonとGrumpyの速度ベンチマーク ～Googleのトランスパイラはどれくらい速い？～</a>という記事を拝読したのですが、
+もう一歩踏み込んで検証して欲しい・・・。</p>
+
+<blockquote><p>並列処理性能が優れているほか、PythonコードからGoのパッケージをPythonモジュールのように呼び出して利用することもできるという特徴がある。</p></blockquote>
+
+<p>と<a href="http://news.mynavi.jp/news/2017/01/06/110/">Google、すごくスケールするPython実行環境をGoで開発</a>から引用しているのに、
+この件に全く触れていないんですよね。
+Twitterに呟いたってどうせ誰もやってくれない気がするので、自分で試してみました。</p>
+
+<!-- More -->
+
+
+<h2>環境</h2>
+
+<p>この記事を書いている2017年5月30日現在の最新バージョンで検証しました。</p>
+
+<ul>
+<li>go version go1.8.3 darwin/amd64</li>
+<li>CPython 2.7.13</li>
+<li>Grumpy <a href="https://github.com/google/grumpy/tree/d8d01899f5eedf99602887567aaeb39a9154bf68">d8d01899f5</a></li>
+</ul>
+
+
+<p>Grumpyのインストール方法はREADMEにある通り。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>make
+</span><span class='line'><span class="nb">export </span><span class="nv">GOPATH</span><span class="o">=</span><span class="nv">$PWD</span>/build
+</span><span class='line'><span class="nb">export </span><span class="nv">PYTHONPATH</span><span class="o">=</span><span class="nv">$PWD</span>/build/lib/python2.7/site-packages
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>ただ個人的な環境問題としてPythonのバージョン管理に利用しているpyenvとの相性が悪いらしく、
+pyenvが管理しているPythonへのパスを直接通す必要がありました。
+(これがないとPythonスクリプトがなぜかbashに処理される。なんかこの問題最近Twitterで見たような・・・)</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nb">export </span><span class="nv">PATH</span><span class="o">=</span><span class="nv">$HOME</span>/.pyenv/versions/2.7.13/bin:<span class="nv">$PATH</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>モンテカルロ法を並列実行してみる</h2>
+
+<p>まず、並列処理性能について検証してみましょう。
+モンテカルロ法の各試行は独立しているので、並列実行にするのは容易です。
+Python2のthreadingモジュールを使って並列実行してみましょう。</p>
+
+<h3>コード</h3>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="c">#coding:utf-8</span>
+</span><span class='line'><span class="c"># モンテカルロ法 Pure Python 並列版</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">threading</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">random</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">sys</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">class</span> <span class="nc">MyThread</span><span class="p">(</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">):</span>
+</span><span class='line'>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span class='line'>        <span class="nb">super</span><span class="p">(</span><span class="n">MyThread</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">()</span>
+</span><span class='line'>        <span class="bp">self</span><span class="o">.</span><span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span class='line'>        <span class="n">r</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">Random</span><span class="p">()</span>
+</span><span class='line'>        <span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
+</span><span class='line'>        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">num</span><span class="p">):</span>
+</span><span class='line'>            <span class="n">x</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">random</span><span class="p">()</span>
+</span><span class='line'>            <span class="n">y</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">random</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'>            <span class="k">if</span> <span class="n">x</span> <span class="o">*</span> <span class="n">x</span> <span class="o">+</span> <span class="n">y</span> <span class="o">*</span> <span class="n">y</span> <span class="o">&lt;=</span> <span class="mf">1.0</span><span class="p">:</span>
+</span><span class='line'>                <span class="n">c</span> <span class="o">+=</span> <span class="mi">1</span>
+</span><span class='line'>        <span class="bp">self</span><span class="o">.</span><span class="n">c</span> <span class="o">=</span> <span class="n">c</span>
+</span><span class='line'>
+</span><span class='line'>
+</span><span class='line'><span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+</span><span class='line'>    <span class="n">num</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+</span><span class='line'>    <span class="n">para</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">threads</span> <span class="o">=</span> <span class="p">[]</span>
+</span><span class='line'>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">para</span><span class="p">):</span>
+</span><span class='line'>        <span class="n">t</span> <span class="o">=</span> <span class="n">MyThread</span><span class="p">()</span>
+</span><span class='line'>        <span class="n">t</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+</span><span class='line'>        <span class="n">threads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
+</span><span class='line'>    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">threads</span><span class="p">:</span>
+</span><span class='line'>        <span class="n">t</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+</span><span class='line'>        <span class="n">c</span> <span class="o">+=</span> <span class="n">t</span><span class="o">.</span><span class="n">c</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">print</span> <span class="mf">4.0</span><span class="o">*</span><span class="n">c</span><span class="o">/</span><span class="p">(</span><span class="n">num</span><span class="o">*</span><span class="n">para</span><span class="p">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>並列度に比例した計算負荷がかかるようになってます。
+理想的な並列処理が行えていれば、並列度に関わらず同じ実時間で実行されるはずです。</p>
+
+<h3>CPythonでの結果</h3>
+
+<p>CPythonでtimeを使って雑に測定した結果です。
+並列度を4倍にしたら実行時間も4倍になっています。
+また、実時間と実行時間が大体おなじで、まったく並列実行できていません。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'># 並列度1で実行した場合(CPython)
+</span><span class='line'>$ time python con_monte.py 300000 1
+</span><span class='line'>3.14529333333
+</span><span class='line'>real    0m0.358s
+</span><span class='line'>user    0m0.279s
+</span><span class='line'>sys 0m0.032s
+</span><span class='line'>
+</span><span class='line'># 並列度4で実行した場合(CPython)
+</span><span class='line'>$ time python con_monte.py 300000 4
+</span><span class='line'>3.14382666667
+</span><span class='line'>real    0m1.261s
+</span><span class='line'>user    0m1.124s
+</span><span class='line'>sys 0m0.441s</span></code></pre></td></tr></table></div></figure>
+
+
+<p>CPythonを利用しているひとにはおなじみの<a href="https://ja.wikipedia.org/wiki/%E3%82%B0%E3%83%AD%E3%83%BC%E3%83%90%E3%83%AB%E3%82%A4%E3%83%B3%E3%82%BF%E3%83%97%E3%83%AA%E3%82%BF%E3%83%AD%E3%83%83%E3%82%AF">グローバルインタプリタロック(GIL: Global Interpreter Lock)</a>の影響ですね。
+CPythonのスレッドはI/Oの並列化には向いていますが、計算の並列化には向いていません。</p>
+
+<h3>Grumpyでの結果</h3>
+
+<p>次にGrumpyで測定した結果です。
+並列度を4倍にしたところ、実行時間は2倍程度になりました。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'># 並列度1で実行した場合(Grumpy)
+</span><span class='line'>$ time ./con_monte_darwin_amd64 300000 1
+</span><span class='line'>3.1441733333333333
+</span><span class='line'>real    0m16.129s
+</span><span class='line'>user    0m16.787s
+</span><span class='line'>sys 0m0.125s
+</span><span class='line'>
+</span><span class='line'># 並列度4で実行した場合(Grumpy)
+</span><span class='line'>$ time ./con_monte_darwin_amd64 300000 4
+</span><span class='line'>3.1401766666666666
+</span><span class='line'>real    0m33.935s
+</span><span class='line'>user    1m45.979s
+</span><span class='line'>sys 0m0.654s</span></code></pre></td></tr></table></div></figure>
+
+
+<p>実時間4倍までは行かなかったので、理想的な並列計算には及ばないものの、
+CPythonよりは並列化の効果が出ていそうです。
+実のところ、Goも計算の並列化よりI/Oの並列化・並行処理のほうが得意なんですよね(GILよりはまし)。</p>
+
+<p>手元の4コアのMBAで試した結果なので、コア数が多いとまた結果が変わってくるかもしれません。</p>
+
+<h2>PythonからGoのライブラリを直接呼び出す</h2>
+
+<p>次にGoのパッケージを呼び出す機能を試してみます。
+Pythonのrandomパッケージではなく、Goのmath/randパッケージを使ってモンテカルロ法を実行してみます。</p>
+
+<h3>コード</h3>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="c">#coding:utf-8</span>
+</span><span class='line'><span class="c"># モンテカルロ法 Python+Go 並列版</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">threading</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">random</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">sys</span>
+</span><span class='line'><span class="kn">from</span> <span class="nn">__go__.time</span> <span class="kn">import</span> <span class="n">Now</span>
+</span><span class='line'><span class="kn">from</span> <span class="nn">__go__.math.rand</span> <span class="kn">import</span> <span class="n">New</span><span class="p">,</span> <span class="n">NewSource</span>
+</span><span class='line'>
+</span><span class='line'>
+</span><span class='line'><span class="k">class</span> <span class="nc">MyThread</span><span class="p">(</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">):</span>
+</span><span class='line'>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span class='line'>        <span class="nb">super</span><span class="p">(</span><span class="n">MyThread</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">()</span>
+</span><span class='line'>        <span class="bp">self</span><span class="o">.</span><span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span class='line'>        <span class="n">r</span> <span class="o">=</span> <span class="n">New</span><span class="p">(</span><span class="n">NewSource</span><span class="p">(</span><span class="n">Now</span><span class="p">()</span><span class="o">.</span><span class="n">UnixNano</span><span class="p">()))</span>
+</span><span class='line'>        <span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
+</span><span class='line'>        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">num</span><span class="p">):</span>
+</span><span class='line'>            <span class="n">x</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">Float64</span><span class="p">()</span>
+</span><span class='line'>            <span class="n">y</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">Float64</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'>            <span class="k">if</span> <span class="n">x</span> <span class="o">*</span> <span class="n">x</span> <span class="o">+</span> <span class="n">y</span> <span class="o">*</span> <span class="n">y</span> <span class="o">&lt;=</span> <span class="mf">1.0</span><span class="p">:</span>
+</span><span class='line'>                <span class="n">c</span> <span class="o">+=</span> <span class="mi">1</span>
+</span><span class='line'>        <span class="bp">self</span><span class="o">.</span><span class="n">c</span> <span class="o">=</span> <span class="n">c</span>
+</span><span class='line'>
+</span><span class='line'>
+</span><span class='line'><span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+</span><span class='line'>    <span class="n">num</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+</span><span class='line'>    <span class="n">para</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">threads</span> <span class="o">=</span> <span class="p">[]</span>
+</span><span class='line'>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">para</span><span class="p">):</span>
+</span><span class='line'>        <span class="n">t</span> <span class="o">=</span> <span class="n">MyThread</span><span class="p">()</span>
+</span><span class='line'>        <span class="n">t</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+</span><span class='line'>        <span class="n">threads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
+</span><span class='line'>    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">threads</span><span class="p">:</span>
+</span><span class='line'>        <span class="n">t</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+</span><span class='line'>        <span class="n">c</span> <span class="o">+=</span> <span class="n">t</span><span class="o">.</span><span class="n">c</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">print</span> <span class="mf">4.0</span><span class="o">*</span><span class="n">c</span><span class="o">/</span><span class="p">(</span><span class="n">num</span><span class="o">*</span><span class="n">para</span><span class="p">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>Grumpyでの結果</h3>
+
+<p>Grumpyでの実行結果です。
+CPythonには遠く及ばないものの、もとのコードの8倍速くらいにはなりました。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'># 並列度1で実行した場合(Grumpy)
+</span><span class='line'>$ time ./con_monte_go_darwin_amd64 300000 1
+</span><span class='line'>3.1388133333333332
+</span><span class='line'>real    0m1.921s
+</span><span class='line'>user    0m2.006s
+</span><span class='line'>sys 0m0.029s
+</span><span class='line'>
+</span><span class='line'># 並列度4で実行した場合(Grumpy)
+</span><span class='line'>$ time ./con_monte_go_darwin_amd64 300000 4
+</span><span class='line'>3.143743333333333
+</span><span class='line'>real    0m4.115s
+</span><span class='line'>user    0m12.855s
+</span><span class='line'>sys 0m0.096s</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>竹内関数を並列実行してみる</h2>
+
+<p>竹内関数を並列実行した場合も試してみました。</p>
+
+<h3>コード</h3>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="c">#coding:utf-8</span>
+</span><span class='line'><span class="c"># 竹内関数 Pure Python 並列版</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">sys</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">threading</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">def</span> <span class="nf">tak</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">z</span><span class="p">):</span>
+</span><span class='line'>    <span class="k">if</span> <span class="n">x</span> <span class="o">&lt;=</span> <span class="n">y</span><span class="p">:</span>
+</span><span class='line'>        <span class="k">return</span> <span class="n">y</span>
+</span><span class='line'>    <span class="k">else</span><span class="p">:</span>
+</span><span class='line'>        <span class="k">return</span> <span class="n">tak</span><span class="p">(</span><span class="n">tak</span><span class="p">((</span><span class="n">x</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="n">y</span> <span class="p">,</span> <span class="n">z</span><span class="p">),</span> <span class="n">tak</span><span class="p">((</span><span class="n">y</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="n">z</span> <span class="p">,</span> <span class="n">x</span><span class="p">),</span> <span class="n">tak</span><span class="p">((</span><span class="n">z</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">class</span> <span class="nc">MyThread</span><span class="p">(</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">):</span>
+</span><span class='line'>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">):</span>
+</span><span class='line'>        <span class="nb">super</span><span class="p">(</span><span class="n">MyThread</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">()</span>
+</span><span class='line'>        <span class="bp">self</span><span class="o">.</span><span class="n">a</span> <span class="o">=</span> <span class="n">a</span>
+</span><span class='line'>        <span class="bp">self</span><span class="o">.</span><span class="n">b</span> <span class="o">=</span> <span class="n">b</span>
+</span><span class='line'>        <span class="bp">self</span><span class="o">.</span><span class="n">c</span> <span class="o">=</span> <span class="n">c</span>
+</span><span class='line'>        <span class="bp">self</span><span class="o">.</span><span class="n">result</span> <span class="o">=</span> <span class="mi">0</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span class='line'>        <span class="bp">self</span><span class="o">.</span><span class="n">result</span> <span class="o">=</span> <span class="n">tak</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">c</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+</span><span class='line'>    <span class="n">a</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+</span><span class='line'>    <span class="n">b</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+</span><span class='line'>    <span class="n">c</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span>
+</span><span class='line'>    <span class="n">para</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">4</span><span class="p">])</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">threads</span> <span class="o">=</span> <span class="p">[]</span>
+</span><span class='line'>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">para</span><span class="p">):</span>
+</span><span class='line'>        <span class="n">t</span> <span class="o">=</span> <span class="n">MyThread</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">)</span>
+</span><span class='line'>        <span class="n">t</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+</span><span class='line'>        <span class="n">threads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">threads</span><span class="p">:</span>
+</span><span class='line'>        <span class="n">t</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+</span><span class='line'>        <span class="k">print</span> <span class="n">t</span><span class="o">.</span><span class="n">result</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">if</span> <span class="n">__name__</span><span class="o">==</span><span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+</span><span class='line'>    <span class="n">main</span><span class="p">()</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>モンテカルロ法と同様に、理想的な並列処理が行えていれば、並列度に関わらず同じ実時間で実行されるはずです。</p>
+
+<h3>CPythonでの結果</h3>
+
+<p>CPythonでの結果です。
+モンテカルロ法の場合と同様に、
+並列度を4倍にしたら実行時間も4倍になっています。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'># 並列度1で実行した場合(CPython)
+</span><span class='line'>$ time python con_take.py 11 10 0 1
+</span><span class='line'>11
+</span><span class='line'>real    0m1.529s
+</span><span class='line'>user    0m1.498s
+</span><span class='line'>sys 0m0.028s
+</span><span class='line'>
+</span><span class='line'># 並列度4で実行した場合(CPython)
+</span><span class='line'>$ time python con_take.py 11 10 0 4
+</span><span class='line'>11
+</span><span class='line'>11
+</span><span class='line'>11
+</span><span class='line'>11
+</span><span class='line'>real    0m7.333s
+</span><span class='line'>user    0m6.620s
+</span><span class='line'>sys 0m2.565s</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>Grumpyでの結果</h3>
+
+<p>Grumpyでの結果です。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'># 並列度1で実行した場合(Grumpy)
+</span><span class='line'>$ time ./con_take_darwin_amd64 11 10 0 1
+</span><span class='line'>11
+</span><span class='line'>real    0m0.988s
+</span><span class='line'>user    0m0.988s
+</span><span class='line'>sys 0m0.018s
+</span><span class='line'>
+</span><span class='line'># 並列度4で実行した場合(Grumpy)
+</span><span class='line'>$ time ./con_take_darwin_amd64 11 10 0 4
+</span><span class='line'>11
+</span><span class='line'>11
+</span><span class='line'>11
+</span><span class='line'>11
+</span><span class='line'>real    0m2.031s
+</span><span class='line'>user    0m7.135s
+</span><span class='line'>sys 0m0.031s</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>(なんかCPythonより早くなったぞ？？？？)</strong></p>
+
+<p>最初に紹介した記事でも、
+モンテカルロ法のベンチマークではCPythonがGrumpyの数十倍の速度で圧倒的勝利でしたが、
+竹内関数のベンチマークではその差は縮まっています。
+この程度であれば並列度を上げて物理で殴れば容易にGrumpyが逆転するでしょう。</p>
+
+<p>(この検証で並列度1のときもGrumpy勝ったの謎だけど・・・)</p>
+
+<h2>考察</h2>
+
+<p>モンテカルロ法はCPythonのほうが圧倒的に速かったのに、
+竹内関数ではGrumpyのほうが速かった(あるいは差が縮まった)という結果から、
+「<strong>GrumpyからGoの関数を呼び出すオーバーヘッドが大きい</strong>」のではと推測しています。
+モンテカルロ法のPure Python版でも圧倒的差が付いたのは、
+<a href="https://github.com/google/grumpy/blob/d8d01899f5eedf99602887567aaeb39a9154bf68/lib/_random.py">Grumpyのrandomパッケージの実装が内部でGoのmath/randを呼んでいる</a>からです。</p>
+
+<p>純粋なPure Pythonなコードであれば、Grumpyのシングルスレッド性能はCPythonより数倍遅い程度です。
+最近のCPUコアたくさんなマシンであれば、GILのなくマルチスレッドを活かせるGrumpyが有利になると思います。
+このことはグーグルのブログ記事「<a href="https://opensource.googleblog.com/2017/01/grumpy-go-running-python.html">Grumpy: Go running Python!</a>」でも触れられていますね。</p>
+
+<h2>まとめ</h2>
+
+<ul>
+<li>Grumpyが非常に遅い<strong>のではなく</strong>、「GrumpyからGoの関数を呼び出すオーバーヘッドが大きい」(推測)</li>
+<li>Grumpyのシングルスレッド性能はCPythonより数倍遅い程度</li>
+<li>並列処理性能ではGrumpyが有利</li>
+<li>そもそもGrumpyの目的は計算速度を上げることではないので、計算速度向上を求めている人は他の手法を模索しましょう</li>
+</ul>
+
+
+<p>今回の検証に使用したソースコード、Grumpyによるトランスパイルの結果、各種プラットフォームのバイナリをGithubにあげておきました。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/grumpy-test">shogo82148/grumpy-test</a></li>
+</ul>
+
+
+<p>さらに検証を進めたい方は参考にどうぞ。</p>
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="https://opensource.googleblog.com/2017/01/grumpy-go-running-python.html">Grumpy: Go running Python!</a></li>
+<li><a href="http://news.mynavi.jp/news/2017/01/06/110/">Google、すごくスケールするPython実行環境をGoで開発</a></li>
+<li><a href="http://qiita.com/kmry2045/items/998250b3d430d82594c2">Grumpy(Go running Python)を試してみた。</a></li>
+<li><a href="http://qiita.com/kotauchisunsun/items/db28d14f7f13fb29e5f9">GoとPythonとGrumpyの速度ベンチマーク ～Googleのトランスパイラはどれくらい速い？～</a></li>
+</ul>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[String::RandomのGo移植を書いてみた]]></title>
@@ -6400,452 +6964,6 @@ Website URLの近くの「Changing domains? Learn how.」をクリックしま�
 最後に「24時間以内に反映するよ」的なメッセージが表示されましたが、僕の場合は5分くらいで反映が確認できました。</p>
 
 <p>残るははてブ。はてなさん頼む〜〜〜。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Net/httpで安全に静的ファイルを返す]]></title>
-    <link href="https://shogo82148.github.io/blog/2016/04/13/serving-static-files-in-golang/"/>
-    <updated>2016-04-13T02:29:00+09:00</updated>
-    <id>https://shogo82148.github.io/blog/2016/04/13/serving-static-files-in-golang</id>
-    <content type="html"><![CDATA[<p><a href="http://konboi.hatenablog.com/entry/2016/04/12/121105">net/httpで静的ファイルを返す</a>で、
-<code>http.ServeFile</code>を使っていてアレ？と思ったのでちょっと詳しく調べてみました。
-(<code>http.FileServer</code>を使うものだと思ってたため)</p>
-
-<p>結論だけ先に書いておくと</p>
-
-<ul>
-<li>やはり、特に理由がなければ<code>http.FileServer</code>を使ったほうが良さそう</li>
-<li>どうしても<code>http.ServeFile</code>を使う場合は定数でパス指定をする</li>
-<li>「自作パスルータを使っている」かつ「Go 1.6.1 未満を使っている」場合はとくに要注意</li>
-</ul>
-
-
-<!-- More -->
-
-
-<h2>ディレクトリトラバーサル脆弱性</h2>
-
-<p>紹介されているのは以下のコードです。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="nx">http</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">&quot;/static/&quot;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">ServeFile</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">,</span> <span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
-</span><span class='line'><span class="p">})</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>しかし、参照先の「<a href="http://stackoverflow.com/questions/25945538/go-golang-to-serve-a-specific-html-file">Go Golang to serve a specific html file</a>」には
-<strong>Actually, do not do that.</strong> (やっちゃいけない)とコメントされています。
-<a href="https://ja.wikipedia.org/wiki/%E3%83%87%E3%82%A3%E3%83%AC%E3%82%AF%E3%83%88%E3%83%AA%E3%83%88%E3%83%A9%E3%83%90%E3%83%BC%E3%82%B5%E3%83%AB">ディレクトリトラバーサル</a>により
-脆弱性の原因となってしまう可能性があるためです。</p>
-
-<p>脆弱性再現のために、以下の様なコードを書いてGo1.5でコンパイルして実行してみました。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
-</span><span class='line'>
-</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
-</span><span class='line'>  <span class="s">&quot;net/http&quot;</span>
-</span><span class='line'>  <span class="s">&quot;strings&quot;</span>
-</span><span class='line'><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">&quot;:3000&quot;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nx">HandlerFunc</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>      <span class="k">if</span> <span class="nx">strings</span><span class="p">.</span><span class="nx">HasPrefix</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">,</span> <span class="s">&quot;/static/&quot;</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>          <span class="nx">http</span><span class="p">.</span><span class="nx">ServeFile</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">,</span> <span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
-</span><span class='line'>      <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-</span><span class='line'>          <span class="nx">http</span><span class="p">.</span><span class="nx">NotFound</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">)</span>
-</span><span class='line'>      <span class="p">}</span>
-</span><span class='line'>  <span class="p">}))</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p><code>..</code>を含んだパスをリクエストしてみます。(実行した場所によって<code>..</code>の数は変わるので適宜調整してみてください)</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
-</span><span class='line'>* About to connect() to localhost port 3000 (#0)
-</span><span class='line'>*   Trying ::1... connected
-</span><span class='line'>* Connected to localhost (::1) port 3000 (#0)
-</span><span class='line'>&gt; GET /static/../../../.ssh/id_rsa HTTP/1.1
-</span><span class='line'>&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
-</span><span class='line'>&gt; Host: localhost:3000
-</span><span class='line'>&gt; Accept: */*
-</span><span class='line'>&gt;
-</span><span class='line'>&lt; HTTP/1.1 200 OK
-</span><span class='line'>&lt; Accept-Ranges: bytes
-</span><span class='line'>&lt; Content-Length: 1679
-</span><span class='line'>&lt; Content-Type: text/plain; charset=utf-8
-</span><span class='line'>&lt; Last-Modified: Fri, 13 Jun 2014 04:57:05 GMT
-</span><span class='line'>&lt; Date: Tue, 12 Apr 2016 17:53:19 GMT
-</span><span class='line'>&lt;
-</span><span class='line'>-----BEGIN RSA PRIVATE KEY-----
-</span><span class='line'>(中略)
-</span><span class='line'>-----END RSA PRIVATE KEY-----
-</span><span class='line'>* Connection #0 to host localhost left intact
-</span><span class='line'>* Closing connection #0</span></code></pre></td></tr></table></div></figure>
-
-
-<p>macのcurlで試したらクライアント側で相対パスを解決した状態でリクエストが飛んでしまって上手く行きませんでした。
-オプションで外す方法がよくわかなかったので、<code>telnet</code>で叩いてみた例も載せておきます。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>$ telnet localhost 3000
-</span><span class='line'>Trying ::1...
-</span><span class='line'>Connected to localhost.
-</span><span class='line'>Escape character is '^]'.
-</span><span class='line'>GET /static/../../../.ssh/id_rsa HTTP/1.0
-</span><span class='line'>
-</span><span class='line'>HTTP/1.0 200 OK
-</span><span class='line'>Accept-Ranges: bytes
-</span><span class='line'>Content-Length: 1679
-</span><span class='line'>Content-Type: text/plain; charset=utf-8
-</span><span class='line'>Last-Modified: Fri, 13 Jun 2014 04:57:05 GMT
-</span><span class='line'>Date: Tue, 12 Apr 2016 18:02:56 GMT
-</span><span class='line'>
-</span><span class='line'>-----BEGIN RSA PRIVATE KEY-----
-</span><span class='line'>(中略)
-</span><span class='line'>-----END RSA PRIVATE KEY-----
-</span><span class='line'>Connection closed by foreign host.</span></code></pre></td></tr></table></div></figure>
-
-
-<p>ああ、僕の秘密鍵が・・・。</p>
-
-<h2>脆弱性を回避する</h2>
-
-<h3>Go1.6以降を使う</h3>
-
-<p>Go1.6以降では修正されており、
-同じコードをGo1.6でコンパイルしてcurlで叩くと400が帰ってきます。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
-</span><span class='line'>* About to connect() to localhost port 3000 (#0)
-</span><span class='line'>*   Trying ::1... connected
-</span><span class='line'>* Connected to localhost (::1) port 3000 (#0)
-</span><span class='line'>&gt; GET /static/../../../.ssh/id_rsa HTTP/1.1
-</span><span class='line'>&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
-</span><span class='line'>&gt; Host: localhost:3000
-</span><span class='line'>&gt; Accept: */*
-</span><span class='line'>&gt; 
-</span><span class='line'>&lt; HTTP/1.1 400 Bad Request
-</span><span class='line'>&lt; Content-Type: text/plain; charset=utf-8
-</span><span class='line'>&lt; X-Content-Type-Options: nosniff
-</span><span class='line'>&lt; Date: Tue, 12 Apr 2016 18:12:46 GMT
-</span><span class='line'>&lt; Content-Length: 17
-</span><span class='line'>&lt; 
-</span><span class='line'>invalid URL path
-</span><span class='line'>* Connection #0 to host localhost left intact
-</span><span class='line'>* Closing connection #0</span></code></pre></td></tr></table></div></figure>
-
-
-<h3><code>http.ServeMux</code>を使う</h3>
-
-<p><code>http.ServeMux</code>にはパスの正規化機能が組み込まれており、
-正規化されていないURLにアクセスが来た場合は自動的リダイレクトしてくれるようです。
-HTTPハンドラに渡ってくるときには、必ず相対パスが含まれていない状態になっています。
-(これに最初は気が付かず、脆弱性が再現しないので困ってた。)</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
-</span><span class='line'>
-</span><span class='line'><span class="kn">import</span> <span class="s">&quot;net/http&quot;</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-</span><span class='line'>  <span class="c1">// 内部でhttp.ServeMuxを使ってくれる</span>
-</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">&quot;/static/&quot;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>    <span class="c1">// r.URLには相対パスが含まれない形で渡ってくる</span>
-</span><span class='line'>    <span class="nx">http</span><span class="p">.</span><span class="nx">ServeFile</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">,</span> <span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
-</span><span class='line'>  <span class="p">})</span>
-</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">&quot;:3000&quot;</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>相対パスを含んだリクエストを投げてもアクセスはできません。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
-</span><span class='line'>* About to connect() to localhost port 3000 (#0)
-</span><span class='line'>*   Trying ::1... connected
-</span><span class='line'>* Connected to localhost (::1) port 3000 (#0)
-</span><span class='line'>&gt; GET /static/../../../.ssh/id_rsa HTTP/1.1
-</span><span class='line'>&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
-</span><span class='line'>&gt; Host: localhost:3000
-</span><span class='line'>&gt; Accept: */*
-</span><span class='line'>&gt; 
-</span><span class='line'>&lt; HTTP/1.1 301 Moved Permanently
-</span><span class='line'>&lt; Location: /.ssh/id_rsa
-</span><span class='line'>&lt; Date: Tue, 12 Apr 2016 18:14:49 GMT
-</span><span class='line'>&lt; Content-Length: 47
-</span><span class='line'>&lt; Content-Type: text/html; charset=utf-8
-</span><span class='line'>&lt; 
-</span><span class='line'>&lt;a href="https://shogo82148.github.io/.ssh/id_rsa"&gt;Moved Permanently&lt;/a&gt;.
-</span><span class='line'>
-</span><span class='line'>* Connection #0 to host localhost left intact
-</span><span class='line'>* Closing connection #0</span></code></pre></td></tr></table></div></figure>
-
-
-<h3><code>http.FileServer</code>を使う</h3>
-
-<p><code>http.Dir</code>と<code>http.FileServer</code>を使うとルートディレクトリを指定でき、
-その外へはアクセスできなくなるので想定外のファイルが見えてしまうことはありません。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
-</span><span class='line'>
-</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
-</span><span class='line'>  <span class="s">&quot;net/http&quot;</span>
-</span><span class='line'>  <span class="s">&quot;strings&quot;</span>
-</span><span class='line'><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">fileServer</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">StripPrefix</span><span class="p">(</span><span class="s">&quot;/static/&quot;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nx">FileServer</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">Dir</span><span class="p">(</span><span class="s">&quot;static&quot;</span><span class="p">)))</span>
-</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">&quot;:3000&quot;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nx">HandlerFunc</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>    <span class="k">if</span> <span class="nx">strings</span><span class="p">.</span><span class="nx">HasPrefix</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">,</span> <span class="s">&quot;/static/&quot;</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>      <span class="nx">fileServer</span><span class="p">.</span><span class="nx">ServeHTTP</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">)</span>
-</span><span class='line'>    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-</span><span class='line'>      <span class="nx">http</span><span class="p">.</span><span class="nx">NotFound</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">)</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>  <span class="p">}))</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>相対パスを含んだURLにアクセスしても404になって見れません。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
-</span><span class='line'>* About to connect() to localhost port 3000 (#0)
-</span><span class='line'>*   Trying ::1... connected
-</span><span class='line'>* Connected to localhost (::1) port 3000 (#0)
-</span><span class='line'>&gt; GET /static/../../../.ssh/id_rsa HTTP/1.1
-</span><span class='line'>&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
-</span><span class='line'>&gt; Host: localhost:3000
-</span><span class='line'>&gt; Accept: */*
-</span><span class='line'>&gt; 
-</span><span class='line'>&lt; HTTP/1.1 404 Not Found
-</span><span class='line'>&lt; Content-Type: text/plain; charset=utf-8
-</span><span class='line'>&lt; X-Content-Type-Options: nosniff
-</span><span class='line'>&lt; Date: Tue, 12 Apr 2016 18:39:34 GMT
-</span><span class='line'>&lt; Content-Length: 19
-</span><span class='line'>&lt; 
-</span><span class='line'>404 page not found
-</span><span class='line'>* Connection #0 to host localhost left intact
-</span><span class='line'>* Closing connection #0</span></code></pre></td></tr></table></div></figure>
-
-
-<h3><code>http.ServeFile</code>に定数を渡す</h3>
-
-<p>どうしても特定のファイルを指定したい場合は、<code>http.ServeFile</code>に渡すファイルパスを定数で指定するべきです。
-例えば、「<a href="http://stackoverflow.com/questions/25945538/go-golang-to-serve-a-specific-html-file">Go Golang to serve a specific html file</a>」の質問者が上げている例を
-正しく書きなおすと以下のようになると思います。</p>
-
-<blockquote><p><code>http.Handle("/", http.FileServer(http.Dir("static")))</code>
-Serves the html file in static directory.</p>
-
-<p>Is there any way in Go that we can specify the html file to serve?</p>
-
-<p>Something like render_template in Flask</p>
-
-<p>I want to do something like:</p>
-
-<p><code>http.Handle("/hello", http.FileServer(http.Dir("static/hello.html")))</code></p></blockquote>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
-</span><span class='line'>
-</span><span class='line'><span class="kn">import</span> <span class="s">&quot;net/http&quot;</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">&quot;/hello&quot;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>    <span class="nx">http</span><span class="p">.</span><span class="nx">ServeFile</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">,</span> <span class="s">&quot;static/hello.html&quot;</span><span class="p">)</span>
-</span><span class='line'>  <span class="p">})</span>
-</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">&quot;:3000&quot;</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>回答者がActually, do not do thatとコメントしているのは<code>http.ServeFile</code>に<code>r.URL.Path[1:]</code>を渡すことで、
-<code>http.ServeFile</code>自体が悪いわけではありません。
-正しく安全に使いましょう。</p>
-
-<h2>まとめ</h2>
-
-<p>まとめ再掲。</p>
-
-<ul>
-<li>やはり、特に理由がなければ<code>http.FileServer</code>を使ったほうが良さそう</li>
-<li>どうしても<code>http.ServeFile</code>を使う場合は定数でパス指定をする</li>
-<li>「自作パスルータを使っている」かつ「Go 1.6.1 未満を使っている」場合はとくに要注意</li>
-</ul>
-
-
-<h2>まとめのまとめ</h2>
-
-<p><a href="https://golang.org/pkg/net/http/#example_FileServer">godocのexample</a>どおりにやるのが一番。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
-</span><span class='line'>
-</span><span class='line'><span class="kn">import</span> <span class="s">&quot;net/http&quot;</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">&quot;/static/&quot;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nx">StripPrefix</span><span class="p">(</span><span class="s">&quot;/static/&quot;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nx">FileServer</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">Dir</span><span class="p">(</span><span class="s">&quot;static&quot;</span><span class="p">))))</span>
-</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">&quot;:3000&quot;</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
 ]]></content>
   </entry>
   

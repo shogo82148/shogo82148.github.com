@@ -4,7 +4,7 @@
   <title><![CDATA[Category: golang | Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/blog/categories/golang/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2017-05-04T11:03:30+09:00</updated>
+  <updated>2017-05-30T18:03:42+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,369 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Re: GoとPythonとGrumpyの速度ベンチマーク]]></title>
+    <link href="https://shogo82148.github.io/blog/2017/05/30/grumpy/"/>
+    <updated>2017-05-30T17:53:32+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2017/05/30/grumpy</id>
+    <content type="html"><![CDATA[<p><a href="http://qiita.com/kotauchisunsun/items/db28d14f7f13fb29e5f9">GoとPythonとGrumpyの速度ベンチマーク ～Googleのトランスパイラはどれくらい速い？～</a>という記事を拝読したのですが、
+もう一歩踏み込んで検証して欲しい・・・。</p>
+
+<blockquote><p>並列処理性能が優れているほか、PythonコードからGoのパッケージをPythonモジュールのように呼び出して利用することもできるという特徴がある。</p></blockquote>
+
+<p>と<a href="http://news.mynavi.jp/news/2017/01/06/110/">Google、すごくスケールするPython実行環境をGoで開発</a>から引用しているのに、
+この件に全く触れていないんですよね。
+Twitterに呟いたってどうせ誰もやってくれない気がするので、自分で試してみました。</p>
+
+<!-- More -->
+
+
+<h2>環境</h2>
+
+<p>この記事を書いている2017年5月30日現在の最新バージョンで検証しました。</p>
+
+<ul>
+<li>go version go1.8.3 darwin/amd64</li>
+<li>CPython 2.7.13</li>
+<li>Grumpy <a href="https://github.com/google/grumpy/tree/d8d01899f5eedf99602887567aaeb39a9154bf68">d8d01899f5</a></li>
+</ul>
+
+
+<p>Grumpyのインストール方法はREADMEにある通り。</p>
+
+<pre><code class="bash">make
+export GOPATH=$PWD/build
+export PYTHONPATH=$PWD/build/lib/python2.7/site-packages
+</code></pre>
+
+<p>ただ個人的な環境問題としてPythonのバージョン管理に利用しているpyenvとの相性が悪いらしく、
+pyenvが管理しているPythonへのパスを直接通す必要がありました。
+(これがないとPythonスクリプトがなぜかbashに処理される。なんかこの問題最近Twitterで見たような・・・)</p>
+
+<pre><code class="bash">export PATH=$HOME/.pyenv/versions/2.7.13/bin:$PATH
+</code></pre>
+
+<h2>モンテカルロ法を並列実行してみる</h2>
+
+<p>まず、並列処理性能について検証してみましょう。
+モンテカルロ法の各試行は独立しているので、並列実行にするのは容易です。
+Python2のthreadingモジュールを使って並列実行してみましょう。</p>
+
+<h3>コード</h3>
+
+<pre><code class="python">#coding:utf-8
+# モンテカルロ法 Pure Python 並列版
+import threading
+import random
+import sys
+
+class MyThread(threading.Thread):
+    def __init__(self):
+        super(MyThread, self).__init__()
+        self.c = 0
+
+    def run(self):
+        r = random.Random()
+        c = 0
+        for _ in xrange(num):
+            x = r.random()
+            y = r.random()
+
+            if x * x + y * y &lt;= 1.0:
+                c += 1
+        self.c = c
+
+
+if __name__ == "__main__":
+    num = int(sys.argv[1])
+    para = int(sys.argv[2])
+
+    threads = []
+    for i in xrange(para):
+        t = MyThread()
+        t.start()
+        threads.append(t)
+
+    c = 0
+    for t in threads:
+        t.join()
+        c += t.c
+
+    print 4.0*c/(num*para)
+</code></pre>
+
+<p>並列度に比例した計算負荷がかかるようになってます。
+理想的な並列処理が行えていれば、並列度に関わらず同じ実時間で実行されるはずです。</p>
+
+<h3>CPythonでの結果</h3>
+
+<p>CPythonでtimeを使って雑に測定した結果です。
+並列度を4倍にしたら実行時間も4倍になっています。
+また、実時間と実行時間が大体おなじで、まったく並列実行できていません。</p>
+
+<pre><code class="plain"># 並列度1で実行した場合(CPython)
+$ time python con_monte.py 300000 1
+3.14529333333
+real    0m0.358s
+user    0m0.279s
+sys 0m0.032s
+
+# 並列度4で実行した場合(CPython)
+$ time python con_monte.py 300000 4
+3.14382666667
+real    0m1.261s
+user    0m1.124s
+sys 0m0.441s
+</code></pre>
+
+<p>CPythonを利用しているひとにはおなじみの<a href="https://ja.wikipedia.org/wiki/%E3%82%B0%E3%83%AD%E3%83%BC%E3%83%90%E3%83%AB%E3%82%A4%E3%83%B3%E3%82%BF%E3%83%97%E3%83%AA%E3%82%BF%E3%83%AD%E3%83%83%E3%82%AF">グローバルインタプリタロック(GIL: Global Interpreter Lock)</a>の影響ですね。
+CPythonのスレッドはI/Oの並列化には向いていますが、計算の並列化には向いていません。</p>
+
+<h3>Grumpyでの結果</h3>
+
+<p>次にGrumpyで測定した結果です。
+並列度を4倍にしたところ、実行時間は2倍程度になりました。</p>
+
+<pre><code class="plain"># 並列度1で実行した場合(Grumpy)
+$ time ./con_monte_darwin_amd64 300000 1
+3.1441733333333333
+real    0m16.129s
+user    0m16.787s
+sys 0m0.125s
+
+# 並列度4で実行した場合(Grumpy)
+$ time ./con_monte_darwin_amd64 300000 4
+3.1401766666666666
+real    0m33.935s
+user    1m45.979s
+sys 0m0.654s
+</code></pre>
+
+<p>実時間4倍までは行かなかったので、理想的な並列計算には及ばないものの、
+CPythonよりは並列化の効果が出ていそうです。
+実のところ、Goも計算の並列化よりI/Oの並列化・並行処理のほうが得意なんですよね(GILよりはまし)。</p>
+
+<p>手元の4コアのMBAで試した結果なので、コア数が多いとまた結果が変わってくるかもしれません。</p>
+
+<h2>PythonからGoのライブラリを直接呼び出す</h2>
+
+<p>次にGoのパッケージを呼び出す機能を試してみます。
+Pythonのrandomパッケージではなく、Goのmath/randパッケージを使ってモンテカルロ法を実行してみます。</p>
+
+<h3>コード</h3>
+
+<pre><code class="python">#coding:utf-8
+# モンテカルロ法 Python+Go 並列版
+import threading
+import random
+import sys
+from __go__.time import Now
+from __go__.math.rand import New, NewSource
+
+
+class MyThread(threading.Thread):
+    def __init__(self):
+        super(MyThread, self).__init__()
+        self.c = 0
+
+    def run(self):
+        r = New(NewSource(Now().UnixNano()))
+        c = 0
+        for _ in xrange(num):
+            x = r.Float64()
+            y = r.Float64()
+
+            if x * x + y * y &lt;= 1.0:
+                c += 1
+        self.c = c
+
+
+if __name__ == "__main__":
+    num = int(sys.argv[1])
+    para = int(sys.argv[2])
+
+    threads = []
+    for i in xrange(para):
+        t = MyThread()
+        t.start()
+        threads.append(t)
+
+    c = 0
+    for t in threads:
+        t.join()
+        c += t.c
+
+    print 4.0*c/(num*para)
+</code></pre>
+
+<h3>Grumpyでの結果</h3>
+
+<p>Grumpyでの実行結果です。
+CPythonには遠く及ばないものの、もとのコードの8倍速くらいにはなりました。</p>
+
+<pre><code class="plain"># 並列度1で実行した場合(Grumpy)
+$ time ./con_monte_go_darwin_amd64 300000 1
+3.1388133333333332
+real    0m1.921s
+user    0m2.006s
+sys 0m0.029s
+
+# 並列度4で実行した場合(Grumpy)
+$ time ./con_monte_go_darwin_amd64 300000 4
+3.143743333333333
+real    0m4.115s
+user    0m12.855s
+sys 0m0.096s
+</code></pre>
+
+<h2>竹内関数を並列実行してみる</h2>
+
+<p>竹内関数を並列実行した場合も試してみました。</p>
+
+<h3>コード</h3>
+
+<pre><code class="python">#coding:utf-8
+# 竹内関数 Pure Python 並列版
+import sys
+import threading
+
+def tak(x, y, z):
+    if x &lt;= y:
+        return y
+    else:
+        return tak(tak((x-1), y , z), tak((y-1), z , x), tak((z-1) , x, y))
+
+class MyThread(threading.Thread):
+    def __init__(self, a, b, c):
+        super(MyThread, self).__init__()
+        self.a = a
+        self.b = b
+        self.c = c
+        self.result = 0
+
+    def run(self):
+        self.result = tak(self.a, self.b, self.c)
+
+def main():
+    a = int(sys.argv[1])
+    b = int(sys.argv[2])
+    c = int(sys.argv[3])
+    para = int(sys.argv[4])
+
+    threads = []
+    for i in xrange(para):
+        t = MyThread(a, b, c)
+        t.start()
+        threads.append(t)
+
+    for t in threads:
+        t.join()
+        print t.result
+
+if __name__=="__main__":
+    main()
+</code></pre>
+
+<p>モンテカルロ法と同様に、理想的な並列処理が行えていれば、並列度に関わらず同じ実時間で実行されるはずです。</p>
+
+<h3>CPythonでの結果</h3>
+
+<p>CPythonでの結果です。
+モンテカルロ法の場合と同様に、
+並列度を4倍にしたら実行時間も4倍になっています。</p>
+
+<pre><code class="plain"># 並列度1で実行した場合(CPython)
+$ time python con_take.py 11 10 0 1
+11
+real    0m1.529s
+user    0m1.498s
+sys 0m0.028s
+
+# 並列度4で実行した場合(CPython)
+$ time python con_take.py 11 10 0 4
+11
+11
+11
+11
+real    0m7.333s
+user    0m6.620s
+sys 0m2.565s
+</code></pre>
+
+<h3>Grumpyでの結果</h3>
+
+<p>Grumpyでの結果です。</p>
+
+<pre><code class="plain"># 並列度1で実行した場合(Grumpy)
+$ time ./con_take_darwin_amd64 11 10 0 1
+11
+real    0m0.988s
+user    0m0.988s
+sys 0m0.018s
+
+# 並列度4で実行した場合(Grumpy)
+$ time ./con_take_darwin_amd64 11 10 0 4
+11
+11
+11
+11
+real    0m2.031s
+user    0m7.135s
+sys 0m0.031s
+</code></pre>
+
+<p><strong>(なんかCPythonより早くなったぞ？？？？)</strong></p>
+
+<p>最初に紹介した記事でも、
+モンテカルロ法のベンチマークではCPythonがGrumpyの数十倍の速度で圧倒的勝利でしたが、
+竹内関数のベンチマークではその差は縮まっています。
+この程度であれば並列度を上げて物理で殴れば容易にGrumpyが逆転するでしょう。</p>
+
+<p>(この検証で並列度1のときもGrumpy勝ったの謎だけど・・・)</p>
+
+<h2>考察</h2>
+
+<p>モンテカルロ法はCPythonのほうが圧倒的に速かったのに、
+竹内関数ではGrumpyのほうが速かった(あるいは差が縮まった)という結果から、
+「<strong>GrumpyからGoの関数を呼び出すオーバーヘッドが大きい</strong>」のではと推測しています。
+モンテカルロ法のPure Python版でも圧倒的差が付いたのは、
+<a href="https://github.com/google/grumpy/blob/d8d01899f5eedf99602887567aaeb39a9154bf68/lib/_random.py">Grumpyのrandomパッケージの実装が内部でGoのmath/randを呼んでいる</a>からです。</p>
+
+<p>純粋なPure Pythonなコードであれば、Grumpyのシングルスレッド性能はCPythonより数倍遅い程度です。
+最近のCPUコアたくさんなマシンであれば、GILのなくマルチスレッドを活かせるGrumpyが有利になると思います。
+このことはグーグルのブログ記事「<a href="https://opensource.googleblog.com/2017/01/grumpy-go-running-python.html">Grumpy: Go running Python!</a>」でも触れられていますね。</p>
+
+<h2>まとめ</h2>
+
+<ul>
+<li>Grumpyが非常に遅い<strong>のではなく</strong>、「GrumpyからGoの関数を呼び出すオーバーヘッドが大きい」(推測)</li>
+<li>Grumpyのシングルスレッド性能はCPythonより数倍遅い程度</li>
+<li>並列処理性能ではGrumpyが有利</li>
+<li>そもそもGrumpyの目的は計算速度を上げることではないので、計算速度向上を求めている人は他の手法を模索しましょう</li>
+</ul>
+
+
+<p>今回の検証に使用したソースコード、Grumpyによるトランスパイルの結果、各種プラットフォームのバイナリをGithubにあげておきました。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/grumpy-test">shogo82148/grumpy-test</a></li>
+</ul>
+
+
+<p>さらに検証を進めたい方は参考にどうぞ。</p>
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="https://opensource.googleblog.com/2017/01/grumpy-go-running-python.html">Grumpy: Go running Python!</a></li>
+<li><a href="http://news.mynavi.jp/news/2017/01/06/110/">Google、すごくスケールするPython実行環境をGoで開発</a></li>
+<li><a href="http://qiita.com/kmry2045/items/998250b3d430d82594c2">Grumpy(Go running Python)を試してみた。</a></li>
+<li><a href="http://qiita.com/kotauchisunsun/items/db28d14f7f13fb29e5f9">GoとPythonとGrumpyの速度ベンチマーク ～Googleのトランスパイラはどれくらい速い？～</a></li>
+</ul>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[String::RandomのGo移植を書いてみた]]></title>
@@ -805,355 +1168,6 @@ WebNTPでは未対応です。</p>
 
 
 <p>UDP/123が禁止されている環境って今はどの程度あるんですかね？</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[go-JSONStoreの高速化と機能追加]]></title>
-    <link href="https://shogo82148.github.io/blog/2017/03/05/tune-up-go-jsonstore/"/>
-    <updated>2017-03-05T16:19:25+09:00</updated>
-    <id>https://shogo82148.github.io/blog/2017/03/05/tune-up-go-jsonstore</id>
-    <content type="html"><![CDATA[<p>以前mattnさんが紹介していた<a href="https://github.com/schollz/jsonstore">schollz/jsonstore</a>。
-時間が経ってしまいましたが「ここは高速化できそうだなー」といじってみたので、
-やってみたことをメモ。</p>
-
-<p>本来は上流にフィードバックしたほうがよいのですが、
-本家のほうも修正が入ってコンフリクトして面倒になったので、
-フォーク版をそのまま置いておきます。</p>
-
-<ul>
-<li><a href="https://github.com/shogo82148/jsonstore">shogo82148/jsonstore</a></li>
-</ul>
-
-
-<!-- More -->
-
-
-<h2>高速化</h2>
-
-<p>まだまだ高速化できそうなところがあったので、いじってみた部分です。</p>
-
-<h3>ロックの範囲を最小にする</h3>
-
-<p>ロックの範囲を小さくすることで、並列処理時の性能が上がります。
-例えば、jsonstoreに値を入れる<code>Set</code>メソッドは、
-以下のように<code>Set</code>全体がロックの対象になっていました。</p>
-
-<pre><code class="go">func (s *JSONStore) Set(key string, value interface{}) error {
-    // Set の中全体がロックの対象になっている
-    s.Lock()
-    defer s.Unlock()
-
-    b, err := json.Marshal(value)
-    if err != nil {
-        return err
-    }
-
-    if s.data == nil {
-        s.data = make(map[string]*json.RawMessage)
-    }
-    s.data[key] = (*json.RawMessage)(&amp;b)
-    return nil
-}
-</code></pre>
-
-<p>jsonのエンコード処理はjsonstoreの中身を触らないので並列実行可能です。
-次のように <code>s.data</code> だけをロックの対象にすれば十分です。</p>
-
-<pre><code class="go">func (s *JSONStore) Set(key string, value interface{}) error {
-    // json.Marshal は並列実行可能
-    b, err := json.Marshal(value)
-    if err != nil {
-        return err
-    }
-
-    // s.data を触る直前でロック
-    s.Lock()
-    defer s.Unlock()
-
-    if s.data == nil {
-        s.data = make(map[string]*json.RawMessage)
-    }
-    s.data[key] = (*json.RawMessage)(&amp;b)
-    return nil
-}
-</code></pre>
-
-<p>デコード処理も同様に並列化が可能なので、<code>Get</code>にも同じ修正をいれました。
-修正前後でベンチを取ってみたところ以下のようになりました。</p>
-
-<pre><code class="plain">Before:
-BenchmarkGet-4               1000000          1923 ns/op         272 B/op          5 allocs/op
-BenchmarkParaGet-4           1000000          1000 ns/op         272 B/op          5 allocs/op
-BenchmarkSet-4               1000000          1159 ns/op         216 B/op          3 allocs/op
-BenchmarkParaSet-4           1000000          1974 ns/op         216 B/op          3 allocs/op
-
-After:
-BenchmarkGet-4               1000000          1793 ns/op         256 B/op          4 allocs/op
-BenchmarkParaGet-4           2000000           845 ns/op         256 B/op          4 allocs/op
-BenchmarkSet-4               1000000          1212 ns/op         248 B/op          4 allocs/op
-BenchmarkParaSet-4           2000000           686 ns/op         248 B/op          4 allocs/op
-</code></pre>
-
-<p>Paraが付いているのが並列実行したとき、付いていないのが単一のgorotineで実行したときの結果です。
-単一gorotineでは修正前後で余り大きな性能差はありませんが、
-並列実行の性能が向上していることがわかりますね。</p>
-
-<p>(他にも細々とした修正を入れたので、全部がロックの効果ではないと思いますが)</p>
-
-<h3>ストリーミングAPIを利用する</h3>
-
-<p>ファイル保存時にjsonのエンコーディングをしているのですが、
-修正前のコードでは<code>json.MarshalIndent</code>を使用していました。
-<code>json.MarshalIndent</code>は結果をメモリ上に出力するので、
-メモリの消費量が増え、そのメモリをアロケーションする分だけ性能が劣化します。</p>
-
-<p><code>io.Writer</code>に書き込むだけなら、以下のように<code>json.NewEncoder</code>を利用するのが効率的です。</p>
-
-<pre><code class="go">enc := json.NewEncoder(w)
-return enc.Encode(data)
-</code></pre>
-
-<h3>不要な再エンコードを避ける</h3>
-
-<p>元のコードでは一度jsonに変換した値を、ファイル保存時に<code>string</code>にキャストしていました。
-そのため、出力されたjsonは以下のように文字列の中にjsonが入っている形になります。
-この形式だと<code>"</code>のエスケープが必要になるので、
-処理性能的にも、ファイル容量的にも不利です。</p>
-
-<pre><code class="go">package main
-
-import (
-    "encoding/json"
-    "os"
-)
-
-func main() {
-    b := []byte(`{"Name":"Dante","Height":5.4}`)
-    data := map[string]string{
-        "human:1": string(b), // ここでキャストしている
-    }
-    enc := json.NewEncoder(os.Stdout)
-    enc.Encode(data)
-}
-</code></pre>
-
-<pre><code class="json">{"human:1": "{\"Name\":\"Dante\",\"Height\":5.4}"}
-</code></pre>
-
-<p>値は既にjsonエンコード済みなので、ファイル出力時に手を加える必要はありません。
-以下のように<code>*json.RawMessage</code>型に変換することで、
-余計な再エンコードを避けることができます。</p>
-
-<pre><code class="go">package main
-
-import (
-    "encoding/json"
-    "os"
-)
-
-func main() {
-    b := []byte(`{"Name":"Dante","Height":5.4}`)
-    data := map[string]*json.RawMessage{
-        "human:1": (*json.RawMessage)(&amp;b),
-    }
-    enc := json.NewEncoder(os.Stdout)
-    enc.Encode(data)
-}
-</code></pre>
-
-<pre><code class="json">{"human:1":{"Name":"Dante","Height":5.4}}
-</code></pre>
-
-<p><code>json.RawMessage</code>でなく<code>*json.RawMessage</code>とポインタを使っているのがポイントです。
-<code>json.RawMessage</code>だと<code>[]byte</code>とみなされてbase64エンコーディングされてしまうのです・・・。</p>
-
-<pre><code class="go">package main
-
-import (
-    "encoding/json"
-    "os"
-)
-
-func main() {
-    b := []byte(`{"Name":"Dante","Height":5.4}`)
-    data := map[string]json.RawMessage{
-        "human:1": json.RawMessage(b),
-    }
-    enc := json.NewEncoder(os.Stdout)
-    enc.Encode(data)
-}
-</code></pre>
-
-<pre><code class="json">// Go1.7以下で実行時
-{"human:1":"eyJOYW1lIjoiRGFudGUiLCJIZWlnaHQiOjUuNH0="}
-
-// Go1.8で実行時
-{"human:1":{"Name":"Dante","Height":5.4}}
-</code></pre>
-
-<p>ちなみにこの挙動、1.8で<code>json.RawMessage</code>も<code>*json.RawMessage</code>と同じ結果になる修正されたようです(この記事を書いていて気がついた)。
-1.7以下を切り捨てるなら<code>json.RawMessage</code>の方が良さそうですね。</p>
-
-<p>「ストリーミングAPIを利用する」「不要な再エンコードを避ける」をやった結果は以下のとおりです。</p>
-
-<pre><code class="plain">Before:
-BenchmarkSave-4                  500       3324647 ns/op     1418718 B/op       3121 allocs/op
-
-After:
-BenchmarkSave-4                  500       2455853 ns/op     1127372 B/op       3094 allocs/op
-</code></pre>
-
-<h3>浅いコピーで並列処理性能を上げる</h3>
-
-<p>一度<code>Set</code>で<code>json.RawMessage</code>に変換されたデータは書き換えられることがないので、
-浅いコピーをするだけでスナップショットが簡単にとれます。</p>
-
-<pre><code class="go">func (s *JSONStore) Snapshot() *JSONStore {
-    s.RLock()
-    defer s.RUnlock()
-    results := make(map[string]*json.RawMessage)
-    for k, v := range s.data {
-        results[k] = v
-    }
-    return &amp;JSONStore{
-        data:     results,
-    }
-}
-</code></pre>
-
-<p>一度スナップショットを取ってしまえば、ファイルへの書き込み時にはロックが不要になります。
-ファイルの書き込みはI/Oを伴うとても重い処理なので、
-この部分をロックの外側に出せるのは非常に効果大です。</p>
-
-<pre><code class="go">func (s *JSONStore) Save() {
-    snapshot := s.Snapshot()
-
-    // snapshotを取ったあとはLock不要
-    enc := json.NewEncoder(w)
-    return enc.Encode(snapshot.data)
-}
-</code></pre>
-
-<p>別gorotineでひたすらSaveを繰り返しながらSetのベンチを取ってみた結果です。
-修正前はSaveがほとんどの時間ロックを獲得していまうので、Saveと同程度の性能しか出ません。
-修正後はSaveとSetを並列実行できるようになるので、大幅に性能が改善します。</p>
-
-<pre><code class="plain">Before:
-BenchmarkSaveSet-4               500       3260143 ns/op     1382516 B/op       3047 allocs/op
-
-After:
-BenchmarkSaveSet-4           1000000          1948 ns/op         914 B/op          5 allocs/op
-</code></pre>
-
-<h3>正規表現をなるべく避ける</h3>
-
-<p>元のjsonstoreには正規表現でキーを指定して値を取ってくる機能があります。</p>
-
-<pre><code class="go">func GetAll(re *regexp.Regexp) map[string]json.RawMessage
-</code></pre>
-
-<p>Gopherのみなさんなら御存知の通り、Goの正規表現はとても遅いです。
-stringsパッケージなどを使えるよう、関数を受け取るインターフェースの方がよいでしょう。</p>
-
-<pre><code class="go">func GetAll(matcher func(key string) bool) map[string]json.RawMessage
-</code></pre>
-
-<p>このインターフェースなら簡単なものであれば自分で関数をかけば良いし、
-どうしても正規表現が必要な場合は<code>s.GetAll(re.MatchString)</code>とやればいいので大きな問題にはなりません。</p>
-
-<p>以下ベンチマークの結果です。Afterの方は正規表現ではなくstringsパッケージを使用しています。</p>
-
-<pre><code class="plain">Before:
-BenchmarkRegex-4                3000        449209 ns/op      206954 B/op         67 allocs/op
-
-After:
-BenchmarkRegex-4                5000        251788 ns/op      124483 B/op         68 allocs/op
-</code></pre>
-
-<h2>機能追加</h2>
-
-<p>実際使うなら最低限こんな機能も必要だよな・・・
-といくつか機能追加も行いました。</p>
-
-<h3>アトミックなデータ保存</h3>
-
-<p>例えば<code>humans.json.gz</code>に保存されたデータを書き換えることを考えます。
-単純に書くと以下のようになるでしょう。</p>
-
-<pre><code class="go">ks, _ := jsonstore.Open("humans.json.gz")
-
-// ksに何か操作を行う
-
-go jsonstore.Save(ks, "humans.json.gz")
-
-// もしpanicしたら・・・？
-panic("error!!")
-</code></pre>
-
-<p>ここでもしSaveの最中にプログラムが強制終了してしまったらどうなるでしょう。
-書きかけの<code>humans.json.gz</code>だけが残り、元のデータが失われてしまう可能性があります。</p>
-
-<p>それを避けるために、一度テンポラリファイルに書き出し、Renameするのが安全です。
-たとえ途中でクラッシュしてしまっても、最悪変更前のデータは残ります。</p>
-
-<pre><code class="go">ks, _ := jsonstore.Open("humans.json.gz")
-
-// ksに何か操作を行う
-
-go func() {
-    jsonstore.Save(ks, "humans.json.tmp.gz")
-    os.Rename("humans.json.tmp.gz", "humans.json.gz")
-}()
-
-panic("error!!")
-</code></pre>
-
-<p>これを勝手にやってくれる<code>SaveAndRename</code>という関数を追加しました。</p>
-
-<p>Linuxの場合、Renameはアトミックに行われるので、
-サーバを起動したままデータベースのバックアップを取るのも安全にできます。
-しかしWindowsの場合、アトミック性は保証されていない模様・・・？
-本当は<code>SafeSave</code>とかにしたかったけど、Windowsの事情がよくわからなったので、
-やってることをそのまま名前にしました。</p>
-
-<h3>自動保存機能</h3>
-
-<p>変更のたびに毎回ファイルに書き込んでいたら、極端に性能が劣化してしまうので、
-適当なタイミングで自動保存してくれる機能を追加しました。
-次のようにすることで、1000回変更があるたびに保存、
-変更回数が1000回に満たなくても最低60秒毎に保存してくれます。</p>
-
-<pre><code class="go">ks := new(jsonstore.JSONStore)
-ks.StartAutoSave("db.json.gz", 60 * time.Second, 1000)
-defer ks.StopAutoSave()
-</code></pre>
-
-<h2>まとめ</h2>
-
-<p>以下の高速化を行いました。</p>
-
-<ul>
-<li>ロックの範囲を最小にする</li>
-<li>ストリーミングAPIを利用する</li>
-<li>不要な再エンコードを避ける</li>
-<li>浅いコピーで並列処理性能を上げる</li>
-<li>正規表現をなるべく避ける</li>
-</ul>
-
-
-<p>また、実際使う際に必要になるであろう、次の機能も追加しました。</p>
-
-<ul>
-<li>アトミックなデータ保存</li>
-<li>自動保存機能</li>
-</ul>
-
-
-<p>これだけあれば、簡単なおもちゃを作るときのデータベースに使うくらいは出来るんじゃないですかね。</p>
-
-<p>プロセス間でデータ共有できない問題はありますが・・・
-まあ、そういうときは素直にRedisとかSQLiteとかboltdbとか使って下さい。</p>
 ]]></content>
   </entry>
   
