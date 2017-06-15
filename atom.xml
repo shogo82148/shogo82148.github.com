@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2017-05-30T18:03:42+09:00</updated>
+  <updated>2017-06-16T07:13:31+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,541 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[ぼくのかんがえたさいきょうのcontext対応版go-mysql-driverをマージしてもらった]]></title>
+    <link href="https://shogo82148.github.io/blog/2017/06/16/mysql-driver-and-context/"/>
+    <updated>2017-06-16T07:11:15+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2017/06/16/mysql-driver-and-context</id>
+    <content type="html"><![CDATA[<p><a href="https://github.com/go-sql-driver/mysql">go-sql-driver</a>に<code>context.Context</code>対応するプルリクエスト
+<a href="https://github.com/go-sql-driver/mysql/pull/608">go-sql-driver/mysql#608</a>
+を送って取り込んでもらいました！！
+現時点ではまだ正式リリースされていませんが、次のリリース(version 1.4)から使えるようにはずです。
+masterブランチではすでに使えるようになっているので、引き続き人柱募集中です。</p>
+
+<p>コネクションプーリングを実装していて、自分も「<code>context.Context</code>サポートしたい！」というかたのために、
+実装の概要をメモとして残しておきます。</p>
+
+<!-- More -->
+
+
+<h2>おおまかな仕組み</h2>
+
+<ul>
+<li>「<strong>contextの監視のみを行うgoroutine</strong>(以下、watcher goroutine)」をあらかじめ起動しておく</li>
+<li>「<strong>やりたい処理を実際に実行するgoroutine</strong>(以下、executor goritune)」とchannelを経由して<code>context.Context</code>をやり取りする</li>
+</ul>
+
+
+<p>watcher goroutineがこの実装で一番重要な部分です。</p>
+
+<h3>watcher goroutine の実装</h3>
+
+<p>一番重要な watcher goroutine の実装例から見てみましょう
+(実際には細かい最適化などが入るため、マージされたコードとは異なります)。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kd">func</span> <span class="p">(</span><span class="nx">mc</span> <span class="o">*</span><span class="nx">mysqlConn</span><span class="p">)</span> <span class="nx">startWatcher</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="c1">// executor goritune と `context.Context` のやり取りをするための channel</span>
+</span><span class='line'>  <span class="nx">watcher</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</span><span class='line'>  <span class="nx">mc</span><span class="p">.</span><span class="nx">watcher</span> <span class="p">=</span> <span class="nx">watcher</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// executor goritune で処理が完了したことを知るための channel</span>
+</span><span class='line'>  <span class="nx">finished</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kd">struct</span><span class="p">{})</span>
+</span><span class='line'>  <span class="nx">mc</span><span class="p">.</span><span class="nx">finished</span> <span class="p">=</span> <span class="nx">finished</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// コネクションがCloseされたことを知らせるための channel</span>
+</span><span class='line'>  <span class="nx">mc</span><span class="p">.</span><span class="nx">closech</span> <span class="p">=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kd">struct</span><span class="p">{})</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// ここから watcher goroutine 本体</span>
+</span><span class='line'>  <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">for</span> <span class="p">{</span>
+</span><span class='line'>          <span class="c1">// executor goritune から `context.Context` を待ち受ける</span>
+</span><span class='line'>          <span class="kd">var</span> <span class="nx">ctx</span> <span class="nx">context</span><span class="p">.</span><span class="nx">Context</span>
+</span><span class='line'>          <span class="k">select</span> <span class="p">{</span>
+</span><span class='line'>          <span class="k">case</span> <span class="nx">ctx</span> <span class="p">=</span> <span class="o">&lt;-</span><span class="nx">watcher</span><span class="p">:</span>
+</span><span class='line'>          <span class="k">case</span> <span class="o">&lt;-</span><span class="nx">mc</span><span class="p">.</span><span class="nx">closech</span><span class="p">:</span>
+</span><span class='line'>              <span class="c1">// コネクションが Close されたので watcher gorutine を終了する</span>
+</span><span class='line'>              <span class="k">return</span>
+</span><span class='line'>          <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>          <span class="c1">// `context.Context` を監視する</span>
+</span><span class='line'>          <span class="k">select</span> <span class="p">{</span>
+</span><span class='line'>          <span class="k">case</span> <span class="o">&lt;-</span><span class="nx">ctx</span><span class="p">.</span><span class="nx">Done</span><span class="p">():</span>
+</span><span class='line'>              <span class="c1">// executor goritune を強制終了する</span>
+</span><span class='line'>              <span class="nx">mc</span><span class="p">.</span><span class="nx">cancel</span><span class="p">(</span><span class="nx">ctx</span><span class="p">.</span><span class="nx">Err</span><span class="p">())</span>
+</span><span class='line'>          <span class="k">case</span> <span class="o">&lt;-</span><span class="nx">finished</span><span class="p">:</span>
+</span><span class='line'>              <span class="c1">// 正常に処理が終了したので何もしない</span>
+</span><span class='line'>          <span class="k">case</span> <span class="o">&lt;-</span><span class="nx">mc</span><span class="p">.</span><span class="nx">closech</span><span class="p">:</span>
+</span><span class='line'>              <span class="c1">// コネクションが Close されたので watcher gorutine を終了する</span>
+</span><span class='line'>              <span class="k">return</span>
+</span><span class='line'>          <span class="p">}</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>  <span class="p">}()</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>watcher</code>, <code>finished</code>, <code>closech</code> の3つの channel を経由して
+executor goroutine と通信を行います。</p>
+
+<h3>executor goroutine の実装</h3>
+
+<p>executor goritune の実装例は以下のようになります。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="c1">// 何かやる</span>
+</span><span class='line'><span class="kd">func</span> <span class="p">(</span><span class="nx">mc</span> <span class="o">*</span><span class="nx">mysqlConn</span><span class="p">)</span> <span class="nx">DoSomething</span><span class="p">(</span><span class="nx">ctx</span> <span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
+</span><span class='line'>  <span class="c1">// watcher gorutineにctxを渡して監視してもらう</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">mc</span><span class="p">.</span><span class="nx">watchCancel</span><span class="p">(</span><span class="nx">ctx</span><span class="p">);</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">return</span> <span class="nx">err</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// doSomthing()が実際に行いたい処理</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">mc</span><span class="p">.</span><span class="nx">doSomthing</span><span class="p">();</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="c1">// キャンセルされたのか、ネットワークエラーで切断されたのか、を確認する</span>
+</span><span class='line'>      <span class="k">if</span> <span class="nx">cerr</span> <span class="o">:=</span> <span class="nx">mc</span><span class="p">.</span><span class="nx">canceled</span><span class="p">();</span> <span class="nx">cerr</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>          <span class="k">return</span> <span class="nx">cerr</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>      <span class="k">return</span> <span class="nx">err</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// watcher gorutineに処理が終了したことを通知する</span>
+</span><span class='line'>  <span class="nx">mc</span><span class="p">.</span><span class="nx">finish</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">return</span> <span class="kc">nil</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>mc.doSomthing()</code> が実際に行いたい処理なのですが、これに <code>ctx</code> を渡していないのがポイントです。
+watcher goroutine に <code>ctx</code> の監視を任せているので、executor goroutine 側では監視しなくてもいいのです。</p>
+
+<h3>executor goritune と watcher goroutine 間の通信</h3>
+
+<p>executor goritune と watcher goroutine 間の通信は主に
+<code>watcher</code> channel と <code>finished</code> channel が担当します。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kd">func</span> <span class="p">(</span><span class="nx">mc</span> <span class="o">*</span><span class="nx">mysqlConn</span><span class="p">)</span> <span class="nx">watchCancel</span><span class="p">(</span><span class="nx">ctx</span> <span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
+</span><span class='line'>  <span class="c1">// 実際の処理が始まるまえに、 `ctx` が終了していないか確認</span>
+</span><span class='line'>  <span class="k">select</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">default</span><span class="p">:</span>
+</span><span class='line'>  <span class="k">case</span> <span class="o">&lt;-</span><span class="nx">ctx</span><span class="p">.</span><span class="nx">Done</span><span class="p">():</span>
+</span><span class='line'>      <span class="k">return</span> <span class="nx">ctx</span><span class="p">.</span><span class="nx">Err</span><span class="p">()</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// watcher goroutineに渡す</span>
+</span><span class='line'>  <span class="nx">mc</span><span class="p">.</span><span class="nx">watcher</span> <span class="o">&lt;-</span> <span class="nx">ctx</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">return</span> <span class="kc">nil</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="p">(</span><span class="nx">mc</span> <span class="o">*</span><span class="nx">mysqlConn</span><span class="p">)</span> <span class="nx">finish</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">select</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">case</span> <span class="nx">mc</span><span class="p">.</span><span class="nx">finished</span> <span class="o">&lt;-</span> <span class="kd">struct</span><span class="p">{}{}:</span>
+</span><span class='line'>  <span class="k">case</span> <span class="o">&lt;-</span><span class="nx">mc</span><span class="p">.</span><span class="nx">closech</span><span class="p">:</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>キャンセルの実装</h3>
+
+<p><code>context.Context</code>がキャンセルされたときに、executor goroutineを強制終了する処理は、
+コネクションを強制的に <code>Close</code> することで行っています。
+ちょっと強引な気はしますが、キャンセルされるような状況に陥った時点で正常な通信なんて出来ていないので、
+まあいいかと、このような実装になっています。
+もっと賢いキャンセルの方法があるかもしれませんが、キャンセルされない場合のほうが圧倒的に多いので、
+余計なオーバーヘッドは避けたいというのもあります。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="c1">// キャンセルを実行する</span>
+</span><span class='line'><span class="kd">func</span> <span class="p">(</span><span class="nx">mc</span> <span class="o">*</span><span class="nx">mysqlConn</span><span class="p">)</span> <span class="nx">cancel</span><span class="p">(</span><span class="nx">err</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="c1">// **コネクションを実際にCloseする前** にエラー内容を記録する</span>
+</span><span class='line'>  <span class="nx">mc</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nx">Lock</span><span class="p">()</span>
+</span><span class='line'>  <span class="nx">mc</span><span class="p">.</span><span class="nx">canceledErr</span> <span class="p">=</span> <span class="nx">err</span>
+</span><span class='line'>  <span class="nx">mc</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nx">Unlock</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// 強制切断</span>
+</span><span class='line'>  <span class="nx">mc</span><span class="p">.</span><span class="nx">cleanup</span><span class="p">()</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// キャンセルされたか確認用</span>
+</span><span class='line'><span class="kd">func</span> <span class="p">(</span><span class="nx">mc</span> <span class="o">*</span><span class="nx">mysqlConn</span><span class="p">)</span> <span class="nx">canceled</span><span class="p">()</span> <span class="kt">error</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">mc</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nx">Lock</span><span class="p">()</span>
+</span><span class='line'>  <span class="k">defer</span> <span class="nx">mc</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nx">Unlock</span><span class="p">()</span>
+</span><span class='line'>  <span class="k">return</span> <span class="nx">mc</span><span class="p">.</span><span class="nx">canceledErr</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="p">(</span><span class="nx">mc</span> <span class="o">*</span><span class="nx">mysqlConn</span><span class="p">)</span> <span class="nx">cleanup</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="c1">// closeが2回以上実行されないようガード</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">atomic</span><span class="p">.</span><span class="nx">SwapInt32</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">mc</span><span class="p">.</span><span class="nx">closed</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">0</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">return</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// (executor|watcher) goroutineに終了を通知</span>
+</span><span class='line'>  <span class="nb">close</span><span class="p">(</span><span class="nx">mc</span><span class="p">.</span><span class="nx">closech</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// コネクションを切断</span>
+</span><span class='line'>  <span class="nx">mc</span><span class="p">.</span><span class="nx">netConn</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>これらの関数は (executor|watcher) 両方の goroutine から呼ばれる可能性があるため、
+以下の二点が非常に重要です。</p>
+
+<ul>
+<li>cancelでは <strong>コネクションを実際にCloseする前</strong> にエラー内容を記録する
+
+<ul>
+<li>これが逆だと executor がキャンセルを見逃してしまう場合がある</li>
+</ul>
+</li>
+<li>sync package や sync/atomic package を使って <strong>goroutine-safe に書く</strong></li>
+</ul>
+
+
+<h2>FAQ(よくあるであろう質問)</h2>
+
+<p>こっちの実装の方がいいんじゃないの？と実装中に自問自答した内容を
+FAQと称して残しておきます。</p>
+
+<h3>close(watcher)していないのはなぜ？</h3>
+
+<p>最初は watcher goroutine の実装は以下のようになっていて、
+<code>close(watcher)</code> で watcher goroutine を終了させようかと考えてました。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="k">for</span> <span class="nx">ctx</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">watcher</span> <span class="p">{</span>
+</span><span class='line'>  <span class="c1">// context.Context監視処理</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>しかしこの実装では <code>mc.watcher &lt;- ctx</code> のところで <code>close</code> されていないかを毎回確認する必要があり、
+channelを使うメリットが薄れてしまうので廃案となりました。</p>
+
+<h3>close(finished)していないのはなぜ？</h3>
+
+<p>監視の終了に <code>close(finished)</code> を使うという案も考えました。
+しかしこの実装が廃案になったのには大きく二つの理由があります。</p>
+
+<p>一つ目は「監視の終了は同期していなければならない」からです。
+<code>close(finished)</code> を使った方法では executor goroutine が監視の終了を通知しても、
+watcher goroutine が実際に監視を終了するタイミングは goroutine スケジューラの気分次第で遅れてしまう可能性があります。
+すると watcher goroutine がクエリキャンセルしたときには、 executor goroutine では既に次のクエリが実行さており、
+間違ったクエリをキャンセルしてしまうという事故が起こりえます。</p>
+
+<p><code>finished &lt;- struct{}{}</code> を使った方法ならこれは起こりません。
+executor goroutine が監視の終了を通知するのと、
+watcher goroutine が実際に監視を終了するのとが同期しているので、
+確実にキャンセルしたいクエリだけをキャンセルできます。</p>
+
+<p>実際、PostgreSQLのGo driver実装は、最初 <code>close(finished)</code> で実装されていたものが、
+<code>finished &lt;- struct{}{}</code> に置き換えられています(実装時には知らなくて、この記事を書いているときに知った)。</p>
+
+<ul>
+<li><a href="https://github.com/lib/pq/pull/535">Add context methods lib/pq#535</a></li>
+<li><a href="https://github.com/lib/pq/pull/578">Fix race condition in query cancellation lib/pq#578</a></li>
+</ul>
+
+
+<p>二つ目は「channelの再利用ができない」という理由です。
+一度 <code>close</code> した channel は <code>open</code> することはできないので、新規に channel を作る必要があります。
+これにはメモリ確保が必要になるので、パフォーマンス面で不利になります。</p>
+
+<h3>QueryContextの中でfinishを直接呼んでいないのはなぜ？</h3>
+
+<p>QueryContext の実装をよく見てみると <code>rows.finish = mc.finish</code> しているだけで、
+QueryContext の中では <code>finish</code> を呼んでいません。</p>
+
+<ul>
+<li><a href="https://github.com/go-sql-driver/mysql/blob/a825be04c652d01442384e9dcdf2cdc3f1eda67f/connection_go18.go#L87">QueryContext</a></li>
+</ul>
+
+
+<p>これはなぜかというと <code>QueryContext</code> の実行が終了した後、
+rows の読み取り中に、<code>context.Context</code> がキャンセルされる場合があるからです。
+たとえば以下のコードで、<code>rows.Err()</code> は <code>context.Canceled</code> になっているべきです。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="nx">ctx</span><span class="p">,</span> <span class="nx">cancel</span> <span class="o">:=</span> <span class="nx">context</span><span class="p">.</span><span class="nx">WithCancel</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nx">Background</span><span class="p">())</span>
+</span><span class='line'><span class="nx">rows</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">dbt</span><span class="p">.</span><span class="nx">db</span><span class="p">.</span><span class="nx">QueryContext</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span> <span class="s">&quot;SELECT v FROM test&quot;</span><span class="p">)</span>
+</span><span class='line'><span class="nx">rows</span><span class="p">.</span><span class="nx">Next</span><span class="p">()</span>
+</span><span class='line'><span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">rows</span><span class="p">.</span><span class="nx">Scan</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">v</span><span class="p">);</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">cancel</span><span class="p">()</span>
+</span><span class='line'><span class="nx">time</span><span class="p">.</span><span class="nx">Sleep</span><span class="p">(</span><span class="mi">100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">rows</span><span class="p">.</span><span class="nx">Next</span><span class="p">()</span>
+</span><span class='line'><span class="c1">// rows.Err() は context.Canceled になっているべき</span>
+</span><span class='line'><span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">rows</span><span class="p">.</span><span class="nx">Err</span><span class="p">();</span> <span class="nx">err</span> <span class="o">!=</span> <span class="nx">context</span><span class="p">.</span><span class="nx">Canceled</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>この挙動は net/http を参考にしています。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;context&quot;</span>
+</span><span class='line'>  <span class="s">&quot;fmt&quot;</span>
+</span><span class='line'>  <span class="s">&quot;io/ioutil&quot;</span>
+</span><span class='line'>  <span class="s">&quot;log&quot;</span>
+</span><span class='line'>  <span class="s">&quot;net/http&quot;</span>
+</span><span class='line'>  <span class="s">&quot;net/http/httptest&quot;</span>
+</span><span class='line'>  <span class="s">&quot;time&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">log</span><span class="p">.</span><span class="nx">SetFlags</span><span class="p">(</span><span class="nx">log</span><span class="p">.</span><span class="nx">LstdFlags</span> <span class="p">|</span> <span class="nx">log</span><span class="p">.</span><span class="nx">Lshortfile</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// 1秒わざとレスポンスを返さないサーバー</span>
+</span><span class='line'>  <span class="nx">ts</span> <span class="o">:=</span> <span class="nx">httptest</span><span class="p">.</span><span class="nx">NewServer</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">HandlerFunc</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">w</span><span class="p">.</span><span class="nx">Header</span><span class="p">().</span><span class="nx">Set</span><span class="p">(</span><span class="s">&quot;Context-Type&quot;</span><span class="p">,</span> <span class="s">&quot;text/plain&quot;</span><span class="p">)</span>
+</span><span class='line'>      <span class="nx">w</span><span class="p">.</span><span class="nx">WriteHeader</span><span class="p">(</span><span class="mi">200</span><span class="p">)</span>
+</span><span class='line'>      <span class="nx">fmt</span><span class="p">.</span><span class="nx">Fprint</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="s">&quot;Hello, &quot;</span><span class="p">)</span>
+</span><span class='line'>      <span class="nx">w</span><span class="p">.(</span><span class="nx">http</span><span class="p">.</span><span class="nx">Flusher</span><span class="p">).</span><span class="nx">Flush</span><span class="p">()</span>
+</span><span class='line'>      <span class="nx">time</span><span class="p">.</span><span class="nx">Sleep</span><span class="p">(</span><span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">)</span>
+</span><span class='line'>      <span class="nx">fmt</span><span class="p">.</span><span class="nx">Fprint</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="s">&quot;client\n&quot;</span><span class="p">)</span>
+</span><span class='line'>  <span class="p">}))</span>
+</span><span class='line'>  <span class="k">defer</span> <span class="nx">ts</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">req</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">NewRequest</span><span class="p">(</span><span class="s">&quot;GET&quot;</span><span class="p">,</span> <span class="nx">ts</span><span class="p">.</span><span class="nx">URL</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">log</span><span class="p">.</span><span class="nx">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// 0.5秒後にキャンセル</span>
+</span><span class='line'>  <span class="nx">ctx</span><span class="p">,</span> <span class="nx">cancel</span> <span class="o">:=</span> <span class="nx">context</span><span class="p">.</span><span class="nx">WithTimeout</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nx">Background</span><span class="p">(),</span> <span class="mi">500</span><span class="o">*</span><span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">time</span><span class="p">.</span><span class="nx">Sleep</span><span class="p">(</span><span class="mi">500</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span><span class='line'>      <span class="nx">cancel</span><span class="p">()</span>
+</span><span class='line'>  <span class="p">}()</span>
+</span><span class='line'>  <span class="k">defer</span> <span class="nx">cancel</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">req</span> <span class="p">=</span> <span class="nx">req</span><span class="p">.</span><span class="nx">WithContext</span><span class="p">(</span><span class="nx">ctx</span><span class="p">)</span>
+</span><span class='line'>  <span class="nx">res</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">DefaultClient</span><span class="p">.</span><span class="nx">Do</span><span class="p">(</span><span class="nx">req</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">log</span><span class="p">.</span><span class="nx">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// ioutil.ReadAll は &quot;context canceled&quot; か &quot;context deadline exceeded&quot; で失敗する</span>
+</span><span class='line'>  <span class="nx">greeting</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">ioutil</span><span class="p">.</span><span class="nx">ReadAll</span><span class="p">(</span><span class="nx">res</span><span class="p">.</span><span class="nx">Body</span><span class="p">)</span>
+</span><span class='line'>  <span class="nx">res</span><span class="p">.</span><span class="nx">Body</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">log</span><span class="p">.</span><span class="nx">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">fmt</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&quot;%s&quot;</span><span class="p">,</span> <span class="nx">greeting</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>BeginTxの中ではfinishを直接呼んでいるのはなぜ？</h3>
+
+<p><code>BeginTx</code> では <code>finish()</code> を呼んでいます。
+<code>BeginTx</code>終了後にトランザクションがキャンセルされる場合を考えると、
+<code>QueryContext</code> と同様に <code>tx.finish = mc.finish</code> となりそうですが、そうはなっていません。</p>
+
+<p>これは database/sql が代わりに監視してくれていて、
+<code>context.Context</code> がキャンセルされると自動的にRollbackしてくれるからです。</p>
+
+<ul>
+<li><a href="https://github.com/golang/go/blob/go1.8.3/src/database/sql/sql.go#L1435-L1447">Tx.awaitDone() (database/sql)</a></li>
+</ul>
+
+
+<p>実は rows にも同様の監視処理が入っているので勝手に <code>Close</code> してくれます。
+しかし、packetの読み書きを <code>context.Context</code> 対応にする必要があり、
+実装コスト・実行コストが大きそうだったので手を付けていません。</p>
+
+<h2>まとめ</h2>
+
+<p>executor goroutine と watcher goroutine を使った <code>context.Context</code> 対応の実装例を紹介しました。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Re: GoとPythonとGrumpyの速度ベンチマーク]]></title>
@@ -6884,86 +7419,6 @@ QRコード®が比較的オープンなのに対してフレームQR®関連の
 
 
 <p>QRコード®およびフレームQR®は<a href="http://www.denso-wave.com/">(株)デンソーウェーブ</a>の登録商標です</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[GitHub Pagesがhttpsをサポートしたので切り替えてみた]]></title>
-    <link href="https://shogo82148.github.io/blog/2016/06/10/github-page-supports-https/"/>
-    <updated>2016-06-10T00:53:51+09:00</updated>
-    <id>https://shogo82148.github.io/blog/2016/06/10/github-page-supports-https</id>
-    <content type="html"><![CDATA[<p>このブログを設置しているGithub PagesがHTTPSに正式対応したらしいので、HTTPSを強制するように設定してみました。</p>
-
-<ul>
-<li><a href="https://github.com/blog/2186-https-for-github-pages">HTTPS for GitHub Pages</a></li>
-</ul>
-
-
-<!-- More -->
-
-
-<h2>やったこと</h2>
-
-<p>ページ内にHTTP経由で取得したリソースが含まれていると、
-警告が出たり取得自体がブロックされたりしてしまうので、
-全てHTTPS経由で取得するように書きなおす必要があります。
-画像・CSS・Javascript等のURLを、以下のようにnetwork-path referenceへの置き換えましょう。
-HTTPでページを開いた場合はHTTPで、HTTPSでページを開いた場合はHTTPSで、リソースを取得してくれます。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>&lt;a href="http://google.co.jp"&gt;
-</span><span class='line'>&lt;a href="//google.co.jp"&gt;</span></code></pre></td></tr></table></div></figure>
-
-
-<p>このサイトはHTTPのレンダリングに<a href="https://github.com/imathis/octopress">Octopress</a>を使っています。
-最新版のOctopressではnetwork-path referenceを使ってくれるので特に対応は不要です。
-このサイトの場合は古すぎてHTTP参照だったので、
-「<a href="http://blog.glidenote.com/blog/2014/02/14/octopress-update/">Octopressをアップデートした</a>」を参考にしてアップデートしました。
-はてなブックマーク連携など、自分でカスタマイズした部分に関しては手作業で対応したました。</p>
-
-<h3>HTTPS強制の設定</h3>
-
-<p><a href="https://help.github.com/articles/securing-your-github-pages-site-with-https/">Securing your GitHub Pages site with HTTPS</a> どおりに設定を有効化すればOKです。
-ユーザ毎ではなくプロジェクト毎の設定のようなので、
-プロジェクト用のページを作っている場合は個別に設定が必要です。</p>
-
-<h2>はてなブックマークについて</h2>
-
-<p>HTTPとHTTPSは別URLとして扱われるようなので、過去の記事に対するはてブ数はリセットされてしまいます。
-解決方法は無いかと調べてみたものの、現象無理っぽいです。</p>
-
-<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">自分のブログは http から https に移行したけど、記事についたはてブを移行することは出来なかった（はてなのサポートに聞いた）。分からないでもないけど、https 移行の躊躇材料になるという点においてはイケてない。</p>&mdash; Takashi Masuda (@masutaka) <a href="https://twitter.com/masutaka/status/739747936318283776">June 6, 2016</a></blockquote>
-
-
-<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
-
-
-<p>はてなさんの方で対応してくれないかな・・・</p>
-
-<h2>2016/06/30追記: DISQUSのマイグレーション</h2>
-
-<p>記事にコメントをつけるのに使っている<a href="https://disqus.com/">DISQUS</a>をマイグレーションするのを忘れてて、
-過去のコメントが見れなくなっていたので追記。</p>
-
-<p><a href="https://disqus.com/">DISQUS</a>のホームから「Admin」「Edit Settings」で設定画面を開き、
-Website URLの近くの「Changing domains? Learn how.」をクリックします。
-すると「Migration Tools」が開くので、「Start URL mapper」「you can download a CSV here」をクリック。
-5分くらいするとDISQUSがコメントを管理しているURL一覧がメールで届くので、
-それを元に新旧URLの対応表を作ります。</p>
-
-<p>今回はプロトコルの変更なので、以下のような雑なワンライナーで変換しました。
-(改行コードがCRLFで地味に面倒だった)</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>grep http:// links.csv | perl -e '$/="\r\n";while(&lt;&gt;){chomp;print "$_,@{[$_=~s/^http:/https:/r]}$/"}' &gt; new-links.csv</span></code></pre></td></tr></table></div></figure>
-
-
-<p>最後に設定画面からCSVをアップロードします。
-以上で作業完了です。
-最後に「24時間以内に反映するよ」的なメッセージが表示されましたが、僕の場合は5分くらいで反映が確認できました。</p>
-
-<p>残るははてブ。はてなさん頼む〜〜〜。</p>
 ]]></content>
   </entry>
   

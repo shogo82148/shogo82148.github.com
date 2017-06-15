@@ -4,7 +4,7 @@
   <title><![CDATA[Category: mysql | Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/blog/categories/mysql/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2017-05-30T18:03:42+09:00</updated>
+  <updated>2017-06-16T07:13:31+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,353 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[ぼくのかんがえたさいきょうのcontext対応版go-mysql-driverをマージしてもらった]]></title>
+    <link href="https://shogo82148.github.io/blog/2017/06/16/mysql-driver-and-context/"/>
+    <updated>2017-06-16T07:11:15+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2017/06/16/mysql-driver-and-context</id>
+    <content type="html"><![CDATA[<p><a href="https://github.com/go-sql-driver/mysql">go-sql-driver</a>に<code>context.Context</code>対応するプルリクエスト
+<a href="https://github.com/go-sql-driver/mysql/pull/608">go-sql-driver/mysql#608</a>
+を送って取り込んでもらいました！！
+現時点ではまだ正式リリースされていませんが、次のリリース(version 1.4)から使えるようにはずです。
+masterブランチではすでに使えるようになっているので、引き続き人柱募集中です。</p>
+
+<p>コネクションプーリングを実装していて、自分も「<code>context.Context</code>サポートしたい！」というかたのために、
+実装の概要をメモとして残しておきます。</p>
+
+<!-- More -->
+
+
+<h2>おおまかな仕組み</h2>
+
+<ul>
+<li>「<strong>contextの監視のみを行うgoroutine</strong>(以下、watcher goroutine)」をあらかじめ起動しておく</li>
+<li>「<strong>やりたい処理を実際に実行するgoroutine</strong>(以下、executor goritune)」とchannelを経由して<code>context.Context</code>をやり取りする</li>
+</ul>
+
+
+<p>watcher goroutineがこの実装で一番重要な部分です。</p>
+
+<h3>watcher goroutine の実装</h3>
+
+<p>一番重要な watcher goroutine の実装例から見てみましょう
+(実際には細かい最適化などが入るため、マージされたコードとは異なります)。</p>
+
+<pre><code class="go">func (mc *mysqlConn) startWatcher() {
+    // executor goritune と `context.Context` のやり取りをするための channel
+    watcher := make(chan context.Context, 1)
+    mc.watcher = watcher
+
+    // executor goritune で処理が完了したことを知るための channel
+    finished := make(chan struct{})
+    mc.finished = finished
+
+    // コネクションがCloseされたことを知らせるための channel
+    mc.closech = make(chan struct{})
+
+    // ここから watcher goroutine 本体
+    go func() {
+        for {
+            // executor goritune から `context.Context` を待ち受ける
+            var ctx context.Context
+            select {
+            case ctx = &lt;-watcher:
+            case &lt;-mc.closech:
+                // コネクションが Close されたので watcher gorutine を終了する
+                return
+            }
+
+            // `context.Context` を監視する
+            select {
+            case &lt;-ctx.Done():
+                // executor goritune を強制終了する
+                mc.cancel(ctx.Err())
+            case &lt;-finished:
+                // 正常に処理が終了したので何もしない
+            case &lt;-mc.closech:
+                // コネクションが Close されたので watcher gorutine を終了する
+                return
+            }
+        }
+    }()
+}
+</code></pre>
+
+<p><code>watcher</code>, <code>finished</code>, <code>closech</code> の3つの channel を経由して
+executor goroutine と通信を行います。</p>
+
+<h3>executor goroutine の実装</h3>
+
+<p>executor goritune の実装例は以下のようになります。</p>
+
+<pre><code class="go">// 何かやる
+func (mc *mysqlConn) DoSomething(ctx context.Context) error {
+    // watcher gorutineにctxを渡して監視してもらう
+    if err := mc.watchCancel(ctx); err != nil {
+        return err
+    }
+
+    // doSomthing()が実際に行いたい処理
+    if err := mc.doSomthing(); err != nil {
+        // キャンセルされたのか、ネットワークエラーで切断されたのか、を確認する
+        if cerr := mc.canceled(); cerr != nil {
+            return cerr
+        }
+        return err
+    }
+
+    // watcher gorutineに処理が終了したことを通知する
+    mc.finish()
+
+    return nil
+}
+</code></pre>
+
+<p><code>mc.doSomthing()</code> が実際に行いたい処理なのですが、これに <code>ctx</code> を渡していないのがポイントです。
+watcher goroutine に <code>ctx</code> の監視を任せているので、executor goroutine 側では監視しなくてもいいのです。</p>
+
+<h3>executor goritune と watcher goroutine 間の通信</h3>
+
+<p>executor goritune と watcher goroutine 間の通信は主に
+<code>watcher</code> channel と <code>finished</code> channel が担当します。</p>
+
+<pre><code class="go">func (mc *mysqlConn) watchCancel(ctx context.Context) error {
+    // 実際の処理が始まるまえに、 `ctx` が終了していないか確認
+    select {
+    default:
+    case &lt;-ctx.Done():
+        return ctx.Err()
+    }
+
+    // watcher goroutineに渡す
+    mc.watcher &lt;- ctx
+
+    return nil
+}
+
+func (mc *mysqlConn) finish() {
+    select {
+    case mc.finished &lt;- struct{}{}:
+    case &lt;-mc.closech:
+    }
+}
+</code></pre>
+
+<h3>キャンセルの実装</h3>
+
+<p><code>context.Context</code>がキャンセルされたときに、executor goroutineを強制終了する処理は、
+コネクションを強制的に <code>Close</code> することで行っています。
+ちょっと強引な気はしますが、キャンセルされるような状況に陥った時点で正常な通信なんて出来ていないので、
+まあいいかと、このような実装になっています。
+もっと賢いキャンセルの方法があるかもしれませんが、キャンセルされない場合のほうが圧倒的に多いので、
+余計なオーバーヘッドは避けたいというのもあります。</p>
+
+<pre><code class="go">// キャンセルを実行する
+func (mc *mysqlConn) cancel(err error) {
+    // **コネクションを実際にCloseする前** にエラー内容を記録する
+    mc.mu.Lock()
+    mc.canceledErr = err
+    mc.mu.Unlock()
+
+    // 強制切断
+    mc.cleanup()
+}
+
+// キャンセルされたか確認用
+func (mc *mysqlConn) canceled() error {
+    mc.mu.Lock()
+    defer mc.mu.Unlock()
+    return mc.canceledErr
+}
+
+func (mc *mysqlConn) cleanup() {
+    // closeが2回以上実行されないようガード
+    if atomic.SwapInt32(&amp;mc.closed, 1) != 0 {
+        return
+    }
+
+    // (executor|watcher) goroutineに終了を通知
+    close(mc.closech)
+
+    // コネクションを切断
+    mc.netConn.Close()
+}
+</code></pre>
+
+<p>これらの関数は (executor|watcher) 両方の goroutine から呼ばれる可能性があるため、
+以下の二点が非常に重要です。</p>
+
+<ul>
+<li>cancelでは <strong>コネクションを実際にCloseする前</strong> にエラー内容を記録する
+
+<ul>
+<li>これが逆だと executor がキャンセルを見逃してしまう場合がある</li>
+</ul>
+</li>
+<li>sync package や sync/atomic package を使って <strong>goroutine-safe に書く</strong></li>
+</ul>
+
+
+<h2>FAQ(よくあるであろう質問)</h2>
+
+<p>こっちの実装の方がいいんじゃないの？と実装中に自問自答した内容を
+FAQと称して残しておきます。</p>
+
+<h3>close(watcher)していないのはなぜ？</h3>
+
+<p>最初は watcher goroutine の実装は以下のようになっていて、
+<code>close(watcher)</code> で watcher goroutine を終了させようかと考えてました。</p>
+
+<pre><code class="go">for ctx := range watcher {
+    // context.Context監視処理
+}
+</code></pre>
+
+<p>しかしこの実装では <code>mc.watcher &lt;- ctx</code> のところで <code>close</code> されていないかを毎回確認する必要があり、
+channelを使うメリットが薄れてしまうので廃案となりました。</p>
+
+<h3>close(finished)していないのはなぜ？</h3>
+
+<p>監視の終了に <code>close(finished)</code> を使うという案も考えました。
+しかしこの実装が廃案になったのには大きく二つの理由があります。</p>
+
+<p>一つ目は「監視の終了は同期していなければならない」からです。
+<code>close(finished)</code> を使った方法では executor goroutine が監視の終了を通知しても、
+watcher goroutine が実際に監視を終了するタイミングは goroutine スケジューラの気分次第で遅れてしまう可能性があります。
+すると watcher goroutine がクエリキャンセルしたときには、 executor goroutine では既に次のクエリが実行さており、
+間違ったクエリをキャンセルしてしまうという事故が起こりえます。</p>
+
+<p><code>finished &lt;- struct{}{}</code> を使った方法ならこれは起こりません。
+executor goroutine が監視の終了を通知するのと、
+watcher goroutine が実際に監視を終了するのとが同期しているので、
+確実にキャンセルしたいクエリだけをキャンセルできます。</p>
+
+<p>実際、PostgreSQLのGo driver実装は、最初 <code>close(finished)</code> で実装されていたものが、
+<code>finished &lt;- struct{}{}</code> に置き換えられています(実装時には知らなくて、この記事を書いているときに知った)。</p>
+
+<ul>
+<li><a href="https://github.com/lib/pq/pull/535">Add context methods lib/pq#535</a></li>
+<li><a href="https://github.com/lib/pq/pull/578">Fix race condition in query cancellation lib/pq#578</a></li>
+</ul>
+
+
+<p>二つ目は「channelの再利用ができない」という理由です。
+一度 <code>close</code> した channel は <code>open</code> することはできないので、新規に channel を作る必要があります。
+これにはメモリ確保が必要になるので、パフォーマンス面で不利になります。</p>
+
+<h3>QueryContextの中でfinishを直接呼んでいないのはなぜ？</h3>
+
+<p>QueryContext の実装をよく見てみると <code>rows.finish = mc.finish</code> しているだけで、
+QueryContext の中では <code>finish</code> を呼んでいません。</p>
+
+<ul>
+<li><a href="https://github.com/go-sql-driver/mysql/blob/a825be04c652d01442384e9dcdf2cdc3f1eda67f/connection_go18.go#L87">QueryContext</a></li>
+</ul>
+
+
+<p>これはなぜかというと <code>QueryContext</code> の実行が終了した後、
+rows の読み取り中に、<code>context.Context</code> がキャンセルされる場合があるからです。
+たとえば以下のコードで、<code>rows.Err()</code> は <code>context.Canceled</code> になっているべきです。</p>
+
+<pre><code class="go">ctx, cancel := context.WithCancel(context.Background())
+rows, _ := dbt.db.QueryContext(ctx, "SELECT v FROM test")
+rows.Next()
+if err := rows.Scan(&amp;v); err != nil {
+    panic(err)
+}
+
+cancel()
+time.Sleep(100 * time.Millisecond)
+
+rows.Next()
+// rows.Err() は context.Canceled になっているべき
+if err := rows.Err(); err != context.Canceled {
+    panic(err)
+}
+</code></pre>
+
+<p>この挙動は net/http を参考にしています。</p>
+
+<pre><code class="go">package main
+
+import (
+    "context"
+    "fmt"
+    "io/ioutil"
+    "log"
+    "net/http"
+    "net/http/httptest"
+    "time"
+)
+
+func main() {
+    log.SetFlags(log.LstdFlags | log.Lshortfile)
+
+    // 1秒わざとレスポンスを返さないサーバー
+    ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("Context-Type", "text/plain")
+        w.WriteHeader(200)
+        fmt.Fprint(w, "Hello, ")
+        w.(http.Flusher).Flush()
+        time.Sleep(time.Second)
+        fmt.Fprint(w, "client\n")
+    }))
+    defer ts.Close()
+
+    req, err := http.NewRequest("GET", ts.URL, nil)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // 0.5秒後にキャンセル
+    ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+    go func() {
+        time.Sleep(500 * time.Millisecond)
+        cancel()
+    }()
+    defer cancel()
+
+    req = req.WithContext(ctx)
+    res, err := http.DefaultClient.Do(req)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // ioutil.ReadAll は "context canceled" か "context deadline exceeded" で失敗する
+    greeting, err := ioutil.ReadAll(res.Body)
+    res.Body.Close()
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    fmt.Printf("%s", greeting)
+}
+</code></pre>
+
+<h3>BeginTxの中ではfinishを直接呼んでいるのはなぜ？</h3>
+
+<p><code>BeginTx</code> では <code>finish()</code> を呼んでいます。
+<code>BeginTx</code>終了後にトランザクションがキャンセルされる場合を考えると、
+<code>QueryContext</code> と同様に <code>tx.finish = mc.finish</code> となりそうですが、そうはなっていません。</p>
+
+<p>これは database/sql が代わりに監視してくれていて、
+<code>context.Context</code> がキャンセルされると自動的にRollbackしてくれるからです。</p>
+
+<ul>
+<li><a href="https://github.com/golang/go/blob/go1.8.3/src/database/sql/sql.go#L1435-L1447">Tx.awaitDone() (database/sql)</a></li>
+</ul>
+
+
+<p>実は rows にも同様の監視処理が入っているので勝手に <code>Close</code> してくれます。
+しかし、packetの読み書きを <code>context.Context</code> 対応にする必要があり、
+実装コスト・実行コストが大きそうだったので手を付けていません。</p>
+
+<h2>まとめ</h2>
+
+<p>executor goroutine と watcher goroutine を使った <code>context.Context</code> 対応の実装例を紹介しました。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Redis、PostgreSQL、MySQLで近傍検索]]></title>
