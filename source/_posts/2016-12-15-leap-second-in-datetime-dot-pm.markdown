@@ -3,7 +3,7 @@ layout: post
 title: "DateTime.pmにうるう秒の修正が入った話"
 date: 2016-12-15 22:17:47 +0900
 comments: true
-categories: perl
+categories: [perl, leapsecond]
 ---
 
 こんにちは、[DateTime.pm](https://metacpan.org/pod/DateTime) Watcherのいっちーです。

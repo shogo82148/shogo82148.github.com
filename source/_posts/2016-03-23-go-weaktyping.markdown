@@ -3,7 +3,7 @@ layout: post
 title: "数値と文字列がごちゃ混ぜになっているJSONをよしなにParseするやつ作った"
 date: 2016-03-23 20:44
 comments: true
-categories: [go]
+categories: [golang]
 ---
 
 Goは数値と文字列を厳格に区別しますが、他の言語もそうとは限りません。

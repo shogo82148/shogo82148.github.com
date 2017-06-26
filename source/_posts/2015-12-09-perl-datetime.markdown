@@ -3,7 +3,7 @@ layout: post
 title: "Perl の DateTime 利用上の注意点"
 date: 2015-12-09 00:00
 comments: true
-categories: perl
+categories: [perl, leapsecond]
 ---
 
 この投稿は [Perl 5 Advent Calendar 2015](http://qiita.com/advent-calendar/2015/perl5) の 9日目の記事です。
