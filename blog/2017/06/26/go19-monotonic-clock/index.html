@@ -1,0 +1,833 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Go1.9から使える Monotonic Clocks を試してみた - Shogo's Blog</title>
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="description" content="先日Go1.9beta1がリリースされました。 Go 1.9 Beta 1 is released!Announcement:https://t.co/lV5nvXwOoRGet it!https://t.co/2LhlOo2EtX#golang pic.twitter.com/ &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="https://shogo82148.github.io/blog/2017/06/26/go19-monotonic-clock/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="Shogo's Blog" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="/javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-4526627-4']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+  <script type="text/javascript" src="//s.hatena.ne.jp/js/HatenaStar.js"></script>
+<script type="text/javascript">
+Hatena.Star.Token = '0da43945db72b59fd47eb24198fc7a0293c0191f';
+Hatena.Star.SiteConfig = {
+  entryNodes: {
+    'article': {
+      uri: 'h1 a',
+      title: 'h1',
+      container: 'h1'
+    },
+    'article.hentry': {
+      uri: 'window.location',
+      title: 'h1.entry-title',
+      container: 'h1.entry-title'
+    }
+  }
+};
+</script>
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Shogo's Blog</a></h1>
+  
+    <h2>たぶんプログラミングとかについて書いていくブログ</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="sitesearch" value="shogo82148.github.io">
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/blog/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Go1.9から使える Monotonic Clocks を試してみた</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+<time class='entry-date' datetime='2017-06-26T09:21:42+09:00'><span class='date'><span class='date-month'>Jun</span> <span class='date-day'>26</span><span class='date-suffix'>th</span>, <span class='date-year'>2017</span></span> <span class='time'>9:21 am</span></time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>先日Go1.9beta1がリリースされました。</p>
+
+<blockquote class="twitter-tweet"><p lang="en" dir="ltr">Go 1.9 Beta 1 is released!<br><br>Announcement:<a href="https://t.co/lV5nvXwOoR">https://t.co/lV5nvXwOoR</a><br><br>Get it!<a href="https://t.co/2LhlOo2EtX">https://t.co/2LhlOo2EtX</a><a href="https://twitter.com/hashtag/golang?src=hash">#golang</a> <a href="https://t.co/zm09DwX93q">pic.twitter.com/zm09DwX93q</a></p>&mdash; Go (@golang) <a href="https://twitter.com/golang/status/875117556595515392">June 14, 2017</a></blockquote>
+
+
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+
+<ul>
+<li><a href="https://tip.golang.org/doc/go1.9">Go 1.9 Release Notes</a></li>
+</ul>
+
+
+<p>型エイリアスのサポート、<a href="https://tip.golang.org/pkg/math/bits/">math/bits</a>パッケージ、
+<a href="https://tip.golang.org/pkg/sync/#Map">sync.Map</a>型など、
+今回のアップデートでも便利そうな機能が追加されます。
+詳しくは<a href="https://twitter.com/tenntenn">tenntenn</a>さんの<a href="https://www.slideshare.net/takuyaueda967/gopher-fest-2017">Gopher Fest 2017参加レポート</a>をどうぞ。</p>
+
+<p>今回のリリースノートを見て、個人的に注目しているのは<strong>Monotonic Clocksのサポート</strong>です。
+他の機能追加はTwitterとかで見かけるけど、
+Monotonic Clocksはなぜかあまり見ない・・・。
+beta1がでて手軽に試せるようになったので、試してみました。</p>
+
+<h2>Monotonic Clocks</h2>
+
+<p>Go1.8以前で取得していた時刻は「wall clock」といい、<strong>現在の正しい時刻</strong>を知るために使います。
+一方「monotonic clock」は、<strong>時間を計る</strong>ために使うものです。
+Go1.9からは<code>time.Now</code>で取得できる時刻に「wall clock」と「monotonic clock」が含まれるようになります。</p>
+
+<p><a href="https://tip.golang.org/pkg/time/#hdr-Monotonic_Clocks">timeパッケージのドキュメント</a>から
+コード片を引用します。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>t := time.Now()
+</span><span class='line'>... operation that takes 20 milliseconds ...
+</span><span class='line'>u := time.Now()
+</span><span class='line'>elapsed := t.Sub(u)</span></code></pre></td></tr></table></div></figure>
+
+
+<p>上のコードで <code>elapsed</code> は 20ms となるはずですが、
+実際はそうはならないケースがあります。
+具体的には以下のようなケースです。</p>
+
+<ul>
+<li>ntpdなどによってOSの時刻が変更された場合</li>
+<li>うるう秒が挿入・削除された場合</li>
+</ul>
+
+
+<p>Go1.9からはこのようなケースでも正しく時間を計ることができます。</p>
+
+<h2>うるう秒を入れてみた</h2>
+
+<p>うるう秒が入ったときの挙動が気になったので実際にやってみました。
+セットアップが簡単になるよう<a href="http://jjy.nict.go.jp/tsp/link/leap.html">NICTのPerl版SNTP</a>のGolangポートを作ったので、
+それを使って偽物のうるう秒を挿入してみます。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/fakentpd">shogo82148/fakentpd</a></li>
+</ul>
+
+
+<p>インストールはいつものように<code>go get</code>です。
+<code>-p</code>オプションで正のうるう秒挿入、<code>-n</code>オプションで負のうるう秒削除です(ほんとうは月末だけだけど、雑な実装のため毎日その日の終わりに挿入・削除されます)。
+引数にRFC3339形式で日時を指定すると、その日時を起動時の日時として扱います。</p>
+
+<p>たとえば今月末に正のうるう秒を挿入するには以下のように指定します。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="c"># 上位ntpd側</span>
+</span><span class='line'><span class="nv">$ </span>go get github.com/shogo82148/fakentpd
+</span><span class='line'><span class="nv">$ </span>sudo fakentpd -p 2017-06-30T23:00:00Z <span class="c"># well known portを使うのでroot権限が必要</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>このSNTPサーバーを上位ntpdとして参照したクライアントを用意し、<code>date</code>コマンドで様子を確認してみましょう。
+(ntpdの設定などの詳細は<a href="http://tkuchiki.hatenablog.com/entry/2015/06/19/083025">tkuchikiさんのうるう秒検証記事</a> を参照)</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="c"># 下位ntpd側</span>
+</span><span class='line'><span class="nv">$ </span><span class="k">while</span> :<span class="p">;</span> <span class="k">do</span> date +<span class="s1">&#39;%Y-%m-%d %H:%M:%S.%3N&#39;</span><span class="p">;</span> usleep 100000<span class="p">;</span> <span class="k">done</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>(前略)
+</span><span class='line'>2017-06-30 23:59:59.040
+</span><span class='line'>2017-06-30 23:59:59.141
+</span><span class='line'>2017-06-30 23:59:59.243
+</span><span class='line'>2017-06-30 23:59:59.344
+</span><span class='line'>2017-06-30 23:59:59.445
+</span><span class='line'>2017-06-30 23:59:59.547
+</span><span class='line'>2017-06-30 23:59:59.648
+</span><span class='line'>2017-06-30 23:59:59.749
+</span><span class='line'>2017-06-30 23:59:59.851
+</span><span class='line'>2017-06-30 23:59:59.952 #
+</span><span class='line'>2017-06-30 23:59:59.053 # うるう秒挿入！
+</span><span class='line'>2017-06-30 23:59:59.155
+</span><span class='line'>2017-06-30 23:59:59.256
+</span><span class='line'>2017-06-30 23:59:59.357
+</span><span class='line'>2017-06-30 23:59:59.458
+</span><span class='line'>2017-06-30 23:59:59.559
+</span><span class='line'>2017-06-30 23:59:59.661
+</span><span class='line'>2017-06-30 23:59:59.762
+</span><span class='line'>2017-06-30 23:59:59.863
+</span><span class='line'>2017-06-30 23:59:59.964
+</span><span class='line'>2017-07-01 00:00:00.066</span></code></pre></td></tr></table></div></figure>
+
+
+<p>うるう秒が挿入されたため、59.952から59.053へ時間が巻き戻っていることが確認できます。</p>
+
+<p>これと同等のプログラムをGoで書いて挙動を確認します。
+monotonic clockの確認をするために、一緒に起動時からの経過時間も表示するようにしました。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;fmt&quot;</span>
+</span><span class='line'>  <span class="s">&quot;time&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
+</span><span class='line'>  <span class="k">for</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">now</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
+</span><span class='line'>      <span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="nx">now</span><span class="p">,</span> <span class="nx">now</span><span class="p">.</span><span class="nx">Sub</span><span class="p">(</span><span class="nx">start</span><span class="p">))</span>
+</span><span class='line'>      <span class="nx">time</span><span class="p">.</span><span class="nx">Sleep</span><span class="p">(</span><span class="mi">100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>date</code>コマンドで検証したときと同様の条件で、
+このプログラムを<strong>Go1.8で実行</strong>すると以下のような結果になりました。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>(前略)
+</span><span class='line'>2017-06-30 23:59:59.038281905 +0000 UTC 32m42.970735711s
+</span><span class='line'>2017-06-30 23:59:59.138469005 +0000 UTC 32m43.070922811s
+</span><span class='line'>2017-06-30 23:59:59.238662875 +0000 UTC 32m43.171116681s
+</span><span class='line'>2017-06-30 23:59:59.338835875 +0000 UTC 32m43.271289681s
+</span><span class='line'>2017-06-30 23:59:59.439025825 +0000 UTC 32m43.371479631s
+</span><span class='line'>2017-06-30 23:59:59.539213666 +0000 UTC 32m43.471667472s
+</span><span class='line'>2017-06-30 23:59:59.63940551 +0000 UTC 32m43.571859316s
+</span><span class='line'>2017-06-30 23:59:59.739603502 +0000 UTC 32m43.672057308s
+</span><span class='line'>2017-06-30 23:59:59.839783301 +0000 UTC 32m43.772237107s
+</span><span class='line'>2017-06-30 23:59:59.939980591 +0000 UTC 32m43.872434397s #
+</span><span class='line'>2017-06-30 23:59:59.043820722 +0000 UTC 32m42.976274528s # うるう秒挿入！
+</span><span class='line'>2017-06-30 23:59:59.143987505 +0000 UTC 32m43.076441311s
+</span><span class='line'>2017-06-30 23:59:59.244160716 +0000 UTC 32m43.176614522s
+</span><span class='line'>2017-06-30 23:59:59.344336707 +0000 UTC 32m43.276790513s
+</span><span class='line'>2017-06-30 23:59:59.444546067 +0000 UTC 32m43.376999873s
+</span><span class='line'>2017-06-30 23:59:59.544717014 +0000 UTC 32m43.47717082s
+</span><span class='line'>2017-06-30 23:59:59.644876123 +0000 UTC 32m43.577329929s
+</span><span class='line'>2017-06-30 23:59:59.745050732 +0000 UTC 32m43.677504538s
+</span><span class='line'>2017-06-30 23:59:59.845230425 +0000 UTC 32m43.777684231s
+</span><span class='line'>2017-06-30 23:59:59.945421532 +0000 UTC 32m43.877875338s
+</span><span class='line'>2017-07-01 00:00:00.045595155 +0000 UTC 32m43.978048961s</span></code></pre></td></tr></table></div></figure>
+
+
+<p>うるう秒が挿入されたため、59.9から59.0に時刻が巻き戻っていることが確認できます。
+それと同時に経過時刻も32m43.87sから32m42.97sと巻き戻ってしまいました。</p>
+
+<p>おなじプログラムをGo1.9で実行してみます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>(前略)
+</span><span class='line'>2017-06-30 23:59:59.038322917 +0000 UTC m=+1962.019889237 32m42.01969158s
+</span><span class='line'>2017-06-30 23:59:59.138507805 +0000 UTC m=+1962.120074107 32m42.11987645s
+</span><span class='line'>2017-06-30 23:59:59.238704422 +0000 UTC m=+1962.220270727 32m42.22007307s
+</span><span class='line'>2017-06-30 23:59:59.338875317 +0000 UTC m=+1962.320441617 32m42.32024396s
+</span><span class='line'>2017-06-30 23:59:59.439066666 +0000 UTC m=+1962.420632996 32m42.420435339s
+</span><span class='line'>2017-06-30 23:59:59.539255964 +0000 UTC m=+1962.520822264 32m42.520624607s
+</span><span class='line'>2017-06-30 23:59:59.639446597 +0000 UTC m=+1962.621012897 32m42.62081524s
+</span><span class='line'>2017-06-30 23:59:59.739644525 +0000 UTC m=+1962.721210832 32m42.721013175s
+</span><span class='line'>2017-06-30 23:59:59.839827168 +0000 UTC m=+1962.821393501 32m42.821195844s
+</span><span class='line'>2017-06-30 23:59:59.94003045 +0000 UTC m=+1962.921596780 32m42.921399123s #
+</span><span class='line'>2017-06-30 23:59:59.043859649 +0000 UTC m=+1963.025425981 32m43.025228324s # うるう秒挿入！
+</span><span class='line'>2017-06-30 23:59:59.144008957 +0000 UTC m=+1963.125575282 32m43.125377625s
+</span><span class='line'>2017-06-30 23:59:59.244196844 +0000 UTC m=+1963.225763148 32m43.225565491s
+</span><span class='line'>2017-06-30 23:59:59.344388476 +0000 UTC m=+1963.325954758 32m43.325757101s
+</span><span class='line'>2017-06-30 23:59:59.444598162 +0000 UTC m=+1963.426164679 32m43.425967022s
+</span><span class='line'>2017-06-30 23:59:59.54473741 +0000 UTC m=+1963.526303708 32m43.526106051s
+</span><span class='line'>2017-06-30 23:59:59.644895019 +0000 UTC m=+1963.626461309 32m43.626263652s
+</span><span class='line'>2017-06-30 23:59:59.745084175 +0000 UTC m=+1963.726650464 32m43.726452807s
+</span><span class='line'>2017-06-30 23:59:59.845264185 +0000 UTC m=+1963.826830509 32m43.826632852s
+</span><span class='line'>2017-06-30 23:59:59.94546352 +0000 UTC m=+1963.927029829 32m43.926832172s
+</span><span class='line'>2017-07-01 00:00:00.04563023 +0000 UTC m=+1964.027196518 32m44.026998861s</span></code></pre></td></tr></table></div></figure>
+
+
+<p>うるう秒が挿入されるとwall clockは59.9から59.0に時刻が巻き戻っています。
+しかし経過時刻は32m42.9から32m43.0と巻き戻りは発生していません。</p>
+
+<p>Go1.9から<code>t.String()</code>がmonotonic clockの情報を返すようになるので、今回の検証ログにも表示されています。
+monotonic clockも m=+1962.921596780 から m=+1963.025425981 と巻き戻りは発生していません。
+(mの意味はよくわかってないけどプロセスの起動時間？)</p>
+
+<h2>時刻を変えてみた</h2>
+
+<p>検証用のfakentpdを止めて本物の上位ntpdを復活させると、
+時刻の差が大きいため元の時刻に一気に修正されます。
+この場合についても試してみました。</p>
+
+<p>Go1.8で実行した場合。
+時刻が戻ると同時に経過時間が-144hとおかしな値になってしまいました。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>(前略)
+</span><span class='line'>2017-07-01 00:30:20.802110381 +0000 UTC 4m52.493894502s
+</span><span class='line'>2017-07-01 00:30:20.9022538 +0000 UTC 4m52.594037921s
+</span><span class='line'>2017-07-01 00:30:21.002404752 +0000 UTC 4m52.694188873s #
+</span><span class='line'>2017-06-24 23:41:17.694698679 +0000 UTC -144h44m10.6135172s # 正しい時刻に戻った
+</span><span class='line'>2017-06-24 23:41:17.794881161 +0000 UTC -144h44m10.513334718s
+</span><span class='line'>2017-06-24 23:41:17.895024223 +0000 UTC -144h44m10.413191656s</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Go1.9で実行した場合です。
+wall clockは正しい時刻に戻りましたが、monotonic clockはその影響を受けず、
+経過時間も正しく計算できています。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>2017-07-01 00:30:20.802071152 +0000 UTC m=+289.102414299 4m49.102265199s
+</span><span class='line'>2017-07-01 00:30:20.902234666 +0000 UTC m=+289.202577610 4m49.20242851s
+</span><span class='line'>2017-07-01 00:30:21.00238566 +0000 UTC m=+289.302728596 4m49.302579496s #
+</span><span class='line'>2017-06-24 23:41:17.694655753 +0000 UTC m=+289.402903206 4m49.402754106s # 正しい時刻に戻った
+</span><span class='line'>2017-06-24 23:41:17.794841932 +0000 UTC m=+289.503089435 4m49.502940335s
+</span><span class='line'>2017-06-24 23:41:17.895004891 +0000 UTC m=+289.603252211 4m49.603103111s</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>ドリフトしてみた</h2>
+
+<p>monotonic time は ntpd の干渉を全く受けないわけではなく、
+ドリフトの補正は受けます。
+せっかくなのでこれも確認してみました。</p>
+
+<p>以下のコマンドで500PPM(Parts-per-Million)早く時刻が進むntpdとして動作します。
+1PPMは100万分の1の誤差なので、500PPMでは2000秒(約33分)で1秒ズレます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>sudo fakentpd -d 500
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>(ほんとうは2倍速！とかやってみたかったけど、さすがに偽ntpdだとバレて同期対象から外された)</p>
+
+<p>起動からの経過時間を返すサーバーと、
+サーバーとの時刻を比較するクライアントを用意します。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;fmt&quot;</span>
+</span><span class='line'>  <span class="s">&quot;log&quot;</span>
+</span><span class='line'>  <span class="s">&quot;net/http&quot;</span>
+</span><span class='line'>  <span class="s">&quot;time&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
+</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">&quot;/&quot;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">req</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="c1">// 起動からの経過時間を返す</span>
+</span><span class='line'>      <span class="nx">fmt</span><span class="p">.</span><span class="nx">Fprintf</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="s">&quot;%.6f&quot;</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Since</span><span class="p">(</span><span class="nx">start</span><span class="p">).</span><span class="nx">Seconds</span><span class="p">())</span>
+</span><span class='line'>      <span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&quot;%.6f&quot;</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Since</span><span class="p">(</span><span class="nx">start</span><span class="p">).</span><span class="nx">Seconds</span><span class="p">())</span>
+</span><span class='line'>  <span class="p">})</span>
+</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">&quot;:8080&quot;</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;io/ioutil&quot;</span>
+</span><span class='line'>  <span class="s">&quot;log&quot;</span>
+</span><span class='line'>  <span class="s">&quot;net/http&quot;</span>
+</span><span class='line'>  <span class="s">&quot;os&quot;</span>
+</span><span class='line'>  <span class="s">&quot;strconv&quot;</span>
+</span><span class='line'>  <span class="s">&quot;time&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// サーバー側の経過時間を取得する</span>
+</span><span class='line'><span class="kd">func</span> <span class="nx">get</span><span class="p">(</span><span class="nx">u</span> <span class="kt">string</span><span class="p">)</span> <span class="kt">float64</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">resp</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">Get</span><span class="p">(</span><span class="nx">u</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">defer</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+</span><span class='line'>  <span class="nx">data</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">ioutil</span><span class="p">.</span><span class="nx">ReadAll</span><span class="p">(</span><span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">)</span>
+</span><span class='line'>  <span class="nx">t</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">strconv</span><span class="p">.</span><span class="nx">ParseFloat</span><span class="p">(</span><span class="nb">string</span><span class="p">(</span><span class="nx">data</span><span class="p">),</span> <span class="mi">64</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">return</span> <span class="nx">t</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
+</span><span class='line'>  <span class="nx">startRemote</span> <span class="o">:=</span> <span class="nx">get</span><span class="p">(</span><span class="nx">os</span><span class="p">.</span><span class="nx">Args</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+</span><span class='line'>  <span class="k">for</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">time</span><span class="p">.</span><span class="nx">Sleep</span><span class="p">(</span><span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">)</span>
+</span><span class='line'>      <span class="nx">end</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
+</span><span class='line'>      <span class="nx">endRemote</span> <span class="o">:=</span> <span class="nx">get</span><span class="p">(</span><span class="nx">os</span><span class="p">.</span><span class="nx">Args</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+</span><span class='line'>      <span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&quot;local:  %.6f&quot;</span><span class="p">,</span> <span class="nx">end</span><span class="p">.</span><span class="nx">Sub</span><span class="p">(</span><span class="nx">start</span><span class="p">).</span><span class="nx">Seconds</span><span class="p">())</span>
+</span><span class='line'>      <span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&quot;remote: %.6f&quot;</span><span class="p">,</span> <span class="nx">endRemote</span><span class="o">-</span><span class="nx">startRemote</span><span class="p">)</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>ドリフト補正が反映されるよう数時間同期状態を保ったあと、
+検証用プログラムを走らせると以下のような結果になりました。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>(前略)
+</span><span class='line'>2017/06/25 08:34:27 local:  1997.178992
+</span><span class='line'>2017/06/25 08:34:27 remote: 1998.176471
+</span><span class='line'>2017/06/25 08:34:28 local:  1998.179892
+</span><span class='line'>2017/06/25 08:34:28 remote: 1999.177970
+</span><span class='line'>2017/06/25 08:34:29 local:  1999.180993
+</span><span class='line'>2017/06/25 08:34:29 remote: 2000.179569
+</span><span class='line'>2017/06/25 08:34:30 local:  2000.182062
+</span><span class='line'>2017/06/25 08:34:30 remote: 2001.181200</span></code></pre></td></tr></table></div></figure>
+
+
+<p>起動から2000秒で1秒のズレ＝500PPMのドリフトがかかっていることが確認できました。</p>
+
+<h2>まとめ</h2>
+
+<p>Go1.9からサポートされるmonotonic clockについて検証を行いました。
+うるう秒や時刻変更の影響を受けず、正しく経過時間を測定できることが確認できました。
+また、ドリフトの調整は受けることも確認できました。</p>
+
+<p>monotonic clockになると、methaneさんが紹介している<a href="http://dsas.blog.klab.org/archives/2016-09-20/isucon5q.html">zero time cache</a>の
+実用性があがって利用しやすくなりますね。
+さらに<a href="https://blog.cloudflare.com/how-and-why-the-leap-second-affected-cloudflare-dns/">Cloudflare DNSがうるう秒にやられる</a>
+こともなくなるので安心です。</p>
+
+<p>注意点としては<code>t.String()</code>がmonotonic clockの情報を返すので、
+時刻の出力を雑に<code>fmt.Println(t)</code>とかしていると出力が変わってしまうことくらいでしょうか。
+(皆さんちゃんとFormatしてますよね？)</p>
+
+<p>もうすぐ来年1月1日のうるう秒の有無が発表される時期です。
+それまでにはGo1.9の正式版がリリースされているはずなので、
+変な罠に引っかからないよう皆さんアップデートしましょう！</p>
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="http://tech.mercari.com/entry/gopherfest2017_report">Gopher Fest 2017参加レポート</a></li>
+<li><a href="https://www.slideshare.net/takuyaueda967/gopher-fest-2017">Gopher Fest 2017参加レポート(スライド)</a></li>
+</ul>
+
+
+<iframe src="https://www.slideshare.net/slideshow/embed_code/key/ebzs4FaAdpQVst" width="427" height="356" frameborder="0" marginwidth="0" marginheight="0" scrolling="no" style="border:1px solid #CCC; border-width:1px; margin-bottom:5px; max-width: 100%;" allowfullscreen> </iframe>
+
+
+<p> <div style="margin-bottom:5px"> <strong> <a href="https://www.slideshare.net/takuyaueda967/gopher-fest-2017" title="Gopher Fest 2017参加レポート" target="_blank">Gopher Fest 2017参加レポート</a> </strong> from <strong><a target="_blank" href="https://www.slideshare.net/takuyaueda967">Takuya Ueda</a></strong> </div></p>
+
+<ul>
+<li><a href="http://jjy.nict.go.jp/tsp/link/leap.html">うるう秒とコンピュータクロック | NICT</a></li>
+<li><a href="http://d.hatena.ne.jp/incarose86/20110505/1312522379">NTP設定</a></li>
+<li><a href="http://tkuchiki.hatenablog.com/entry/2015/06/19/083025">2015年うるう秒の検証方法と検証結果 (Amazon Linux, CentOS)</a></li>
+<li><a href="https://access.redhat.com/ja/node/1362753">Leap Second Insertion フラグを受信後にそのフラグを削除する</a></li>
+<li><a href="http://www.geocities.co.jp/SiliconValley/6876/rfc2030j.htm">RFC2030 参考訳 IPv4・IPv6・OSI用簡易ネットワーク時刻プロトコル（SNTP）Version 4</a></li>
+<li><a href="https://tools.ietf.org/html/rfc2030">RFC2030  Simple Network Time Protocol (SNTP) Version 4 for IPv4, IPv6 and OSI</a></li>
+<li><a href="http://dsas.blog.klab.org/archives/2016-09-20/isucon5q.html">ISUCON6予選をトップ通過しました</a>
+
+<ul>
+<li>zero time cache について紹介されています</li>
+</ul>
+</li>
+<li><a href="https://blog.cloudflare.com/how-and-why-the-leap-second-affected-cloudflare-dns/">How and why the leap second affected Cloudflare DNS</a></li>
+</ul>
+
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+
+      
+
+
+
+
+<time class='entry-date' datetime='2017-06-26T09:21:42+09:00'><span class='date'><span class='date-month'>Jun</span> <span class='date-day'>26</span><span class='date-suffix'>th</span>, <span class='date-year'>2017</span></span> <span class='time'>9:21 am</span></time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/golang/'>golang</a>, <a class='category' href='/blog/categories/leapsecond/'>leapsecond</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//b.hatena.ne.jp/entry/https://shogo82148.github.io/blog/2017/06/26/go19-monotonic-clock/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="//b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="//b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="https://shogo82148.github.io/blog/2017/06/26/go19-monotonic-clock/" data-via="shogo82148" data-counturl="https://shogo82148.github.io/blog/2017/06/26/go19-monotonic-clock/" >Tweet</a>
+  
+  
+  <div class="g-plusone" data-size="medium"></div>
+  
+  
+    <div class="fb-like" data-send="true" data-width="450" data-show-faces="false"></div>
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2017/06/16/mysql-driver-and-context/" title="Previous Post: ぼくのかんがえたさいきょうのcontext対応版go-mysql-driverをマージしてもらった">&laquo; ぼくのかんがえたさいきょうのcontext対応版go-mysql-driverをマージしてもらった</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2017/06/26/go19-monotonic-clock/">Go1.9から使える Monotonic Clocks を試してみた</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/06/16/mysql-driver-and-context/">ぼくのかんがえたさいきょうのcontext対応版go-mysql-driverをマージしてもらった</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/05/30/grumpy/">Re: GoとPythonとGrumpyの速度ベンチマーク</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/05/04/go-rerand/">String::RandomのGo移植を書いてみた</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/04/22/postgresql-exclusion-constraint/">Re: PostgreSQLで排他制約がめっちゃ便利！！</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>GitHub Repos</h1>
+  <ul id="gh_repos">
+    <li class="loading">Status updating...</li>
+  </ul>
+  
+  <a href="https://github.com/shogo82148">@shogo82148</a> on GitHub
+  
+  <script type="text/javascript">
+    $(document).ready(function(){
+        if (!window.jXHR){
+            var jxhr = document.createElement('script');
+            jxhr.type = 'text/javascript';
+            jxhr.src = '/javascripts/libs/jXHR.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(jxhr, s);
+        }
+
+        github.showRepos({
+            user: 'shogo82148',
+            count: 0,
+            skip_forks: true,
+            target: '#gh_repos'
+        });
+    });
+  </script>
+  <script src="/javascripts/github.js" type="text/javascript"> </script>
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2017 - Shogo Ichinose -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'shogosblog';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'https://shogo82148.github.io/blog/2017/06/26/go19-monotonic-clock/';
+        var disqus_url = 'https://shogo82148.github.io/blog/2017/06/26/go19-monotonic-clock/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = '//' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) {return;}
+  js = d.createElement(s); js.id = id; js.async = true;
+  js.src = "//connect.facebook.net/en_US/all.js#appId=212934732101925&xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var script = document.createElement('script'); script.type = 'text/javascript'; script.async = true;
+      script.src = 'https://apis.google.com/js/plusone.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(script, s);
+    })();
+  </script>
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

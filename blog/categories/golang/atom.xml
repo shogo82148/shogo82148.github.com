@@ -4,7 +4,7 @@
   <title><![CDATA[Category: golang | Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/blog/categories/golang/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2017-06-16T07:13:31+09:00</updated>
+  <updated>2017-06-26T10:20:23+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,359 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Go1.9から使える Monotonic Clocks を試してみた]]></title>
+    <link href="https://shogo82148.github.io/blog/2017/06/26/go19-monotonic-clock/"/>
+    <updated>2017-06-26T09:21:42+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2017/06/26/go19-monotonic-clock</id>
+    <content type="html"><![CDATA[<p>先日Go1.9beta1がリリースされました。</p>
+
+<p><a href="https://twitter.com/golang/status/875117556595515392">https://twitter.com/golang/status/875117556595515392</a>">https://twitter.com/golang/status/875117556595515392">https://twitter.com/golang/status/875117556595515392</a></a></p>
+
+<ul>
+<li><a href="https://tip.golang.org/doc/go1.9">Go 1.9 Release Notes</a></li>
+</ul>
+
+
+<p>型エイリアスのサポート、<a href="https://tip.golang.org/pkg/math/bits/">math/bits</a>パッケージ、
+<a href="https://tip.golang.org/pkg/sync/#Map">sync.Map</a>型など、
+今回のアップデートでも便利そうな機能が追加されます。
+詳しくは<a href="https://twitter.com/tenntenn">tenntenn</a>さんの<a href="https://www.slideshare.net/takuyaueda967/gopher-fest-2017">Gopher Fest 2017参加レポート</a>をどうぞ。</p>
+
+<p>今回のリリースノートを見て、個人的に注目しているのは<strong>Monotonic Clocksのサポート</strong>です。
+他の機能追加はTwitterとかで見かけるけど、
+Monotonic Clocksはなぜかあまり見ない・・・。
+beta1がでて手軽に試せるようになったので、試してみました。</p>
+
+<h2>Monotonic Clocks</h2>
+
+<p>Go1.8以前で取得していた時刻は「wall clock」といい、<strong>現在の正しい時刻</strong>を知るために使います。
+一方「monotonic clock」は、<strong>時間を計る</strong>ために使うものです。
+Go1.9からは<code>time.Now</code>で取得できる時刻に「wall clock」と「monotonic clock」が含まれるようになります。</p>
+
+<p><a href="https://tip.golang.org/pkg/time/#hdr-Monotonic_Clocks">timeパッケージのドキュメント</a>から
+コード片を引用します。</p>
+
+<pre><code class="plain">t := time.Now()
+... operation that takes 20 milliseconds ...
+u := time.Now()
+elapsed := t.Sub(u)
+</code></pre>
+
+<p>上のコードで <code>elapsed</code> は 20ms となるはずですが、
+実際はそうはならないケースがあります。
+具体的には以下のようなケースです。</p>
+
+<ul>
+<li>ntpdなどによってOSの時刻が変更された場合</li>
+<li>うるう秒が挿入・削除された場合</li>
+</ul>
+
+
+<p>Go1.9からはこのようなケースでも正しく時間を計ることができます。</p>
+
+<h2>うるう秒を入れてみた</h2>
+
+<p>うるう秒が入ったときの挙動が気になったので実際にやってみました。
+セットアップが簡単になるよう<a href="http://jjy.nict.go.jp/tsp/link/leap.html">NICTのPerl版SNTP</a>のGolangポートを作ったので、
+それを使って偽物のうるう秒を挿入してみます。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/fakentpd">shogo82148/fakentpd</a></li>
+</ul>
+
+
+<p>インストールはいつものように<code>go get</code>です。
+<code>-p</code>オプションで正のうるう秒挿入、<code>-n</code>オプションで負のうるう秒削除です(ほんとうは月末だけだけど、雑な実装のため毎日その日の終わりに挿入・削除されます)。
+引数にRFC3339形式で日時を指定すると、その日時を起動時の日時として扱います。</p>
+
+<p>たとえば今月末に正のうるう秒を挿入するには以下のように指定します。</p>
+
+<pre><code class="bash"># 上位ntpd側
+$ go get github.com/shogo82148/fakentpd
+$ sudo fakentpd -p 2017-06-30T23:00:00Z # well known portを使うのでroot権限が必要
+</code></pre>
+
+<p>このSNTPサーバーを上位ntpdとして参照したクライアントを用意し、<code>date</code>コマンドで様子を確認してみましょう。
+(ntpdの設定などの詳細は<a href="http://tkuchiki.hatenablog.com/entry/2015/06/19/083025">tkuchikiさんのうるう秒検証記事</a> を参照)</p>
+
+<pre><code class="bash"># 下位ntpd側
+$ while :; do date +'%Y-%m-%d %H:%M:%S.%3N'; usleep 100000; done
+</code></pre>
+
+<pre><code class="plain">(前略)
+2017-06-30 23:59:59.040
+2017-06-30 23:59:59.141
+2017-06-30 23:59:59.243
+2017-06-30 23:59:59.344
+2017-06-30 23:59:59.445
+2017-06-30 23:59:59.547
+2017-06-30 23:59:59.648
+2017-06-30 23:59:59.749
+2017-06-30 23:59:59.851
+2017-06-30 23:59:59.952 #
+2017-06-30 23:59:59.053 # うるう秒挿入！
+2017-06-30 23:59:59.155
+2017-06-30 23:59:59.256
+2017-06-30 23:59:59.357
+2017-06-30 23:59:59.458
+2017-06-30 23:59:59.559
+2017-06-30 23:59:59.661
+2017-06-30 23:59:59.762
+2017-06-30 23:59:59.863
+2017-06-30 23:59:59.964
+2017-07-01 00:00:00.066
+</code></pre>
+
+<p>うるう秒が挿入されたため、59.952から59.053へ時間が巻き戻っていることが確認できます。</p>
+
+<p>これと同等のプログラムをGoで書いて挙動を確認します。
+monotonic clockの確認をするために、一緒に起動時からの経過時間も表示するようにしました。</p>
+
+<pre><code class="go">package main
+
+import (
+    "fmt"
+    "time"
+)
+
+func main() {
+    start := time.Now()
+    for {
+        now := time.Now()
+        fmt.Println(now, now.Sub(start))
+        time.Sleep(100 * time.Millisecond)
+    }
+}
+</code></pre>
+
+<p><code>date</code>コマンドで検証したときと同様の条件で、
+このプログラムを<strong>Go1.8で実行</strong>すると以下のような結果になりました。</p>
+
+<pre><code class="plain">(前略)
+2017-06-30 23:59:59.038281905 +0000 UTC 32m42.970735711s
+2017-06-30 23:59:59.138469005 +0000 UTC 32m43.070922811s
+2017-06-30 23:59:59.238662875 +0000 UTC 32m43.171116681s
+2017-06-30 23:59:59.338835875 +0000 UTC 32m43.271289681s
+2017-06-30 23:59:59.439025825 +0000 UTC 32m43.371479631s
+2017-06-30 23:59:59.539213666 +0000 UTC 32m43.471667472s
+2017-06-30 23:59:59.63940551 +0000 UTC 32m43.571859316s
+2017-06-30 23:59:59.739603502 +0000 UTC 32m43.672057308s
+2017-06-30 23:59:59.839783301 +0000 UTC 32m43.772237107s
+2017-06-30 23:59:59.939980591 +0000 UTC 32m43.872434397s #
+2017-06-30 23:59:59.043820722 +0000 UTC 32m42.976274528s # うるう秒挿入！
+2017-06-30 23:59:59.143987505 +0000 UTC 32m43.076441311s
+2017-06-30 23:59:59.244160716 +0000 UTC 32m43.176614522s
+2017-06-30 23:59:59.344336707 +0000 UTC 32m43.276790513s
+2017-06-30 23:59:59.444546067 +0000 UTC 32m43.376999873s
+2017-06-30 23:59:59.544717014 +0000 UTC 32m43.47717082s
+2017-06-30 23:59:59.644876123 +0000 UTC 32m43.577329929s
+2017-06-30 23:59:59.745050732 +0000 UTC 32m43.677504538s
+2017-06-30 23:59:59.845230425 +0000 UTC 32m43.777684231s
+2017-06-30 23:59:59.945421532 +0000 UTC 32m43.877875338s
+2017-07-01 00:00:00.045595155 +0000 UTC 32m43.978048961s
+</code></pre>
+
+<p>うるう秒が挿入されたため、59.9から59.0に時刻が巻き戻っていることが確認できます。
+それと同時に経過時刻も32m43.87sから32m42.97sと巻き戻ってしまいました。</p>
+
+<p>おなじプログラムをGo1.9で実行してみます。</p>
+
+<pre><code class="plain">(前略)
+2017-06-30 23:59:59.038322917 +0000 UTC m=+1962.019889237 32m42.01969158s
+2017-06-30 23:59:59.138507805 +0000 UTC m=+1962.120074107 32m42.11987645s
+2017-06-30 23:59:59.238704422 +0000 UTC m=+1962.220270727 32m42.22007307s
+2017-06-30 23:59:59.338875317 +0000 UTC m=+1962.320441617 32m42.32024396s
+2017-06-30 23:59:59.439066666 +0000 UTC m=+1962.420632996 32m42.420435339s
+2017-06-30 23:59:59.539255964 +0000 UTC m=+1962.520822264 32m42.520624607s
+2017-06-30 23:59:59.639446597 +0000 UTC m=+1962.621012897 32m42.62081524s
+2017-06-30 23:59:59.739644525 +0000 UTC m=+1962.721210832 32m42.721013175s
+2017-06-30 23:59:59.839827168 +0000 UTC m=+1962.821393501 32m42.821195844s
+2017-06-30 23:59:59.94003045 +0000 UTC m=+1962.921596780 32m42.921399123s #
+2017-06-30 23:59:59.043859649 +0000 UTC m=+1963.025425981 32m43.025228324s # うるう秒挿入！
+2017-06-30 23:59:59.144008957 +0000 UTC m=+1963.125575282 32m43.125377625s
+2017-06-30 23:59:59.244196844 +0000 UTC m=+1963.225763148 32m43.225565491s
+2017-06-30 23:59:59.344388476 +0000 UTC m=+1963.325954758 32m43.325757101s
+2017-06-30 23:59:59.444598162 +0000 UTC m=+1963.426164679 32m43.425967022s
+2017-06-30 23:59:59.54473741 +0000 UTC m=+1963.526303708 32m43.526106051s
+2017-06-30 23:59:59.644895019 +0000 UTC m=+1963.626461309 32m43.626263652s
+2017-06-30 23:59:59.745084175 +0000 UTC m=+1963.726650464 32m43.726452807s
+2017-06-30 23:59:59.845264185 +0000 UTC m=+1963.826830509 32m43.826632852s
+2017-06-30 23:59:59.94546352 +0000 UTC m=+1963.927029829 32m43.926832172s
+2017-07-01 00:00:00.04563023 +0000 UTC m=+1964.027196518 32m44.026998861s
+</code></pre>
+
+<p>うるう秒が挿入されるとwall clockは59.9から59.0に時刻が巻き戻っています。
+しかし経過時刻は32m42.9から32m43.0と巻き戻りは発生していません。</p>
+
+<p>Go1.9から<code>t.String()</code>がmonotonic clockの情報を返すようになるので、今回の検証ログにも表示されています。
+monotonic clockも m=+1962.921596780 から m=+1963.025425981 と巻き戻りは発生していません。
+(mの意味はよくわかってないけどプロセスの起動時間？)</p>
+
+<h2>時刻を変えてみた</h2>
+
+<p>検証用のfakentpdを止めて本物の上位ntpdを復活させると、
+時刻の差が大きいため元の時刻に一気に修正されます。
+この場合についても試してみました。</p>
+
+<p>Go1.8で実行した場合。
+時刻が戻ると同時に経過時間が-144hとおかしな値になってしまいました。</p>
+
+<pre><code class="plain">(前略)
+2017-07-01 00:30:20.802110381 +0000 UTC 4m52.493894502s
+2017-07-01 00:30:20.9022538 +0000 UTC 4m52.594037921s
+2017-07-01 00:30:21.002404752 +0000 UTC 4m52.694188873s #
+2017-06-24 23:41:17.694698679 +0000 UTC -144h44m10.6135172s # 正しい時刻に戻った
+2017-06-24 23:41:17.794881161 +0000 UTC -144h44m10.513334718s
+2017-06-24 23:41:17.895024223 +0000 UTC -144h44m10.413191656s
+</code></pre>
+
+<p>Go1.9で実行した場合です。
+wall clockは正しい時刻に戻りましたが、monotonic clockはその影響を受けず、
+経過時間も正しく計算できています。</p>
+
+<pre><code class="plain">2017-07-01 00:30:20.802071152 +0000 UTC m=+289.102414299 4m49.102265199s
+2017-07-01 00:30:20.902234666 +0000 UTC m=+289.202577610 4m49.20242851s
+2017-07-01 00:30:21.00238566 +0000 UTC m=+289.302728596 4m49.302579496s #
+2017-06-24 23:41:17.694655753 +0000 UTC m=+289.402903206 4m49.402754106s # 正しい時刻に戻った
+2017-06-24 23:41:17.794841932 +0000 UTC m=+289.503089435 4m49.502940335s
+2017-06-24 23:41:17.895004891 +0000 UTC m=+289.603252211 4m49.603103111s
+</code></pre>
+
+<h2>ドリフトしてみた</h2>
+
+<p>monotonic time は ntpd の干渉を全く受けないわけではなく、
+ドリフトの補正は受けます。
+せっかくなのでこれも確認してみました。</p>
+
+<p>以下のコマンドで500PPM(Parts-per-Million)早く時刻が進むntpdとして動作します。
+1PPMは100万分の1の誤差なので、500PPMでは2000秒(約33分)で1秒ズレます。</p>
+
+<pre><code class="bash">$ sudo fakentpd -d 500
+</code></pre>
+
+<p>(ほんとうは2倍速！とかやってみたかったけど、さすがに偽ntpdだとバレて同期対象から外された)</p>
+
+<p>起動からの経過時間を返すサーバーと、
+サーバーとの時刻を比較するクライアントを用意します。</p>
+
+<pre><code class="go">package main
+
+import (
+    "fmt"
+    "log"
+    "net/http"
+    "time"
+)
+
+func main() {
+    start := time.Now()
+    http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+        // 起動からの経過時間を返す
+        fmt.Fprintf(w, "%.6f", time.Since(start).Seconds())
+        log.Printf("%.6f", time.Since(start).Seconds())
+    })
+    http.ListenAndServe(":8080", nil)
+}
+</code></pre>
+
+<pre><code class="go">package main
+
+import (
+    "io/ioutil"
+    "log"
+    "net/http"
+    "os"
+    "strconv"
+    "time"
+)
+
+// サーバー側の経過時間を取得する
+func get(u string) float64 {
+    resp, _ := http.Get(u)
+    defer resp.Body.Close()
+    data, _ := ioutil.ReadAll(resp.Body)
+    t, _ := strconv.ParseFloat(string(data), 64)
+    return t
+}
+
+func main() {
+    start := time.Now()
+    startRemote := get(os.Args[1])
+    for {
+        time.Sleep(time.Second)
+        end := time.Now()
+        endRemote := get(os.Args[1])
+        log.Printf("local:  %.6f", end.Sub(start).Seconds())
+        log.Printf("remote: %.6f", endRemote-startRemote)
+    }
+}
+</code></pre>
+
+<p>ドリフト補正が反映されるよう数時間同期状態を保ったあと、
+検証用プログラムを走らせると以下のような結果になりました。</p>
+
+<pre><code class="plain">(前略)
+2017/06/25 08:34:27 local:  1997.178992
+2017/06/25 08:34:27 remote: 1998.176471
+2017/06/25 08:34:28 local:  1998.179892
+2017/06/25 08:34:28 remote: 1999.177970
+2017/06/25 08:34:29 local:  1999.180993
+2017/06/25 08:34:29 remote: 2000.179569
+2017/06/25 08:34:30 local:  2000.182062
+2017/06/25 08:34:30 remote: 2001.181200
+</code></pre>
+
+<p>起動から2000秒で1秒のズレ＝500PPMのドリフトがかかっていることが確認できました。</p>
+
+<h2>まとめ</h2>
+
+<p>Go1.9からサポートされるmonotonic clockについて検証を行いました。
+うるう秒や時刻変更の影響を受けず、正しく経過時間を測定できることが確認できました。
+また、ドリフトの調整は受けることも確認できました。</p>
+
+<p>monotonic clockになると、methaneさんが紹介している<a href="http://dsas.blog.klab.org/archives/2016-09-20/isucon5q.html">zero time cache</a>の
+実用性があがって利用しやすくなりますね。
+さらに<a href="https://blog.cloudflare.com/how-and-why-the-leap-second-affected-cloudflare-dns/">Cloudflare DNSがうるう秒にやられる</a>
+こともなくなるので安心です。</p>
+
+<p>注意点としては<code>t.String()</code>がmonotonic clockの情報を返すので、
+時刻の出力を雑に<code>fmt.Println(t)</code>とかしていると出力が変わってしまうことくらいでしょうか。
+(皆さんちゃんとFormatしてますよね？)</p>
+
+<p>もうすぐ来年1月1日のうるう秒の有無が発表される時期です。
+それまでにはGo1.9の正式版がリリースされているはずなので、
+変な罠に引っかからないよう皆さんアップデートしましょう！</p>
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="http://tech.mercari.com/entry/gopherfest2017_report">Gopher Fest 2017参加レポート</a></li>
+<li><a href="https://www.slideshare.net/takuyaueda967/gopher-fest-2017">Gopher Fest 2017参加レポート(スライド)</a></li>
+</ul>
+
+
+<p><a href="https://www.slideshare.net/takuyaueda967/gopher-fest-2017">https://www.slideshare.net/takuyaueda967/gopher-fest-2017</a>">https://www.slideshare.net/takuyaueda967/gopher-fest-2017">https://www.slideshare.net/takuyaueda967/gopher-fest-2017</a></a></p>
+
+<ul>
+<li><a href="http://jjy.nict.go.jp/tsp/link/leap.html">うるう秒とコンピュータクロック | NICT</a></li>
+<li><a href="http://d.hatena.ne.jp/incarose86/20110505/1312522379">NTP設定</a></li>
+<li><a href="http://tkuchiki.hatenablog.com/entry/2015/06/19/083025">2015年うるう秒の検証方法と検証結果 (Amazon Linux, CentOS)</a></li>
+<li><a href="https://access.redhat.com/ja/node/1362753">Leap Second Insertion フラグを受信後にそのフラグを削除する</a></li>
+<li><a href="http://www.geocities.co.jp/SiliconValley/6876/rfc2030j.htm">RFC2030 参考訳 IPv4・IPv6・OSI用簡易ネットワーク時刻プロトコル（SNTP）Version 4</a></li>
+<li><a href="https://tools.ietf.org/html/rfc2030">RFC2030  Simple Network Time Protocol (SNTP) Version 4 for IPv4, IPv6 and OSI</a></li>
+<li><a href="http://dsas.blog.klab.org/archives/2016-09-20/isucon5q.html">ISUCON6予選をトップ通過しました</a>
+
+<ul>
+<li>zero time cache について紹介されています</li>
+</ul>
+</li>
+<li><a href="https://blog.cloudflare.com/how-and-why-the-leap-second-affected-cloudflare-dns/">How and why the leap second affected Cloudflare DNS</a></li>
+</ul>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[ぼくのかんがえたさいきょうのcontext対応版go-mysql-driverをマージしてもらった]]></title>
@@ -1178,202 +1531,6 @@ v13 = MOVQstore &lt;mem&gt; {~r0} v2 v11 v12
 <li>Go1.8.1では<code>new(Type)</code>と<code>&amp;Type{}</code>の差はない(少なくとも性能面では)</li>
 </ul>
 
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Go言語のchanはいったいいくつ付けられるのか試してみた]]></title>
-    <link href="https://shogo82148.github.io/blog/2017/03/17/how-many-chan-can-i-write-in-golang/"/>
-    <updated>2017-03-17T21:10:25+09:00</updated>
-    <id>https://shogo82148.github.io/blog/2017/03/17/how-many-chan-can-i-write-in-golang</id>
-    <content type="html"><![CDATA[<p>pecoに入った修正をみて、果たして<code>chan</code>はいくつまで付けられるのか気になったので、
-雑に試してみました。
-先に断っておきますが、全く有用ではないですよ。</p>
-
-<!-- More -->
-
-
-<h2>背景</h2>
-
-<p>pecoに入った修正はこちら(一部抜粋)。</p>
-
-<ul>
-<li><a href="https://github.com/peco/peco/pull/411">Make Resume a blocking operation #411</a></li>
-</ul>
-
-
-<pre><code class="diff">diff --git a/interface.go b/interface.go
-index 3d4472f..fff446c 100644
---- a/interface.go
-+++ b/interface.go
-@@ -162,8 +162,8 @@ type Screen interface {
- // Termbox just hands out the processing to the termbox library
- type Termbox struct {
-    mutex     sync.Mutex
--   resumeCh  chan (struct{})
--   suspendCh chan (struct{})
-+   resumeCh  chan chan struct{}
-+   suspendCh chan struct{}
- }
-
- // View handles the drawing/updating the screen
-diff --git a/screen.go b/screen.go
-index edbce87..f6dd71e 100644
---- a/screen.go
-+++ b/screen.go
-@@ -21,7 +21,7 @@ func (t *Termbox) Init() error {
- func NewTermbox() *Termbox {
-    return &amp;Termbox{
-        suspendCh: make(chan struct{}),
--       resumeCh:  make(chan struct{}),
-+       resumeCh:  make(chan chan struct{}),
-    }
- }
-</code></pre>
-
-<p>channelを使ってchannelをやり取りすることができるので、
-<code>chan struct{}</code>をやり取りする<code>chan chan struct{}</code>という型が使えます。
-同じ要領で、channelをやり取りするchannelをやり取りするchannelをやり取り&hellip;するchannelが
-無限に作れるはずです(少なくとも構文上は)。
-ということで、実際にやってみました。</p>
-
-<h2>実験</h2>
-
-<p>雑なPerlスクリプトを準備して、大量の<code>chan</code>を付けたGoのコードを自動生成します。</p>
-
-<pre><code class="perl">print &lt;&lt;EOF;
-package main
-
-import (
-    "fmt"
-)
-
-type Foo @{['chan ' x 4096]} struct{}
-
-func main() {
-    fmt.Printf("Hello, %#v\\n", make(Foo))
-}
-EOF
-</code></pre>
-
-<p><code>chan</code>の個数を変えて何度かビルドを繰り返します。</p>
-
-<pre><code class="bash">time go build -o main main.go
-</code></pre>
-
-<h2>結果</h2>
-
-<p>chanの個数とビルドにかかった時間をまとめてみました。</p>
-
-<table>
-    <tr><th>chanの個数</th><th>ビルド時間</th></tr>
-    <tr><td>1</td><td>0.236s</td></tr>
-    <tr><td>2</td><td>0.240s</td></tr>
-    <tr><td>4</td><td>0.226s</td></tr>
-    <tr><td>8</td><td>0.234s</td></tr>
-    <tr><td>16</td><td>0.240s</td></tr>
-    <tr><td>32</td><td>0.250s</td></tr>
-    <tr><td>64</td><td>0.281s</td></tr>
-    <tr><td>128</td><td>0.258s</td></tr>
-    <tr><td>256</td><td>0.360s</td></tr>
-    <tr><td>512</td><td>0.775s</td></tr>
-    <tr><td>1024</td><td>3.228s</td></tr>
-    <tr><td>2048</td><td>18.605s</td></tr>
-    <tr><td>4096</td><td>1m53.614s</td></tr>
-    <tr><td>8192</td><td>13m46.018s(ビルド失敗したので参考記録)</td></tr>
-</table>
-
-
-<p>8192個付けたら以下のようなエラーを吐いてビルドが失敗してしまったので、
-8192個の時の記録は参考記録です。</p>
-
-<pre><code class="plain"># command-line-arguments
-too much data in section SDWARFINFO (over 2000000000 bytes)
-</code></pre>
-
-<p>何かビルドの設定をいじればもっと行けるかもしれませんが、
-デフォルトの設定では4096から8192の間に限界があるようです。
-4096個<code>chan</code>を付けたときのソースコードは20KB程度なのにバイナリサイズは524MBまで膨らんでいました。</p>
-
-<p>256個当たりからビルド時間に影響が出ているので、
-ビルド時間を考える256個以下に抑えるのがよさそうです。
-それ以上だと <script type="math/tex">O(n^{2.6})</script> 程度のオーダーでビルド時間が延びます。
-とはいえ、256個も<code>chan</code>を付いたコードを人間が読めるとは思えないので、
-2個が限度でしょうね・・・。
-3個以上必要になるケースは余りないと思います。</p>
-
-<h2>型定義を再帰的にして無限chanを実現する</h2>
-
-<p>そもそも、<code>chan</code>を大量に並べなくとも、
-型定義を再帰的に行えば無限の<code>chan</code>を付けたときと同等のことができます。
-例えば以下のコードで"Goroutine 1"と"Goroutine 2"を交互に表示することが可能です。</p>
-
-<pre><code class="go">package main
-
-import (
-    "fmt"
-)
-
-type Foo chan Foo
-
-func main() {
-    ch := make(Foo)
-    go func() {
-        ch := ch
-        for {
-            done := &lt;-ch
-            fmt.Println("Goroutine 2")
-            done &lt;- ch
-        }
-    }()
-
-    for i := 0; i &lt; 100; i++ {
-        fmt.Println("Goroutine 1")
-        done := make(Foo)
-        ch &lt;- done
-        ch = &lt;-done
-    }
-    fmt.Println("Hello, playground")
-}
-</code></pre>
-
-<p>channelでのやり取りが複雑になるので実用性があるかは不明ですが・・・。
-例えば先程の例だと、普通にループを書いたほうが圧倒的にシンプルです。</p>
-
-<pre><code class="go">package main
-
-import (
-    "fmt"
-)
-
-func main() {
-    for i := 0; i &lt; 100; i++ {
-        fmt.Println("Goroutine 1")
-        fmt.Println("Goroutine 2")
-    }
-    fmt.Println("Hello, playground")
-}
-</code></pre>
-
-<p>無限<code>chan</code>が必要になる多くのケースは、このような書き換えができるような気がします。
-(そもそも必要になったことがない)</p>
-
-<h2>まとめ</h2>
-
-<ul>
-<li><code>chan</code>の個数の上限は4096から8192の間のどこか</li>
-<li>256個あたりからビルド時間に影響が出始める
-
-<ul>
-<li>プログラムを読む人の精神力に多大な影響を与えるので、実際は2個までに留めるべきだと思う</li>
-</ul>
-</li>
-<li>再帰的に型を定義することで、無限に<code>chan</code>を付けた時と同等のことが可能</li>
-</ul>
-
-
-<p><code>chan</code>を大量に付けたいケースには今までに僕自身は遭遇したことがないです。
-有用な例を見つけた人は教えてください。</p>
 ]]></content>
   </entry>
   

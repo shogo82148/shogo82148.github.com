@@ -4,7 +4,7 @@
   <title><![CDATA[Category: go | Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/blog/categories/go/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2017-06-16T07:13:31+09:00</updated>
+  <updated>2017-06-26T10:20:23+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -14,652 +14,16 @@
 
   
   <entry>
-    <title type="html"><![CDATA[Redisを使ってユニークなIDを配布する]]></title>
-    <link href="https://shogo82148.github.io/blog/2017/02/26/unique-id-supplier-using-redis/"/>
-    <updated>2017-02-26T19:37:45+09:00</updated>
-    <id>https://shogo82148.github.io/blog/2017/02/26/unique-id-supplier-using-redis</id>
-    <content type="html"><![CDATA[<p>スケーラブルにIDを生成する方法として
-Twitterの<a href="https://github.com/twitter/snowflake">snowflake</a>が有名です。
-1024台までスケールすることが出来ますが、各snowflakeのサーバにユニークなWoker IDを割り振る必要があります。
-IDを振るためのサーバにIDを振るのが問題になるとは難しいですね。</p>
-
-<p>各snowflakeサーバにIDを振る親玉Worker ID配布サーバを作るというアイデアはあったのですが、
-Worker IDサーバの可用性を考えるのが大変で手を付けていませんでした。
-最近になってWorker IDサーバとしてRedisを使い、ソート済みセット型で管理すれば楽できるのでは？
-と思いついたので、やってみたというお話です。</p>
-
-<!-- More -->
-
-
-<h2>概要</h2>
-
-<p>レポジトリはこちらです。</p>
+    <title type="html"><![CDATA[nginx-omniauth-adapterのGolangポート作った]]></title>
+    <link href="https://shogo82148.github.io/blog/2016/03/10/go-nginx-oauth2-adapter/"/>
+    <updated>2016-03-10T12:51:00+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2016/03/10/go-nginx-oauth2-adapter</id>
+    <content type="html"><![CDATA[<p>「<a href="http://techlife.cookpad.com/entry/2015/10/16/080000">nginx で omniauth を利用してアクセス制御を行う</a>」という記事で、
+<a href="http://nginx.org/en/docs/http/ngx_http_auth_request_module.html">ngx_http_auth_request_module</a>の存在を知ったので、
+Golangで<a href="https://github.com/sorah/nginx_omniauth_adapter">nginx_omniauth_adapter</a>と似たようなものを作ってみました。</p>
 
 <ul>
-<li><a href="https://github.com/shogo82148/yaraus">shogo82148/yaraus</a></li>
-</ul>
-
-
-<p>他の<a href="https://github.com/twitter/snowflake">snowflake</a>-likeなID発番サーバの実装として
-<a href="http://techblog.kayac.com/katsubushi-introduction.html">katsubushi</a>や
-<a href="https://github.com/sony/sonyflake">sonyflake</a>なんていうのもあります。
-これらのID発番サーバにRedisを使ってWorker IDを割り振るコマンドです。
-Redis3.2以上推奨です。</p>
-
-<h2>使い方</h2>
-
-<p>Go製なので<code>go get</code>でインストールできます。</p>
-
-<pre><code class="bash">go get github.com/shogo82148/yaraus/cmd/yaraus
-</code></pre>
-
-<pre><code class="bash"># 1から1023までのIDが使えるようにRedisを初期化
-$ yaraus init -min 1 -max 1023
-
-# ユニークなIDが必要な処理を実行する
-$ yaraus run -- echo {}
-2017/02/25 17:19:16 getting new id...
-2017/02/25 17:19:16 client id: YourHostName-1488010756.738-1, id: 1
-2017/02/25 17:19:16 sleep 2s for making sure that other generates which has same id expire.
-2017/02/25 17:19:18 starting...
-1
-2017/02/25 17:19:18 releasing id...
-
-# katsubushiと一緒に使う例
-$ yaraus run -- ./katsubushi -worker-id={} -port=7238
-
-# ステータス情報もとれます
-$ yaraus stats
-{
-    "client_id_count": 4,
-    "client_get_id_count": 4,
-    "client_get_id_success": 4,
-    "get_id_no_available_id": 0,
-    "extend_ttl_count": 8,
-    "extend_ttl_success": 8,
-    "extend_ttl_ownership_error": 0,
-    "extend_ttl_expire_warning": 0,
-    "unusing_ids": 1023,
-    "using_ids": 0,
-    "using_ttl_max": 0,
-    "using_ttl_mid": 0,
-    "using_ttl_min": 0
-}
-</code></pre>
-
-<p>ステータスの意味は以下の通りです。</p>
-
-<ul>
-<li><code>client_id_count</code>: 今までに接続してきたクライアントの延べ数</li>
-<li><code>client_get_id_count</code>: ID取得を試みた回数</li>
-<li><code>client_get_id_success</code>: ID取得に成功した回数</li>
-<li><code>get_id_no_available_id</code>: 利用可能なIDが無くて失敗した回数</li>
-<li><code>extend_ttl_count</code>: Expireを伸ばそうと試みた回数</li>
-<li><code>extend_ttl_success</code>: Expireを伸ばすのに成功した回数</li>
-<li><code>extend_ttl_ownership_error</code>: IDが横取りされた回数</li>
-<li><code>extend_ttl_expire_warning</code>: IDが横取りされそうだったのを防いだ回数</li>
-<li><code>unusing_ids</code>: 未使用のIDの数</li>
-<li><code>using_ids</code>: 使用中のIDの数</li>
-<li><code>using_ttl_max</code>: IDの寿命の最大値(秒単位)</li>
-<li><code>using_ttl_mid</code>: IDの寿命の中央値(秒単位)</li>
-<li><code>using_ttl_min</code>: IDの寿命の最小値(秒単位)</li>
-</ul>
-
-
-<h2>実装アイデア</h2>
-
-<p>Redisのセット型を使えば、ID配布自体は簡単です。
-Perlでの実装は以下のようになります。(Go実装なのに例がPerlなのは、僕が一番慣れているので・・・)</p>
-
-<pre><code class="perl"># あらかじめPoolにIDを蓄えておく
-$redis-&gt;sadd('pool', "id$_") for 1..10;
-
-# ランダムに選ぶ
-my $id = $redis-&gt;spop('pool');
-
-# 使い終わったら戻す
-$redis-&gt;sadd('pool', $id);
-</code></pre>
-
-<p>多めに見積もって1IDあたり1kB使うと仮定しても、1000個のIDで約1MBです。
-余裕で全部メモリにのるので、オンメモリのRedisでも全く問題ありません。</p>
-
-<p>しかし、この方法では、IDを受け取ったクライアントが突然死してしまった場合に
-永遠にIDが開放されないため、そのうちIDが枯渇してしまいます。</p>
-
-<p>そこで思いついたのが、ソート済みセット型を使ったExpire付き機能付きID配布です。
-「ソート済みセットのスコアにExpireの予定時刻を入れる」というルールでIDを管理します。
-ソート済みセットを使えば、「スコアが一番小さいID＝Expireしている可能性が一番高いID」
-を簡単に取得できます。
-現在時刻と比較して実際にExpireしているかをチェックし、ExpireしていたらID取得成功です。
-Perlのコードに起こすと以下のようになります。</p>
-
-<pre><code class="perl"># PoolにID追加
-$redis-&gt;zadd('pool', time, "id$_") for 1..10;
-
-# IDを取得
-RETRY:
-my ($id, $score) = $redis-&gt;zrange('pool', 0, 0, "WITHSCORE");
-
-# expireしているかチェック
-if $score &lt; time {
-    # ID取得失敗、しばらく待ってID取得やり直し
-    sleep 1;
-    goto RETRY
-}
-
-# expireの期間延長
-my $expire = 10; # 10秒でexpire
-$redis-&gt;zadd('pool', time + $expire, $id);
-
-# $idを使ったなにかの処理
-
-# 使い終わったらExpire扱い
-$redis-&gt;zadd('pool', time, $id);
-</code></pre>
-
-<p>クライアントが突然死していまうと、Expireが更新されないため
-どんどんRankがあがっていき、最終的には別のクライアントに再利用されます。</p>
-
-<p>この方法であれば、Expireしてからの期間が長いIDから再利用されるというのも利点です。
-どうしてもサーバとクライアントで時刻のズレが生じてしまうので、
-サーバはExpireした！と思っても、クライアントがまだ使用中ということは十分に考えられます。
-そのためExpireしたIDをすぐに再利用してしまうと、多重使用になってしまう可能性があります。
-Expireしてからの期間が長いIDから再利用することで、この問題を緩和できるというわけです。</p>
-
-<p>(Googleさんみたいに分散データベース管理に原子時計を導入していれば話は別ですが・・・)</p>
-
-<p>ソート済みセット型のScoreは64bitの浮動小数点型なので、
-scoreにunix timestampを使うとマイクロ秒程度の精度になってしまいますが、
-この用途であれば十分足りるでしょう。</p>
-
-<h2>実装上の工夫</h2>
-
-<p>このアイデアなら楽できる！と思ったものの、
-実際にコードに起こすとなると考慮すべきことがたくさんあって大変でした。</p>
-
-<h3>ID取得とExpire期間延長をアトミックにする</h3>
-
-<p>先のコード例をそのまま実装すると同時アクセスがあった場合にIDプールが壊れます。
-それを防ぐために
-「IDを取得」「expireしているかチェック」「expireの期間延長」はアトミックに実行する必要があります。</p>
-
-<p>Redisの場合、Luaスクリプトを使えば簡単ですね。
-慣れないLuaに少し手こずりましたが、一度覚えてしまうと全部Luaにしたくなってしまう麻薬ですね、あれは。</p>
-
-<h3>Luaスクリプト内で時刻を取得する</h3>
-
-<p>このアイデアは時刻が肝なので、可能であれば時刻の管理もRedisサーバに一任したいところです。
-しかし、Luaスクリプト内ではOS機能のモジュールが無効化されており、時刻の取得はできません。
-ファイルもいじれる危ないモジュールなので仕方ないですね。</p>
-
-<p>ではどうするかというと、LuaからRedisのTIMEコマンドを呼び出して時刻を取得します。
-しかしながら、この方法も一筋縄ではいかず、何もせずに呼び出すとコマンドの実行に失敗してしまいます。</p>
-
-<p>TIMEコマンドが失敗する原因はLuaスクリプトのレプリケーションの方法にあります。
-Redisのレプリケーション方法は、マスターからスクリプトをまるごとスレーブに送り、スレーブ側でスクリプト再実行する方式です。
-そのため、TIMEコマンドのように実行するタイミングによって結果が変わるコマンドは、
-マスターとスレーブで不整合が起きてしまう可能性があるため実行できないのです。</p>
-
-<p>この問題を解決するため、Redis3.2から <code>redis.replicate_commands</code> が追加されました。
-この関数を呼び出すと、Luaスクリプト内で実行したRedisへの書き込みコマンドを転送するレプリケーション方式に変わります。
-実行結果だけを送るのでTIMEコマンドも安全に実行できるというわけです。</p>
-
-<pre><code class="lua">redis.replicate_commands()
-local t = redis.call("TIME")
-time = t[1] + t[2]*1e-6 -- 秒単位に変換
-</code></pre>
-
-<p>なお、<code>redis.replicate_commands</code>が使えない場合は、クライアントの時刻を使うようフォールバックするので、
-3.2よりまえのRedisでも動作はします。</p>
-
-<p>ちなみにレプリケーションの挙動を変えるコマンドは他にもあって、
-<code>redis.set_repl</code>を使うとレプリケーション自体を止めることも出来るらしいです。
-怖い。</p>
-
-<h3>若い番号のIDから配布する</h3>
-
-<p>これはあまり重要ではないんですが、Expireまでの期間が同じだった場合、
-若い番号のIDから順に配布するようにしました。
-「エライ人順にIPアドレスを設定しろ」みたいなアレなので、
-別に考慮しなくてもいいんですが、数字を見ると順番に並べたくなってしまうのが人間というものです。</p>
-
-<p>Redisのソート済みセットはスコアが同じ場合、メンバーの辞書順に並びます。
-<code>Itoa(id)</code>した結果をそのまま辞書順ソートすると</p>
-
-<pre><code class="plain">1, 10, 11, 12, ..., 2, 20, 21, ...
-</code></pre>
-
-<p>のようなおかしな順番になってしまいます。
-そこで、「1桁のときは頭にAを付ける」「2桁のときはB」「3桁のときはC」&hellip;
-と先頭の文字で数字の桁数が分かるようにしました。</p>
-
-<pre><code class="plain">A1, A2, A3, ..., A9, B10, B11, B12, ... B99, C100, C101, C102, ...
-</code></pre>
-
-<p>この規則はRFC2550をヒントにしました。
-RFC2550にはZまで使い切ったあとのことも書いてあるんですが、そこまではしていません。
-可読性にこだわらなければ他にも方法はあるのですが、redis-cliで見れたほうが嬉しいじゃないですか。</p>
-
-<ul>
-<li><a href="https://tools.ietf.org/html/rfc2550">RFC 2550 Y10K and Beyond</a></li>
-<li><a href="http://www.cam.hi-ho.ne.jp/mendoxi/rfc/rfc2550j.html">参考日本語訳 RFC 2550 Y10K とその先</a></li>
-</ul>
-
-
-<h3>レプリケーション完了を待つ</h3>
-
-<p>可用性を求めるならば、Redisサーバー自体が突然死する可能性も考えなければなりません。
-この問題に対応するにはマスタースレーブ構成を取るのが一般的でしょう。
-マスタースレーブ構成ではフェールオーバー時に多少のデータ消失が起こる可能性があります。
-レプリケーションが終わっていない分のデータが消失するためです。</p>
-
-<p>キャッシュ用途であれば許容できるかもしれませんが、
-ID配布でこれが起こるのは致命的です。
-配布したIDをもとにデータベースへの書き込みを行うので、整合性が崩れ、修復困難なダメージを与えてしまう可能性があります。</p>
-
-<p>この問題を最小限に抑えるために、2.8からWAITコマンドが追加されています。
-WAITコマンドを使うと、今まで書き込んだデータがレプリケーションされたかを検出できます。</p>
-
-<pre><code># ROLEコマンドでスレーブの台数を確認
-127.0.0.1:6379&gt; ROLE
-1) "master"
-2) (integer) 83
-3) 1) 1) "::1"     # 一台スレーブ
-      2) "6378"
-      3) "83"
-
-# 適当に書き込み
-127.0.0.1:6379&gt; SET foo bar
-OK
-
-# 1つのスレーブのレプリケーションが完了するのを待つ(Timeout 1000ms)
-127.0.0.1:6379&gt; WAIT 1 1000
-(integer) 1 # レプリケーションが完了したスレーブの台数
-</code></pre>
-
-<p>レプリケーションの完了＝コマンドの実行完了と解釈すれば、
-データの消失を最小限に抑えることができます。</p>
-
-<p>ちなみに、WAITコマンドのtimeoutはミリ秒ですが、今回使用した<a href="https://godoc.org/gopkg.in/redis.v5">go-redis/redis</a>は
-これを秒として扱っていました。
-(こういうのRedis::Fast開発時にもあった気がする)
-単位重要ですね。
-time.ParseDurationで時間指定をすると、毎回単位指定が必要になって面倒ですが、
-こういうミスを防ぐためには有用そうです。
-積極的に使っていきたい。</p>
-
-<h3>横取り検出</h3>
-
-<p>WAITコマンドでデータの消失を最小限にしたとしても、0にできるわけではありません。
-消失が起こった場合の対応も必要です。
-ID配布した記録が消えて横取りが出来る可能性があるので、
-IDに所有者(貸出先の方が正しかったかも)を一緒に記録しておくことにしました。</p>
-
-<p>各クライアントにクライアントIDを付与しておきます。(現状の実装はhostname+timestamp+連番)
-横取りされた方は、自分のクライアントIDとIDの所有者を比較し、横取りが分かった時点で速やかにID開放します。
-横取りした方は、ID取得からID使用までしばらく時間を開けます(-delayでこの時間は変更可能)
-これは横取りされた方のID開放が終わるまで、猶予時間を与えるためです。</p>
-
-<h2>動作条件等</h2>
-
-<p>何度か書いていますが、このアイデアは時刻が肝です。
-各サーバ間の時刻同期が正しく行われている必要があります。
-普通にNTPを使っていればmsのオーダーで同期が取れるので問題ないでしょう。</p>
-
-<p>・・・ただし、みんな大嫌いなうるう秒があります。
-うるう秒の対応の仕方がまちまちなので、ことなった対応方針が適用されたサーバーが混ざると大変です。</p>
-
-<p>例えば、マネージドなRedisとしてElastiCacheを使うと、
-うるう秒挿入のタイミングでElastiCacheは<a href="http://aws.typepad.com/aws_japan/2015/05/look-before-you-leap-the-coming-leap-second-and-aws.html">AWS調整時刻</a>で動作します。
-残念ながらAWS調整時刻を返すNTPは提供されていないようです。</p>
-
-<p>デフォルトの設定はこの辺を考慮してマージンを取っているので大丈夫なはず・・・。
-使う人がいるかはわかりませんが、検証頑張って！</p>
-
-<h2>名前について</h2>
-
-<p>「Yet Another Ranged Unique id Supplier」の略です。
-いい名前が思いつかなかったので、fujiwaraさん製のRanged Unique id Supplierが既にあったのでそこから拝借しました。
-Yet Anatherは、こう付けると流行ると「言語のしくみ」に書いてあったからです。</p>
-
-<iframe style="width:120px;height:240px;" marginwidth="0" marginheight="0" scrolling="no" frameborder="0" src="//rcm-fe.amazon-adsystem.com/e/cm?lt1=_blank&bc1=000000&IS2=1&bg1=FFFFFF&fc1=000000&lc1=0000FF&t=shogo82148-22&o=9&p=8&l=as4&m=amazon&f=ifr&ref=as_ss_li_til&asins=B01N7JZXMD&linkId=8ee3d3dfb649430b1d0abd35881e5f56"></iframe>
-
-
-<h2>まとめ</h2>
-
-<ul>
-<li>RedisをID発番サーバID配布サーバとして活用する方法を考えてみました</li>
-<li>可用性を求めていったらレプリケーションの高度な使い方がわかってきた
-
-<ul>
-<li><code>redis.replicate_commands</code>でスクリプトのレプリケーション方式を変更する</li>
-<li>WAITコマンドでレプリケーションを待つ</li>
-</ul>
-</li>
-<li>フェールオーバのこととか考えると全然楽じゃなかった・・・</li>
-</ul>
-
-
-<p>思いつきを試したかっただけなのですが、勉強になったので良しとしましょう。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[net/httpで安全に静的ファイルを返す]]></title>
-    <link href="https://shogo82148.github.io/blog/2016/04/13/serving-static-files-in-golang/"/>
-    <updated>2016-04-13T02:29:00+09:00</updated>
-    <id>https://shogo82148.github.io/blog/2016/04/13/serving-static-files-in-golang</id>
-    <content type="html"><![CDATA[<p><a href="http://konboi.hatenablog.com/entry/2016/04/12/121105">net/httpで静的ファイルを返す</a>で、
-<code>http.ServeFile</code>を使っていてアレ？と思ったのでちょっと詳しく調べてみました。
-(<code>http.FileServer</code>を使うものだと思ってたため)</p>
-
-<p>結論だけ先に書いておくと</p>
-
-<ul>
-<li>やはり、特に理由がなければ<code>http.FileServer</code>を使ったほうが良さそう</li>
-<li>どうしても<code>http.ServeFile</code>を使う場合は定数でパス指定をする</li>
-<li>「自作パスルータを使っている」かつ「Go 1.6.1 未満を使っている」場合はとくに要注意</li>
-</ul>
-
-
-<!-- More -->
-
-
-<h2>ディレクトリトラバーサル脆弱性</h2>
-
-<p>紹介されているのは以下のコードです。</p>
-
-<pre><code class="go">http.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {
-  http.ServeFile(w, r, r.URL.Path[1:])
-})
-</code></pre>
-
-<p>しかし、参照先の「<a href="http://stackoverflow.com/questions/25945538/go-golang-to-serve-a-specific-html-file">Go Golang to serve a specific html file</a>」には
-<strong>Actually, do not do that.</strong> (やっちゃいけない)とコメントされています。
-<a href="https://ja.wikipedia.org/wiki/%E3%83%87%E3%82%A3%E3%83%AC%E3%82%AF%E3%83%88%E3%83%AA%E3%83%88%E3%83%A9%E3%83%90%E3%83%BC%E3%82%B5%E3%83%AB">ディレクトリトラバーサル</a>により
-脆弱性の原因となってしまう可能性があるためです。</p>
-
-<p>脆弱性再現のために、以下の様なコードを書いてGo1.5でコンパイルして実行してみました。</p>
-
-<pre><code class="go">package main
-
-import (
-    "net/http"
-    "strings"
-)
-
-func main() {
-    http.ListenAndServe(":3000", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        if strings.HasPrefix(r.URL.Path, "/static/") {
-            http.ServeFile(w, r, r.URL.Path[1:])
-        } else {
-            http.NotFound(w, r)
-        }
-    }))
-}
-</code></pre>
-
-<p><code>..</code>を含んだパスをリクエストしてみます。(実行した場所によって<code>..</code>の数は変わるので適宜調整してみてください)</p>
-
-<pre><code class="plain">$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
-* About to connect() to localhost port 3000 (#0)
-*   Trying ::1... connected
-* Connected to localhost (::1) port 3000 (#0)
-&gt; GET /static/../../../.ssh/id_rsa HTTP/1.1
-&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
-&gt; Host: localhost:3000
-&gt; Accept: */*
-&gt;
-&lt; HTTP/1.1 200 OK
-&lt; Accept-Ranges: bytes
-&lt; Content-Length: 1679
-&lt; Content-Type: text/plain; charset=utf-8
-&lt; Last-Modified: Fri, 13 Jun 2014 04:57:05 GMT
-&lt; Date: Tue, 12 Apr 2016 17:53:19 GMT
-&lt;
------BEGIN RSA PRIVATE KEY-----
-(中略)
------END RSA PRIVATE KEY-----
-* Connection #0 to host localhost left intact
-* Closing connection #0
-</code></pre>
-
-<p>macのcurlで試したらクライアント側で相対パスを解決した状態でリクエストが飛んでしまって上手く行きませんでした。
-オプションで外す方法がよくわかなかったので、<code>telnet</code>で叩いてみた例も載せておきます。</p>
-
-<pre><code class="plain">$ telnet localhost 3000
-Trying ::1...
-Connected to localhost.
-Escape character is '^]'.
-GET /static/../../../.ssh/id_rsa HTTP/1.0
-
-HTTP/1.0 200 OK
-Accept-Ranges: bytes
-Content-Length: 1679
-Content-Type: text/plain; charset=utf-8
-Last-Modified: Fri, 13 Jun 2014 04:57:05 GMT
-Date: Tue, 12 Apr 2016 18:02:56 GMT
-
------BEGIN RSA PRIVATE KEY-----
-(中略)
------END RSA PRIVATE KEY-----
-Connection closed by foreign host.
-</code></pre>
-
-<p>ああ、僕の秘密鍵が・・・。</p>
-
-<h2>脆弱性を回避する</h2>
-
-<h3>Go1.6以降を使う</h3>
-
-<p>Go1.6以降では修正されており、
-同じコードをGo1.6でコンパイルしてcurlで叩くと400が帰ってきます。</p>
-
-<pre><code class="plain">$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
-* About to connect() to localhost port 3000 (#0)
-*   Trying ::1... connected
-* Connected to localhost (::1) port 3000 (#0)
-&gt; GET /static/../../../.ssh/id_rsa HTTP/1.1
-&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
-&gt; Host: localhost:3000
-&gt; Accept: */*
-&gt; 
-&lt; HTTP/1.1 400 Bad Request
-&lt; Content-Type: text/plain; charset=utf-8
-&lt; X-Content-Type-Options: nosniff
-&lt; Date: Tue, 12 Apr 2016 18:12:46 GMT
-&lt; Content-Length: 17
-&lt; 
-invalid URL path
-* Connection #0 to host localhost left intact
-* Closing connection #0
-</code></pre>
-
-<h3><code>http.ServeMux</code>を使う</h3>
-
-<p><code>http.ServeMux</code>にはパスの正規化機能が組み込まれており、
-正規化されていないURLにアクセスが来た場合は自動的リダイレクトしてくれるようです。
-HTTPハンドラに渡ってくるときには、必ず相対パスが含まれていない状態になっています。
-(これに最初は気が付かず、脆弱性が再現しないので困ってた。)</p>
-
-<pre><code class="go">package main
-
-import "net/http"
-
-func main() {
-  // 内部でhttp.ServeMuxを使ってくれる
-  http.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {
-    // r.URLには相対パスが含まれない形で渡ってくる
-    http.ServeFile(w, r, r.URL.Path[1:])
-  })
-  http.ListenAndServe(":3000", nil)
-}
-</code></pre>
-
-<p>相対パスを含んだリクエストを投げてもアクセスはできません。</p>
-
-<pre><code class="plain">$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
-* About to connect() to localhost port 3000 (#0)
-*   Trying ::1... connected
-* Connected to localhost (::1) port 3000 (#0)
-&gt; GET /static/../../../.ssh/id_rsa HTTP/1.1
-&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
-&gt; Host: localhost:3000
-&gt; Accept: */*
-&gt; 
-&lt; HTTP/1.1 301 Moved Permanently
-&lt; Location: /.ssh/id_rsa
-&lt; Date: Tue, 12 Apr 2016 18:14:49 GMT
-&lt; Content-Length: 47
-&lt; Content-Type: text/html; charset=utf-8
-&lt; 
-&lt;a href="https://shogo82148.github.io/.ssh/id_rsa"&gt;Moved Permanently&lt;/a&gt;.
-
-* Connection #0 to host localhost left intact
-* Closing connection #0
-</code></pre>
-
-<h3><code>http.FileServer</code>を使う</h3>
-
-<p><code>http.Dir</code>と<code>http.FileServer</code>を使うとルートディレクトリを指定でき、
-その外へはアクセスできなくなるので想定外のファイルが見えてしまうことはありません。</p>
-
-<pre><code class="go">package main
-
-import (
-  "net/http"
-  "strings"
-)
-
-func main() {
-  fileServer := http.StripPrefix("/static/", http.FileServer(http.Dir("static")))
-  http.ListenAndServe(":3000", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-    if strings.HasPrefix(r.URL.Path, "/static/") {
-      fileServer.ServeHTTP(w, r)
-    } else {
-      http.NotFound(w, r)
-    }
-  }))
-}
-</code></pre>
-
-<p>相対パスを含んだURLにアクセスしても404になって見れません。</p>
-
-<pre><code class="plain">$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
-* About to connect() to localhost port 3000 (#0)
-*   Trying ::1... connected
-* Connected to localhost (::1) port 3000 (#0)
-&gt; GET /static/../../../.ssh/id_rsa HTTP/1.1
-&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
-&gt; Host: localhost:3000
-&gt; Accept: */*
-&gt; 
-&lt; HTTP/1.1 404 Not Found
-&lt; Content-Type: text/plain; charset=utf-8
-&lt; X-Content-Type-Options: nosniff
-&lt; Date: Tue, 12 Apr 2016 18:39:34 GMT
-&lt; Content-Length: 19
-&lt; 
-404 page not found
-* Connection #0 to host localhost left intact
-* Closing connection #0
-</code></pre>
-
-<h3><code>http.ServeFile</code>に定数を渡す</h3>
-
-<p>どうしても特定のファイルを指定したい場合は、<code>http.ServeFile</code>に渡すファイルパスを定数で指定するべきです。
-例えば、「<a href="http://stackoverflow.com/questions/25945538/go-golang-to-serve-a-specific-html-file">Go Golang to serve a specific html file</a>」の質問者が上げている例を
-正しく書きなおすと以下のようになると思います。</p>
-
-<blockquote><p><code>http.Handle("/", http.FileServer(http.Dir("static")))</code>
-Serves the html file in static directory.</p>
-
-<p>Is there any way in Go that we can specify the html file to serve?</p>
-
-<p>Something like render_template in Flask</p>
-
-<p>I want to do something like:</p>
-
-<p><code>http.Handle("/hello", http.FileServer(http.Dir("static/hello.html")))</code></p></blockquote>
-
-<pre><code class="go">package main
-
-import "net/http"
-
-func main() {
-  http.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
-    http.ServeFile(w, r, "static/hello.html")
-  })
-  http.ListenAndServe(":3000", nil)
-}
-</code></pre>
-
-<p>回答者がActually, do not do thatとコメントしているのは<code>http.ServeFile</code>に<code>r.URL.Path[1:]</code>を渡すことで、
-<code>http.ServeFile</code>自体が悪いわけではありません。
-正しく安全に使いましょう。</p>
-
-<h2>まとめ</h2>
-
-<p>まとめ再掲。</p>
-
-<ul>
-<li>やはり、特に理由がなければ<code>http.FileServer</code>を使ったほうが良さそう</li>
-<li>どうしても<code>http.ServeFile</code>を使う場合は定数でパス指定をする</li>
-<li>「自作パスルータを使っている」かつ「Go 1.6.1 未満を使っている」場合はとくに要注意</li>
-</ul>
-
-
-<h2>まとめのまとめ</h2>
-
-<p><a href="https://golang.org/pkg/net/http/#example_FileServer">godocのexample</a>どおりにやるのが一番。</p>
-
-<pre><code class="go">package main
-
-import "net/http"
-
-func main() {
-  http.HandleFunc("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
-  http.ListenAndServe(":3000", nil)
-}
-</code></pre>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[PerlでもGoでも実行できるQuine書いた]]></title>
-    <link href="https://shogo82148.github.io/blog/2016/04/06/ployglot-quine-of-golang-and-perl/"/>
-    <updated>2016-04-06T10:07:00+09:00</updated>
-    <id>https://shogo82148.github.io/blog/2016/04/06/ployglot-quine-of-golang-and-perl</id>
-    <content type="html"><![CDATA[<p><a href="http://shogo82148.github.io/blog/2016/04/05/polyglot-of-perl-and-golang/">昨日のPolyglot</a>を元にPerlでもGoでも実行できるQuine書いた。</p>
-
-<!-- More -->
-
-
-<pre><code>package main;import("fmt");var(q=`printf'package main;import("fmt");var(q%c%c%s%c/*%c);sub import{}sub var{$_%cshift%c~s!%c(.*)%c/\*!$1!gr;eval}%c__END__%c',61,96,$_,96,61,61,61,96,96,10,10;print&lt;DATA&gt;`/*=);sub import{}sub var{$_=shift=~s!`(.*)`/\*!$1!gr;eval}
-__END__
-*/);func main(){s:=`package main;import("fmt");var(q=%c%s%c/*=);sub import{}sub var{$_=shift=~s!%c(.*)%c/\*!$1!gr;eval}
-__END__
-*/);func main(){s:=%c%s%c;fmt.Printf(s,96,q,96,96,96,96,s,96)}
-`;fmt.Printf(s,96,q,96,96,96,96,s,96)}
-</code></pre>
-
-<p>Perlで実行してもGoで実行しても自分自身を出力します。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[数値と文字列がごちゃ混ぜになっているJSONをよしなにParseするやつ作った]]></title>
-    <link href="https://shogo82148.github.io/blog/2016/03/23/go-weaktyping/"/>
-    <updated>2016-03-23T20:44:00+09:00</updated>
-    <id>https://shogo82148.github.io/blog/2016/03/23/go-weaktyping</id>
-    <content type="html"><![CDATA[<p>Goは数値と文字列を厳格に区別しますが、他の言語もそうとは限りません。
-例えばPerlは数値と文字列を自動変換してくれるので、気をつけていないといつの間にか数値が文字列になっていたりします。
-その言語の中に閉じていいれば問題ないのですが、Goとやり取りしようとすると困ります。
-そんなときに使えるライブラリを書いてみました。</p>
-
-<ul>
-<li><a href="https://github.com/shogo82148/go-weaktyping">shogo82148/go-weaktyping</a></li>
+<li><a href="https://github.com/shogo82148/go-nginx-oauth2-adapter">shogo82148/go-nginx-oauth2-adapter</a></li>
 </ul>
 
 
@@ -668,267 +32,469 @@ __END__
 
 <h2>背景</h2>
 
-<p><code>map[string][]*string</code>を返してくるライブラリがあって、
-そのままだと扱いにくいのでなんとか構造体にできないかと頭を悩ませていました。
-JSONに一旦変換すれば楽かなーとも思ったのですが、一部フィールドを数値に変換する必要がありました。
-JSONの数値と文字列を区別するため、JSONの文字列をGoの数値型に変換するのは厄介です。
-タグに<code>json:",string"</code>と指定すると変換可能になりますが、逆にJSONの数値を受け付けなくなりますし、
-JSONに変換すると文字列になってしまいます。
-変換先の構造体は普通のJSONの操作にも使いたかったので、これでは困ります。
-「数値も文字列もUnmarshalできて、Marshalするときには数値になる」ようなJSONライブラリが必要でした。</p>
+<p><a href="https://github.com/typester/gate">typester/gate</a>は単体でも動くようになっていますが、
+例えばIP制限などちょっと高度なことをしたい場合には結局nginxを前段に置く必要があります。
+nginxとgateの設定を同時にいじる必要があって煩雑だと感じていました。</p>
 
-<p><code>"encoding/json"</code>に代わる新しいJSONライブラリを・・・とも考えたのですが、
-よく考えるとUnmarshal時の挙動は<code>"encoding/json".Unmarshaler</code>インターフェースを実装することでカスタマイズ可能です。
-こうして作ったのが go-weaktyping です。</p>
+<p>そんな中「<a href="http://techlife.cookpad.com/entry/2015/10/16/080000">nginx で omniauth を利用してアクセス制御を行う</a>」という記事で、
+<a href="http://nginx.org/en/docs/http/ngx_http_auth_request_module.html">ngx_http_auth_request_module</a>の存在を知りました。
+gateが認証＋Proxyをやってしまうのに対して、認証だけRubyのomniauthモジュールで行いProxyはnginxに任せるという方法です。</p>
+
+<p>以前から記事の存在は知っていたのですが、Rubyの実行環境をそろえるのが億劫で手を出せずにいました。
+小さなアプリなので自分の慣れた言語で実装しても大したことないのではと思い、Goで実装してみることにしました。</p>
 
 <h2>使い方</h2>
 
-<p>builtinの型の先頭を大文字にしたものを用意しているので、
-適当にUnmarshalして欲しいところでbuiltinの型の代わりに指定するだけです。
-以下は整数型をUnmarshalする例です。</p>
+<p><code>go get</code>で落として来れます。
+最低限client_idとclient_secretの指定が必要です。
+nginx_omniauth_adapterと同じ環境変数名で設定できるほか、YAML形式の設定ファイルを読みこませることができます。
+YAMLの形式はREADMEを参照してください。</p>
 
-<pre><code class="go">package main
-
-import (
-    "encoding/json"
-    "fmt"
-    "log"
-
-    "github.com/shogo82148/go-weaktyping"
-)
-
-func main() {
-    ptr := &amp;struct {
-        Foo weaktyping.Int `json:"foo"`
-    }{}
-
-    if err := json.Unmarshal([]byte(`{"foo":123}`), ptr); err != nil {
-        log.Fatal(err)
-    }
-    fmt.Println("Foo:", ptr.Foo)
-
-    if err := json.Unmarshal([]byte(`{"foo":"456"}`), ptr); err != nil {
-        log.Fatal(err)
-    }
-    fmt.Println("Foo:", ptr.Foo)
-}
+<pre><code class="bash">$ go get github.com/shogo82148/go-nginx-oauth2-adapter/cli/go-nginx-oauth2-adapter
+$ export NGX_OMNIAUTH_GOOGLE_KEY=YOUR_CLIENT_ID
+$ export NGX_OMNIAUTH_GOOGLE_SECRET=YOUR_CLIENT_SECRET
+$ go-nginx-oauth2-adapter
+$ go-nginx-oauth2-adapter -c conf.yaml # 設定ファイルでの指定も可能
 </code></pre>
 
-<p><code>{"foo":123}</code>が正常にUnmarshalできるのはもちろん、
-通常はエラーになってしまう<code>{"foo":"456"}</code>のUnmarshalも問題なく行えます。
-Marshal時は通常のint型と同様に振る舞います。</p>
+<p>PerlでHTTPサーバ書いているひとにはおなじみのServer::Starterにも対応しているので、
+それ経由で立ち上げておくと設定の更新・プログラム自身の更新等が楽になると思います。</p>
 
-<p>数値型だけでなく<code>weaktyping.String</code>も用意されていて、
-通常はエラーになってしまう <code>{"foo":123}</code> も <code>struct { Foo weaktyping.String }{"123"}</code>にUnmarshal可能です。</p>
+<pre><code class="bash">start_server --port 18081 -- go-nginx-oauth2-adapter -c conf.yaml
+</code></pre>
 
-<p>その他使える型は <a href="https://godoc.org/github.com/shogo82148/go-weaktyping">godoc</a> をどうぞ。</p>
+<p>nginx側の設定は<a href="https://github.com/shogo82148/go-nginx-oauth2-adapter/blob/master/examples/nginx/nginx-site.conf">examples</a>ディレクトリを参照してください。
+ヘッダ名・パス名等を合わせてあるので、nginx_omniauth_adapterと同じ設定で動くはずです。</p>
 
-<h2>各種Boolたち</h2>
+<p>また、<a href="https://h2o.examp1e.net/">h2o</a>の設定はプログラマブルだからh2oでもちゃんと設定ファイルを書けば動くのではと考え、
+<a href="https://github.com/shogo82148/go-nginx-oauth2-adapter/blob/master/examples/h2o/oauth.rb">h2oの設定</a>も書いてみました。
+mrubyからproxyに渡るリクエストを書き換える方法がない(？)っぽいので、アプリ側で認証情報をとることはできないですが、一応制限はできます。
+basic認証の実装を見る限りremote-userヘッダだけは渡せるようなので、これを使えばなんとかなるかもしれないですが、未確認です。
+(Ruby慣れてないからってGoで実装したけど、結局Rubyを書いていて面白い)</p>
 
-<p>builtinの<code>bool</code>に対応する<code>weaktyping.Bool</code>も実装してみたのですが、
-何を持って真偽を判断するか難しい・・・。
-例えば空のARRAYは真とみなすべきか、偽とみなすべきか。
-普段触っている言語によって意見が分かれるのではないでしょうか。
-(そもそも型が違うからエラーという人もいるだろうけど、そういうときは普通に<code>bool</code>を使いましょう)</p>
+<h2>nginx_omniauth_adapterとの違い</h2>
 
-<p>JSONはもともとJavaScriptから派生した形式なので、JavaScriptに合わせるのが妥当かなと思い、
-<code>weaktyping.Bool</code>の挙動はJavaScriptに合わせてあります。
-「<a href="http://blog.mirakui.com/entry/20090604/truefalse">各言語におけるtrue/falseまとめ</a>」を参考に言語別のBoolも用意しています。</p>
+<p>厳密に同じ挙動を実装するのが面倒だったため、挙動に若干の違いがあります。
+一番大きなものは認証後のリダイレクト先です。</p>
 
-<ul>
-<li><code>Bool</code>/<code>JavaScriptBool</code>: <code>false</code>, <code>0</code>, <code>0.0</code>, <code>""</code>, <code>null</code> は偽、それ以外は真</li>
-<li><code>RubyBool</code>: <code>false</code>, <code>null</code> は偽、それ以外は真</li>
-<li><code>PHPBool</code>: <code>false</code>, <code>0</code>, <code>0.0</code>, <code>""</code>, <code>null</code>, <code>"0"</code>, <code>[]</code> は偽、それ以外は真</li>
-<li><code>PerlBool</code>: <code>false</code>, <code>0</code>, <code>0.0</code>, <code>""</code>, <code>null</code>, <code>"0"</code> は偽、それ以外は真</li>
-<li><code>PythonBool</code>: <code>false</code>, <code>0</code>, <code>0.0</code>, <code>""</code>, <code>null</code>, <code>[]</code>, <code>{}</code> は偽、それ以外は真</li>
-</ul>
+<p>nginx_omniauth_adapterは認証後、一度adapterのURLにリダイレクトしてから、アプリサーバの<code>/_auth/callback</code>にリダイレクトします。
+それに対してgo-nginx-oauth2-adapterは認証後、アプリサーバの<code>/_auth/callback</code>に直接リダイレクトします。
+この違いのため、Google Developers Consoleの「承認済みのリダイレクト URI」に設定するべきURIが異なることに注意してください。
+nginx_omniauth_adapterはadapter自身のURI、go-nginx-oauth2-adapterはアプリサーバの<code>/_auth/callbak</code>を指定します。</p>
 
+<p>この挙動のため、go-nginx-oauth2-adapterはアプリの追加のたびにnginxの設定に加え「承認済みのリダイレクト URI」に正しいURIを追加する必要があります。
+もちろん設定箇所がGoogle Developers Consoleではないだけで、nginx_omniauth_adapterもリダイレクト先の設定は必要です。
+GoogleでもFacebookでも認証できるようにしたいという場合、nginx_omniauth_adapterは設定を一箇所変えればOKですが、go-nginx-oauth2-adapterは各サービスに登録し直す必要があります。
+現状、認証に使うサービスをユーザが選ぶ仕組みがないので、そのまま放置してあります。</p>
 
-<p>ややこしい・・・なるべく使わない方がいいと思います。</p>
+<h2>まとめ</h2>
 
-<h2>最後に</h2>
+<p><a href="https://github.com/sorah/nginx_omniauth_adapter">nginx_omniauth_adapter</a>のGolangポート
+<a href="https://github.com/shogo82148/go-nginx-oauth2-adapter">shogo82148/go-nginx-oauth2-adapter</a>を紹介しました。</p>
 
-<p>これを作るきっかけになった問題ですが、reflectで解決しました。reflect最強。
-go-weaktypingを使うとすべてのUnmarshal時に有効になってしまって怖いなと考えたためです。</p>
-
-<p>今後もなるべく go-weaktyping を使わずに済むよう祈ってます。</p>
+<p>adapter自身の公開設定をしなくて良い分簡単にセットアップできます。
+nginx_omniauth_adapter互換ですぐに乗り換えもできるので、ぜひお気軽にお試し下さい。</p>
 ]]></content>
   </entry>
   
   <entry>
-    <title type="html"><![CDATA[ngrokみたいなHTTPプロキシを書いてみた]]></title>
-    <link href="https://shogo82148.github.io/blog/2016/03/14/http2-over-websocket/"/>
-    <updated>2016-03-14T22:59:00+09:00</updated>
-    <id>https://shogo82148.github.io/blog/2016/03/14/http2-over-websocket</id>
-    <content type="html"><![CDATA[<p>開発中のWebアプリをみんなに試してほしいけど、
-サーバなんてなくて開発環境がローカルにしか無くて公開できないということは、
-開発初期段階だとよくあることだと思います。
-もちろん本格的にやるならテスト用にサーバを建てるべきですが、
-小さなものなら<a href="https://ngrok.com/">ngrok</a>を使うと簡単です。
-<a href="https://ngrok.com/">ngrok</a>の公開サーバへのHTTPリクエストをローカルにリレーして、
-ローカルのサーバをお手がるに公開できるサービスです。</p>
+    <title type="html"><![CDATA[Goでデプロイ神社書いてみた]]></title>
+    <link href="https://shogo82148.github.io/blog/2015/12/13/go-deploy-shrine/"/>
+    <updated>2015-12-13T10:51:00+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2015/12/13/go-deploy-shrine</id>
+    <content type="html"><![CDATA[<p><a href="http://qiita.com/advent-calendar/2015/go2">Go その2 Advent Calendar 2015</a>の13日目の記事です。</p>
 
-<p>びっくりするほど簡単に公開できて便利ですが、
-一応oAuthで制限とかかけたいなーとかカスタマイズしてみたくなってきたので、
-似たようなものを自作できないかといろいろ遊んでみました。</p>
+<ul>
+<li><a href="http://qiita.com/advent-calendar/2015/go">その1</a></li>
+<li><a href="http://qiita.com/advent-calendar/2015/go2">その2</a></li>
+<li><a href="http://qiita.com/advent-calendar/2015/go3">その3</a></li>
+</ul>
 
-<p>その結果、HTTP2 over Websocketみたいな謎なものが出来上がってしまったというお話です。</p>
+
+<p>六曜を知ることができる便利コマンドを作ってみたお話です。</p>
 
 <!-- More -->
 
 
-<h2>HTTP2 over Websocketというアイデア</h2>
+<h2>Deploy神社とは</h2>
 
-<p><a href="https://ngrok.com/">ngrok</a>っぽいものを実現するためには、
-サーバが受け取ったHTTPリクエストをローカルの環境に転送する必要があります。
-ご存知のとおり通常のHTTPではサーバ側からのプッシュ配信が難しいので、Websocketを使うのが良さそうです。
-しかし、複数のコネクションで並列にやってくるHTTPリクエストを、一本のWebsocketに束ねる必要があり、
-上手く制御するのは大変そうです。</p>
+<p><a href="https://twitter.com/Maco_Tasu">Maco_Tasu</a>が作ったいつdeployしたら安全かを教えてくれる便利APIです。
+詳しくは作者ブログ記事をどうぞ。(<a href="http://macotasu.hatenablog.jp/entry/2014/11/13/214337">Deploy神社APIを作った- 眠すぎて明日が見えない</a>)</p>
 
-<p>さて、HTTP2は一つのTCPコネクションで複数のリクエストを並行処理する仕様があります。
-「複数のリクエストを一本に束ねる」という点ではなんか似ているので、なんだか流用できそうな気がしてきました。
-Golangならきっと上手いこと<code>interface</code>を実装すれば、なんとかできるのではとやってみました。</p>
+<p>便利APIなのですが、依存している外部APIが利用できなくなってしまったため、Deploy神社自体が利用できなくなっています。</p>
 
-<h2>実装</h2>
+<h2>作ってみた</h2>
 
-<p>HTTP2は暗号化や複雑なフロー制御を行っていますが、
-外から見れば<code>net.Conn</code>インターフェースに読み書きしている何かに過ぎません。
-そして、<code>websocket.Conn</code>も<code>net.Conn</code>を実装しているので、そのままHTTP2のライブラリに渡せるはずです。</p>
-
-<p>そうしてできたのが以下のサーバです。</p>
-
-<pre><code class="go server.go">package main
-
-import (
-    "errors"
-    "log"
-    "net/http"
-    "net/http/httputil"
-    "sync"
-
-    "golang.org/x/net/http2"
-    "golang.org/x/net/websocket"
-)
-
-type transport struct {
-    m      sync.Mutex
-    t      http.RoundTripper
-    closed chan struct{}
-}
-
-var t *transport
-
-func main() {
-    t = &amp;transport{}
-    s := websocket.Server{Handler: websocket.Handler(Handler)}
-    http.Handle("/", s)
-    go http.ListenAndServe(":3000", nil)
-    http.ListenAndServe(":3001", &amp;httputil.ReverseProxy{
-        Transport: t,
-        Director: func(req *http.Request) {
-        },
-    })
-}
-
-func Handler(ws *websocket.Conn) {
-    log.Println("start new connection")
-    t2 := &amp;http2.Transport{}
-    conn, err := t2.NewClientConn(ws)
-    if err != nil {
-        log.Println(err)
-        return
-    }
-
-    t.m.Lock()
-    if t.t != nil {
-        t.m.Unlock()
-        log.Println("already connected.")
-        return
-    }
-    t.t = conn
-    t.m.Unlock()
-    &lt;-t.closed
-    log.Println("close connection")
-}
-
-func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
-    t.m.Lock()
-    t2 := t.t
-    t.m.Unlock()
-    if t2 == nil {
-        return nil, errors.New("connection not found")
-    }
-    res, err := t2.RoundTrip(req)
-    if err != nil {
-        log.Println(err)
-        t.m.Lock()
-        t.t = nil
-        t.m.Unlock()
-        t.closed &lt;- struct{}{}
-        return nil, err
-    }
-    return res, nil
-}
-</code></pre>
-
-<p>複数Websocketのコネクションが張られた場合の処理が少し煩雑ですが、思いのほか短くかけました。
-3001番ポートに来たリクエストをWebsocket経由で転送します。
-Websocketは3000番ポートで待ち受けです。</p>
-
-<p>これにアクセスするためのクライアントがこちら。</p>
-
-<pre><code class="go client.go">package main
-
-import (
-    "log"
-    "net/http/httputil"
-    "net/url"
-
-    "golang.org/x/net/http2"
-    "golang.org/x/net/websocket"
-)
-
-func main() {
-    origin := "http://localhost:3000/"
-    u := "ws://localhost:3000/"
-    ws, err := websocket.Dial(u, "", origin)
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    target, _ := url.Parse("http://localhost:8000/")
-
-    s := &amp;http2.Server{}
-    s.ServeConn(ws, &amp;http2.ServeConnOpts{
-        Handler: httputil.NewSingleHostReverseProxy(target),
-    })
-}
-</code></pre>
-
-<p>Websocket経由でリクエストを受け付け、それを8000番ポートに転送します。
-こちらも非常に短くかけました。
-サーバーとクライアントを立ち上げて<code>http://localhost:3001/</code>にアクセスすると、
-<code>http://localhost:8000/</code>の内容が見れるはずです。</p>
-
-<h2>ngrok1.xについて</h2>
-
-<p>ところでngrokの旧バージョンはソースコードが公開されているから、こっちを使ったほうが早い？
-でも、開発中止って書かれてて不安になる。</p>
+<p>デプロイする時間が分からないと不便なので、Go実装を作ってみました。</p>
 
 <ul>
-<li><a href="https://github.com/inconshreveable/ngrok">ngrok1.x</a></li>
+<li><a href="https://github.com/shogo82148/go-deploy-shrine">shogo82148/go-deploy-shrine</a></li>
 </ul>
 
 
+<p><code>go get</code>してきてお祈りを捧げればデプロイするべき時間を教えてくれます。</p>
+
+<pre><code class="bash">$ go get github.com/shogo82148/go-deploy-shrine/cli/pray
+$ pray
+今日は旧暦の11月3日(先勝)です。deployは午前中に済ませましょう。
+</code></pre>
+
+<p><a href="http://www.weblio.jp/content/%E5%85%88%E5%8B%9D">先勝 - Weblio</a></p>
+
+<blockquote><p>六曜の一。急用や訴訟などによいとされ，早く事を行うのがよく，午前は吉，午後は凶という日。先勝日。せんかち。さきがち。</p></blockquote>
+
+<p>今日12月13日は先勝で午前中にデプロイするのが良いようです。便利ですね。</p>
+
+<h2>六曜とは</h2>
+
+<p>むかしのカレンダーには暦注と呼ばれる「今日の運勢」みたいなものが記載されていたらしいです。
+六曜はその暦注のひとつで、現在のカレンダーにも記載されることの多い影響力の大きなものです。</p>
+
+<p>詳しくはWikipediaで。</p>
+
+<ul>
+<li><a href="https://ja.wikipedia.org/wiki/%E5%85%AD%E6%9B%9C">六曜 - Wikipedia</a></li>
+</ul>
+
+
+<p>旧暦の(月＋日)を6で割った余りから簡単に求めることができます。</p>
+
+<ul>
+<li>0: 大安</li>
+<li>1: 赤口</li>
+<li>2: 先勝</li>
+<li>3: 友引</li>
+<li>4: 先負</li>
+<li>5: 仏滅</li>
+</ul>
+
+
+<h2>旧暦とは</h2>
+
+<p>旧暦の月日を求めることができれば六曜は簡単に出せるのですが、
+日本における旧暦である<a href="https://ja.wikipedia.org/wiki/%E5%A4%A9%E4%BF%9D%E6%9A%A6">天保暦</a>は月の満ち欠けと太陽の動きを元にした暦法であり、
+月と太陽の動きを正確に予測する必要があります。</p>
+
+<p>Go版デプロイ神社では「日の出・日の入りの計算―天体の出没時刻の求め方」で紹介されていた計算式を用いています</p>
+
+<iframe src="http://rcm-fe.amazon-adsystem.com/e/cm?lt1=_blank&bc1=000000&IS2=1&bg1=FFFFFF&fc1=000000&lc1=0000FF&t=shogo82148-22&o=9&p=8&l=as4&m=amazon&f=ifr&ref=ss_til&asins=4805206349" style="width:120px;height:240px;" scrolling="no" marginwidth="0" marginheight="0" frameborder="0"></iframe>
+
+
+<h2>2033年旧暦閏月問題</h2>
+
+<p>天保暦をそのまま当てはめると2033年に月を決定できない問題が知られています。
+日本カレンダー暦文化振興協会というところが「閏11月を推奨する」との見解を2015年8月に出しています。</p>
+
+<ul>
+<li><a href="http://www.rekibunkyo.or.jp/year2033problem.html">2033年旧暦閏月問題の見解</a></li>
+</ul>
+
+
+<p>Go版デプロイ神社では時憲暦方式を採用したつもりです。</p>
+
+<h2>せめてGoっぽい話題を</h2>
+
+<p>引数に日付を渡すとその日の六曜をかえしてくれます。
+いろんな形式に対応していて、以下はすべて2006年1月2日の六曜を返します。</p>
+
+<pre><code class="bash">$ pray 20060102
+$ pray 1/2/2006
+$ pray 2-Jan-06
+$ pray 2-Jan-2006
+$ pray 2/Jan/2006
+$ pray 'Jan 2 2006'
+2006-01-02は旧暦の12月3日(友引)です。昼のdeployはさけましょう。するなら朝晩が吉です。
+</code></pre>
+
+<p>引数の解析には <a href="https://github.com/tkuchiki/parsetime">tkuchiki/parsetime</a>を使っています。
+たいていの日時フォーマットなら解析してくれる便利ライブラリです。</p>
+
+<h2>最後に</h2>
+
+<p>暦法とか天文学とかよくわかってない人間が作ったプログラムなので、結果の保証はできません。
+今月の旧暦は<a href="http://keisan.casio.jp/exec/system/1186108192">六曜計算 - 高精度計算サイト</a>の計算結果と一致することは確認していますが、
+他の日でも正しい結果を返すかどうかは未検証です。</p>
+
+<p>Go版デプロイ神社を信じてのデプロイして事故っても、責任は負いかねますのでご了承ください。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[AnySan::Provider::Slackとape-slackを書いた]]></title>
+    <link href="https://shogo82148.github.io/blog/2015/09/28/anysan-provider-slack-and-ape-slack/"/>
+    <updated>2015-09-28T22:11:00+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2015/09/28/anysan-provider-slack-and-ape-slack</id>
+    <content type="html"><![CDATA[<p>先週、今のプロジェクトでのメインのコミュニケーションツールをIRCからSlack切り替えました。
+それにともないIRCに済んでいたボットたちもお引越しする必要があったので、
+ボットとSlackをつなぐためのライブラリを書きました。</p>
+
+<ul>
+<li><a href="https://metacpan.org/release/AnySan-Provider-Slack">AnySan::Provider::Slack</a></li>
+<li><a href="https://github.com/shogo82148/ape-slack">ape-slack</a></li>
+</ul>
+
+
+<p>Perlとgoのボットが住んでいるのでそれぞれの言語で実装してあります。</p>
+
+<!-- More -->
+
+
+<h2>AnySan::Provider::Slack</h2>
+
+<p>Perlの<a href="https://metacpan.org/pod/AnySan">AnySan</a>用のモジュールです。</p>
+
+<pre><code class="perl">use AnySan;
+use AnySan::Provider::Slack;
+my $slack = slack
+    token =&gt; 'YOUR SLACK API TOKEN',
+    channels =&gt; {
+        'general' =&gt; {},
+    };
+$slack-&gt;send_message('slack message', channel =&gt; 'C024BE91L');
+AnySan-&gt;run;
+</code></pre>
+
+<p>AnySanを使うだけでも便利なんですが、
+今のプロジェクトではAnySanを対話形式で使いやすくするように<a href="http://www.songmu.jp/riji/entry/2013-09-09-unazusan.html">UnazuSan</a>を使っています。
+UnazuSanはIRC前提で書かれていて、AnySan::Provider::Slackをインストールしてもそのままは使えません。</p>
+
+<p>UnazuSanを置き換えるもの面倒なので、イベントの名前を書き換えて投げ直すことで、
+SlackのメッセージをIRCに見せかける方法をとっています。
+また<a href="https://beatsync.net/main/log20150926.html">SlackのOutgoing Webhookで@つきのmentionを捕まえる</a>にもあるように、
+Slackのメンションは &lt;@U08DGJVJ7&gt;のような形式になってしまい、UnazuSanは自分へのメッセージとして扱ってくれません。
+これをUnazuSanが解釈できる形式に置き換えるのがポイントです。</p>
+
+<pre><code class="perl">use 5.010;
+use warnings;
+use utf8;
+use Encode qw/encode_utf8/;
+use UnazuSan;
+use AnySan;
+use AnySan::Provider::Slack;
+
+my $unazu_san = UnazuSan-&gt;new(
+    host       =&gt; 'example.com',
+    password   =&gt; 'xxxxxxxxxxx',
+    enable_ssl =&gt; 1,
+    join_channels =&gt; [qw/arcade/],
+    respond_all   =&gt; 1,
+);
+
+
+my $slack = slack(
+    token    =&gt; 'YOUR SLACK TOKEN',
+    channels =&gt; {},
+    as_user =&gt; 1,
+);
+
+AnySan-&gt;register_listener(
+    slack =&gt; {
+        event =&gt; 'message',
+        cb =&gt; sub {
+            my $receive = shift;
+            # fake irc privmsg
+            $receive-&gt;{event} = 'privmsg';
+            $receive-&gt;{message} =~ s/&lt;\@xxxxx&gt;:/unazusan:/;
+            AnySan-&gt;broadcast_message($receive);
+        },
+    }
+);
+
+$unazu_san-&gt;on_command(
+    help =&gt; sub {
+        my ($receive, @args) = @_;
+        $receive-&gt;reply('help '. ($args[0] || ''));
+    }
+);
+
+$unazu_san-&gt;run;
+</code></pre>
+
+<h2>ape-slack</h2>
+
+<p><a href="https://github.com/m0t0k1ch1/ape">ape</a>のSlack対応版です。
+SlackRTM APIを使ってイベントを受け取ります。</p>
+
+<p>GoはWebSocketも比較的カンタンに使えるので、実はape-slackを使わなくても以下のようなコードだけでSlackRTM APIを使えてしまいます。</p>
+
+<pre><code class="go">import (
+  "encoding/json"
+  "fmt"
+  "net/http"
+  "net/url"
+
+  "golang.org/x/net/websocket"
+)
+
+
+func main() {
+  resp, _ := http.PostForm("https://slack.com/api/rtm.start", url.Values{"token": {"YOUR SLACK TOKEN"}})
+  var r struct {
+    Url   string `json:"url"`
+  }
+
+  json.NewDecoder(resp.Body).Decode(&amp;r)
+
+  ws := websocket.Dial(r.Url, "", "https://slack.com/")
+
+  for {
+    var data map[string]interface{}
+    websocket.JSON.Receive(ws, &amp;data)
+    fmt.Println(data)
+  }
+}
+</code></pre>
+
+<p>Outgoing Webhookを使うとSlackから呼んでもらえるようセキュリティの設定が必要で面倒ですが、
+WebSocketならインターネッツに繋がった環境なら大抵そのままつながります。
+Outgoing WebhookならチャンネルにJOINしていなくてもイベントを受け取れたりして便利ですが、
+ちょっとしたボットならこちらの方がお手軽ですね。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Go言語でPerlのテストを早くする]]></title>
+    <link href="https://shogo82148.github.io/blog/2015/09/19/faster-perl-test-with-go-lang/"/>
+    <updated>2015-09-19T21:49:00+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2015/09/19/faster-perl-test-with-go-lang</id>
+    <content type="html"><![CDATA[<p><a href="http://shogo82148.github.io/blog/2015/06/20/test-mysqld-multi/">Test::mysqld::Multiというモジュールを書いてみた</a>みたいな涙ぐましい努力により5分で終わるようになったテストですが、
+プロジェクトのコードも増えて人も増えた影響で、
+テスト時間が約7分まで伸び、テストのキューに10個近く並んで順番待ちさせられるという状況になってしまいした。</p>
+
+<p>この状況を解決すべく <a href="https://github.com/shogo82148/go-prove">go-prove</a> というものを書いてみたので、そのご紹介です。</p>
+
+<h2>proveが遅い理由</h2>
+
+<p>proveがテストの結果を読むところがブロッキングI/Oになっているらしく、そのせいで遅くなっているらしいです。</p>
+
+<ul>
+<li><a href="https://github.com/Perl-Toolchain-Gang/Test-Harness/issues/30">Perl-Toolchain-Gang/Test-Harness#30</a></li>
+</ul>
+
+
+<p>実際に<a href="https://github.com/Perl-Toolchain-Gang/Test-Harness/blob/a278e504794c649c61f2c362841eec1a9735a3d0/lib/TAP/Parser/Iterator/Process.pm#L245">結果読んでいるところ</a>はこの辺ですかね。
+selectとか使っていてなるべくブロッキングしないような作りにはなっていそうですが、どこかでブロッキングしてしまっているようです。
+今のプロジェクトだと32コアのCPUで32並列で動かしてもCPUを100%使い切ることができませんでした。</p>
+
+<h2>Shunme</h2>
+
+<p>ググるとShunmeというプロジェクトでproveの問題を解決しようという試みが行われているようです。</p>
+
+<ul>
+<li><a href="http://code-stylistics.net/archives/shunme.html">Shunmeというperl用のテストハーネスモジュールを書き始めました</a></li>
+<li><a href="https://github.com/magnolia-k/p5-Shunme">magnolia-k/p5-Shunme</a></li>
+</ul>
+
+
+<p>しかし残念ながらproveのプラグイン機構はサポートしておらず、Formatterの指定オプションもないようです。
+今のプロジェクトではプラグインでMySQLを立てたり、JUnitでテスト結果をフォーマットしたりということをしているので、そのままは使えなさそう。
+ちょっと改造するにはソースコードの理解が大変そうなので断念。
+「(逆に遅くなるときも有ります)」というところも気になりますね・・・。</p>
+
+<h2>go-prove</h2>
+
+<p>いろいろテストの実行方法を調べてはみましたが、どの方法も並行処理に苦労している模様。
+テストファイル自体はただのPerlのスクリプトなので、実行して集計する部分は別にPerlにこだわる必要ないのでは？
+並行処理といえば今ならGolangでしょ！ってことでproveのGo実装を書いてみました。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/go-prove">go-prove</a></li>
+</ul>
+
+
+<p>例えば以下のようなテストをかいて、</p>
+
+<pre><code class="perl t/macopy.t">use Test::More;
+
+ok "macopy";
+
+done_testing;
+</code></pre>
+
+<p>go-proveコマンドと実行すると、JUnit形式でテスト結果が出力されます。</p>
+
+<pre><code>$ go-prove
+2015/09/19 21:45:44 start t/macopy.t
+2015/09/19 21:45:44 finish t/macopy.t
+&lt;testsuites&gt;
+        &lt;testsuite tests="1" failures="0" time="0.225" name="t_macopy_t"&gt;
+                &lt;properties&gt;&lt;/properties&gt;
+                &lt;testcase classname="t_macopy_t" name="" time="0.225"&gt;&lt;/testcase&gt;
+        &lt;/testsuite&gt;
+&lt;/testsuites&gt;
+</code></pre>
+
+<p><code>go-prove -j 32</code>とするとgoroutineを32個生成して、32並列でテストを実行してくれます。
+I/Oの処理をGolangのランタイムがよしなにやってくれるので、楽ちんです。</p>
+
+<p>また、今のプロジェクトではApp::Prove::Plugin::MySQLPoolを使っているので、それ相当の機能を<code>go-prove -plugin mysqld</code>で使えるようにしました。
+プラグインを有効にするとMySQLサーバを立ち上げて、その接続先情報を<code>GO_PROVE_MYSQLD</code>環境変数に設定してくれます。</p>
+
+<p>実際にプロジェクトのコードで試してみたところ7分かかっていたテストが4分を切るようになりました。
+CPUの使用率も100%近くになって、有効活用できているようです。</p>
+
 <h2>まとめ</h2>
 
-<p>ローカルのサーバをお手軽に公開するためのngrokというサービスを紹介しました。
-自作のためのアイデアとして、http2 over websocketを試してみました。</p>
+<ul>
+<li>Perl製のproveは並列実行に弱い</li>
+<li>Goで書きなおしてCPUをフル活用できるようになった</li>
+</ul>
 
-<p>設定の読み込みとかエラー処理とかセキュリティ周りとかいろいろ足りてない部分はありますが、
-たったあれだけのコードで、ヘッダの圧縮転送、リクエストの並行処理等のHTTP2の機能が使えるのは面白いですね。</p>
 
-<p>もうちょっと手を加えて多少は使えるものにしてみたいですね。</p>
+<p>早くはなるものの、既存のテストコードに手を加える必要があってちょっと怖いかなと思ったので、プロジェクトへの組み込みはやってません。
+まあ本番環境で走るものではないので、ある程度動くことが確認できたら置き換えてみたいですね。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[go-webtailってのを書いた]]></title>
+    <link href="https://shogo82148.github.io/blog/2015/06/21/go-webtail/"/>
+    <updated>2015-06-21T23:28:00+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2015/06/21/go-webtail</id>
+    <content type="html"><![CDATA[<p>Rubyで書かれた<a href="https://github.com/r7kamura/webtail">webtail</a>のGo移植を書いてみました。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/go-webtail">go-webtail</a></li>
+</ul>
+
+
+<!-- More -->
+
+
+<p>オリジナルのwebtailはRubyなので、Rubyistではない僕が使おうとするとまずRubyの実行環境からそろえないといけなくてつらい。
+ワンバイナリでダウンロードするだけで使えるやつが欲しいなあと常々思っていたのでGolangです。
+htmlやjavasctiptの部分もバイナリに含まれているので、インストールも簡単です。</p>
+
+<p>引数無しで実行すると8080ポートで待ち受けて、標準入力から読み込んだ結果をWebsocketで読めるようにしてくれます。</p>
+
+<pre><code class="bash">go get github.com/shogo82148/go-webtail/cmd/webtail # インストール
+echo hogehoge | webtail
+</code></pre>
+
+<p>ファイルもtailできます。</p>
+
+<pre><code class="bash">webtail hoge.log fuga.log
+</code></pre>
+
+<p>それぞれ、<code>http://localhost:8080/hoge.log</code>と<code>http://localhost:8080/fuga.log</code>で見れるようになります。</p>
+
+<h1>mirageと一緒につかう</h1>
+
+<p><a href="https://github.com/acidlemon/mirage">mirage</a>は待ち受けポートを複数設定できます。
+(SEE ALSO <a href="http://tech.kayac.com/archive/mirage_for_docker.html">Dockerで非エンジニアでも開発環境を上げ下げできる、mirageというツールを作りました</a>)
+その一つをwebtailに割り当てて以下のようにDockerfileに書いておけば、非(サーバサイド)エンジニアでも開発環境のログが見れるようになります。
+(見れても理解できるのか？って疑問もあるけど、まあ、全く見れないよりは・・・)</p>
+
+<pre><code>ADD webtail /
+CMD ./docker_run.sh 2&gt;&amp;1 | /webtail --prefix webtail
+
+# ブラウザで見れる代わりにdocker logsで見れなくなるのでこっちのほうがいいかも
+CMD ./docker_run.sh 2&gt;&amp;1 | tee hoge.log | /webtail --prefix webtail
+</code></pre>
+
+<p>残念ながらwebsocket対応はしていないので、<a href="https://github.com/shogo82148/mirage/tree/feature/websocket">websoket対応にしたmirage</a>が必要です。
+<code>httputil.NewSingleHostReverseProxy</code>互換の<a href="github.com/methane/rproxy">rproxy</a>ってのを使ったら簡単にwebsocket対応ができて素晴らしいですね。
+(mirage自身に手を加える必要があるなら、mirageにこういう機能をつけるべきだったのでは説はある)</p>
 ]]></content>
   </entry>
   
