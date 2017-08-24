@@ -1,0 +1,503 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Perl 5.26 & Unicode 9.0 で変わる書記素クラスタ(grapheme Cluster)のお話 - Shogo's Blog</title>
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="description" content="WEB+DB PRESS Vol.100が発売されましたね。
+記念すべき Vol.100 おめでとうございます！ WEB+DB PRESS の連載「Perl Hackers Hub」今回のテーマは「【第46回】Perl 5.26で変わること」です。
+Perl 5.26 で追加になった機能、 &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="https://shogo82148.github.io/blog/2017/08/25/unicode9-grapheme-cluster/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="Shogo's Blog" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="/javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-4526627-4']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+  <script type="text/javascript" src="//s.hatena.ne.jp/js/HatenaStar.js"></script>
+<script type="text/javascript">
+Hatena.Star.Token = '0da43945db72b59fd47eb24198fc7a0293c0191f';
+Hatena.Star.SiteConfig = {
+  entryNodes: {
+    'article': {
+      uri: 'h1 a',
+      title: 'h1',
+      container: 'h1'
+    },
+    'article.hentry': {
+      uri: 'window.location',
+      title: 'h1.entry-title',
+      container: 'h1.entry-title'
+    }
+  }
+};
+</script>
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Shogo's Blog</a></h1>
+  
+    <h2>たぶんプログラミングとかについて書いていくブログ</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="sitesearch" value="shogo82148.github.io">
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/blog/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Perl 5.26 & Unicode 9.0 で変わる書記素クラスタ(grapheme Cluster)のお話</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+<time class='entry-date' datetime='2017-08-25T07:08:44+09:00'><span class='date'><span class='date-month'>Aug</span> <span class='date-day'>25</span><span class='date-suffix'>th</span>, <span class='date-year'>2017</span></span> <span class='time'>7:08 am</span></time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p><a href="http://gihyo.jp/magazine/wdpress/archive/2017/vol100">WEB+DB PRESS Vol.100</a>が発売されましたね。
+記念すべき Vol.100 おめでとうございます！</p>
+
+<p><a href="https://www.amazon.co.jp/WEB-DB-PRESS-Vol-100-%E6%B2%B3%E5%8E%9F/dp/4774191299/ref=as_li_ss_il?_encoding=UTF8&psc=1&refRID=KWT48YN41EFBHYXPM8YQ&linkCode=li2&tag=shogo82148-22&linkId=c41e466f8dad4ea5b2c2287f1e6c5efc" target="_blank"><img border="0" src="//ws-fe.amazon-adsystem.com/widgets/q?_encoding=UTF8&ASIN=4774191299&Format=_SL160_&ID=AsinImage&MarketPlace=JP&ServiceVersion=20070822&WS=1&tag=shogo82148-22" ></a><img src="https://ir-jp.amazon-adsystem.com/e/ir?t=shogo82148-22&l=li2&o=9&a=4774191299" width="1" height="1" border="0" alt="" style="border:none !important; margin:0px !important;" /></p>
+
+<p>WEB+DB PRESS の連載「Perl Hackers Hub」今回のテーマは「【第46回】Perl 5.26で変わること」です。
+Perl 5.26 で追加になった機能、アップグレードの際に気をつけなければならないところ( 特に @INC 問題とか )などに触れられているので、
+Perl Monger の方はぜひ読むとよいと思います。</p>
+
+<p>追加された機能のひとつとして Unicode 9.0 サポートが挙げられているのですが、以下のような簡単な紹介に留まっています。</p>
+
+<blockquote><p>Unicode 9.0にはオリンピックで活躍するであろう金銀 銅メダルの絵文字などが追加されました。</p></blockquote>
+
+<p>Unicode 9.0 で変わるのはそれだけではありません！
+Unicode 9.0 での <strong>書記素クラスタ(grapheme cluster)</strong> の扱いを少し前に調査したので紹介します。</p>
+
+<!-- More -->
+
+
+<h2>書記素クラスタ(grapheme cluster)とは</h2>
+
+<p>書記素クラスタ(grapheme cluster)とは、人間にとって自然な1文字を表すものです。</p>
+
+<p>たとえば &ldquo;é&rdquo; という文字は一見1文字に見えますが、 <code>length</code> で文字数をカウントすると2文字としてカウントされます。</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ perl -Mutf8 -E 'say length "é"'
+</span><span class='line'>2</span></code></pre></td></tr></table></div></figure>
+
+
+<p>これは <code>length</code> がUnicodeのコードポイント数を数えており、
+&ldquo;é"が"e&rdquo;(U+0065) + アクセント記号(U+0301) の2つのコードポイントで構成されているためです。</p>
+
+<p>他にも<a href="https://ja.wikipedia.org/wiki/%E7%95%B0%E4%BD%93%E5%AD%97%E3%82%BB%E3%83%AC%E3%82%AF%E3%82%BF">異字体セレクタ</a>というのがあったり、
+<a href="http://qiita.com/_sobataro/items/47989ee4b573e0c2adfc#%E7%B5%B5%E6%96%87%E5%AD%97%E3%82%B7%E3%83%BC%E3%82%B1%E3%83%B3%E3%82%B9">絵文字シーケンス</a>というのがあったりして、
+コードポイントの数＝文字数とは限りません。</p>
+
+<p>これらの文字たちを1文字として数えるための概念が書記素クラスタ(grapheme cluster)です。</p>
+
+<h2>Unicode 9.0での変更点</h2>
+
+<p>Unicode 8.0以前も書記素クラスタはあるのですが、
+&ldquo;👨‍👨‍👦"のような家族の絵文字が3文字とカウントされてしまったり、
+"🇯🇵🇯🇵🇯🇵"のように国旗が連続していると1文字にカウントされてしまったりと、
+問題がありました。
+Unicode 9.0からはこれらの問題が解決されています。</p>
+
+<p>詳しくは<a href="http://qiita.com/_sobataro/items/47989ee4b573e0c2adfc#%E6%9B%B8%E8%A8%98%E7%B4%A0%E3%82%AF%E3%83%A9%E3%82%B9%E3%82%BF%E3%81%AB%E9%96%A2%E3%81%99%E3%82%8B-unicode-90-%E4%BB%A5%E9%99%8D%E3%81%A8-80-%E4%BB%A5%E5%89%8D%E3%81%AE%E9%81%95%E3%81%84">書記素クラスタに関する Unicode 9.0 以降と 8.0 以前の違い</a>を参照してください。</p>
+
+<h2>Perlでの書記素クラスタ</h2>
+
+<h3>書記素クラスタの使い方</h3>
+
+<p>Perlでは正規表現<code>\X</code>が書記素クラスタにマッチします
+(<a href="https://perldoc.perl.org/perlrebackslash.html#Misc">Misc in perlrebackslash</a>)。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">utf8</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="mf">5.24.1</span><span class="p">;</span>
+</span><span class='line'><span class="nb">binmode</span><span class="p">(</span><span class="bp">STDOUT</span><span class="p">,</span> <span class="s">&quot;:utf8&quot;</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$str</span> <span class="o">=</span> <span class="s">&quot;eé&quot;</span><span class="p">;</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">@characters</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="nv">@characters</span> <span class="o">=</span> <span class="nb">split</span> <span class="sr">//</span><span class="p">,</span> <span class="nv">$str</span><span class="p">;</span>
+</span><span class='line'><span class="n">say</span> <span class="s">&quot;splitを使った場合: &quot;</span><span class="p">,</span> <span class="nb">join</span> <span class="s">&quot; &quot;</span><span class="p">,</span> <span class="nv">@characters</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1"># 書記素クラスタ</span>
+</span><span class='line'><span class="nv">@characters</span> <span class="o">=</span> <span class="nv">$str</span> <span class="o">=~</span><span class="sr"> /\X/g</span><span class="p">;</span>
+</span><span class='line'><span class="n">say</span> <span class="s">&quot;書記素クラスタを使った場合: &quot;</span><span class="p">,</span> <span class="nb">join</span> <span class="s">&quot; &quot;</span><span class="p">,</span> <span class="nv">@characters</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li><a href="https://wandbox.org/permlink/ImSQW7QAkadczlqt">[Wandbox]三へ( へ՞ਊ ՞)へ ﾊｯﾊｯ</a></li>
+</ul>
+
+
+<p>文字数をカウントは「<a href="https://shogo82148.github.io/blog/2015/04/09/count-substrings-in-perl/">Perlで文字列の出現回数を調べる</a>」の
+方法が使えます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">utf8</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="mf">5.24.1</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$str</span> <span class="o">=</span> <span class="s">&quot;eé&quot;</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$length</span> <span class="o">=</span><span class="p">()</span><span class="o">=</span> <span class="nv">$str</span> <span class="o">=~</span><span class="sr"> /\X/g</span><span class="p">;</span>
+</span><span class='line'><span class="n">say</span> <span class="nv">$length</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>(後から知ったことですが、この <code>=()=</code> を使ったハックには <a href="https://metacpan.org/pod/distribution/perlsecret/lib/perlsecret.pod#Goatse">画像検索してはいけない名前</a> がついているらしいです)</p>
+
+<h3>Perl5.24とPerl5.26の違い</h3>
+
+<p>Perl 5.26 は Unicode 8.0 をサポートしているので、書記素クラスタの問題点が改善されています。
+たとえば、Perl 5.24では &ldquo;🇯🇵🇯🇵🇯🇵"が1文字としてカウントされてしまいますが・・・</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">utf8</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="mf">5.24.1</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$length</span> <span class="o">=</span><span class="p">()</span><span class="o">=</span> <span class="s">&quot;🇯🇵🇯🇵🇯🇵&quot;</span> <span class="o">=~</span><span class="sr"> /\X/g</span><span class="p">;</span>
+</span><span class='line'><span class="n">say</span> <span class="nv">$length</span><span class="p">;</span> <span class="c1"># =&gt; 1</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li><a href="https://wandbox.org/permlink/QKl5K45F8BvvPMfz">[Wandbox]三へ( へ՞ਊ ՞)へ ﾊｯﾊｯ</a></li>
+</ul>
+
+
+<p>Perl 5.26 では3文字としてカウントされます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">utf8</span><span class="p">;</span>
+</span><span class='line'><span class="k">use</span> <span class="mf">5.26.0</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">my</span> <span class="nv">$length</span> <span class="o">=</span><span class="p">()</span><span class="o">=</span> <span class="s">&quot;🇯🇵🇯🇵🇯🇵&quot;</span> <span class="o">=~</span><span class="sr"> /\X/g</span><span class="p">;</span>
+</span><span class='line'><span class="n">say</span> <span class="nv">$length</span><span class="p">;</span> <span class="c1"># =&gt; 3</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li><a href="https://wandbox.org/permlink/s05vJF33MlCj9Qvl">[Wandbox]三へ( へ՞ਊ ՞)へ ﾊｯﾊｯ</a></li>
+</ul>
+
+
+<h2>FYI: 他の言語の対応状況</h2>
+
+<h3>Ruby</h3>
+
+<p><a href="http://qiita.com/_sobataro/items/47989ee4b573e0c2adfc">Unicode 絵文字にまつわるあれこれ (絵文字の標準とプログラム上でのハンドリング)</a>で紹介されているように、
+<a href="https://github.com/ruby/ruby/blob/17c2828581a4dcd9babb5c754f240aa86523c673/NEWS#L133-L143">Ruby 2.4.0</a>から対応してます。
+Ruby 2.4.0は2016年12月25日に正式リリースされているので、この記事を書いている現在(2017年8月25日)は安心して使えます。</p>
+
+<h3>Python</h3>
+
+<p>残念ながら標準の正規表現ライブラリ <a href="https://docs.python.jp/3/library/re.html">re</a> は書記素クラスタに対応していません。
+サードパーティーの<a href="https://pypi.python.org/pypi/regex/">reqex</a>がUnicode 10に対応しているらしいので、
+そちらを使うと書記素クラスタを扱えるようです。</p>
+
+<h3>Golang</h3>
+
+<blockquote><p><a href="https://github.com/google/re2/wiki/Syntax">https://github.com/google/re2/wiki/Syntax</a>
+extended Unicode sequence (NOT SUPPORTED)</p></blockquote>
+
+<p>正規表現は対応していません、残念・・・</p>
+
+<ul>
+<li><a href="https://github.com/golang/go/issues/14820">https://github.com/golang/go/issues/14820</a></li>
+</ul>
+
+
+<p><code>x/text</code> に書記素クラスタを扱う機能を追加しようというIssueはありますが、今のところ進捗はないようです。</p>
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="https://hydrocul.github.io/wiki/blog/2015/1025-unicode-grapheme-clusters.html">Unicodeのgrapheme cluster (書記素クラスタ)</a></li>
+<li><a href="http://qiita.com/_sobataro/items/47989ee4b573e0c2adfc">Unicode 絵文字にまつわるあれこれ (絵文字の標準とプログラム上でのハンドリング)</a></li>
+<li><a href="https://engineering.linecorp.com/ja/blog/detail/52">文字数をカウントする7つの方法</a></li>
+</ul>
+
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+
+      
+
+
+
+
+<time class='entry-date' datetime='2017-08-25T07:08:44+09:00'><span class='date'><span class='date-month'>Aug</span> <span class='date-day'>25</span><span class='date-suffix'>th</span>, <span class='date-year'>2017</span></span> <span class='time'>7:08 am</span></time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/perl/'>perl</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//b.hatena.ne.jp/entry/https://shogo82148.github.io/blog/2017/08/25/unicode9-grapheme-cluster/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="//b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="//b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="https://shogo82148.github.io/blog/2017/08/25/unicode9-grapheme-cluster/" data-via="shogo82148" data-counturl="https://shogo82148.github.io/blog/2017/08/25/unicode9-grapheme-cluster/" >Tweet</a>
+  
+  
+  <div class="g-plusone" data-size="medium"></div>
+  
+  
+    <div class="fb-like" data-send="true" data-width="450" data-show-faces="false"></div>
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2017/06/26/go19-monotonic-clock/" title="Previous Post: Go1.9から使える Monotonic Clocks を試してみた">&laquo; Go1.9から使える Monotonic Clocks を試してみた</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2017/08/25/unicode9-grapheme-cluster/">Perl 5.26 & Unicode 9.0 で変わる書記素クラスタ(grapheme Cluster)のお話</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/06/26/go19-monotonic-clock/">Go1.9から使える Monotonic Clocks を試してみた</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/06/16/mysql-driver-and-context/">ぼくのかんがえたさいきょうのcontext対応版go-mysql-driverをマージしてもらった</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/05/30/grumpy/">Re: GoとPythonとGrumpyの速度ベンチマーク</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/05/04/go-rerand/">String::RandomのGo移植を書いてみた</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>GitHub Repos</h1>
+  <ul id="gh_repos">
+    <li class="loading">Status updating...</li>
+  </ul>
+  
+  <a href="https://github.com/shogo82148">@shogo82148</a> on GitHub
+  
+  <script type="text/javascript">
+    $(document).ready(function(){
+        if (!window.jXHR){
+            var jxhr = document.createElement('script');
+            jxhr.type = 'text/javascript';
+            jxhr.src = '/javascripts/libs/jXHR.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(jxhr, s);
+        }
+
+        github.showRepos({
+            user: 'shogo82148',
+            count: 0,
+            skip_forks: true,
+            target: '#gh_repos'
+        });
+    });
+  </script>
+  <script src="/javascripts/github.js" type="text/javascript"> </script>
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2017 - Shogo Ichinose -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'shogosblog';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'https://shogo82148.github.io/blog/2017/08/25/unicode9-grapheme-cluster/';
+        var disqus_url = 'https://shogo82148.github.io/blog/2017/08/25/unicode9-grapheme-cluster/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = '//' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) {return;}
+  js = d.createElement(s); js.id = id; js.async = true;
+  js.src = "//connect.facebook.net/en_US/all.js#appId=212934732101925&xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var script = document.createElement('script'); script.type = 'text/javascript'; script.async = true;
+      script.src = 'https://apis.google.com/js/plusone.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(script, s);
+    })();
+  </script>
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

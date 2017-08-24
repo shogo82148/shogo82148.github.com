@@ -1,0 +1,728 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Redisを使ってユニークなIDを配布する - Shogo's Blog</title>
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="description" content="スケーラブルにIDを生成する方法として
+Twitterのsnowflakeが有名です。
+1024台までスケールすることが出来ますが、各snowflakeのサーバにユニークなWoker IDを割り振る必要があります。
+IDを振るためのサーバにIDを振るのが問題になるとは難しいですね。 &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="https://shogo82148.github.io/blog/2017/02/26/unique-id-supplier-using-redis/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="Shogo's Blog" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="/javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-4526627-4']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+  <script type="text/javascript" src="//s.hatena.ne.jp/js/HatenaStar.js"></script>
+<script type="text/javascript">
+Hatena.Star.Token = '0da43945db72b59fd47eb24198fc7a0293c0191f';
+Hatena.Star.SiteConfig = {
+  entryNodes: {
+    'article': {
+      uri: 'h1 a',
+      title: 'h1',
+      container: 'h1'
+    },
+    'article.hentry': {
+      uri: 'window.location',
+      title: 'h1.entry-title',
+      container: 'h1.entry-title'
+    }
+  }
+};
+</script>
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Shogo's Blog</a></h1>
+  
+    <h2>たぶんプログラミングとかについて書いていくブログ</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="sitesearch" value="shogo82148.github.io">
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/blog/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Redisを使ってユニークなIDを配布する</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+<time class='entry-date' datetime='2017-02-26T19:37:45+09:00'><span class='date'><span class='date-month'>Feb</span> <span class='date-day'>26</span><span class='date-suffix'>th</span>, <span class='date-year'>2017</span></span> <span class='time'>7:37 pm</span></time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>スケーラブルにIDを生成する方法として
+Twitterの<a href="https://github.com/twitter/snowflake">snowflake</a>が有名です。
+1024台までスケールすることが出来ますが、各snowflakeのサーバにユニークなWoker IDを割り振る必要があります。
+IDを振るためのサーバにIDを振るのが問題になるとは難しいですね。</p>
+
+<p>各snowflakeサーバにIDを振る親玉Worker ID配布サーバを作るというアイデアはあったのですが、
+Worker IDサーバの可用性を考えるのが大変で手を付けていませんでした。
+最近になってWorker IDサーバとしてRedisを使い、ソート済みセット型で管理すれば楽できるのでは？
+と思いついたので、やってみたというお話です。</p>
+
+<!-- More -->
+
+
+<h2>概要</h2>
+
+<p>レポジトリはこちらです。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/yaraus">shogo82148/yaraus</a></li>
+</ul>
+
+
+<p>他の<a href="https://github.com/twitter/snowflake">snowflake</a>-likeなID発番サーバの実装として
+<a href="http://techblog.kayac.com/katsubushi-introduction.html">katsubushi</a>や
+<a href="https://github.com/sony/sonyflake">sonyflake</a>なんていうのもあります。
+これらのID発番サーバにRedisを使ってWorker IDを割り振るコマンドです。
+Redis3.2以上推奨です。</p>
+
+<h2>使い方</h2>
+
+<p>Go製なので<code>go get</code>でインストールできます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>go get github.com/shogo82148/yaraus/cmd/yaraus
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="c"># 1から1023までのIDが使えるようにRedisを初期化</span>
+</span><span class='line'><span class="nv">$ </span>yaraus init -min <span class="m">1</span> -max 1023
+</span><span class='line'>
+</span><span class='line'><span class="c"># ユニークなIDが必要な処理を実行する</span>
+</span><span class='line'><span class="nv">$ </span>yaraus run -- <span class="nb">echo</span> <span class="o">{}</span>
+</span><span class='line'>2017/02/25 17:19:16 getting new id...
+</span><span class='line'>2017/02/25 17:19:16 client id: YourHostName-1488010756.738-1, id: 1
+</span><span class='line'>2017/02/25 17:19:16 sleep 2s <span class="k">for</span> making sure that other generates which has same id expire.
+</span><span class='line'>2017/02/25 17:19:18 starting...
+</span><span class='line'>1
+</span><span class='line'>2017/02/25 17:19:18 releasing id...
+</span><span class='line'>
+</span><span class='line'><span class="c"># katsubushiと一緒に使う例</span>
+</span><span class='line'><span class="nv">$ </span>yaraus run -- ./katsubushi -worker-id<span class="o">={}</span> -port<span class="o">=</span>7238
+</span><span class='line'>
+</span><span class='line'><span class="c"># ステータス情報もとれます</span>
+</span><span class='line'><span class="nv">$ </span>yaraus stats
+</span><span class='line'><span class="o">{</span>
+</span><span class='line'>    <span class="s2">&quot;client_id_count&quot;</span>: 4,
+</span><span class='line'>    <span class="s2">&quot;client_get_id_count&quot;</span>: 4,
+</span><span class='line'>    <span class="s2">&quot;client_get_id_success&quot;</span>: 4,
+</span><span class='line'>    <span class="s2">&quot;get_id_no_available_id&quot;</span>: 0,
+</span><span class='line'>    <span class="s2">&quot;extend_ttl_count&quot;</span>: 8,
+</span><span class='line'>    <span class="s2">&quot;extend_ttl_success&quot;</span>: 8,
+</span><span class='line'>    <span class="s2">&quot;extend_ttl_ownership_error&quot;</span>: 0,
+</span><span class='line'>    <span class="s2">&quot;extend_ttl_expire_warning&quot;</span>: 0,
+</span><span class='line'>    <span class="s2">&quot;unusing_ids&quot;</span>: 1023,
+</span><span class='line'>    <span class="s2">&quot;using_ids&quot;</span>: 0,
+</span><span class='line'>    <span class="s2">&quot;using_ttl_max&quot;</span>: 0,
+</span><span class='line'>    <span class="s2">&quot;using_ttl_mid&quot;</span>: 0,
+</span><span class='line'>    <span class="s2">&quot;using_ttl_min&quot;</span>: 0
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>ステータスの意味は以下の通りです。</p>
+
+<ul>
+<li><code>client_id_count</code>: 今までに接続してきたクライアントの延べ数</li>
+<li><code>client_get_id_count</code>: ID取得を試みた回数</li>
+<li><code>client_get_id_success</code>: ID取得に成功した回数</li>
+<li><code>get_id_no_available_id</code>: 利用可能なIDが無くて失敗した回数</li>
+<li><code>extend_ttl_count</code>: Expireを伸ばそうと試みた回数</li>
+<li><code>extend_ttl_success</code>: Expireを伸ばすのに成功した回数</li>
+<li><code>extend_ttl_ownership_error</code>: IDが横取りされた回数</li>
+<li><code>extend_ttl_expire_warning</code>: IDが横取りされそうだったのを防いだ回数</li>
+<li><code>unusing_ids</code>: 未使用のIDの数</li>
+<li><code>using_ids</code>: 使用中のIDの数</li>
+<li><code>using_ttl_max</code>: IDの寿命の最大値(秒単位)</li>
+<li><code>using_ttl_mid</code>: IDの寿命の中央値(秒単位)</li>
+<li><code>using_ttl_min</code>: IDの寿命の最小値(秒単位)</li>
+</ul>
+
+
+<h2>実装アイデア</h2>
+
+<p>Redisのセット型を使えば、ID配布自体は簡単です。
+Perlでの実装は以下のようになります。(Go実装なのに例がPerlなのは、僕が一番慣れているので・・・)</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="c1"># あらかじめPoolにIDを蓄えておく</span>
+</span><span class='line'><span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">sadd</span><span class="p">(</span><span class="s">&#39;pool&#39;</span><span class="p">,</span> <span class="s">&quot;id$_&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="mi">1</span><span class="o">..</span><span class="mi">10</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1"># ランダムに選ぶ</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$id</span> <span class="o">=</span> <span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">spop</span><span class="p">(</span><span class="s">&#39;pool&#39;</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1"># 使い終わったら戻す</span>
+</span><span class='line'><span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">sadd</span><span class="p">(</span><span class="s">&#39;pool&#39;</span><span class="p">,</span> <span class="nv">$id</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>多めに見積もって1IDあたり1kB使うと仮定しても、1000個のIDで約1MBです。
+余裕で全部メモリにのるので、オンメモリのRedisでも全く問題ありません。</p>
+
+<p>しかし、この方法では、IDを受け取ったクライアントが突然死してしまった場合に
+永遠にIDが開放されないため、そのうちIDが枯渇してしまいます。</p>
+
+<p>そこで思いついたのが、ソート済みセット型を使ったExpire付き機能付きID配布です。
+「ソート済みセットのスコアにExpireの予定時刻を入れる」というルールでIDを管理します。
+ソート済みセットを使えば、「スコアが一番小さいID＝Expireしている可能性が一番高いID」
+を簡単に取得できます。
+現在時刻と比較して実際にExpireしているかをチェックし、ExpireしていたらID取得成功です。
+Perlのコードに起こすと以下のようになります。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="c1"># PoolにID追加</span>
+</span><span class='line'><span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">zadd</span><span class="p">(</span><span class="s">&#39;pool&#39;</span><span class="p">,</span> <span class="nb">time</span><span class="p">,</span> <span class="s">&quot;id$_&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="mi">1</span><span class="o">..</span><span class="mi">10</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1"># IDを取得</span>
+</span><span class='line'><span class="n">RETRY:</span>
+</span><span class='line'><span class="k">my</span> <span class="p">(</span><span class="nv">$id</span><span class="p">,</span> <span class="nv">$score</span><span class="p">)</span> <span class="o">=</span> <span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">zrange</span><span class="p">(</span><span class="s">&#39;pool&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="s">&quot;WITHSCORE&quot;</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1"># expireしているかチェック</span>
+</span><span class='line'><span class="k">if</span> <span class="nv">$score</span> <span class="o">&lt;</span> <span class="nb">time</span> <span class="p">{</span>
+</span><span class='line'>    <span class="c1"># ID取得失敗、しばらく待ってID取得やり直し</span>
+</span><span class='line'>    <span class="nb">sleep</span> <span class="mi">1</span><span class="p">;</span>
+</span><span class='line'>    <span class="nb">goto</span> <span class="n">RETRY</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1"># expireの期間延長</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$expire</span> <span class="o">=</span> <span class="mi">10</span><span class="p">;</span> <span class="c1"># 10秒でexpire</span>
+</span><span class='line'><span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">zadd</span><span class="p">(</span><span class="s">&#39;pool&#39;</span><span class="p">,</span> <span class="nb">time</span> <span class="o">+</span> <span class="nv">$expire</span><span class="p">,</span> <span class="nv">$id</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1"># $idを使ったなにかの処理</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1"># 使い終わったらExpire扱い</span>
+</span><span class='line'><span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">zadd</span><span class="p">(</span><span class="s">&#39;pool&#39;</span><span class="p">,</span> <span class="nb">time</span><span class="p">,</span> <span class="nv">$id</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>クライアントが突然死していまうと、Expireが更新されないため
+どんどんRankがあがっていき、最終的には別のクライアントに再利用されます。</p>
+
+<p>この方法であれば、Expireしてからの期間が長いIDから再利用されるというのも利点です。
+どうしてもサーバとクライアントで時刻のズレが生じてしまうので、
+サーバはExpireした！と思っても、クライアントがまだ使用中ということは十分に考えられます。
+そのためExpireしたIDをすぐに再利用してしまうと、多重使用になってしまう可能性があります。
+Expireしてからの期間が長いIDから再利用することで、この問題を緩和できるというわけです。</p>
+
+<p>(Googleさんみたいに分散データベース管理に原子時計を導入していれば話は別ですが・・・)</p>
+
+<p>ソート済みセット型のScoreは64bitの浮動小数点型なので、
+scoreにunix timestampを使うとマイクロ秒程度の精度になってしまいますが、
+この用途であれば十分足りるでしょう。</p>
+
+<h2>実装上の工夫</h2>
+
+<p>このアイデアなら楽できる！と思ったものの、
+実際にコードに起こすとなると考慮すべきことがたくさんあって大変でした。</p>
+
+<h3>ID取得とExpire期間延長をアトミックにする</h3>
+
+<p>先のコード例をそのまま実装すると同時アクセスがあった場合にIDプールが壊れます。
+それを防ぐために
+「IDを取得」「expireしているかチェック」「expireの期間延長」はアトミックに実行する必要があります。</p>
+
+<p>Redisの場合、Luaスクリプトを使えば簡単ですね。
+慣れないLuaに少し手こずりましたが、一度覚えてしまうと全部Luaにしたくなってしまう麻薬ですね、あれは。</p>
+
+<h3>Luaスクリプト内で時刻を取得する</h3>
+
+<p>このアイデアは時刻が肝なので、可能であれば時刻の管理もRedisサーバに一任したいところです。
+しかし、Luaスクリプト内ではOS機能のモジュールが無効化されており、時刻の取得はできません。
+ファイルもいじれる危ないモジュールなので仕方ないですね。</p>
+
+<p>ではどうするかというと、LuaからRedisのTIMEコマンドを呼び出して時刻を取得します。
+しかしながら、この方法も一筋縄ではいかず、何もせずに呼び出すとコマンドの実行に失敗してしまいます。</p>
+
+<p>TIMEコマンドが失敗する原因はLuaスクリプトのレプリケーションの方法にあります。
+Redisのレプリケーション方法は、マスターからスクリプトをまるごとスレーブに送り、スレーブ側でスクリプト再実行する方式です。
+そのため、TIMEコマンドのように実行するタイミングによって結果が変わるコマンドは、
+マスターとスレーブで不整合が起きてしまう可能性があるため実行できないのです。</p>
+
+<p>この問題を解決するため、Redis3.2から <code>redis.replicate_commands</code> が追加されました。
+この関数を呼び出すと、Luaスクリプト内で実行したRedisへの書き込みコマンドを転送するレプリケーション方式に変わります。
+実行結果だけを送るのでTIMEコマンドも安全に実行できるというわけです。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="n">redis</span><span class="p">.</span><span class="n">replicate_commands</span><span class="p">()</span>
+</span><span class='line'><span class="kd">local</span> <span class="n">t</span> <span class="o">=</span> <span class="n">redis</span><span class="p">.</span><span class="n">call</span><span class="p">(</span><span class="s2">&quot;</span><span class="s">TIME&quot;</span><span class="p">)</span>
+</span><span class='line'><span class="n">time</span> <span class="o">=</span> <span class="n">t</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">t</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">*</span><span class="mf">1e-6</span> <span class="c1">-- 秒単位に変換</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>なお、<code>redis.replicate_commands</code>が使えない場合は、クライアントの時刻を使うようフォールバックするので、
+3.2よりまえのRedisでも動作はします。</p>
+
+<p>ちなみにレプリケーションの挙動を変えるコマンドは他にもあって、
+<code>redis.set_repl</code>を使うとレプリケーション自体を止めることも出来るらしいです。
+怖い。</p>
+
+<h3>若い番号のIDから配布する</h3>
+
+<p>これはあまり重要ではないんですが、Expireまでの期間が同じだった場合、
+若い番号のIDから順に配布するようにしました。
+「エライ人順にIPアドレスを設定しろ」みたいなアレなので、
+別に考慮しなくてもいいんですが、数字を見ると順番に並べたくなってしまうのが人間というものです。</p>
+
+<p>Redisのソート済みセットはスコアが同じ場合、メンバーの辞書順に並びます。
+<code>Itoa(id)</code>した結果をそのまま辞書順ソートすると</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>1, 10, 11, 12, ..., 2, 20, 21, ...</span></code></pre></td></tr></table></div></figure>
+
+
+<p>のようなおかしな順番になってしまいます。
+そこで、「1桁のときは頭にAを付ける」「2桁のときはB」「3桁のときはC」&hellip;
+と先頭の文字で数字の桁数が分かるようにしました。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>A1, A2, A3, ..., A9, B10, B11, B12, ... B99, C100, C101, C102, ...</span></code></pre></td></tr></table></div></figure>
+
+
+<p>この規則はRFC2550をヒントにしました。
+RFC2550にはZまで使い切ったあとのことも書いてあるんですが、そこまではしていません。
+可読性にこだわらなければ他にも方法はあるのですが、redis-cliで見れたほうが嬉しいじゃないですか。</p>
+
+<ul>
+<li><a href="https://tools.ietf.org/html/rfc2550">RFC 2550 Y10K and Beyond</a></li>
+<li><a href="http://www.cam.hi-ho.ne.jp/mendoxi/rfc/rfc2550j.html">参考日本語訳 RFC 2550 Y10K とその先</a></li>
+</ul>
+
+
+<h3>レプリケーション完了を待つ</h3>
+
+<p>可用性を求めるならば、Redisサーバー自体が突然死する可能性も考えなければなりません。
+この問題に対応するにはマスタースレーブ構成を取るのが一般的でしょう。
+マスタースレーブ構成ではフェールオーバー時に多少のデータ消失が起こる可能性があります。
+レプリケーションが終わっていない分のデータが消失するためです。</p>
+
+<p>キャッシュ用途であれば許容できるかもしれませんが、
+ID配布でこれが起こるのは致命的です。
+配布したIDをもとにデータベースへの書き込みを行うので、整合性が崩れ、修復困難なダメージを与えてしまう可能性があります。</p>
+
+<p>この問題を最小限に抑えるために、2.8からWAITコマンドが追加されています。
+WAITコマンドを使うと、今まで書き込んだデータがレプリケーションされたかを検出できます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'># ROLEコマンドでスレーブの台数を確認
+</span><span class='line'>127.0.0.1:6379&gt; ROLE
+</span><span class='line'>1) "master"
+</span><span class='line'>2) (integer) 83
+</span><span class='line'>3) 1) 1) "::1"     # 一台スレーブ
+</span><span class='line'>      2) "6378"
+</span><span class='line'>      3) "83"
+</span><span class='line'>
+</span><span class='line'># 適当に書き込み
+</span><span class='line'>127.0.0.1:6379&gt; SET foo bar
+</span><span class='line'>OK
+</span><span class='line'>
+</span><span class='line'># 1つのスレーブのレプリケーションが完了するのを待つ(Timeout 1000ms)
+</span><span class='line'>127.0.0.1:6379&gt; WAIT 1 1000
+</span><span class='line'>(integer) 1 # レプリケーションが完了したスレーブの台数</span></code></pre></td></tr></table></div></figure>
+
+
+<p>レプリケーションの完了＝コマンドの実行完了と解釈すれば、
+データの消失を最小限に抑えることができます。</p>
+
+<p>ちなみに、WAITコマンドのtimeoutはミリ秒ですが、今回使用した<a href="https://godoc.org/gopkg.in/redis.v5">go-redis/redis</a>は
+これを秒として扱っていました。
+(こういうのRedis::Fast開発時にもあった気がする)
+単位重要ですね。
+time.ParseDurationで時間指定をすると、毎回単位指定が必要になって面倒ですが、
+こういうミスを防ぐためには有用そうです。
+積極的に使っていきたい。</p>
+
+<h3>横取り検出</h3>
+
+<p>WAITコマンドでデータの消失を最小限にしたとしても、0にできるわけではありません。
+消失が起こった場合の対応も必要です。
+ID配布した記録が消えて横取りが出来る可能性があるので、
+IDに所有者(貸出先の方が正しかったかも)を一緒に記録しておくことにしました。</p>
+
+<p>各クライアントにクライアントIDを付与しておきます。(現状の実装はhostname+timestamp+連番)
+横取りされた方は、自分のクライアントIDとIDの所有者を比較し、横取りが分かった時点で速やかにID開放します。
+横取りした方は、ID取得からID使用までしばらく時間を開けます(-delayでこの時間は変更可能)
+これは横取りされた方のID開放が終わるまで、猶予時間を与えるためです。</p>
+
+<h2>動作条件等</h2>
+
+<p>何度か書いていますが、このアイデアは時刻が肝です。
+各サーバ間の時刻同期が正しく行われている必要があります。
+普通にNTPを使っていればmsのオーダーで同期が取れるので問題ないでしょう。</p>
+
+<p>・・・ただし、みんな大嫌いなうるう秒があります。
+うるう秒の対応の仕方がまちまちなので、ことなった対応方針が適用されたサーバーが混ざると大変です。</p>
+
+<p>例えば、マネージドなRedisとしてElastiCacheを使うと、
+うるう秒挿入のタイミングでElastiCacheは<a href="http://aws.typepad.com/aws_japan/2015/05/look-before-you-leap-the-coming-leap-second-and-aws.html">AWS調整時刻</a>で動作します。
+残念ながらAWS調整時刻を返すNTPは提供されていないようです。</p>
+
+<p>デフォルトの設定はこの辺を考慮してマージンを取っているので大丈夫なはず・・・。
+使う人がいるかはわかりませんが、検証頑張って！</p>
+
+<h2>名前について</h2>
+
+<p>「Yet Another Ranged Unique id Supplier」の略です。
+いい名前が思いつかなかったので、fujiwaraさん製のRanged Unique id Supplierが既にあったのでそこから拝借しました。
+Yet Anatherは、こう付けると流行ると「言語のしくみ」に書いてあったからです。</p>
+
+<iframe style="width:120px;height:240px;" marginwidth="0" marginheight="0" scrolling="no" frameborder="0" src="//rcm-fe.amazon-adsystem.com/e/cm?lt1=_blank&bc1=000000&IS2=1&bg1=FFFFFF&fc1=000000&lc1=0000FF&t=shogo82148-22&o=9&p=8&l=as4&m=amazon&f=ifr&ref=as_ss_li_til&asins=B01N7JZXMD&linkId=8ee3d3dfb649430b1d0abd35881e5f56"></iframe>
+
+
+<h2>まとめ</h2>
+
+<ul>
+<li>RedisをID発番サーバID配布サーバとして活用する方法を考えてみました</li>
+<li>可用性を求めていったらレプリケーションの高度な使い方がわかってきた
+
+<ul>
+<li><code>redis.replicate_commands</code>でスクリプトのレプリケーション方式を変更する</li>
+<li>WAITコマンドでレプリケーションを待つ</li>
+</ul>
+</li>
+<li>フェールオーバのこととか考えると全然楽じゃなかった・・・</li>
+</ul>
+
+
+<p>思いつきを試したかっただけなのですが、勉強になったので良しとしましょう。</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+
+      
+
+
+
+
+<time class='entry-date' datetime='2017-02-26T19:37:45+09:00'><span class='date'><span class='date-month'>Feb</span> <span class='date-day'>26</span><span class='date-suffix'>th</span>, <span class='date-year'>2017</span></span> <span class='time'>7:37 pm</span></time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/golang/'>golang</a>, <a class='category' href='/blog/categories/redis/'>redis</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//b.hatena.ne.jp/entry/https://shogo82148.github.io/blog/2017/02/26/unique-id-supplier-using-redis/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="//b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="//b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="https://shogo82148.github.io/blog/2017/02/26/unique-id-supplier-using-redis/" data-via="shogo82148" data-counturl="https://shogo82148.github.io/blog/2017/02/26/unique-id-supplier-using-redis/" >Tweet</a>
+  
+  
+  <div class="g-plusone" data-size="medium"></div>
+  
+  
+    <div class="fb-like" data-send="true" data-width="450" data-show-faces="false"></div>
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2017/02/25/rust-and-go-ploygolot/" title="Previous Post: Rust vs Go の終戦へ向けてPolyglotを作ってみた">&laquo; Rust vs Go の終戦へ向けてPolyglotを作ってみた</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2017/03/05/tune-up-go-jsonstore/" title="Next Post: go-JSONStoreの高速化と機能追加">go-JSONStoreの高速化と機能追加 &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2017/08/25/unicode9-grapheme-cluster/">Perl 5.26 & Unicode 9.0 で変わる書記素クラスタ(grapheme Cluster)のお話</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/06/26/go19-monotonic-clock/">Go1.9から使える Monotonic Clocks を試してみた</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/06/16/mysql-driver-and-context/">ぼくのかんがえたさいきょうのcontext対応版go-mysql-driverをマージしてもらった</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/05/30/grumpy/">Re: GoとPythonとGrumpyの速度ベンチマーク</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/05/04/go-rerand/">String::RandomのGo移植を書いてみた</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>GitHub Repos</h1>
+  <ul id="gh_repos">
+    <li class="loading">Status updating...</li>
+  </ul>
+  
+  <a href="https://github.com/shogo82148">@shogo82148</a> on GitHub
+  
+  <script type="text/javascript">
+    $(document).ready(function(){
+        if (!window.jXHR){
+            var jxhr = document.createElement('script');
+            jxhr.type = 'text/javascript';
+            jxhr.src = '/javascripts/libs/jXHR.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(jxhr, s);
+        }
+
+        github.showRepos({
+            user: 'shogo82148',
+            count: 0,
+            skip_forks: true,
+            target: '#gh_repos'
+        });
+    });
+  </script>
+  <script src="/javascripts/github.js" type="text/javascript"> </script>
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2017 - Shogo Ichinose -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'shogosblog';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'https://shogo82148.github.io/blog/2017/02/26/unique-id-supplier-using-redis/';
+        var disqus_url = 'https://shogo82148.github.io/blog/2017/02/26/unique-id-supplier-using-redis/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = '//' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) {return;}
+  js = d.createElement(s); js.id = id; js.async = true;
+  js.src = "//connect.facebook.net/en_US/all.js#appId=212934732101925&xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var script = document.createElement('script'); script.type = 'text/javascript'; script.async = true;
+      script.src = 'https://apis.google.com/js/plusone.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(script, s);
+    })();
+  </script>
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

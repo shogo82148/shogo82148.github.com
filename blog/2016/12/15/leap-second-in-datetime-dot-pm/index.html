@@ -1,0 +1,488 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>DateTime.pmにうるう秒の修正が入った話 - Shogo's Blog</title>
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="description" content="こんにちは、DateTime.pm Watcherのいっちーです。
+本日面白いパッチがDateTime.pmに取り込まれたので、ご紹介したいと思います。 そのpullreqがこちらです。Closedになっていますが、該当コミットはmasterに取り込まれています。 The leap second &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="Shogo's Blog" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="/javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-4526627-4']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+  <script type="text/javascript" src="//s.hatena.ne.jp/js/HatenaStar.js"></script>
+<script type="text/javascript">
+Hatena.Star.Token = '0da43945db72b59fd47eb24198fc7a0293c0191f';
+Hatena.Star.SiteConfig = {
+  entryNodes: {
+    'article': {
+      uri: 'h1 a',
+      title: 'h1',
+      container: 'h1'
+    },
+    'article.hentry': {
+      uri: 'window.location',
+      title: 'h1.entry-title',
+      container: 'h1.entry-title'
+    }
+  }
+};
+</script>
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Shogo's Blog</a></h1>
+  
+    <h2>たぶんプログラミングとかについて書いていくブログ</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="sitesearch" value="shogo82148.github.io">
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/blog/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">DateTime.pmにうるう秒の修正が入った話</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+<time class='entry-date' datetime='2016-12-15T22:17:47+09:00'><span class='date'><span class='date-month'>Dec</span> <span class='date-day'>15</span><span class='date-suffix'>th</span>, <span class='date-year'>2016</span></span> <span class='time'>10:17 pm</span></time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>こんにちは、<a href="https://metacpan.org/pod/DateTime">DateTime.pm</a> Watcherのいっちーです。
+本日面白いパッチがDateTime.pmに取り込まれたので、ご紹介したいと思います。</p>
+
+<!-- More -->
+
+
+<p>そのpullreqがこちらです。Closedになっていますが、該当コミットはmasterに取り込まれています。</p>
+
+<ul>
+<li><a href="https://github.com/houseabsolute/DateTime.pm/pull/48">The leap second in 2012 was on 2012-07-01 not 2012-06-01. #48</a></li>
+</ul>
+
+
+<blockquote><p>per <a href="https://confluence.qps.nl/display/KBE/UTC+to+GPS+Time+Correction">https://confluence.qps.nl/display/KBE/UTC+to+GPS+Time+Correction</a> the leap second in 2012 was on 2012-07-01 not 2012-06-01. It&rsquo;s is well known that leap seconds only occur directly before Jan 1st or July 1st.</p></blockquote>
+
+<p>適当な和訳「2012年に挿入されたうるう秒は2012年6月1日ではなく2012年7月1日です。よく知られているように、今までに挿入されたうるう秒は1月1日と7月1日の直前だけです。」</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class='diff'><span class='line'><span class="gh">diff --git a/lib/DateTime/LeapSecond.pm b/lib/DateTime/LeapSecond.pm</span>
+</span><span class='line'><span class="gh">index 66e1b2b..4a38be2 100644</span>
+</span><span class='line'><span class="gd">--- a/lib/DateTime/LeapSecond.pm</span>
+</span><span class='line'><span class="gi">+++ b/lib/DateTime/LeapSecond.pm</span>
+</span><span class='line'><span class="gu">@@ -108,7 +108,7 @@ sub _initialize {</span>
+</span><span class='line'>             1999  Jan. 1  +1
+</span><span class='line'>             2006  Jan. 1  +1
+</span><span class='line'>             2009  Jan. 1  +1
+</span><span class='line'><span class="gd">-            2012  Jun. 1  +1</span>
+</span><span class='line'><span class="gi">+            2012  Jul. 1  +1</span>
+</span><span class='line'>             2015  Jul. 1  +1
+</span><span class='line'>             2017  Jan. 1  +1
+</span><span class='line'>             )
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>なぜ4年間誰も気が付かなかった。</p>
+
+<h2>このバグの影響</h2>
+
+<p>結論から言うと、<strong>この修正によるDateTime.pmの挙動への影響はありません</strong>。
+これを書いている時点で最新版のver1.41には、上記の修正は取り込まれていませんが、
+うるう秒は2012年7月1日に正しく挿入されます。</p>
+
+<p>以前<a href="//shogo82148.github.io/blog/2015/12/09/perl-datetime/">Perl の DateTime 利用上の注意点</a>で
+うるう秒の確認をしたときと同様に検証してみましょう。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">feature</span> <span class="sx">qw(say)</span><span class="p">;</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$dt</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">use</span> <span class="n">DateTime</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="nv">$dt</span> <span class="o">=</span> <span class="n">DateTime</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span> <span class="n">year</span> <span class="o">=&gt;</span> <span class="mi">2012</span><span class="p">,</span> <span class="n">month</span> <span class="o">=&gt;</span> <span class="mi">7</span><span class="p">,</span> <span class="n">day</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span> <span class="n">hour</span> <span class="o">=&gt;</span> <span class="mi">9</span><span class="p">,</span> <span class="n">time_zone</span> <span class="o">=&gt;</span> <span class="s">&#39;Asia/Tokyo&#39;</span> <span class="p">);</span>
+</span><span class='line'><span class="n">say</span> <span class="nv">$dt</span><span class="o">-&gt;</span><span class="n">subtract</span><span class="p">(</span><span class="n">seconds</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="nv">$dt</span> <span class="o">=</span> <span class="n">DateTime</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span> <span class="n">year</span> <span class="o">=&gt;</span> <span class="mi">2012</span><span class="p">,</span> <span class="n">month</span> <span class="o">=&gt;</span> <span class="mi">6</span><span class="p">,</span> <span class="n">day</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span> <span class="n">hour</span> <span class="o">=&gt;</span> <span class="mi">9</span><span class="p">,</span> <span class="n">time_zone</span> <span class="o">=&gt;</span> <span class="s">&#39;Asia/Tokyo&#39;</span> <span class="p">);</span>
+</span><span class='line'><span class="n">say</span> <span class="nv">$dt</span><span class="o">-&gt;</span><span class="n">subtract</span><span class="p">(</span><span class="n">seconds</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ perl datetime.pl
+</span><span class='line'>2012-07-01T08:59:60
+</span><span class='line'>2012-06-01T08:59:59
+</span><span class='line'>
+</span><span class='line'>$ PERL_DATETIME_PP=1 perl datetime.pl
+</span><span class='line'>2012-07-01T08:59:60
+</span><span class='line'>2012-06-01T08:59:59</span></code></pre></td></tr></table></div></figure>
+
+
+<p>DateTime.pmにはXSの実装とPurePerlの実装が含まれていますが、
+どちらの実装でも2012年7月1日に正しくうるう秒が挿入され、2012年6月1日にはうるう秒はありません。</p>
+
+<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">プログラム書いてると「書いたとおりに動くんじゃなくて思った通りに動けよ」って思うけど、たまに「コード見たら絶対動かないはずなのになぜか思った通りにちゃんと動く」みたいな奴に出くわすと恐ろしくて夜も眠れなくなるのでやっぱり書いたとおりに動いて欲しい</p>&mdash; かずー (@kazoo04) <a href="https://twitter.com/kazoo04/status/808195587518578688">December 12, 2016</a></blockquote>
+
+
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+
+<p>まさに、「コード見たら絶対動かないはずなのになぜか思った通りにちゃんと動く」といった感じです。</p>
+
+<h2>なぜ正しく動くのか</h2>
+
+<p>なぜ正しく動くのか、その答えはうるう秒一覧の解析を行う部分にありました。</p>
+
+<ul>
+<li><a href="https://github.com/houseabsolute/DateTime.pm/blob/ff0e3780ea1c841eb17a0245f5f8061cf10c28d3/lib/DateTime/LeapSecond.pm#L40-L41">DateTime.pm/lib/DateTime/LeapSecond.pm</a></li>
+</ul>
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">my</span> <span class="nv">$utc_epoch</span>
+</span><span class='line'>    <span class="o">=</span> <span class="n">DateTime</span><span class="o">-&gt;</span><span class="n">_ymd2rd</span><span class="p">(</span> <span class="nv">$year</span><span class="p">,</span> <span class="p">(</span> <span class="nv">$mon</span> <span class="o">=~</span><span class="sr"> /Jan/i</span> <span class="p">?</span> <span class="mi">1</span> <span class="p">:</span> <span class="mi">7</span> <span class="p">),</span> <span class="nv">$mday</span> <span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>Jan.(1月)以外はすべて7月として扱っている！</strong></p>
+
+<p>Janか否かが重要なので、JunだろうがJulだろうが7月として扱われるので、結果的に正しく動くわけです。
+「バグを埋め込んでいたけど、実装が適当でたまたま動いていた」というよくあるパターンですね。
+将来3月末や9月末に挿入されるようになったとき大丈夫なんでしょうか・・・。
+まあ、必要になるのは数百年後とかなので、僕には関係ない・・・そう、関係ないのです・・・。</p>
+
+<h2>まとめ</h2>
+
+<ul>
+<li>DateTime.pmのうるう秒一覧にbug fix</li>
+<li>動作に影響は無いので、ユーザ側では特に気にする必要はない
+
+<ul>
+<li>うるう秒自体を気にしないといけないのは仕方がない・・・</li>
+</ul>
+</li>
+<li>JanとかJunとかJulとか似てて紛らわしいんだよ！！数字書け！！</li>
+</ul>
+
+
+<h2>ちなみに</h2>
+
+<p>最新版のver1.41は来年(2017年)の1月1日のうるう秒に対応済みです。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">use</span> <span class="n">feature</span> <span class="sx">qw(say)</span><span class="p">;</span>
+</span><span class='line'><span class="k">my</span> <span class="nv">$dt</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">use</span> <span class="n">DateTime</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="nv">$dt</span> <span class="o">=</span> <span class="n">DateTime</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span> <span class="n">year</span> <span class="o">=&gt;</span> <span class="mi">2017</span><span class="p">,</span> <span class="n">month</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span> <span class="n">day</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span> <span class="n">hour</span> <span class="o">=&gt;</span> <span class="mi">9</span><span class="p">,</span> <span class="n">time_zone</span> <span class="o">=&gt;</span> <span class="s">&#39;Asia/Tokyo&#39;</span> <span class="p">);</span>
+</span><span class='line'><span class="n">say</span> <span class="nv">$dt</span><span class="o">-&gt;</span><span class="n">subtract</span><span class="p">(</span><span class="n">seconds</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ perl datetime.pl
+</span><span class='line'>2017-01-01T08:59:60</span></code></pre></td></tr></table></div></figure>
+
+
+<p>みなさん準備は出来ていますか 😇</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+
+      
+
+
+
+
+<time class='entry-date' datetime='2016-12-15T22:17:47+09:00'><span class='date'><span class='date-month'>Dec</span> <span class='date-day'>15</span><span class='date-suffix'>th</span>, <span class='date-year'>2016</span></span> <span class='time'>10:17 pm</span></time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/leapsecond/'>leapsecond</a>, <a class='category' href='/blog/categories/perl/'>perl</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//b.hatena.ne.jp/entry/https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="//b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="//b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm/" data-via="shogo82148" data-counturl="https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm/" >Tweet</a>
+  
+  
+  <div class="g-plusone" data-size="medium"></div>
+  
+  
+    <div class="fb-like" data-send="true" data-width="450" data-show-faces="false"></div>
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2016/11/23/qr-code/" title="Previous Post: Twitterの二次元コード問題と、QRコード・フレームQRの見分け方">&laquo; Twitterの二次元コード問題と、QRコード・フレームQRの見分け方</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2016/12/20/redis-fast-0-dot-19-released/" title="Next Post: Redis::Fast 0.19リリースのお知らせ">Redis::Fast 0.19リリースのお知らせ &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2017/08/25/unicode9-grapheme-cluster/">Perl 5.26 & Unicode 9.0 で変わる書記素クラスタ(grapheme Cluster)のお話</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/06/26/go19-monotonic-clock/">Go1.9から使える Monotonic Clocks を試してみた</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/06/16/mysql-driver-and-context/">ぼくのかんがえたさいきょうのcontext対応版go-mysql-driverをマージしてもらった</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/05/30/grumpy/">Re: GoとPythonとGrumpyの速度ベンチマーク</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/05/04/go-rerand/">String::RandomのGo移植を書いてみた</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>GitHub Repos</h1>
+  <ul id="gh_repos">
+    <li class="loading">Status updating...</li>
+  </ul>
+  
+  <a href="https://github.com/shogo82148">@shogo82148</a> on GitHub
+  
+  <script type="text/javascript">
+    $(document).ready(function(){
+        if (!window.jXHR){
+            var jxhr = document.createElement('script');
+            jxhr.type = 'text/javascript';
+            jxhr.src = '/javascripts/libs/jXHR.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(jxhr, s);
+        }
+
+        github.showRepos({
+            user: 'shogo82148',
+            count: 0,
+            skip_forks: true,
+            target: '#gh_repos'
+        });
+    });
+  </script>
+  <script src="/javascripts/github.js" type="text/javascript"> </script>
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2017 - Shogo Ichinose -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'shogosblog';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm/';
+        var disqus_url = 'https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = '//' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) {return;}
+  js = d.createElement(s); js.id = id; js.async = true;
+  js.src = "//connect.facebook.net/en_US/all.js#appId=212934732101925&xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var script = document.createElement('script'); script.type = 'text/javascript'; script.async = true;
+      script.src = 'https://apis.google.com/js/plusone.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(script, s);
+    })();
+  </script>
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

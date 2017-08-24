@@ -1,0 +1,868 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Re: GoとPythonとGrumpyの速度ベンチマーク - Shogo's Blog</title>
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="description" content="GoとPythonとGrumpyの速度ベンチマーク ～Googleのトランスパイラはどれくらい速い？～という記事を拝読したのですが、
+もう一歩踏み込んで検証して欲しい・・・。 並列処理性能が優れているほか、 &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="https://shogo82148.github.io/blog/2017/05/30/grumpy/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="Shogo's Blog" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="/javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-4526627-4']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+  <script type="text/javascript" src="//s.hatena.ne.jp/js/HatenaStar.js"></script>
+<script type="text/javascript">
+Hatena.Star.Token = '0da43945db72b59fd47eb24198fc7a0293c0191f';
+Hatena.Star.SiteConfig = {
+  entryNodes: {
+    'article': {
+      uri: 'h1 a',
+      title: 'h1',
+      container: 'h1'
+    },
+    'article.hentry': {
+      uri: 'window.location',
+      title: 'h1.entry-title',
+      container: 'h1.entry-title'
+    }
+  }
+};
+</script>
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Shogo's Blog</a></h1>
+  
+    <h2>たぶんプログラミングとかについて書いていくブログ</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="sitesearch" value="shogo82148.github.io">
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/blog/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Re: GoとPythonとGrumpyの速度ベンチマーク</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+<time class='entry-date' datetime='2017-05-30T17:53:32+09:00'><span class='date'><span class='date-month'>May</span> <span class='date-day'>30</span><span class='date-suffix'>th</span>, <span class='date-year'>2017</span></span> <span class='time'>5:53 pm</span></time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p><a href="http://qiita.com/kotauchisunsun/items/db28d14f7f13fb29e5f9">GoとPythonとGrumpyの速度ベンチマーク ～Googleのトランスパイラはどれくらい速い？～</a>という記事を拝読したのですが、
+もう一歩踏み込んで検証して欲しい・・・。</p>
+
+<blockquote><p>並列処理性能が優れているほか、PythonコードからGoのパッケージをPythonモジュールのように呼び出して利用することもできるという特徴がある。</p></blockquote>
+
+<p>と<a href="http://news.mynavi.jp/news/2017/01/06/110/">Google、すごくスケールするPython実行環境をGoで開発</a>から引用しているのに、
+この件に全く触れていないんですよね。
+Twitterに呟いたってどうせ誰もやってくれない気がするので、自分で試してみました。</p>
+
+<!-- More -->
+
+
+<h2>環境</h2>
+
+<p>この記事を書いている2017年5月30日現在の最新バージョンで検証しました。</p>
+
+<ul>
+<li>go version go1.8.3 darwin/amd64</li>
+<li>CPython 2.7.13</li>
+<li>Grumpy <a href="https://github.com/google/grumpy/tree/d8d01899f5eedf99602887567aaeb39a9154bf68">d8d01899f5</a></li>
+</ul>
+
+
+<p>Grumpyのインストール方法はREADMEにある通り。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>make
+</span><span class='line'><span class="nb">export </span><span class="nv">GOPATH</span><span class="o">=</span><span class="nv">$PWD</span>/build
+</span><span class='line'><span class="nb">export </span><span class="nv">PYTHONPATH</span><span class="o">=</span><span class="nv">$PWD</span>/build/lib/python2.7/site-packages
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>ただ個人的な環境問題としてPythonのバージョン管理に利用しているpyenvとの相性が悪いらしく、
+pyenvが管理しているPythonへのパスを直接通す必要がありました。
+(これがないとPythonスクリプトがなぜかbashに処理される。なんかこの問題最近Twitterで見たような・・・)</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nb">export </span><span class="nv">PATH</span><span class="o">=</span><span class="nv">$HOME</span>/.pyenv/versions/2.7.13/bin:<span class="nv">$PATH</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>モンテカルロ法を並列実行してみる</h2>
+
+<p>まず、並列処理性能について検証してみましょう。
+モンテカルロ法の各試行は独立しているので、並列実行にするのは容易です。
+Python2のthreadingモジュールを使って並列実行してみましょう。</p>
+
+<h3>コード</h3>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="c">#coding:utf-8</span>
+</span><span class='line'><span class="c"># モンテカルロ法 Pure Python 並列版</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">threading</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">random</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">sys</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">class</span> <span class="nc">MyThread</span><span class="p">(</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">):</span>
+</span><span class='line'>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span class='line'>        <span class="nb">super</span><span class="p">(</span><span class="n">MyThread</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">()</span>
+</span><span class='line'>        <span class="bp">self</span><span class="o">.</span><span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span class='line'>        <span class="n">r</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">Random</span><span class="p">()</span>
+</span><span class='line'>        <span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
+</span><span class='line'>        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">num</span><span class="p">):</span>
+</span><span class='line'>            <span class="n">x</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">random</span><span class="p">()</span>
+</span><span class='line'>            <span class="n">y</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">random</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'>            <span class="k">if</span> <span class="n">x</span> <span class="o">*</span> <span class="n">x</span> <span class="o">+</span> <span class="n">y</span> <span class="o">*</span> <span class="n">y</span> <span class="o">&lt;=</span> <span class="mf">1.0</span><span class="p">:</span>
+</span><span class='line'>                <span class="n">c</span> <span class="o">+=</span> <span class="mi">1</span>
+</span><span class='line'>        <span class="bp">self</span><span class="o">.</span><span class="n">c</span> <span class="o">=</span> <span class="n">c</span>
+</span><span class='line'>
+</span><span class='line'>
+</span><span class='line'><span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+</span><span class='line'>    <span class="n">num</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+</span><span class='line'>    <span class="n">para</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">threads</span> <span class="o">=</span> <span class="p">[]</span>
+</span><span class='line'>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">para</span><span class="p">):</span>
+</span><span class='line'>        <span class="n">t</span> <span class="o">=</span> <span class="n">MyThread</span><span class="p">()</span>
+</span><span class='line'>        <span class="n">t</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+</span><span class='line'>        <span class="n">threads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
+</span><span class='line'>    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">threads</span><span class="p">:</span>
+</span><span class='line'>        <span class="n">t</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+</span><span class='line'>        <span class="n">c</span> <span class="o">+=</span> <span class="n">t</span><span class="o">.</span><span class="n">c</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">print</span> <span class="mf">4.0</span><span class="o">*</span><span class="n">c</span><span class="o">/</span><span class="p">(</span><span class="n">num</span><span class="o">*</span><span class="n">para</span><span class="p">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>並列度に比例した計算負荷がかかるようになってます。
+理想的な並列処理が行えていれば、並列度に関わらず同じ実時間で実行されるはずです。</p>
+
+<h3>CPythonでの結果</h3>
+
+<p>CPythonでtimeを使って雑に測定した結果です。
+並列度を4倍にしたら実行時間も4倍になっています。
+また、実時間と実行時間が大体おなじで、まったく並列実行できていません。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'># 並列度1で実行した場合(CPython)
+</span><span class='line'>$ time python con_monte.py 300000 1
+</span><span class='line'>3.14529333333
+</span><span class='line'>real    0m0.358s
+</span><span class='line'>user    0m0.279s
+</span><span class='line'>sys 0m0.032s
+</span><span class='line'>
+</span><span class='line'># 並列度4で実行した場合(CPython)
+</span><span class='line'>$ time python con_monte.py 300000 4
+</span><span class='line'>3.14382666667
+</span><span class='line'>real    0m1.261s
+</span><span class='line'>user    0m1.124s
+</span><span class='line'>sys 0m0.441s</span></code></pre></td></tr></table></div></figure>
+
+
+<p>CPythonを利用しているひとにはおなじみの<a href="https://ja.wikipedia.org/wiki/%E3%82%B0%E3%83%AD%E3%83%BC%E3%83%90%E3%83%AB%E3%82%A4%E3%83%B3%E3%82%BF%E3%83%97%E3%83%AA%E3%82%BF%E3%83%AD%E3%83%83%E3%82%AF">グローバルインタプリタロック(GIL: Global Interpreter Lock)</a>の影響ですね。
+CPythonのスレッドはI/Oの並列化には向いていますが、計算の並列化には向いていません。</p>
+
+<h3>Grumpyでの結果</h3>
+
+<p>次にGrumpyで測定した結果です。
+並列度を4倍にしたところ、実行時間は2倍程度になりました。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'># 並列度1で実行した場合(Grumpy)
+</span><span class='line'>$ time ./con_monte_darwin_amd64 300000 1
+</span><span class='line'>3.1441733333333333
+</span><span class='line'>real    0m16.129s
+</span><span class='line'>user    0m16.787s
+</span><span class='line'>sys 0m0.125s
+</span><span class='line'>
+</span><span class='line'># 並列度4で実行した場合(Grumpy)
+</span><span class='line'>$ time ./con_monte_darwin_amd64 300000 4
+</span><span class='line'>3.1401766666666666
+</span><span class='line'>real    0m33.935s
+</span><span class='line'>user    1m45.979s
+</span><span class='line'>sys 0m0.654s</span></code></pre></td></tr></table></div></figure>
+
+
+<p>実時間4倍までは行かなかったので、理想的な並列計算には及ばないものの、
+CPythonよりは並列化の効果が出ていそうです。
+実のところ、Goも計算の並列化よりI/Oの並列化・並行処理のほうが得意なんですよね(GILよりはまし)。</p>
+
+<p>手元の4コアのMBAで試した結果なので、コア数が多いとまた結果が変わってくるかもしれません。</p>
+
+<h2>PythonからGoのライブラリを直接呼び出す</h2>
+
+<p>次にGoのパッケージを呼び出す機能を試してみます。
+Pythonのrandomパッケージではなく、Goのmath/randパッケージを使ってモンテカルロ法を実行してみます。</p>
+
+<h3>コード</h3>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="c">#coding:utf-8</span>
+</span><span class='line'><span class="c"># モンテカルロ法 Python+Go 並列版</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">threading</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">random</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">sys</span>
+</span><span class='line'><span class="kn">from</span> <span class="nn">__go__.time</span> <span class="kn">import</span> <span class="n">Now</span>
+</span><span class='line'><span class="kn">from</span> <span class="nn">__go__.math.rand</span> <span class="kn">import</span> <span class="n">New</span><span class="p">,</span> <span class="n">NewSource</span>
+</span><span class='line'>
+</span><span class='line'>
+</span><span class='line'><span class="k">class</span> <span class="nc">MyThread</span><span class="p">(</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">):</span>
+</span><span class='line'>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span class='line'>        <span class="nb">super</span><span class="p">(</span><span class="n">MyThread</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">()</span>
+</span><span class='line'>        <span class="bp">self</span><span class="o">.</span><span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span class='line'>        <span class="n">r</span> <span class="o">=</span> <span class="n">New</span><span class="p">(</span><span class="n">NewSource</span><span class="p">(</span><span class="n">Now</span><span class="p">()</span><span class="o">.</span><span class="n">UnixNano</span><span class="p">()))</span>
+</span><span class='line'>        <span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
+</span><span class='line'>        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">num</span><span class="p">):</span>
+</span><span class='line'>            <span class="n">x</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">Float64</span><span class="p">()</span>
+</span><span class='line'>            <span class="n">y</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">Float64</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'>            <span class="k">if</span> <span class="n">x</span> <span class="o">*</span> <span class="n">x</span> <span class="o">+</span> <span class="n">y</span> <span class="o">*</span> <span class="n">y</span> <span class="o">&lt;=</span> <span class="mf">1.0</span><span class="p">:</span>
+</span><span class='line'>                <span class="n">c</span> <span class="o">+=</span> <span class="mi">1</span>
+</span><span class='line'>        <span class="bp">self</span><span class="o">.</span><span class="n">c</span> <span class="o">=</span> <span class="n">c</span>
+</span><span class='line'>
+</span><span class='line'>
+</span><span class='line'><span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+</span><span class='line'>    <span class="n">num</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+</span><span class='line'>    <span class="n">para</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">threads</span> <span class="o">=</span> <span class="p">[]</span>
+</span><span class='line'>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">para</span><span class="p">):</span>
+</span><span class='line'>        <span class="n">t</span> <span class="o">=</span> <span class="n">MyThread</span><span class="p">()</span>
+</span><span class='line'>        <span class="n">t</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+</span><span class='line'>        <span class="n">threads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
+</span><span class='line'>    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">threads</span><span class="p">:</span>
+</span><span class='line'>        <span class="n">t</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+</span><span class='line'>        <span class="n">c</span> <span class="o">+=</span> <span class="n">t</span><span class="o">.</span><span class="n">c</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">print</span> <span class="mf">4.0</span><span class="o">*</span><span class="n">c</span><span class="o">/</span><span class="p">(</span><span class="n">num</span><span class="o">*</span><span class="n">para</span><span class="p">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>Grumpyでの結果</h3>
+
+<p>Grumpyでの実行結果です。
+CPythonには遠く及ばないものの、もとのコードの8倍速くらいにはなりました。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'># 並列度1で実行した場合(Grumpy)
+</span><span class='line'>$ time ./con_monte_go_darwin_amd64 300000 1
+</span><span class='line'>3.1388133333333332
+</span><span class='line'>real    0m1.921s
+</span><span class='line'>user    0m2.006s
+</span><span class='line'>sys 0m0.029s
+</span><span class='line'>
+</span><span class='line'># 並列度4で実行した場合(Grumpy)
+</span><span class='line'>$ time ./con_monte_go_darwin_amd64 300000 4
+</span><span class='line'>3.143743333333333
+</span><span class='line'>real    0m4.115s
+</span><span class='line'>user    0m12.855s
+</span><span class='line'>sys 0m0.096s</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>竹内関数を並列実行してみる</h2>
+
+<p>竹内関数を並列実行した場合も試してみました。</p>
+
+<h3>コード</h3>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="c">#coding:utf-8</span>
+</span><span class='line'><span class="c"># 竹内関数 Pure Python 並列版</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">sys</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">threading</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">def</span> <span class="nf">tak</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">z</span><span class="p">):</span>
+</span><span class='line'>    <span class="k">if</span> <span class="n">x</span> <span class="o">&lt;=</span> <span class="n">y</span><span class="p">:</span>
+</span><span class='line'>        <span class="k">return</span> <span class="n">y</span>
+</span><span class='line'>    <span class="k">else</span><span class="p">:</span>
+</span><span class='line'>        <span class="k">return</span> <span class="n">tak</span><span class="p">(</span><span class="n">tak</span><span class="p">((</span><span class="n">x</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="n">y</span> <span class="p">,</span> <span class="n">z</span><span class="p">),</span> <span class="n">tak</span><span class="p">((</span><span class="n">y</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="n">z</span> <span class="p">,</span> <span class="n">x</span><span class="p">),</span> <span class="n">tak</span><span class="p">((</span><span class="n">z</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">class</span> <span class="nc">MyThread</span><span class="p">(</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">):</span>
+</span><span class='line'>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">):</span>
+</span><span class='line'>        <span class="nb">super</span><span class="p">(</span><span class="n">MyThread</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">()</span>
+</span><span class='line'>        <span class="bp">self</span><span class="o">.</span><span class="n">a</span> <span class="o">=</span> <span class="n">a</span>
+</span><span class='line'>        <span class="bp">self</span><span class="o">.</span><span class="n">b</span> <span class="o">=</span> <span class="n">b</span>
+</span><span class='line'>        <span class="bp">self</span><span class="o">.</span><span class="n">c</span> <span class="o">=</span> <span class="n">c</span>
+</span><span class='line'>        <span class="bp">self</span><span class="o">.</span><span class="n">result</span> <span class="o">=</span> <span class="mi">0</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span class='line'>        <span class="bp">self</span><span class="o">.</span><span class="n">result</span> <span class="o">=</span> <span class="n">tak</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">c</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+</span><span class='line'>    <span class="n">a</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+</span><span class='line'>    <span class="n">b</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+</span><span class='line'>    <span class="n">c</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span>
+</span><span class='line'>    <span class="n">para</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">4</span><span class="p">])</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">threads</span> <span class="o">=</span> <span class="p">[]</span>
+</span><span class='line'>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">para</span><span class="p">):</span>
+</span><span class='line'>        <span class="n">t</span> <span class="o">=</span> <span class="n">MyThread</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">)</span>
+</span><span class='line'>        <span class="n">t</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+</span><span class='line'>        <span class="n">threads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">threads</span><span class="p">:</span>
+</span><span class='line'>        <span class="n">t</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+</span><span class='line'>        <span class="k">print</span> <span class="n">t</span><span class="o">.</span><span class="n">result</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">if</span> <span class="n">__name__</span><span class="o">==</span><span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+</span><span class='line'>    <span class="n">main</span><span class="p">()</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>モンテカルロ法と同様に、理想的な並列処理が行えていれば、並列度に関わらず同じ実時間で実行されるはずです。</p>
+
+<h3>CPythonでの結果</h3>
+
+<p>CPythonでの結果です。
+モンテカルロ法の場合と同様に、
+並列度を4倍にしたら実行時間も4倍になっています。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'># 並列度1で実行した場合(CPython)
+</span><span class='line'>$ time python con_take.py 11 10 0 1
+</span><span class='line'>11
+</span><span class='line'>real    0m1.529s
+</span><span class='line'>user    0m1.498s
+</span><span class='line'>sys 0m0.028s
+</span><span class='line'>
+</span><span class='line'># 並列度4で実行した場合(CPython)
+</span><span class='line'>$ time python con_take.py 11 10 0 4
+</span><span class='line'>11
+</span><span class='line'>11
+</span><span class='line'>11
+</span><span class='line'>11
+</span><span class='line'>real    0m7.333s
+</span><span class='line'>user    0m6.620s
+</span><span class='line'>sys 0m2.565s</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>Grumpyでの結果</h3>
+
+<p>Grumpyでの結果です。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'># 並列度1で実行した場合(Grumpy)
+</span><span class='line'>$ time ./con_take_darwin_amd64 11 10 0 1
+</span><span class='line'>11
+</span><span class='line'>real    0m0.988s
+</span><span class='line'>user    0m0.988s
+</span><span class='line'>sys 0m0.018s
+</span><span class='line'>
+</span><span class='line'># 並列度4で実行した場合(Grumpy)
+</span><span class='line'>$ time ./con_take_darwin_amd64 11 10 0 4
+</span><span class='line'>11
+</span><span class='line'>11
+</span><span class='line'>11
+</span><span class='line'>11
+</span><span class='line'>real    0m2.031s
+</span><span class='line'>user    0m7.135s
+</span><span class='line'>sys 0m0.031s</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>(なんかCPythonより早くなったぞ？？？？)</strong></p>
+
+<p>最初に紹介した記事でも、
+モンテカルロ法のベンチマークではCPythonがGrumpyの数十倍の速度で圧倒的勝利でしたが、
+竹内関数のベンチマークではその差は縮まっています。
+この程度であれば並列度を上げて物理で殴れば容易にGrumpyが逆転するでしょう。</p>
+
+<p>(この検証で並列度1のときもGrumpy勝ったの謎だけど・・・)</p>
+
+<h2>考察</h2>
+
+<p>モンテカルロ法はCPythonのほうが圧倒的に速かったのに、
+竹内関数ではGrumpyのほうが速かった(あるいは差が縮まった)という結果から、
+「<strong>GrumpyからGoの関数を呼び出すオーバーヘッドが大きい</strong>」のではと推測しています。
+モンテカルロ法のPure Python版でも圧倒的差が付いたのは、
+<a href="https://github.com/google/grumpy/blob/d8d01899f5eedf99602887567aaeb39a9154bf68/lib/_random.py">Grumpyのrandomパッケージの実装が内部でGoのmath/randを呼んでいる</a>からです。</p>
+
+<p>純粋なPure Pythonなコードであれば、Grumpyのシングルスレッド性能はCPythonより数倍遅い程度です。
+最近のCPUコアたくさんなマシンであれば、GILのなくマルチスレッドを活かせるGrumpyが有利になると思います。
+このことはグーグルのブログ記事「<a href="https://opensource.googleblog.com/2017/01/grumpy-go-running-python.html">Grumpy: Go running Python!</a>」でも触れられていますね。</p>
+
+<h2>まとめ</h2>
+
+<ul>
+<li>Grumpyが非常に遅い<strong>のではなく</strong>、「GrumpyからGoの関数を呼び出すオーバーヘッドが大きい」(推測)</li>
+<li>Grumpyのシングルスレッド性能はCPythonより数倍遅い程度</li>
+<li>並列処理性能ではGrumpyが有利</li>
+<li>そもそもGrumpyの目的は計算速度を上げることではないので、計算速度向上を求めている人は他の手法を模索しましょう</li>
+</ul>
+
+
+<p>今回の検証に使用したソースコード、Grumpyによるトランスパイルの結果、各種プラットフォームのバイナリをGithubにあげておきました。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/grumpy-test">shogo82148/grumpy-test</a></li>
+</ul>
+
+
+<p>さらに検証を進めたい方は参考にどうぞ。</p>
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="https://opensource.googleblog.com/2017/01/grumpy-go-running-python.html">Grumpy: Go running Python!</a></li>
+<li><a href="http://news.mynavi.jp/news/2017/01/06/110/">Google、すごくスケールするPython実行環境をGoで開発</a></li>
+<li><a href="http://qiita.com/kmry2045/items/998250b3d430d82594c2">Grumpy(Go running Python)を試してみた。</a></li>
+<li><a href="http://qiita.com/kotauchisunsun/items/db28d14f7f13fb29e5f9">GoとPythonとGrumpyの速度ベンチマーク ～Googleのトランスパイラはどれくらい速い？～</a></li>
+</ul>
+
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+
+      
+
+
+
+
+<time class='entry-date' datetime='2017-05-30T17:53:32+09:00'><span class='date'><span class='date-month'>May</span> <span class='date-day'>30</span><span class='date-suffix'>th</span>, <span class='date-year'>2017</span></span> <span class='time'>5:53 pm</span></time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/golang/'>golang</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//b.hatena.ne.jp/entry/https://shogo82148.github.io/blog/2017/05/30/grumpy/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="//b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="//b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="https://shogo82148.github.io/blog/2017/05/30/grumpy/" data-via="shogo82148" data-counturl="https://shogo82148.github.io/blog/2017/05/30/grumpy/" >Tweet</a>
+  
+  
+  <div class="g-plusone" data-size="medium"></div>
+  
+  
+    <div class="fb-like" data-send="true" data-width="450" data-show-faces="false"></div>
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2017/05/04/go-rerand/" title="Previous Post: String::RandomのGo移植を書いてみた">&laquo; String::RandomのGo移植を書いてみた</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2017/06/16/mysql-driver-and-context/" title="Next Post: ぼくのかんがえたさいきょうのcontext対応版go-mysql-driverをマージしてもらった">ぼくのかんがえたさいきょうのcontext対応版go-mysql-driverをマージしてもらった &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2017/08/25/unicode9-grapheme-cluster/">Perl 5.26 & Unicode 9.0 で変わる書記素クラスタ(grapheme Cluster)のお話</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/06/26/go19-monotonic-clock/">Go1.9から使える Monotonic Clocks を試してみた</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/06/16/mysql-driver-and-context/">ぼくのかんがえたさいきょうのcontext対応版go-mysql-driverをマージしてもらった</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/05/30/grumpy/">Re: GoとPythonとGrumpyの速度ベンチマーク</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/05/04/go-rerand/">String::RandomのGo移植を書いてみた</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>GitHub Repos</h1>
+  <ul id="gh_repos">
+    <li class="loading">Status updating...</li>
+  </ul>
+  
+  <a href="https://github.com/shogo82148">@shogo82148</a> on GitHub
+  
+  <script type="text/javascript">
+    $(document).ready(function(){
+        if (!window.jXHR){
+            var jxhr = document.createElement('script');
+            jxhr.type = 'text/javascript';
+            jxhr.src = '/javascripts/libs/jXHR.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(jxhr, s);
+        }
+
+        github.showRepos({
+            user: 'shogo82148',
+            count: 0,
+            skip_forks: true,
+            target: '#gh_repos'
+        });
+    });
+  </script>
+  <script src="/javascripts/github.js" type="text/javascript"> </script>
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2017 - Shogo Ichinose -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'shogosblog';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'https://shogo82148.github.io/blog/2017/05/30/grumpy/';
+        var disqus_url = 'https://shogo82148.github.io/blog/2017/05/30/grumpy/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = '//' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) {return;}
+  js = d.createElement(s); js.id = id; js.async = true;
+  js.src = "//connect.facebook.net/en_US/all.js#appId=212934732101925&xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var script = document.createElement('script'); script.type = 'text/javascript'; script.async = true;
+      script.src = 'https://apis.google.com/js/plusone.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(script, s);
+    })();
+  </script>
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>
