@@ -4,7 +4,7 @@
   <title><![CDATA[Category: perl | Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/blog/categories/perl/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2017-06-26T10:20:23+09:00</updated>
+  <updated>2017-08-25T07:11:38+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,170 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Perl 5.26 & Unicode 9.0 で変わる書記素クラスタ(grapheme cluster)のお話]]></title>
+    <link href="https://shogo82148.github.io/blog/2017/08/25/unicode9-grapheme-cluster/"/>
+    <updated>2017-08-25T07:08:44+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2017/08/25/unicode9-grapheme-cluster</id>
+    <content type="html"><![CDATA[<p><a href="http://gihyo.jp/magazine/wdpress/archive/2017/vol100">WEB+DB PRESS Vol.100</a>が発売されましたね。
+記念すべき Vol.100 おめでとうございます！</p>
+
+<p><a href="https://www.amazon.co.jp/WEB-DB-PRESS-Vol-100-%E6%B2%B3%E5%8E%9F/dp/4774191299/ref=as_li_ss_il?_encoding=UTF8&psc=1&refRID=KWT48YN41EFBHYXPM8YQ&linkCode=li2&tag=shogo82148-22&linkId=c41e466f8dad4ea5b2c2287f1e6c5efc" target="_blank"><img border="0" src="//ws-fe.amazon-adsystem.com/widgets/q?_encoding=UTF8&ASIN=4774191299&Format=_SL160_&ID=AsinImage&MarketPlace=JP&ServiceVersion=20070822&WS=1&tag=shogo82148-22" ></a><img src="https://ir-jp.amazon-adsystem.com/e/ir?t=shogo82148-22&l=li2&o=9&a=4774191299" width="1" height="1" border="0" alt="" style="border:none !important; margin:0px !important;" /></p>
+
+<p>WEB+DB PRESS の連載「Perl Hackers Hub」今回のテーマは「【第46回】Perl 5.26で変わること」です。
+Perl 5.26 で追加になった機能、アップグレードの際に気をつけなければならないところ( 特に @INC 問題とか )などに触れられているので、
+Perl Monger の方はぜひ読むとよいと思います。</p>
+
+<p>追加された機能のひとつとして Unicode 9.0 サポートが挙げられているのですが、以下のような簡単な紹介に留まっています。</p>
+
+<blockquote><p>Unicode 9.0にはオリンピックで活躍するであろう金銀 銅メダルの絵文字などが追加されました。</p></blockquote>
+
+<p>Unicode 9.0 で変わるのはそれだけではありません！
+Unicode 9.0 での <strong>書記素クラスタ(grapheme cluster)</strong> の扱いを少し前に調査したので紹介します。</p>
+
+<!-- More -->
+
+
+<h2>書記素クラスタ(grapheme cluster)とは</h2>
+
+<p>書記素クラスタ(grapheme cluster)とは、人間にとって自然な1文字を表すものです。</p>
+
+<p>たとえば &ldquo;é&rdquo; という文字は一見1文字に見えますが、 <code>length</code> で文字数をカウントすると2文字としてカウントされます。</p>
+
+<pre><code>$ perl -Mutf8 -E 'say length "é"'
+2
+</code></pre>
+
+<p>これは <code>length</code> がUnicodeのコードポイント数を数えており、
+&ldquo;é"が"e&rdquo;(U+0065) + アクセント記号(U+0301) の2つのコードポイントで構成されているためです。</p>
+
+<p>他にも<a href="https://ja.wikipedia.org/wiki/%E7%95%B0%E4%BD%93%E5%AD%97%E3%82%BB%E3%83%AC%E3%82%AF%E3%82%BF">異字体セレクタ</a>というのがあったり、
+<a href="http://qiita.com/_sobataro/items/47989ee4b573e0c2adfc#%E7%B5%B5%E6%96%87%E5%AD%97%E3%82%B7%E3%83%BC%E3%82%B1%E3%83%B3%E3%82%B9">絵文字シーケンス</a>というのがあったりして、
+コードポイントの数＝文字数とは限りません。</p>
+
+<p>これらの文字たちを1文字として数えるための概念が書記素クラスタ(grapheme cluster)です。</p>
+
+<h2>Unicode 9.0での変更点</h2>
+
+<p>Unicode 8.0以前も書記素クラスタはあるのですが、
+&ldquo;👨‍👨‍👦"のような家族の絵文字が3文字とカウントされてしまったり、
+"🇯🇵🇯🇵🇯🇵"のように国旗が連続していると1文字にカウントされてしまったりと、
+問題がありました。
+Unicode 9.0からはこれらの問題が解決されています。</p>
+
+<p>詳しくは<a href="http://qiita.com/_sobataro/items/47989ee4b573e0c2adfc#%E6%9B%B8%E8%A8%98%E7%B4%A0%E3%82%AF%E3%83%A9%E3%82%B9%E3%82%BF%E3%81%AB%E9%96%A2%E3%81%99%E3%82%8B-unicode-90-%E4%BB%A5%E9%99%8D%E3%81%A8-80-%E4%BB%A5%E5%89%8D%E3%81%AE%E9%81%95%E3%81%84">書記素クラスタに関する Unicode 9.0 以降と 8.0 以前の違い</a>を参照してください。</p>
+
+<h2>Perlでの書記素クラスタ</h2>
+
+<h3>書記素クラスタの使い方</h3>
+
+<p>Perlでは正規表現<code>\X</code>が書記素クラスタにマッチします
+(<a href="https://perldoc.perl.org/perlrebackslash.html#Misc">Misc in perlrebackslash</a>)。</p>
+
+<pre><code class="perl">use utf8;
+use 5.24.1;
+binmode(STDOUT, ":utf8");
+
+my $str = "eé";
+my @characters;
+
+@characters = split //, $str;
+say "splitを使った場合: ", join " ", @characters;
+
+# 書記素クラスタ
+@characters = $str =~ /\X/g;
+say "書記素クラスタを使った場合: ", join " ", @characters;
+</code></pre>
+
+<ul>
+<li><a href="https://wandbox.org/permlink/ImSQW7QAkadczlqt">[Wandbox]三へ( へ՞ਊ ՞)へ ﾊｯﾊｯ</a></li>
+</ul>
+
+
+<p>文字数をカウントは「<a href="https://shogo82148.github.io/blog/2015/04/09/count-substrings-in-perl/">Perlで文字列の出現回数を調べる</a>」の
+方法が使えます。</p>
+
+<pre><code class="perl">use utf8;
+use 5.24.1;
+
+my $str = "eé";
+
+my $length =()= $str =~ /\X/g;
+say $length;
+</code></pre>
+
+<p>(後から知ったことですが、この <code>=()=</code> を使ったハックには <a href="https://metacpan.org/pod/distribution/perlsecret/lib/perlsecret.pod#Goatse">画像検索してはいけない名前</a> がついているらしいです)</p>
+
+<h3>Perl5.24とPerl5.26の違い</h3>
+
+<p>Perl 5.26 は Unicode 8.0 をサポートしているので、書記素クラスタの問題点が改善されています。
+たとえば、Perl 5.24では &ldquo;🇯🇵🇯🇵🇯🇵"が1文字としてカウントされてしまいますが・・・</p>
+
+<pre><code class="perl">use utf8;
+use 5.24.1;
+
+my $length =()= "🇯🇵🇯🇵🇯🇵" =~ /\X/g;
+say $length; # =&gt; 1
+</code></pre>
+
+<ul>
+<li><a href="https://wandbox.org/permlink/QKl5K45F8BvvPMfz">[Wandbox]三へ( へ՞ਊ ՞)へ ﾊｯﾊｯ</a></li>
+</ul>
+
+
+<p>Perl 5.26 では3文字としてカウントされます。</p>
+
+<pre><code class="perl">use utf8;
+use 5.26.0;
+
+my $length =()= "🇯🇵🇯🇵🇯🇵" =~ /\X/g;
+say $length; # =&gt; 3
+</code></pre>
+
+<ul>
+<li><a href="https://wandbox.org/permlink/s05vJF33MlCj9Qvl">[Wandbox]三へ( へ՞ਊ ՞)へ ﾊｯﾊｯ</a></li>
+</ul>
+
+
+<h2>FYI: 他の言語の対応状況</h2>
+
+<h3>Ruby</h3>
+
+<p><a href="http://qiita.com/_sobataro/items/47989ee4b573e0c2adfc">Unicode 絵文字にまつわるあれこれ (絵文字の標準とプログラム上でのハンドリング)</a>で紹介されているように、
+<a href="https://github.com/ruby/ruby/blob/17c2828581a4dcd9babb5c754f240aa86523c673/NEWS#L133-L143">Ruby 2.4.0</a>から対応してます。
+Ruby 2.4.0は2016年12月25日に正式リリースされているので、この記事を書いている現在(2017年8月25日)は安心して使えます。</p>
+
+<h3>Python</h3>
+
+<p>残念ながら標準の正規表現ライブラリ <a href="https://docs.python.jp/3/library/re.html">re</a> は書記素クラスタに対応していません。
+サードパーティーの<a href="https://pypi.python.org/pypi/regex/">reqex</a>がUnicode 10に対応しているらしいので、
+そちらを使うと書記素クラスタを扱えるようです。</p>
+
+<h3>Golang</h3>
+
+<blockquote><p><a href="https://github.com/google/re2/wiki/Syntax">https://github.com/google/re2/wiki/Syntax</a>
+extended Unicode sequence (NOT SUPPORTED)</p></blockquote>
+
+<p>正規表現は対応していません、残念・・・</p>
+
+<ul>
+<li><a href="https://github.com/golang/go/issues/14820">https://github.com/golang/go/issues/14820</a></li>
+</ul>
+
+
+<p><code>x/text</code> に書記素クラスタを扱う機能を追加しようというIssueはありますが、今のところ進捗はないようです。</p>
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="https://hydrocul.github.io/wiki/blog/2015/1025-unicode-grapheme-clusters.html">Unicodeのgrapheme cluster (書記素クラスタ)</a></li>
+<li><a href="http://qiita.com/_sobataro/items/47989ee4b573e0c2adfc">Unicode 絵文字にまつわるあれこれ (絵文字の標準とプログラム上でのハンドリング)</a></li>
+<li><a href="https://engineering.linecorp.com/ja/blog/detail/52">文字数をカウントする7つの方法</a></li>
+</ul>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Perl+List::Utilの64bit整数の罠にはまった話]]></title>
@@ -467,7 +631,7 @@ $ PERL_DATETIME_PP=1 perl datetime.pl
 <p>DateTime.pmにはXSの実装とPurePerlの実装が含まれていますが、
 どちらの実装でも2012年7月1日に正しくうるう秒が挿入され、2012年6月1日にはうるう秒はありません。</p>
 
-<p><a href="https://twitter.com/kazoo04/status/808195587518578688">https://twitter.com/kazoo04/status/808195587518578688</a>">https://twitter.com/kazoo04/status/808195587518578688">https://twitter.com/kazoo04/status/808195587518578688</a></a></p>
+<p>{% oembed <a href="https://twitter.com/kazoo04/status/808195587518578688">https://twitter.com/kazoo04/status/808195587518578688</a> %}</p>
 
 <p>まさに、「コード見たら絶対動かないはずなのになぜか思った通りにちゃんと動く」といった感じです。</p>
 
@@ -523,28 +687,6 @@ say $dt-&gt;subtract(seconds =&gt; 1);
 </code></pre>
 
 <p>みなさん準備は出来ていますか 😇</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[PerlでもGoでも実行できるQuine書いた]]></title>
-    <link href="https://shogo82148.github.io/blog/2016/04/06/ployglot-quine-of-golang-and-perl/"/>
-    <updated>2016-04-06T10:07:00+09:00</updated>
-    <id>https://shogo82148.github.io/blog/2016/04/06/ployglot-quine-of-golang-and-perl</id>
-    <content type="html"><![CDATA[<p><a href="http://shogo82148.github.io/blog/2016/04/05/polyglot-of-perl-and-golang/">昨日のPolyglot</a>を元にPerlでもGoでも実行できるQuine書いた。</p>
-
-<!-- More -->
-
-
-<pre><code>package main;import("fmt");var(q=`printf'package main;import("fmt");var(q%c%c%s%c/*%c);sub import{}sub var{$_%cshift%c~s!%c(.*)%c/\*!$1!gr;eval}%c__END__%c',61,96,$_,96,61,61,61,96,96,10,10;print&lt;DATA&gt;`/*=);sub import{}sub var{$_=shift=~s!`(.*)`/\*!$1!gr;eval}
-__END__
-*/);func main(){s:=`package main;import("fmt");var(q=%c%s%c/*=);sub import{}sub var{$_=shift=~s!%c(.*)%c/\*!$1!gr;eval}
-__END__
-*/);func main(){s:=%c%s%c;fmt.Printf(s,96,q,96,96,96,96,s,96)}
-`;fmt.Printf(s,96,q,96,96,96,96,s,96)}
-</code></pre>
-
-<p>Perlで実行してもGoで実行しても自分自身を出力します。</p>
 ]]></content>
   </entry>
   
