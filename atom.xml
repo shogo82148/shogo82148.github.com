@@ -4,7 +4,7 @@
   <title><![CDATA[Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2017-08-25T07:20:49+09:00</updated>
+  <updated>2017-10-22T18:26:03+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,209 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[ACMのドメイン検証をシミュレートするやつ書いた]]></title>
+    <link href="https://shogo82148.github.io/blog/2017/10/22/aws-certification-manager-validation/"/>
+    <updated>2017-10-22T15:45:02+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2017/10/22/aws-certification-manager-validation</id>
+    <content type="html"><![CDATA[<p>始まりは一件のメールから。</p>
+
+<blockquote><p>Title: Action Required - Your certificate renewal</p>
+
+<p>Greetings from Amazon Web Services,</p>
+
+<p>You have an AWS Certificate Manager (ACM) provided SSL/TLS certificate in your AWS account that expires on Nov 04, 2017 at 12:00:00 UTC. That certificate has the following domains:
+example.com, *.example.com</p>
+
+<p>AWS account ID: xxxxxx
+AWS Region name: us-east-1
+Certificate identifier: arn:aws:acm:us-east-1:xxxxxx:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx</p>
+
+<p>Therefore, ACM has initiated the process to renew this certificate. You must take the action below before Nov 04, 2017 at 12:00:00 UTC to avoid certificate expiration, which might cause your website to become unreachable.
+To complete the renewal of this certificate, the domain owners must use the approval link that was sent in separate validation request emails. Those emails were last sent on Sep 20, 2017 at 12:11:48 UTC.
+以下略</p></blockquote>
+
+<p>要約すると、AWS Certificate Manager (以下ACM)で管理している証明書の自動更新に失敗したので、
+手動更新をしてくれとのこと。</p>
+
+<p>このメールの対応方法についてのメモと、次回から自動更新に成功するようおこなった設定について書きます。
+ついでに確認用のツールも作ったので、その紹介も。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/go-acm-checker">shogo82148/go-acm-checker</a></li>
+</ul>
+
+
+<!-- More -->
+
+
+<h2>手動での対応方法</h2>
+
+<p>メール以下のページへのリンクが貼られているので、これに従えば基本的にはOK。</p>
+
+<ul>
+<li><a href="https://aws.amazon.com/jp/premiumsupport/knowledge-center/resend-email-ssl/">I didn&rsquo;t receive a validation email for the SSL certificate I requested through AWS Certificate Manager</a></li>
+</ul>
+
+
+<p>日本語だと Developers.IO さんの記事が詳しいです。</p>
+
+<ul>
+<li><a href="https://dev.classmethod.jp/etc/acm-expire-cation/">ACMで管理されているSSL/TLS証明書の自動更新失敗について</a></li>
+</ul>
+
+
+<blockquote><ol>
+<li>AWSマネジメントコンソールにログイン</li>
+<li>Certificate Managerを選択</li>
+<li>更新対象の証明書チェックボタンを選択</li>
+<li>[アクション]-[検証Eメールの再送信]を選択</li>
+<li>検証メールアドレスに送信された「Certificate approval for &lt;ドメイン名>」に記載されている「Amazon Certificate Approvals」を選択</li>
+<li>承認ページが表示されますので、ドメイン名・AWSアカウントID・証明書識別子に相違がないことを確認して「I Approve」を選択</li>
+<li>「Success」が表示されることを確認</li>
+<li>Certificate Managerに戻って頂き、証明書の更新ステータスが「成功」になっていることを確認</li>
+</ol>
+</blockquote>
+
+<h2>頑張って自動更新を有効にする</h2>
+
+<p>しかしまあ、更新作業が面倒でACMを使っているというのに、
+13ヶ月ごとに更新作業をするのは面倒です。</p>
+
+<p>以下のドキュメントを参考に、自動更新が有効になるよう設定しましょう。</p>
+
+<ul>
+<li><a href="http://docs.aws.amazon.com/ja_jp/acm/latest/userguide/configure-domain-for-automatic-validation.html">自動検証のためにドメインを設定する</a></li>
+</ul>
+
+
+<blockquote><ul>
+<li>ACM によって証明書の各ドメインと HTTPS 接続を確立できる必要があります。</li>
+<li>各接続では、返される証明書が ACM が更新している証明書と一致する必要があります。</li>
+</ul>
+</blockquote>
+
+<h2>証明書のシリアル番号チェッカーを書いてみた</h2>
+
+<p>HTTPS接続の確立は <code>curl</code> を使って一発ですが、
+「返される証明書が ACM が更新している証明書と一致する」のを確認するのはなかなか骨です。
+一応、Chromeのデベロッパーコンソール→Securityタブ→View Certificate→詳細な情報→シリアル番号と辿っていけば、
+ACMに表示されているシリアル番号との一致を確認できます。
+コンソールから確認できないものかと少しググったのですが、見つけられませんでした。</p>
+
+<p>ということで、Go言語でシリアル番号を表示するツールをサクッと書いてみました。
+<code>go run main.go https://example.com</code> で実行できます。
+こういうのがすぐに書けるのがGoのいいところですね。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;fmt&quot;</span>
+</span><span class='line'>  <span class="s">&quot;net/http&quot;</span>
+</span><span class='line'>  <span class="s">&quot;os&quot;</span>
+</span><span class='line'>  <span class="s">&quot;strings&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">http</span><span class="p">.</span><span class="nx">DefaultClient</span><span class="p">.</span><span class="nx">CheckRedirect</span> <span class="p">=</span> <span class="kd">func</span><span class="p">(</span><span class="nx">req</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">,</span> <span class="nx">via</span> <span class="p">[]</span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">return</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ErrUseLastResponse</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">resp</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">Get</span><span class="p">(</span><span class="nx">os</span><span class="p">.</span><span class="nx">Args</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+</span><span class='line'>  <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">defer</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">serial</span> <span class="o">:=</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">TLS</span><span class="p">.</span><span class="nx">PeerCertificates</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">SerialNumber</span><span class="p">.</span><span class="nx">Bytes</span><span class="p">()</span>
+</span><span class='line'>  <span class="nx">s</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">([]</span><span class="kt">string</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="nx">serial</span><span class="p">))</span>
+</span><span class='line'>  <span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">b</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">serial</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">s</span> <span class="p">=</span> <span class="nb">append</span><span class="p">(</span><span class="nx">s</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nx">Sprintf</span><span class="p">(</span><span class="s">&quot;%02x&quot;</span><span class="p">,</span> <span class="nx">b</span><span class="p">))</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="nx">strings</span><span class="p">.</span><span class="nx">Join</span><span class="p">(</span><span class="nx">s</span><span class="p">,</span> <span class="s">&quot;:&quot;</span><span class="p">))</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>自動検証シミュレーター</h2>
+
+<p>複数のドメインを管理しているとシリアル番号の確認をするのも面倒になってきたので、
+ACMに登録されている証明書を検証するシミュレーターを書いてみました。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/go-acm-checker">shogo82148/go-acm-checker</a></li>
+</ul>
+
+
+<p>Go製のツールなので、おなじみの<code>go get</code>でインストールできます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>go get -u github.com/shogo82148/go-acm-checker</span></code></pre></td></tr></table></div></figure>
+
+
+<p>実行するとACMで管理されている証明書の情報を全リージョンから取ってきて、
+検証を試みます。
+検証に成功すると以下のようなメッセージが表示されます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ go-acm-checker
+</span><span class='line'>2017/10/21 14:30:04 success to validate example.com(arn:aws:acm:us-east-1:1234567890:certificate/00000000-0000-0000-0000-000000000000)</span></code></pre></td></tr></table></div></figure>
+
+
+<p>検証に失敗すると、どのドメインの検証に失敗したかを教えてくれます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ go-acm-checker
+</span><span class='line'>2017/10/21 14:30:05 failed to validate example.com
+</span><span class='line'>2017/10/21 14:30:05 failed to validate *.example.com
+</span><span class='line'>2017/10/21 14:30:05 failed to validate example.com(arn:aws:acm:us-east-1:1234567890:certificate/00000000-0000-0000-0000-000000000000)</span></code></pre></td></tr></table></div></figure>
+
+
+<p>検証に失敗した場合、「<a href="http://docs.aws.amazon.com/ja_jp/acm/latest/userguide/configure-domain-for-automatic-validation.html">自動検証のためにドメインを設定する</a>」を参考に、
+<code>https://example.com/</code> や <code>https://www.example.com/</code> に正常にアクセスできる状態にしてください。</p>
+
+<h2>まとめ</h2>
+
+<p>AMCの手動更新の方法と、自動更新を有効化するための方法を簡単にまとめてみました。
+なお、 <a href="https://github.com/shogo82148/go-acm-checker">shogo82148/go-acm-checker</a> で検証成功したからといって、
+ACMの検証が必ず成功するとは限りません。
+自動更新だからと油断せずに、こまめにメールはチェックしましょうね。</p>
+
+<p>(ちなみに今回メールが来たドメインは自動更新できるように設定し直したけど、自動更新のタイミングがよくわからないので、いつ手動更新をやるかチキンレースの真っ最中です・・・)</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Perl 5.26 & Unicode 9.0 で変わる書記素クラスタ(grapheme Cluster)のお話]]></title>
@@ -7688,91 +7891,6 @@ DNSよくわからない・・・検証環境構築つらい・・・ので、�
 ソースコードの中に<a href="https://github.com/golang/go/blob/ecc4474341504f5893c8333dbb68c520dbe93ca5/src/net/lookup.go#L39">Gopher君を見つけた</a>。</p>
 
 <p>ʕ◔ϖ◔ʔʕ◔ϖ◔ʔʕ◔ϖ◔ʔ</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Redis::Fast 0.19リリースのお知らせ]]></title>
-    <link href="https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/"/>
-    <updated>2016-12-20T22:38:27+09:00</updated>
-    <id>https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released</id>
-    <content type="html"><![CDATA[<p><a href="https://metacpan.org/pod/Redis::Fast">Redis::Fast 0.19</a> をリリースしました。
-主な変更点は以下の通りです。</p>
-
-<ul>
-<li><code>reconnect_on_error</code> オプションの追加</li>
-<li>Sentinelのノード一覧が更新されない不具合の修正</li>
-<li>IPv6の実験的サポート</li>
-</ul>
-
-
-<!-- More -->
-
-
-<h2><code>reconnect_on_error</code> オプションの追加</h2>
-
-<p><a href="https://github.com/yoheimuta">@yoheimuta</a>さんからのプルリクエストです。
-今まではネットワークエラーが発生した時のみ再接続処理が走っていましたが、
-Redisがエラーを返した場合にも再接続を行うようになります。
-マスタースレーブ構成をしているときに、
-何らかの原因によりRedis::Fastからのコネクションを維持したまま、
-マスターがスレーブに降格してしまった場合に対処するための機能です。
-以下のように設定することで、新しいマスターに再接続を行うことが可能になります。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">my</span> <span class="nv">$r</span> <span class="o">=</span> <span class="nn">Redis::</span><span class="n">Fast</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span>
-</span><span class='line'>    <span class="n">reconnect</span>          <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span> <span class="c1"># 0以上で再接続有効</span>
-</span><span class='line'>    <span class="n">reconnect_on_error</span> <span class="o">=&gt;</span> <span class="k">sub </span><span class="p">{</span>
-</span><span class='line'>        <span class="k">my</span> <span class="p">(</span><span class="nv">$error</span><span class="p">,</span> <span class="nv">$ret</span><span class="p">,</span> <span class="nv">$command</span><span class="p">)</span> <span class="o">=</span> <span class="nv">@_</span><span class="p">;</span>
-</span><span class='line'>        <span class="k">if</span> <span class="p">(</span><span class="nv">$error</span> <span class="o">=~</span><span class="sr"> /READONLY You can&#39;t write against a read only slave/</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>            <span class="k">return</span> <span class="mi">1</span><span class="p">;</span> <span class="c1"># 再接続を行う。次の再接続まで最低1秒空ける</span>
-</span><span class='line'>        <span class="p">}</span>
-</span><span class='line'>        <span class="k">return</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span> <span class="c1"># 再接続は行わない</span>
-</span><span class='line'>    <span class="p">},</span>
-</span><span class='line'><span class="p">);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>Sentinelのノード一覧が更新されない不具合の修正</h2>
-
-<p>Redis::FastにはどれかひとつのSentinelノードに接続すると、
-他のノードの情報を自動的に収集する機能があります。
-この機能が最新のRedisでは動いていなかったので修正しました。
-具体的にいつからなのかまでは追ってないのですが、
-Redisのバージョン3.0.6から3.2.6の間のどこかで
-ノード一覧の形式が変わってしまったようです。</p>
-
-<p>(最近Sentinelの話題を聞かないけど、みんな使ってるのかな・・・)</p>
-
-<h2>IPv6の実験的サポート</h2>
-
-<p>サーバの指定にIPv6のアドレスが使えるようになりました。
-<code>Redis::Fast-&gt;new(server =&gt; "[::1]:6379")</code> のような指定ができます。</p>
-
-<p>バックエンドのhiredis自体は以前からIPv6に対応していたのですが、
-今までRedis::Fastでは正しく動きませんでした。</p>
-
-<p>とりあえずlocalhostに接続できることは確認しましたが、
-手元にIPv6のネットワークがなくて検証もできていないため、
-実験的サポートという扱いで・・・。
- 誰かIPv6に詳しい方、検証お願いします。</p>
-
-<h2>感想</h2>
-
-<ul>
-<li>テストがなかなか通らず辛かった</li>
-<li>CPAN Autherを変な幾何学模様から変えたい</li>
-</ul>
-
 ]]></content>
   </entry>
   

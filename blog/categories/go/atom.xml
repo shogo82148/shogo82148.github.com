@@ -4,7 +4,7 @@
   <title><![CDATA[Category: go | Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/blog/categories/go/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2017-08-25T07:20:49+09:00</updated>
+  <updated>2017-10-22T18:26:03+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,174 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[ACMのドメイン検証をシミュレートするやつ書いた]]></title>
+    <link href="https://shogo82148.github.io/blog/2017/10/22/aws-certification-manager-validation/"/>
+    <updated>2017-10-22T15:45:02+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2017/10/22/aws-certification-manager-validation</id>
+    <content type="html"><![CDATA[<p>始まりは一件のメールから。</p>
+
+<blockquote><p>Title: Action Required - Your certificate renewal</p>
+
+<p>Greetings from Amazon Web Services,</p>
+
+<p>You have an AWS Certificate Manager (ACM) provided SSL/TLS certificate in your AWS account that expires on Nov 04, 2017 at 12:00:00 UTC. That certificate has the following domains:
+example.com, *.example.com</p>
+
+<p>AWS account ID: xxxxxx
+AWS Region name: us-east-1
+Certificate identifier: arn:aws:acm:us-east-1:xxxxxx:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx</p>
+
+<p>Therefore, ACM has initiated the process to renew this certificate. You must take the action below before Nov 04, 2017 at 12:00:00 UTC to avoid certificate expiration, which might cause your website to become unreachable.
+To complete the renewal of this certificate, the domain owners must use the approval link that was sent in separate validation request emails. Those emails were last sent on Sep 20, 2017 at 12:11:48 UTC.
+以下略</p></blockquote>
+
+<p>要約すると、AWS Certificate Manager (以下ACM)で管理している証明書の自動更新に失敗したので、
+手動更新をしてくれとのこと。</p>
+
+<p>このメールの対応方法についてのメモと、次回から自動更新に成功するようおこなった設定について書きます。
+ついでに確認用のツールも作ったので、その紹介も。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/go-acm-checker">shogo82148/go-acm-checker</a></li>
+</ul>
+
+
+<!-- More -->
+
+
+<h2>手動での対応方法</h2>
+
+<p>メール以下のページへのリンクが貼られているので、これに従えば基本的にはOK。</p>
+
+<ul>
+<li><a href="https://aws.amazon.com/jp/premiumsupport/knowledge-center/resend-email-ssl/">I didn&rsquo;t receive a validation email for the SSL certificate I requested through AWS Certificate Manager</a></li>
+</ul>
+
+
+<p>日本語だと Developers.IO さんの記事が詳しいです。</p>
+
+<ul>
+<li><a href="https://dev.classmethod.jp/etc/acm-expire-cation/">ACMで管理されているSSL/TLS証明書の自動更新失敗について</a></li>
+</ul>
+
+
+<blockquote><ol>
+<li>AWSマネジメントコンソールにログイン</li>
+<li>Certificate Managerを選択</li>
+<li>更新対象の証明書チェックボタンを選択</li>
+<li>[アクション]-[検証Eメールの再送信]を選択</li>
+<li>検証メールアドレスに送信された「Certificate approval for &lt;ドメイン名>」に記載されている「Amazon Certificate Approvals」を選択</li>
+<li>承認ページが表示されますので、ドメイン名・AWSアカウントID・証明書識別子に相違がないことを確認して「I Approve」を選択</li>
+<li>「Success」が表示されることを確認</li>
+<li>Certificate Managerに戻って頂き、証明書の更新ステータスが「成功」になっていることを確認</li>
+</ol>
+</blockquote>
+
+<h2>頑張って自動更新を有効にする</h2>
+
+<p>しかしまあ、更新作業が面倒でACMを使っているというのに、
+13ヶ月ごとに更新作業をするのは面倒です。</p>
+
+<p>以下のドキュメントを参考に、自動更新が有効になるよう設定しましょう。</p>
+
+<ul>
+<li><a href="http://docs.aws.amazon.com/ja_jp/acm/latest/userguide/configure-domain-for-automatic-validation.html">自動検証のためにドメインを設定する</a></li>
+</ul>
+
+
+<blockquote><ul>
+<li>ACM によって証明書の各ドメインと HTTPS 接続を確立できる必要があります。</li>
+<li>各接続では、返される証明書が ACM が更新している証明書と一致する必要があります。</li>
+</ul>
+</blockquote>
+
+<h2>証明書のシリアル番号チェッカーを書いてみた</h2>
+
+<p>HTTPS接続の確立は <code>curl</code> を使って一発ですが、
+「返される証明書が ACM が更新している証明書と一致する」のを確認するのはなかなか骨です。
+一応、Chromeのデベロッパーコンソール→Securityタブ→View Certificate→詳細な情報→シリアル番号と辿っていけば、
+ACMに表示されているシリアル番号との一致を確認できます。
+コンソールから確認できないものかと少しググったのですが、見つけられませんでした。</p>
+
+<p>ということで、Go言語でシリアル番号を表示するツールをサクッと書いてみました。
+<code>go run main.go https://example.com</code> で実行できます。
+こういうのがすぐに書けるのがGoのいいところですね。</p>
+
+<pre><code class="go">package main
+
+import (
+    "fmt"
+    "net/http"
+    "os"
+    "strings"
+)
+
+func main() {
+    http.DefaultClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+        return http.ErrUseLastResponse
+    }
+
+    resp, err := http.Get(os.Args[1])
+    if err != nil {
+        panic(err)
+    }
+    defer resp.Body.Close()
+
+    serial := resp.TLS.PeerCertificates[0].SerialNumber.Bytes()
+    s := make([]string, 0, len(serial))
+    for _, b := range serial {
+        s = append(s, fmt.Sprintf("%02x", b))
+    }
+    fmt.Println(strings.Join(s, ":"))
+}
+</code></pre>
+
+<h2>自動検証シミュレーター</h2>
+
+<p>複数のドメインを管理しているとシリアル番号の確認をするのも面倒になってきたので、
+ACMに登録されている証明書を検証するシミュレーターを書いてみました。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/go-acm-checker">shogo82148/go-acm-checker</a></li>
+</ul>
+
+
+<p>Go製のツールなので、おなじみの<code>go get</code>でインストールできます。</p>
+
+<pre><code class="plain">go get -u github.com/shogo82148/go-acm-checker
+</code></pre>
+
+<p>実行するとACMで管理されている証明書の情報を全リージョンから取ってきて、
+検証を試みます。
+検証に成功すると以下のようなメッセージが表示されます。</p>
+
+<pre><code>$ go-acm-checker
+2017/10/21 14:30:04 success to validate example.com(arn:aws:acm:us-east-1:1234567890:certificate/00000000-0000-0000-0000-000000000000)
+</code></pre>
+
+<p>検証に失敗すると、どのドメインの検証に失敗したかを教えてくれます。</p>
+
+<pre><code>$ go-acm-checker
+2017/10/21 14:30:05 failed to validate example.com
+2017/10/21 14:30:05 failed to validate *.example.com
+2017/10/21 14:30:05 failed to validate example.com(arn:aws:acm:us-east-1:1234567890:certificate/00000000-0000-0000-0000-000000000000)
+</code></pre>
+
+<p>検証に失敗した場合、「<a href="http://docs.aws.amazon.com/ja_jp/acm/latest/userguide/configure-domain-for-automatic-validation.html">自動検証のためにドメインを設定する</a>」を参考に、
+<code>https://example.com/</code> や <code>https://www.example.com/</code> に正常にアクセスできる状態にしてください。</p>
+
+<h2>まとめ</h2>
+
+<p>AMCの手動更新の方法と、自動更新を有効化するための方法を簡単にまとめてみました。
+なお、 <a href="https://github.com/shogo82148/go-acm-checker">shogo82148/go-acm-checker</a> で検証成功したからといって、
+ACMの検証が必ず成功するとは限りません。
+自動更新だからと油断せずに、こまめにメールはチェックしましょうね。</p>
+
+<p>(ちなみに今回メールが来たドメインは自動更新できるように設定し直したけど、自動更新のタイミングがよくわからないので、いつ手動更新をやるかチキンレースの真っ最中です・・・)</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[nginx-omniauth-adapterのGolangポート作った]]></title>
@@ -443,58 +611,6 @@ CPUの使用率も100%近くになって、有効活用できているようで�
 
 <p>早くはなるものの、既存のテストコードに手を加える必要があってちょっと怖いかなと思ったので、プロジェクトへの組み込みはやってません。
 まあ本番環境で走るものではないので、ある程度動くことが確認できたら置き換えてみたいですね。</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[go-webtailってのを書いた]]></title>
-    <link href="https://shogo82148.github.io/blog/2015/06/21/go-webtail/"/>
-    <updated>2015-06-21T23:28:00+09:00</updated>
-    <id>https://shogo82148.github.io/blog/2015/06/21/go-webtail</id>
-    <content type="html"><![CDATA[<p>Rubyで書かれた<a href="https://github.com/r7kamura/webtail">webtail</a>のGo移植を書いてみました。</p>
-
-<ul>
-<li><a href="https://github.com/shogo82148/go-webtail">go-webtail</a></li>
-</ul>
-
-
-<!-- More -->
-
-
-<p>オリジナルのwebtailはRubyなので、Rubyistではない僕が使おうとするとまずRubyの実行環境からそろえないといけなくてつらい。
-ワンバイナリでダウンロードするだけで使えるやつが欲しいなあと常々思っていたのでGolangです。
-htmlやjavasctiptの部分もバイナリに含まれているので、インストールも簡単です。</p>
-
-<p>引数無しで実行すると8080ポートで待ち受けて、標準入力から読み込んだ結果をWebsocketで読めるようにしてくれます。</p>
-
-<pre><code class="bash">go get github.com/shogo82148/go-webtail/cmd/webtail # インストール
-echo hogehoge | webtail
-</code></pre>
-
-<p>ファイルもtailできます。</p>
-
-<pre><code class="bash">webtail hoge.log fuga.log
-</code></pre>
-
-<p>それぞれ、<code>http://localhost:8080/hoge.log</code>と<code>http://localhost:8080/fuga.log</code>で見れるようになります。</p>
-
-<h1>mirageと一緒につかう</h1>
-
-<p><a href="https://github.com/acidlemon/mirage">mirage</a>は待ち受けポートを複数設定できます。
-(SEE ALSO <a href="http://tech.kayac.com/archive/mirage_for_docker.html">Dockerで非エンジニアでも開発環境を上げ下げできる、mirageというツールを作りました</a>)
-その一つをwebtailに割り当てて以下のようにDockerfileに書いておけば、非(サーバサイド)エンジニアでも開発環境のログが見れるようになります。
-(見れても理解できるのか？って疑問もあるけど、まあ、全く見れないよりは・・・)</p>
-
-<pre><code>ADD webtail /
-CMD ./docker_run.sh 2&gt;&amp;1 | /webtail --prefix webtail
-
-# ブラウザで見れる代わりにdocker logsで見れなくなるのでこっちのほうがいいかも
-CMD ./docker_run.sh 2&gt;&amp;1 | tee hoge.log | /webtail --prefix webtail
-</code></pre>
-
-<p>残念ながらwebsocket対応はしていないので、<a href="https://github.com/shogo82148/mirage/tree/feature/websocket">websoket対応にしたmirage</a>が必要です。
-<code>httputil.NewSingleHostReverseProxy</code>互換の<a href="github.com/methane/rproxy">rproxy</a>ってのを使ったら簡単にwebsocket対応ができて素晴らしいですね。
-(mirage自身に手を加える必要があるなら、mirageにこういう機能をつけるべきだったのでは説はある)</p>
 ]]></content>
   </entry>
   
