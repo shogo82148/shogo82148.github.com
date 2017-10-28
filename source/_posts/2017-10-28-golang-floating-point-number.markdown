@@ -45,7 +45,7 @@ func main() {
 }
 ```
 
-https://play.golang.org/p/FkMVpY2Fa3
+- [play.golang.org/p/FkMVpY2Fa3](https://play.golang.org/p/FkMVpY2Fa3)
 
 型がない定数同士の演算は 162132938 と正しい答えを出してくれます。
 
@@ -89,7 +89,7 @@ func main() {
 }
 ```
 
-play.golang.org/p/X36rciE8by
+- [play.golang.org/p/X36rciE8by](https://play.golang.org/p/X36rciE8by)
 
 一方、以下のように明示的に型を与えると、 `float64` の精度でしか計算してくれません。
 この場合は他のほとんどの言語同様、 `c` は `false` となります。
@@ -109,7 +109,7 @@ func main() {
 }
 ```
 
-https://play.golang.org/p/9_jKFfc5Hy
+- [play.golang.org/p/9_jKFfc5Hy](https://play.golang.org/p/9_jKFfc5Hy)
 
 > おそらくGoはコンパイラがa=0.1とb=0.1に変換していると思われます。
 
@@ -197,7 +197,7 @@ func main() {
 }
 ```
 
-https://play.golang.org/p/T26lQ0Ajvw
+- [play.golang.org/p/T26lQ0Ajvw](https://play.golang.org/p/T26lQ0Ajvw)
 
 ```
 false
