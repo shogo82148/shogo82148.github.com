@@ -4,7 +4,7 @@
   <title><![CDATA[Category: golang | Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/blog/categories/golang/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2017-10-22T18:26:03+09:00</updated>
+  <updated>2017-10-28T21:08:45+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,219 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Go言語の浮動小数点数のお話]]></title>
+    <link href="https://shogo82148.github.io/blog/2017/10/28/golang-floating-point-number/"/>
+    <updated>2017-10-28T20:12:48+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2017/10/28/golang-floating-point-number</id>
+    <content type="html"><![CDATA[<p>元ネタ:</p>
+
+<p><a href="https://twitter.com/RIORAO/status/922871767147749376">https://twitter.com/RIORAO/status/922871767147749376</a>">https://twitter.com/RIORAO/status/922871767147749376">https://twitter.com/RIORAO/status/922871767147749376</a></a></p>
+
+<p><a href="https://twitter.com/RIORAO/status/923599110262874112">https://twitter.com/RIORAO/status/923599110262874112</a>">https://twitter.com/RIORAO/status/923599110262874112">https://twitter.com/RIORAO/status/923599110262874112</a></a></p>
+
+<p>コンピューターで浮動小数点数を扱ったことのある人なら一度は経験する、
+数学上の計算とコンピューター上の計算が合わない計算の一例ですね。</p>
+
+<p>この件に関して、Go言語では正しく(=数学的な結果と同じように)計算できるとの情報が。</p>
+
+<p><a href="https://twitter.com/inukirom/status/923721661408411650">https://twitter.com/inukirom/status/923721661408411650</a>">https://twitter.com/inukirom/status/923721661408411650">https://twitter.com/inukirom/status/923721661408411650</a></a></p>
+
+<p>しかしながら、inukiromさんのこの推察、半分はあってますが、半分は間違っていると思います。
+なぜGo言語でこのような結果になったのか、検証してみました。</p>
+
+<!-- More -->
+
+
+<h2>Goの数値定数の型について</h2>
+
+<p>以前<a href="https://shogo82148.github.io/blog/2017/02/19/golang-compile-time-fib/">Go言語でコンパイル時フィボナッチ数列計算</a>で紹介した
+<a href="https://qiita.com/sonatard/items/464a9d45c689386edfe1">Better C - Go言語と整数 #golang</a>にもあるように、
+Goの定数には「型がない(場合がある)」「任意の精度で計算してくれる」という特徴があります。</p>
+
+<p>このため、普通はどう考えてもオーバーフローしそうなこんな演算も・・・</p>
+
+<pre><code class="go">package main
+
+import (
+    "fmt"
+)
+
+func main() {
+    var i uint64 = 31415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679 % 1000000007
+    fmt.Println(i)
+}
+</code></pre>
+
+<p><a href="https://play.golang.org/p/FkMVpY2Fa3">https://play.golang.org/p/FkMVpY2Fa3</a></p>
+
+<p>型がない定数同士の演算は 162132938 と正しい答えを出してくれます。</p>
+
+<p>しかし、明示的に型を指定すると、今度はオーバーフローしてしまいます。</p>
+
+<pre><code class="go">package main
+
+import (
+    "fmt"
+)
+
+func main() {
+    var i uint64 = uint64(31415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679) % 1000000007
+    fmt.Println(i)
+}
+</code></pre>
+
+<pre><code>tmp/sandbox436519650/main.go:8:23: constant 31415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679 overflows uint64
+</code></pre>
+
+<h2>問題の計算</h2>
+
+<p>さて、最初の問題に戻りましょう。
+以下のコードで、0.1, 0.2, 0.3 は「型のない定数」なので、「任意の精度で計算して」くれます。
+計算結果を <code>float64</code> に変換すると全く同じ数字になるので、 <code>c</code> は <code>true</code> になります。</p>
+
+<pre><code class="go">package main
+
+import (
+    "fmt"
+)
+
+func main() {
+    a := 0.3 - 0.2
+    b := 0.2 - 0.1
+    c := a == b
+    fmt.Println(c)
+}
+</code></pre>
+
+<p>play.golang.org/p/X36rciE8by</p>
+
+<p>一方、以下のように明示的に型を与えると、 <code>float64</code> の精度でしか計算してくれません。
+この場合は他のほとんどの言語同様、 <code>c</code> は <code>false</code> となります。</p>
+
+<pre><code class="go">package main
+
+import (
+    "fmt"
+)
+
+func main() {
+    a := float64(0.3) - float64(0.2)
+    b := float64(0.2) - float64(0.1)
+    c := a == b
+    fmt.Println(c)
+}
+</code></pre>
+
+<p><a href="https://play.golang.org/p/9_jKFfc5Hy">https://play.golang.org/p/9_jKFfc5Hy</a></p>
+
+<blockquote><p>おそらくGoはコンパイラがa=0.1とb=0.1に変換していると思われます。</p></blockquote>
+
+<p>というわけで、先程のinukiromさんのこの推察ツイートのこの部分は正解です。</p>
+
+<h2>計算されるのは実行時？コンパイル時？</h2>
+
+<p>次にこんな二つのコードを用意して <code>GOSSAFUNC=main go run main.go</code> を実行し、
+<a href="https://shinpei.github.io/blog/2016/08/13/what-ssa-brings-to-go-17">SSA</a>による最適化の様子を見てみます。
+違いは <code>x</code>, <code>y</code>, <code>z</code> が <code>const</code> で宣言されているか、<code>var</code> で宣言されているか、だけです。</p>
+
+<pre><code class="go">package main
+
+import (
+    "fmt"
+)
+
+func main() {
+    var (
+        x = 0.3
+        y = 0.2
+        z = 0.1
+    )
+    a := x - y
+    b := y - z
+    c := a == b
+    fmt.Println(c)
+}
+</code></pre>
+
+<pre><code class="go">package main
+
+import (
+    "fmt"
+)
+
+func main() {
+    const (
+        x = 0.3
+        y = 0.2
+        z = 0.1
+    )
+    a := x - y
+    b := y - z
+    c := a == b
+    fmt.Println(c)
+}
+</code></pre>
+
+<p>結果は以下のツイートの通り。</p>
+
+<p><a href="https://twitter.com/shogo82148/status/924156133522120705">https://twitter.com/shogo82148/status/924156133522120705</a>">https://twitter.com/shogo82148/status/924156133522120705">https://twitter.com/shogo82148/status/924156133522120705</a></a></p>
+
+<p>最適化の結果、コンパイル時に計算が行われ、 <code>x</code>, <code>y</code>, <code>z</code> は消えてしまいました。</p>
+
+<blockquote><p>constはコンパイル時に計算されますが、varは実行時に計算されるためです。</p></blockquote>
+
+<p>そういうわけで、この部分は間違いです。
+Goのコンパイラは賢いので、 <code>var</code> であってもコンパイル時に計算可能ならば計算してくれます。
+(比較演算子は範囲外？みたいだけど・・・)</p>
+
+<h2>任意の精度で計算の限界に迫る</h2>
+
+<p>ここまでは <code>a</code> や <code>b</code> は <code>float64</code> という型を持っていました。
+次に以下のように書き換えて <code>a</code> も <code>b</code> も「型の無い定数」にしてみましょう。
+すると少し面白い結果が得られます。</p>
+
+<pre><code class="go">package main
+
+import (
+    "fmt"
+)
+
+func main() {
+    const a = 0.3 - 0.2
+    const b = 0.2 - 0.1
+    var c = a == b
+    fmt.Println(c)
+    fmt.Printf("%e\n", float64(a-b))
+}
+</code></pre>
+
+<p><a href="https://play.golang.org/p/T26lQ0Ajvw">https://play.golang.org/p/T26lQ0Ajvw</a></p>
+
+<pre><code>false
+9.322926e-156
+</code></pre>
+
+<p><code>c</code> が <code>false</code> になってしまいました。
+「任意の精度で計算」と言ってもコンピューター上の計算である以上、有効桁数には限界があります。
+<code>a</code> と <code>b</code> の差が <code>9.322926e-156</code> になったことから、おそらく有効桁数150桁程度で計算していると考えられます。</p>
+
+<p>ここでちょっとソースコードを覗いてみると・・・</p>
+
+<ul>
+<li><a href="https://github.com/golang/go/blob/master/src/cmd/compile/internal/gc/mpfloat.go#L18">mpfloat.go</a></li>
+</ul>
+
+
+<p>512bitの精度で計算しているようです。
+<script type="math/tex">512 \times \log 2 = 154.1273577&hellip;</script> なので、有効桁数150桁程度という予想通りです。</p>
+
+<h2>まとめ</h2>
+
+<p>何事にも限界ってものがある。</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Go1.9から使える Monotonic Clocks を試してみた]]></title>
@@ -1321,214 +1534,6 @@ rerandでは以下のように<code>rand.New</code>を使って、グローバ�
 <li><a href="https://github.com/Songmu/strrand">Songmu/strrand</a></li>
 <li><a href="http://blog.yux3.net/entry/2017/05/01/014200">golangkyoto 「そうだ、 Go 京都」で「Go に String::Random を移植した話」というタイトルで発表した</a></li>
 <li><a href="https://github.com/t-mrt/gocha">t-mrt/gocha</a></li>
-</ul>
-
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Go言語のヒープに確保するデータの初期化コストについて調べてみた(Go1.8.1版)]]></title>
-    <link href="https://shogo82148.github.io/blog/2017/04/13/go1-8-allocation/"/>
-    <updated>2017-04-13T08:23:08+09:00</updated>
-    <id>https://shogo82148.github.io/blog/2017/04/13/go1-8-allocation</id>
-    <content type="html"><![CDATA[<p><a href="https://twitter.com/kaoriya/status/851983856966283265">https://twitter.com/kaoriya/status/851983856966283265</a>">https://twitter.com/kaoriya/status/851983856966283265">https://twitter.com/kaoriya/status/851983856966283265</a></a></p>
-
-<p>こちらのツイートに対して、以下のベンチ結果が紹介されていました。</p>
-
-<ul>
-<li><a href="http://ryochack.hatenablog.com/entry/2014/06/08/225606">Go言語のヒープに確保するデータの初期化コストについて調べてみた</a></li>
-</ul>
-
-
-<p>しかし<a href="https://twitter.com/hnakamur2">hnakamur2</a>さんも言及しているように、
-これはGo1.2.2時の結果。
-その後、GoのコンパイラがGo実装になったり、SSAが導入されたりと、
-今のコンパイラの実装は当時とは全く違うものになっています。</p>
-
-<p>というわけで、現時点での最新のバージョン(Go1.8.1)で、同様の検証をおこなってみました。</p>
-
-<!-- More -->
-
-
-<h2>検証コード</h2>
-
-<p>検証に使用したコードはGo1.2.2のときと全く同じものです。</p>
-
-<pre><code class="go">// alloc_overhead.go
-
-package main
-
-type container struct {
-    v [64]byte
-}
-
-func MakeContainer() *container {
-    c := container{}
-    return &amp;c
-}
-
-func MakeContainerOneLine() *container {
-    return &amp;container{}
-}
-
-func MakeContainerNew() *container {
-    return new(container)
-}
-
-func main() {
-    _ = MakeContainer()
-    _ = MakeContainerOneLine()
-    _ = MakeContainerNew()
-}
-</code></pre>
-
-<pre><code class="go">// alloc_overhead_test.go
-
-package main
-
-import (
-    "testing"
-)
-
-func BenchmarkMakeContainer(b *testing.B) {
-    for i := 0; i &lt; b.N; i++ {
-        _ = MakeContainer()
-    }
-}
-
-func BenchmarkMakeContainerOneLine(b *testing.B) {
-    for i := 0; i &lt; b.N; i++ {
-        _ = MakeContainerOneLine()
-    }
-}
-
-func BenchmarkMakeContainerNew(b *testing.B) {
-    for i := 0; i &lt; b.N; i++ {
-        _ = MakeContainerNew()
-    }
-}
-</code></pre>
-
-<h2>ベンチマーク結果</h2>
-
-<p>Go1.8.1でベンチマークを実行した結果がこちら。</p>
-
-<pre><code class="plain">$ go test -bench . -benchmem
-BenchmarkMakeContainer-4            1000000000           2.79 ns/op        0 B/op          0 allocs/op
-BenchmarkMakeContainerOneLine-4     1000000000           2.84 ns/op        0 B/op          0 allocs/op
-BenchmarkMakeContainerNew-4         1000000000           2.83 ns/op        0 B/op          0 allocs/op
-PASS
-ok      _/Users/shogo/workspace/tmp/2017-04-13-alloc    9.345s
-</code></pre>
-
-<p>ベンチマークの結果、ほとんど速度の差はありませんでした。</p>
-
-<p>しかし、「ヒープに置かれるデータの初期化」を検証したかったのに、アロケーションが0なのはおかしいですね？
-どうやら最適化の結果、スタックに置かれるようになってしまったようです。</p>
-
-<h2>再検証</h2>
-
-<p>Go1.7から追加された<a href="https://golang.org/pkg/runtime/#KeepAlive">runtime.KeepAlive</a>を使ってベンチマークを修正しました。
-<code>runtime.KeepAlive</code>が呼ばれるまで確保した領域は解放されることが無いので、
-データがヒープに乗ってくれるはずです(たぶん)。</p>
-
-<pre><code class="go">// alloc_overhead_test.go
-
-package main
-
-import (
-    "runtime"
-    "testing"
-)
-
-func BenchmarkMakeContainer(b *testing.B) {
-    for i := 0; i &lt; b.N; i++ {
-        runtime.KeepAlive(MakeContainer())
-    }
-}
-
-func BenchmarkMakeContainerOneLine(b *testing.B) {
-    for i := 0; i &lt; b.N; i++ {
-        runtime.KeepAlive(MakeContainerOneLine())
-    }
-}
-
-func BenchmarkMakeContainerNew(b *testing.B) {
-    for i := 0; i &lt; b.N; i++ {
-        runtime.KeepAlive(MakeContainerNew())
-    }
-}
-</code></pre>
-
-<p>修正版のベンチマークはこちら。</p>
-
-<pre><code class="plain">$ go test -bench . -benchmem
-BenchmarkMakeContainer-4            50000000            34.7 ns/op        64 B/op          1 allocs/op
-BenchmarkMakeContainerOneLine-4     30000000            34.4 ns/op        64 B/op          1 allocs/op
-BenchmarkMakeContainerNew-4         50000000            35.9 ns/op        64 B/op          1 allocs/op
-PASS
-ok      _/Users/shogo/workspace/tmp/2017-04-13-alloc    4.690s
-</code></pre>
-
-<p>意図したとおりアロケーションが発生しています。
-速度差もほとんどありません。</p>
-
-<h2>最適化の結果を見てみる</h2>
-
-<p><a href="http://shinpei.github.io/blog/2016/08/13/what-ssa-brings-to-go-17/">Go1.7からSSAが導入された</a>ことにより、
-以下のようなコマンドで最適化の様子を簡単に知ることができるようになりました。</p>
-
-<pre><code class="bash">GOSSAFUNC=MakeContainer go build alloc_overhead.go
-</code></pre>
-
-<p>この機能を使って、各関数が最終的にどのように最適化されたのかを確認してみます。</p>
-
-<p>以下は<code>MakeContainer</code>の結果(<a href="/files/2017-04-13-go1-8-allocation/MakeContainer.html">ssa.html</a>)。</p>
-
-<pre><code class="plain">v1 = InitMem &lt;mem&gt;
-v2 = SP &lt;uintptr&gt; : SP
-v3 = SB &lt;uintptr&gt; : SB
-v10 = LEAQ &lt;*uint8&gt; {type."".container} v3 : AX
-v8 = MOVQstore &lt;mem&gt; v2 v10 v1
-v9 = CALLstatic &lt;mem&gt; {runtime.newobject} [16] v8
-v11 = MOVQload &lt;*container&gt; [8] v2 v9 : AX
-v13 = VarDef &lt;mem&gt; {~r0} v9
-v14 = MOVQstore &lt;mem&gt; {~r0} v2 v11 v13
-</code></pre>
-
-<p><code>MakeContainerOneLine</code>の結果(<a href="/files/2017-04-13-go1-8-allocation/MakeContainerOneLine.html">ssa.html</a>)。</p>
-
-<pre><code class="plain">v1 = InitMem &lt;mem&gt;
-v2 = SP &lt;uintptr&gt; : SP
-v3 = SB &lt;uintptr&gt; : SB
-v10 = LEAQ &lt;*uint8&gt; {type."".container} v3 : AX
-v8 = MOVQstore &lt;mem&gt; v2 v10 v1
-v9 = CALLstatic &lt;mem&gt; {runtime.newobject} [16] v8
-v11 = MOVQload &lt;*container&gt; [8] v2 v9 : AX
-v14 = VarDef &lt;mem&gt; {~r0} v9
-v15 = MOVQstore &lt;mem&gt; {~r0} v2 v11 v14
-</code></pre>
-
-<p><code>MakeContainerNew</code>の結果(<a href="/files/2017-04-13-go1-8-allocation/MakeContainerNew.html">ssa.html</a>)。</p>
-
-<pre><code class="plain">v1 = InitMem &lt;mem&gt;
-v2 = SP &lt;uintptr&gt; : SP
-v3 = SB &lt;uintptr&gt; : SB
-v10 = LEAQ &lt;*uint8&gt; {type."".container} v3 : AX
-v8 = MOVQstore &lt;mem&gt; v2 v10 v1
-v9 = CALLstatic &lt;mem&gt; {runtime.newobject} [16] v8
-v11 = MOVQload &lt;*container&gt; [8] v2 v9 : AX
-v12 = VarDef &lt;mem&gt; {~r0} v9
-v13 = MOVQstore &lt;mem&gt; {~r0} v2 v11 v12
-</code></pre>
-
-<p>変数名の割り当てが異なるだけで実質同じ内容ですね。</p>
-
-<h2>まとめ</h2>
-
-<ul>
-<li>Go1.8.1の最適化強い</li>
-<li>Go1.8.1では<code>new(Type)</code>と<code>&amp;Type{}</code>の差はない(少なくとも性能面では)</li>
 </ul>
 
 ]]></content>

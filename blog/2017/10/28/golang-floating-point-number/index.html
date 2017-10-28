@@ -1,0 +1,643 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Go言語の浮動小数点数のお話 - Shogo's Blog</title>
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="description" content="元ネタ: [JavaScriptの問題]var a = 0.3 - 0.2;var b = 0.2 - 0.1;var c = a==b;cの中身はどれ？&mdash; RAO(らお) (@RIORAO) October 24, 2017 正確な実数計算をやらされるJavaScriptくん # &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="https://shogo82148.github.io/blog/2017/10/28/golang-floating-point-number/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="Shogo's Blog" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="/javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-4526627-4']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+  <script type="text/javascript" src="//s.hatena.ne.jp/js/HatenaStar.js"></script>
+<script type="text/javascript">
+Hatena.Star.Token = '0da43945db72b59fd47eb24198fc7a0293c0191f';
+Hatena.Star.SiteConfig = {
+  entryNodes: {
+    'article': {
+      uri: 'h1 a',
+      title: 'h1',
+      container: 'h1'
+    },
+    'article.hentry': {
+      uri: 'window.location',
+      title: 'h1.entry-title',
+      container: 'h1.entry-title'
+    }
+  }
+};
+</script>
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Shogo's Blog</a></h1>
+  
+    <h2>たぶんプログラミングとかについて書いていくブログ</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="sitesearch" value="shogo82148.github.io">
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/blog/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Go言語の浮動小数点数のお話</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+<time class='entry-date' datetime='2017-10-28T20:12:48+09:00'><span class='date'><span class='date-month'>Oct</span> <span class='date-day'>28</span><span class='date-suffix'>th</span>, <span class='date-year'>2017</span></span> <span class='time'>8:12 pm</span></time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>元ネタ:</p>
+
+<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">[JavaScriptの問題]<br>var a = 0.3 - 0.2;<br>var b = 0.2 - 0.1;<br>var c = a==b;<br><br>cの中身はどれ？</p>&mdash; RAO(らお) (@RIORAO) <a href="https://twitter.com/RIORAO/status/922871767147749376?ref_src=twsrc%5Etfw">October 24, 2017</a></blockquote>
+
+
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+
+
+
+<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">正確な実数計算をやらされるJavaScriptくん <a href="https://twitter.com/hashtag/%E6%93%AC%E7%AB%9C%E6%88%AF%E7%94%BB?src=hash&amp;ref_src=twsrc%5Etfw">#擬竜戯画</a> <a href="https://t.co/ipE56C2YbV">pic.twitter.com/ipE56C2YbV</a></p>&mdash; RAO(らお) (@RIORAO) <a href="https://twitter.com/RIORAO/status/923599110262874112?ref_src=twsrc%5Etfw">October 26, 2017</a></blockquote>
+
+
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+
+<p>コンピューターで浮動小数点数を扱ったことのある人なら一度は経験する、
+数学上の計算とコンピューター上の計算が合わない計算の一例ですね。</p>
+
+<p>この件に関して、Go言語では正しく(=数学的な結果と同じように)計算できるとの情報が。</p>
+
+<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">おそらくGoはコンパイラがa=0.1とb=0.1に変換していると思われます。<br>添付した画像のコードだとtrueになりますが、constをvarに変更するとfalseになります。constはコンパイル時に計算されますが、varは実行時に計算されるためです。 <a href="https://t.co/LpKZF2kOjH">pic.twitter.com/LpKZF2kOjH</a></p>&mdash; morikuni (@inukirom) <a href="https://twitter.com/inukirom/status/923721661408411650?ref_src=twsrc%5Etfw">October 27, 2017</a></blockquote>
+
+
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+
+<p>しかしながら、inukiromさんのこの推察、半分はあってますが、半分は間違っていると思います。
+なぜGo言語でこのような結果になったのか、検証してみました。</p>
+
+<!-- More -->
+
+
+<h2>Goの数値定数の型について</h2>
+
+<p>以前<a href="https://shogo82148.github.io/blog/2017/02/19/golang-compile-time-fib/">Go言語でコンパイル時フィボナッチ数列計算</a>で紹介した
+<a href="https://qiita.com/sonatard/items/464a9d45c689386edfe1">Better C - Go言語と整数 #golang</a>にもあるように、
+Goの定数には「型がない(場合がある)」「任意の精度で計算してくれる」という特徴があります。</p>
+
+<p>このため、普通はどう考えてもオーバーフローしそうなこんな演算も・・・</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;fmt&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">i</span> <span class="kt">uint64</span> <span class="p">=</span> <span class="mi">31415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679</span> <span class="o">%</span> <span class="mi">1000000007</span>
+</span><span class='line'>  <span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="nx">i</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><a href="https://play.golang.org/p/FkMVpY2Fa3">https://play.golang.org/p/FkMVpY2Fa3</a></p>
+
+<p>型がない定数同士の演算は 162132938 と正しい答えを出してくれます。</p>
+
+<p>しかし、明示的に型を指定すると、今度はオーバーフローしてしまいます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;fmt&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">i</span> <span class="kt">uint64</span> <span class="p">=</span> <span class="nb">uint64</span><span class="p">(</span><span class="mi">31415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679</span><span class="p">)</span> <span class="o">%</span> <span class="mi">1000000007</span>
+</span><span class='line'>  <span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="nx">i</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="nx">tmp</span><span class="o">/</span><span class="nx">sandbox436519650</span><span class="o">/</span><span class="nx">main</span><span class="p">.</span><span class="k">go</span><span class="p">:</span><span class="mi">8</span><span class="p">:</span><span class="mi">23</span><span class="p">:</span> <span class="nx">constant</span> <span class="mi">31415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679</span> <span class="nx">overflows</span> <span class="kt">uint64</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>問題の計算</h2>
+
+<p>さて、最初の問題に戻りましょう。
+以下のコードで、0.1, 0.2, 0.3 は「型のない定数」なので、「任意の精度で計算して」くれます。
+計算結果を <code>float64</code> に変換すると全く同じ数字になるので、 <code>c</code> は <code>true</code> になります。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;fmt&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">a</span> <span class="o">:=</span> <span class="mf">0.3</span> <span class="o">-</span> <span class="mf">0.2</span>
+</span><span class='line'>  <span class="nx">b</span> <span class="o">:=</span> <span class="mf">0.2</span> <span class="o">-</span> <span class="mf">0.1</span>
+</span><span class='line'>  <span class="nx">c</span> <span class="o">:=</span> <span class="nx">a</span> <span class="o">==</span> <span class="nx">b</span>
+</span><span class='line'>  <span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="nx">c</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>play.golang.org/p/X36rciE8by</p>
+
+<p>一方、以下のように明示的に型を与えると、 <code>float64</code> の精度でしか計算してくれません。
+この場合は他のほとんどの言語同様、 <code>c</code> は <code>false</code> となります。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;fmt&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">a</span> <span class="o">:=</span> <span class="nb">float64</span><span class="p">(</span><span class="mf">0.3</span><span class="p">)</span> <span class="o">-</span> <span class="nb">float64</span><span class="p">(</span><span class="mf">0.2</span><span class="p">)</span>
+</span><span class='line'>  <span class="nx">b</span> <span class="o">:=</span> <span class="nb">float64</span><span class="p">(</span><span class="mf">0.2</span><span class="p">)</span> <span class="o">-</span> <span class="nb">float64</span><span class="p">(</span><span class="mf">0.1</span><span class="p">)</span>
+</span><span class='line'>  <span class="nx">c</span> <span class="o">:=</span> <span class="nx">a</span> <span class="o">==</span> <span class="nx">b</span>
+</span><span class='line'>  <span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="nx">c</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><a href="https://play.golang.org/p/9_jKFfc5Hy">https://play.golang.org/p/9_jKFfc5Hy</a></p>
+
+<blockquote><p>おそらくGoはコンパイラがa=0.1とb=0.1に変換していると思われます。</p></blockquote>
+
+<p>というわけで、先程のinukiromさんのこの推察ツイートのこの部分は正解です。</p>
+
+<h2>計算されるのは実行時？コンパイル時？</h2>
+
+<p>次にこんな二つのコードを用意して <code>GOSSAFUNC=main go run main.go</code> を実行し、
+<a href="https://shinpei.github.io/blog/2016/08/13/what-ssa-brings-to-go-17">SSA</a>による最適化の様子を見てみます。
+違いは <code>x</code>, <code>y</code>, <code>z</code> が <code>const</code> で宣言されているか、<code>var</code> で宣言されているか、だけです。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;fmt&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="p">(</span>
+</span><span class='line'>      <span class="nx">x</span> <span class="p">=</span> <span class="mf">0.3</span>
+</span><span class='line'>      <span class="nx">y</span> <span class="p">=</span> <span class="mf">0.2</span>
+</span><span class='line'>      <span class="nx">z</span> <span class="p">=</span> <span class="mf">0.1</span>
+</span><span class='line'>  <span class="p">)</span>
+</span><span class='line'>  <span class="nx">a</span> <span class="o">:=</span> <span class="nx">x</span> <span class="o">-</span> <span class="nx">y</span>
+</span><span class='line'>  <span class="nx">b</span> <span class="o">:=</span> <span class="nx">y</span> <span class="o">-</span> <span class="nx">z</span>
+</span><span class='line'>  <span class="nx">c</span> <span class="o">:=</span> <span class="nx">a</span> <span class="o">==</span> <span class="nx">b</span>
+</span><span class='line'>  <span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="nx">c</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;fmt&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="kd">const</span> <span class="p">(</span>
+</span><span class='line'>      <span class="nx">x</span> <span class="p">=</span> <span class="mf">0.3</span>
+</span><span class='line'>      <span class="nx">y</span> <span class="p">=</span> <span class="mf">0.2</span>
+</span><span class='line'>      <span class="nx">z</span> <span class="p">=</span> <span class="mf">0.1</span>
+</span><span class='line'>  <span class="p">)</span>
+</span><span class='line'>  <span class="nx">a</span> <span class="o">:=</span> <span class="nx">x</span> <span class="o">-</span> <span class="nx">y</span>
+</span><span class='line'>  <span class="nx">b</span> <span class="o">:=</span> <span class="nx">y</span> <span class="o">-</span> <span class="nx">z</span>
+</span><span class='line'>  <span class="nx">c</span> <span class="o">:=</span> <span class="nx">a</span> <span class="o">==</span> <span class="nx">b</span>
+</span><span class='line'>  <span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="nx">c</span><span class="p">)</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>結果は以下のツイートの通り。</p>
+
+<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">varのときは 0.09999999999999998 と 0.1 の比較に<br>const のときは 0.1 と 0.1 の比較になった ( go version go1.9.2 darwin/amd64 ) <a href="https://t.co/1obA95RzBC">pic.twitter.com/1obA95RzBC</a></p>&mdash; Ichinose Shogo (@shogo82148) <a href="https://twitter.com/shogo82148/status/924156133522120705?ref_src=twsrc%5Etfw">October 28, 2017</a></blockquote>
+
+
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+
+<p>最適化の結果、コンパイル時に計算が行われ、 <code>x</code>, <code>y</code>, <code>z</code> は消えてしまいました。</p>
+
+<blockquote><p>constはコンパイル時に計算されますが、varは実行時に計算されるためです。</p></blockquote>
+
+<p>そういうわけで、この部分は間違いです。
+Goのコンパイラは賢いので、 <code>var</code> であってもコンパイル時に計算可能ならば計算してくれます。
+(比較演算子は範囲外？みたいだけど・・・)</p>
+
+<h2>任意の精度で計算の限界に迫る</h2>
+
+<p>ここまでは <code>a</code> や <code>b</code> は <code>float64</code> という型を持っていました。
+次に以下のように書き換えて <code>a</code> も <code>b</code> も「型の無い定数」にしてみましょう。
+すると少し面白い結果が得られます。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="p">(</span>
+</span><span class='line'>  <span class="s">&quot;fmt&quot;</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="kd">const</span> <span class="nx">a</span> <span class="p">=</span> <span class="mf">0.3</span> <span class="o">-</span> <span class="mf">0.2</span>
+</span><span class='line'>  <span class="kd">const</span> <span class="nx">b</span> <span class="p">=</span> <span class="mf">0.2</span> <span class="o">-</span> <span class="mf">0.1</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">c</span> <span class="p">=</span> <span class="nx">a</span> <span class="o">==</span> <span class="nx">b</span>
+</span><span class='line'>  <span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="nx">c</span><span class="p">)</span>
+</span><span class='line'>  <span class="nx">fmt</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&quot;%e\n&quot;</span><span class="p">,</span> <span class="nb">float64</span><span class="p">(</span><span class="nx">a</span><span class="o">-</span><span class="nx">b</span><span class="p">))</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><a href="https://play.golang.org/p/T26lQ0Ajvw">https://play.golang.org/p/T26lQ0Ajvw</a></p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kc">false</span>
+</span><span class='line'><span class="mf">9.322926e-156</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>c</code> が <code>false</code> になってしまいました。
+「任意の精度で計算」と言ってもコンピューター上の計算である以上、有効桁数には限界があります。
+<code>a</code> と <code>b</code> の差が <code>9.322926e-156</code> になったことから、おそらく有効桁数150桁程度で計算していると考えられます。</p>
+
+<p>ここでちょっとソースコードを覗いてみると・・・</p>
+
+<ul>
+<li><a href="https://github.com/golang/go/blob/master/src/cmd/compile/internal/gc/mpfloat.go#L18">mpfloat.go</a></li>
+</ul>
+
+
+<p>512bitの精度で計算しているようです。</p>
+
+<script type="math/tex">512 \times \log 2 = 154.1273577...</script>
+
+
+<p> なので、有効桁数150桁程度という予想通りです。</p>
+
+<h2>まとめ</h2>
+
+<p>何事にも限界ってものがある。</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+
+      
+
+
+
+
+<time class='entry-date' datetime='2017-10-28T20:12:48+09:00'><span class='date'><span class='date-month'>Oct</span> <span class='date-day'>28</span><span class='date-suffix'>th</span>, <span class='date-year'>2017</span></span> <span class='time'>8:12 pm</span></time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/golang/'>golang</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//b.hatena.ne.jp/entry/https://shogo82148.github.io/blog/2017/10/28/golang-floating-point-number/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="//b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="//b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="https://shogo82148.github.io/blog/2017/10/28/golang-floating-point-number/" data-via="shogo82148" data-counturl="https://shogo82148.github.io/blog/2017/10/28/golang-floating-point-number/" >Tweet</a>
+  
+  
+  <div class="g-plusone" data-size="medium"></div>
+  
+  
+    <div class="fb-like" data-send="true" data-width="450" data-show-faces="false"></div>
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2017/10/22/aws-certification-manager-validation/" title="Previous Post: ACMのドメイン検証をシミュレートするやつ書いた">&laquo; ACMのドメイン検証をシミュレートするやつ書いた</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2017/10/28/golang-floating-point-number/">Go言語の浮動小数点数のお話</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/10/22/aws-certification-manager-validation/">ACMのドメイン検証をシミュレートするやつ書いた</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/08/25/unicode9-grapheme-cluster/">Perl 5.26 & Unicode 9.0 で変わる書記素クラスタ(grapheme Cluster)のお話</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/06/26/go19-monotonic-clock/">Go1.9から使える Monotonic Clocks を試してみた</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/06/16/mysql-driver-and-context/">ぼくのかんがえたさいきょうのcontext対応版go-mysql-driverをマージしてもらった</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>GitHub Repos</h1>
+  <ul id="gh_repos">
+    <li class="loading">Status updating...</li>
+  </ul>
+  
+  <a href="https://github.com/shogo82148">@shogo82148</a> on GitHub
+  
+  <script type="text/javascript">
+    $(document).ready(function(){
+        if (!window.jXHR){
+            var jxhr = document.createElement('script');
+            jxhr.type = 'text/javascript';
+            jxhr.src = '/javascripts/libs/jXHR.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(jxhr, s);
+        }
+
+        github.showRepos({
+            user: 'shogo82148',
+            count: 0,
+            skip_forks: true,
+            target: '#gh_repos'
+        });
+    });
+  </script>
+  <script src="/javascripts/github.js" type="text/javascript"> </script>
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2017 - Shogo Ichinose -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'shogosblog';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'https://shogo82148.github.io/blog/2017/10/28/golang-floating-point-number/';
+        var disqus_url = 'https://shogo82148.github.io/blog/2017/10/28/golang-floating-point-number/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = '//' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) {return;}
+  js = d.createElement(s); js.id = id; js.async = true;
+  js.src = "//connect.facebook.net/en_US/all.js#appId=212934732101925&xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var script = document.createElement('script'); script.type = 'text/javascript'; script.async = true;
+      script.src = 'https://apis.google.com/js/plusone.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(script, s);
+    })();
+  </script>
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>
