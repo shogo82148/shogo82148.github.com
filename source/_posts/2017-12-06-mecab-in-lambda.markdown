@@ -3,7 +3,7 @@ layout: post
 title: "MeCabをAWS Lambdaで動かす(2017年版)"
 date: 2017-12-06 05:39:57 +0900
 comments: true
-categories: [mecab, lambda]
+categories: [aws-lambda, python, mecab]
 ---
 
 [AWS Lambda上で鯖(Mackerel)の曖昧性問題を機械学習で解決しよう](http://www.yasuhisay.info/entry/saba_disambiguator)の記事の中で、
