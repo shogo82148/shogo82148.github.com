@@ -1,0 +1,633 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Go言語でコンパイル時フィボナッチ数列計算 - Shogo's Blog</title>
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="description" content="整数の公式でフィボナッチ数列を求めるという記事を読んで、
+「これコンパイル時ならGoでも簡単に計算できるのでは？」と思いやってみたメモ。 背景 みんな大好きフィボナッチ数列(要出典)。
+漸化式で定義されているため、再帰やループを使って書くことが多いと思いますが、
+閉じた式で書くことが知られています &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="https://shogo82148.github.io/blog/2017/02/19/golang-compile-time-fib/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="Shogo's Blog" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="/javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-4526627-4']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+  <script type="text/javascript" src="//s.hatena.ne.jp/js/HatenaStar.js"></script>
+<script type="text/javascript">
+Hatena.Star.Token = '0da43945db72b59fd47eb24198fc7a0293c0191f';
+Hatena.Star.SiteConfig = {
+  entryNodes: {
+    'article': {
+      uri: 'h1 a',
+      title: 'h1',
+      container: 'h1'
+    },
+    'article.hentry': {
+      uri: 'window.location',
+      title: 'h1.entry-title',
+      container: 'h1.entry-title'
+    }
+  }
+};
+</script>
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Shogo's Blog</a></h1>
+  
+    <h2>たぶんプログラミングとかについて書いていくブログ</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="sitesearch" value="shogo82148.github.io">
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/blog/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Go言語でコンパイル時フィボナッチ数列計算</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+<time class='entry-date' datetime='2017-02-19T09:06:05+09:00'><span class='date'><span class='date-month'>Feb</span> <span class='date-day'>19</span><span class='date-suffix'>th</span>, <span class='date-year'>2017</span></span> <span class='time'>9:06 am</span></time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p><a href="http://postd.cc/fibonacci/">整数の公式でフィボナッチ数列を求める</a>という記事を読んで、
+「これコンパイル時ならGoでも簡単に計算できるのでは？」と思いやってみたメモ。</p>
+
+<!-- More -->
+
+
+<h2>背景</h2>
+
+<p>みんな大好きフィボナッチ数列(要出典)。
+漸化式で定義されているため、再帰やループを使って書くことが多いと思いますが、
+閉じた式で書くことが知られています。
+ただし、この一般式には無理数の演算が入るので、コンピュータで厳密に扱うことはできません。
+ところが、さきほど紹介した記事で紹介された方法を使うと、整数の演算のみで実現できるそうです。</p>
+
+<p>原理などはネタ元の記事を参照してもらうとして、
+Python3では以下のように書けるらしいです。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="k">def</span> <span class="nf">fib</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+</span><span class='line'>    <span class="k">return</span> <span class="p">(</span><span class="mi">4</span> <span class="o">&lt;&lt;</span> <span class="n">n</span><span class="o">*</span><span class="p">(</span><span class="mi">3</span><span class="o">+</span><span class="n">n</span><span class="p">))</span> <span class="o">//</span> <span class="p">((</span><span class="mi">4</span> <span class="o">&lt;&lt;</span> <span class="mi">2</span><span class="o">*</span><span class="n">n</span><span class="p">)</span> <span class="o">-</span> <span class="p">(</span><span class="mi">2</span> <span class="o">&lt;&lt;</span> <span class="n">n</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">((</span><span class="mi">2</span> <span class="o">&lt;&lt;</span> <span class="n">n</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>ある程度大きなフィボナッチ数を求める場合、
+計算途中の値が非常に大きくなるため、多倍長整数が必要となります。
+Python3は多倍長整数に組み込みで対応していますが、
+Goでは<a href="https://golang.org/pkg/math/big/">math/bigパッケージ</a>を利用する必要があります。</p>
+
+<p>なんか面倒だなGolangと思っていたのですが、
+<a href="http://qiita.com/sonatard/items/464a9d45c689386edfe1">Better C - Go言語と整数 #golang</a>を読んで、
+「Goの定数には型がない(場合がある)」「任意の精度で計算してくれる」ということを知り、
+「つまりコンパイル時に定数として計算すれば楽にいけるのでは！！」と考えたわけです。</p>
+
+<h2>結果</h2>
+
+<p>ちょっと複雑な式ですが、個々の演算自体はPython3もGoも変わらないので、
+翻訳は簡単ですね。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+</pre></td><td class='code'><pre><code class='go'><span class='line'><span class="kn">package</span> <span class="nx">main</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="s">&quot;fmt&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">const</span> <span class="nx">Fib0</span> <span class="p">=</span> <span class="mi">1</span> <span class="c1">// 0だけはうまくいかない</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">const</span> <span class="p">(</span>
+</span><span class='line'>  <span class="nx">_</span>    <span class="p">=</span> <span class="p">(</span><span class="mi">4</span> <span class="o">&lt;&lt;</span> <span class="p">(</span><span class="kc">iota</span> <span class="o">*</span> <span class="p">(</span><span class="mi">3</span> <span class="o">+</span> <span class="kc">iota</span><span class="p">)))</span> <span class="o">/</span> <span class="p">((</span><span class="mi">4</span> <span class="o">&lt;&lt;</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="kc">iota</span><span class="p">))</span> <span class="o">-</span> <span class="p">(</span><span class="mi">2</span> <span class="o">&lt;&lt;</span> <span class="kc">iota</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">((</span><span class="mi">2</span> <span class="o">&lt;&lt;</span> <span class="kc">iota</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+</span><span class='line'>  <span class="nx">Fib1</span>
+</span><span class='line'>  <span class="nx">Fib2</span>
+</span><span class='line'>  <span class="nx">Fib3</span>
+</span><span class='line'>  <span class="nx">Fib4</span>
+</span><span class='line'>  <span class="nx">Fib5</span>
+</span><span class='line'>  <span class="nx">Fib6</span>
+</span><span class='line'>  <span class="nx">Fib7</span>
+</span><span class='line'>  <span class="nx">Fib8</span>
+</span><span class='line'>  <span class="nx">Fib9</span>
+</span><span class='line'>  <span class="nx">Fib10</span>
+</span><span class='line'>  <span class="nx">Fib11</span>
+</span><span class='line'>  <span class="nx">Fib12</span>
+</span><span class='line'>  <span class="nx">Fib13</span>
+</span><span class='line'>  <span class="nx">Fib14</span>
+</span><span class='line'>  <span class="nx">Fib15</span>
+</span><span class='line'>  <span class="nx">Fib16</span>
+</span><span class='line'>  <span class="nx">Fib17</span>
+</span><span class='line'>  <span class="nx">Fib18</span>
+</span><span class='line'>  <span class="nx">Fib19</span>
+</span><span class='line'>  <span class="nx">Fib20</span>
+</span><span class='line'>  <span class="nx">Fib21</span>
+</span><span class='line'><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">fibs</span> <span class="o">:=</span> <span class="p">[]</span><span class="kt">int</span><span class="p">{</span>
+</span><span class='line'>      <span class="nx">Fib0</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib1</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib2</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib3</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib4</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib5</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib6</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib7</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib8</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib9</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib10</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib11</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib12</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib13</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib14</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib15</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib16</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib17</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib18</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib19</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib20</span><span class="p">,</span>
+</span><span class='line'>      <span class="nx">Fib21</span><span class="p">,</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">for</span> <span class="nx">i</span><span class="p">,</span> <span class="nx">fib</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">fibs</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="nx">i</span><span class="p">,</span> <span class="nx">fib</span><span class="p">)</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>実行結果です。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ go run fibconst.go
+</span><span class='line'>0 1
+</span><span class='line'>1 1
+</span><span class='line'>2 2
+</span><span class='line'>3 3
+</span><span class='line'>4 5
+</span><span class='line'>5 8
+</span><span class='line'>6 13
+</span><span class='line'>7 21
+</span><span class='line'>8 34
+</span><span class='line'>9 55
+</span><span class='line'>10 89
+</span><span class='line'>11 144
+</span><span class='line'>12 233
+</span><span class='line'>13 377
+</span><span class='line'>14 610
+</span><span class='line'>15 987
+</span><span class='line'>16 1597
+</span><span class='line'>17 2584
+</span><span class='line'>18 4181
+</span><span class='line'>19 6765
+</span><span class='line'>20 10946
+</span><span class='line'>21 17711</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>Fibxxx</code>をたくさん書くのはつらかったので、ソースコードはPerlで自動生成しました。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+</pre></td><td class='code'><pre><code class='perl'><span class='line'><span class="k">print</span> <span class="s">&lt;&lt;EOF;</span>
+</span><span class='line'><span class="s">package main</span>
+</span><span class='line'>
+</span><span class='line'><span class="s">import &quot;fmt&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="s">const Fib0 = 1</span>
+</span><span class='line'>
+</span><span class='line'><span class="s">const (</span>
+</span><span class='line'><span class="s">    _    = (4 &lt;&lt; (iota * (3 + iota))) / ((4 &lt;&lt; (2 * iota)) - (2 &lt;&lt; iota) - 1) &amp; ((2 &lt;&lt; iota) - 1)</span>
+</span><span class='line'><span class="s">EOF</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">print</span> <span class="s">&quot;    Fib$_\n&quot;</span> <span class="k">for</span> <span class="mi">1</span><span class="o">..</span><span class="mi">21</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">print</span> <span class="s">&lt;&lt;EOF;</span>
+</span><span class='line'><span class="s">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="s">func main() {</span>
+</span><span class='line'><span class="s">    fibs := []int{</span>
+</span><span class='line'><span class="s">        Fib0,</span>
+</span><span class='line'><span class="s">EOF</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">print</span> <span class="s">&quot;        Fib$_,\n&quot;</span> <span class="k">for</span> <span class="mi">1</span><span class="o">..</span><span class="mi">21</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">print</span> <span class="s">&lt;&lt;EOF</span>
+</span><span class='line'><span class="s">    }</span>
+</span><span class='line'><span class="s">    for i, fib := range fibs {</span>
+</span><span class='line'><span class="s">        fmt.Println(i, fib)</span>
+</span><span class='line'><span class="s">    }</span>
+</span><span class='line'><span class="s">}</span>
+</span><span class='line'><span class="s">EOF</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>21までしかないのは、
+22以降を求めようとしたらコンパイルが通らなかったためです。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ go run fibconst.go
+</span><span class='line'># command-line-arguments
+</span><span class='line'>./fibconst.go:29: shift count too large: 550</span></code></pre></td></tr></table></div></figure>
+
+
+<p>どうやら512bitまでしか扱えないらしい。
+任意精度扱えるって書いてあったのに！！！</p>
+
+<ul>
+<li><a href="https://github.com/golang/go/blob/go1.8/src/cmd/compile/internal/gc/mpint.go#L211">mpint.go</a></li>
+<li><a href="https://github.com/golang/go/blob/go1.8/src/cmd/compile/internal/gc/mpfloat.go#L18">mpfloat.go</a></li>
+</ul>
+
+
+<p>おとなしく多倍長整数が組込の言語でやれっている話ではありますが、
+なんとなくやってみたかったんです。</p>
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="http://postd.cc/fibonacci/">整数の公式でフィボナッチ数列を求める</a>
+
+<ul>
+<li>Source: <a href="http://paulhankin.github.io/Fibonacci/">An integer formula for Fibonacci numbers</a></li>
+</ul>
+</li>
+<li><a href="http://qiita.com/sonatard/items/464a9d45c689386edfe1">Better C - Go言語と整数 #golang</a></li>
+</ul>
+
+
+<p>ネタ元にある「母関数」という概念は、数学ガールを読んで知りました。</p>
+
+<iframe style="width:120px;height:240px;" marginwidth="0" marginheight="0" scrolling="no" frameborder="0" src="//rcm-fe.amazon-adsystem.com/e/cm?lt1=_blank&bc1=000000&IS2=1&bg1=FFFFFF&fc1=000000&lc1=0000FF&t=shogo82148-22&o=9&p=8&l=as4&m=amazon&f=ifr&ref=as_ss_li_til&asins=4797341378&linkId=be2c6011ca1a5f15d96c370e494b0f95"></iframe>
+
+
+<p>フィボナッチ数列に触れている部分はWebでも公開されているので、そちらもどうぞ(<a href="http://www.hyuki.com/story/genfunc.html">ミルカさんとフィボナッチ数列</a>)</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+
+      
+
+
+
+
+<time class='entry-date' datetime='2017-02-19T09:06:05+09:00'><span class='date'><span class='date-month'>Feb</span> <span class='date-day'>19</span><span class='date-suffix'>th</span>, <span class='date-year'>2017</span></span> <span class='time'>9:06 am</span></time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/golang/'>golang</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//b.hatena.ne.jp/entry/https://shogo82148.github.io/blog/2017/02/19/golang-compile-time-fib/" class="hatena-bookmark-button" data-hatena-bookmark-layout="standard" title="このエントリーをはてなブックマークに追加"><img src="//b.st-hatena.com/images/entry-button/button-only.gif" alt="このエントリーをはてなブックマークに追加" width="20" height="20" style="border: none;" /></a><script type="text/javascript" src="//b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+  
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="https://shogo82148.github.io/blog/2017/02/19/golang-compile-time-fib/" data-via="shogo82148" data-counturl="https://shogo82148.github.io/blog/2017/02/19/golang-compile-time-fib/" >Tweet</a>
+  
+  
+  <div class="g-plusone" data-size="medium"></div>
+  
+  
+    <div class="fb-like" data-send="true" data-width="450" data-show-faces="false"></div>
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2017/02/16/go-sql-proxy-in-go18/" title="Previous Post: go-sql-proxyがcontextに対応しました">&laquo; go-sql-proxyがcontextに対応しました</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2017/02/23/perl-webdb-vol97/" title="Next Post: WEB+DB PRESS Vol.97にPerlとRedisの記事を寄稿しました">WEB+DB PRESS Vol.97にPerlとRedisの記事を寄稿しました &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2017/12/06/mecab-in-lambda/">MeCabをAWS Lambdaで動かす(2017年版)</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/10/28/golang-floating-point-number/">Go言語の浮動小数点数のお話</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/10/22/aws-certification-manager-validation/">ACMのドメイン検証をシミュレートするやつ書いた</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/08/25/unicode9-grapheme-cluster/">Perl 5.26 & Unicode 9.0 で変わる書記素クラスタ(grapheme Cluster)のお話</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2017/06/26/go19-monotonic-clock/">Go1.9から使える Monotonic Clocks を試してみた</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>GitHub Repos</h1>
+  <ul id="gh_repos">
+    <li class="loading">Status updating...</li>
+  </ul>
+  
+  <a href="https://github.com/shogo82148">@shogo82148</a> on GitHub
+  
+  <script type="text/javascript">
+    $(document).ready(function(){
+        if (!window.jXHR){
+            var jxhr = document.createElement('script');
+            jxhr.type = 'text/javascript';
+            jxhr.src = '/javascripts/libs/jXHR.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(jxhr, s);
+        }
+
+        github.showRepos({
+            user: 'shogo82148',
+            count: 0,
+            skip_forks: true,
+            target: '#gh_repos'
+        });
+    });
+  </script>
+  <script src="/javascripts/github.js" type="text/javascript"> </script>
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2017 - Shogo Ichinose -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'shogosblog';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'https://shogo82148.github.io/blog/2017/02/19/golang-compile-time-fib/';
+        var disqus_url = 'https://shogo82148.github.io/blog/2017/02/19/golang-compile-time-fib/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = '//' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+<div id="fb-root"></div>
+<script>(function(d, s, id) {
+  var js, fjs = d.getElementsByTagName(s)[0];
+  if (d.getElementById(id)) {return;}
+  js = d.createElement(s); js.id = id; js.async = true;
+  js.src = "//connect.facebook.net/en_US/all.js#appId=212934732101925&xfbml=1";
+  fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'facebook-jssdk'));</script>
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var script = document.createElement('script'); script.type = 'text/javascript'; script.async = true;
+      script.src = 'https://apis.google.com/js/plusone.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(script, s);
+    })();
+  </script>
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>
