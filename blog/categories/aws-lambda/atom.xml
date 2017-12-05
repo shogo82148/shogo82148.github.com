@@ -4,7 +4,7 @@
   <title><![CDATA[Category: aws-lambda | Shogo's Blog]]></title>
   <link href="https://shogo82148.github.io/blog/categories/aws-lambda/atom.xml" rel="self"/>
   <link href="https://shogo82148.github.io/"/>
-  <updated>2017-12-06T05:47:38+09:00</updated>
+  <updated>2017-12-06T05:56:29+09:00</updated>
   <id>https://shogo82148.github.io/</id>
   <author>
     <name><![CDATA[Shogo Ichinose]]></name>
@@ -12,6 +12,203 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[MeCabをAWS Lambdaで動かす(2017年版)]]></title>
+    <link href="https://shogo82148.github.io/blog/2017/12/06/mecab-in-lambda/"/>
+    <updated>2017-12-06T05:39:57+09:00</updated>
+    <id>https://shogo82148.github.io/blog/2017/12/06/mecab-in-lambda</id>
+    <content type="html"><![CDATA[<p><a href="http://www.yasuhisay.info/entry/saba_disambiguator">AWS Lambda上で鯖(Mackerel)の曖昧性問題を機械学習で解決しよう</a>の記事の中で、
+Lambda上でMeCabを動かすことについて以下のように触れられています。</p>
+
+<blockquote><p>日本語を扱う自然言語処理ではMeCabを扱うことが多いですが、Lambda上でMeCabを動かすのは一手間必要なようです。</p></blockquote>
+
+<p>確かにLambda上でMeCabを動かすのは一手間必要です。
+しかし、参照している記事は少し古くて、今はもう少し手軽にできるようになっています。</p>
+
+<p>ブコメでも言及しましたが、改めて記事として残しておこうと思います。</p>
+
+<!-- More -->
+
+
+<h2>ビルド方法(2017年版)</h2>
+
+<p>結論から言うと <a href="https://shogo82148.github.io/blog/2016/02/10/mecab-in-lambda/#comment-2550852533">Norio Kimura さんのコメント</a> 通りにビルドするのが、2017年12月現在一番楽な方法です。
+(お返事すっかり忘れていてスイマセン・・・情報提供ありがとうございます)</p>
+
+<blockquote><p>調べてみると、AWS Lambda では環境変数 LD_LIBRARY_PATH が既に設定されていて /var/task/lib を含んでいました。元記事で ./configure &ndash;prefix=$PROJECT_HOME/local ではなく ./configure &ndash;prefix=$PROJECT_HOME とすればライブラリとの動的リンクは何もしなくても実現できます。さらにコードが展開されるディレクトリ /var/task を固定値だと決め打ちして PROJECT_HOME を /var/task にして開発すれば MeCab に渡すパラメーターの設定（-d, -r）も不要になります。undocumented な仕様に２つも依存していて気持ち悪いですが、MeCab を呼ぶ側のコードを Lambda 用に変更する必要がなくなります。</p></blockquote>
+
+<p>コメント中の元記事というのは、こちらの記事のことです。</p>
+
+<ul>
+<li><a href="https://dev.classmethod.jp/cloud/aws-lambda-with-mecab/">AWS Lambda で MeCab を動かす</a></li>
+</ul>
+
+
+<pre><code class="bash install.sh">export PROJECT_HOME=/var/task # LAMBDA_TASK_ROOT
+
+# 1. プロジェクト用にディレクトリを作成
+mkdir -p "$PROJECT_HOME"
+
+# 2. MeCabのダウンロードとインストール
+# googlecodeサービス終了に伴い、ダウンロードURLが元記事と変わっていることに注意
+cd "$HOME"
+curl -fsSL "https://drive.google.com/uc?export=download&amp;id=0B4y35FiV1wh7cENtOXlicTFaRUE" -o mecab.tar.gz
+cd mecab-0.996
+./configure --prefix="$PROJECT_HOME" --enable-utf8-only # ※ここでのprefix指定がポイント
+make &amp;&amp; make install
+
+# 3. 辞書のダウンロードとインストール
+cd "$HOME"
+curl -fsSL "https://drive.google.com/uc?export=download&amp;id=0B4y35FiV1wh7MWVlSDBCSXZMTXM" -o mecab-ipadic.tar.gz
+tar zvxf mecab-ipadic.tar.gz
+cd mecab-ipadic-2.7.0-20070801
+export PATH=$PROJECT_HOME/bin:$PATH
+./configure --prefix="$PROJECT_HOME" --enable-utf8-only # ※ここでのprefix指定がポイント
+make &amp;&amp; make install
+
+# 4. Python用MeCab-bindingをインストール
+pip install -t "$PROJECT_HOME" -r mecab-python
+</code></pre>
+
+<h2>Lambda関数を書いてみる</h2>
+
+<p>上記方法でMeCabをインストールすると<a href="https://shogo82148.github.io/blog/2016/02/10/mecab-in-lambda/">AWS Lambda で MeCab を動かす(改)</a>で紹介したコードは以下のように簡略化できます。</p>
+
+<pre><code class="python lambda_function.py"># coding=utf-8
+import os
+import settings
+
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(settings.LOG_LEVEL)
+
+"""
+# https://shogo82148.github.io/blog/2016/02/10/mecab-in-lambda/ にあったpreload処理は不要になります。
+# preload libmecab
+import ctypes
+libdir = os.path.join(os.getcwd(), 'local', 'lib')
+libmecab = ctypes.cdll.LoadLibrary(os.path.join(libdir, 'libmecab.so'))
+"""
+
+import MeCab
+
+# prepare Tagger
+"""
+# 辞書のパスの明示的な指定が不要になります。
+dicdir = os.path.join(os.getcwd(), 'local', 'lib', 'mecab', 'dic', 'ipadic')
+rcfile = os.path.join(os.getcwd(), 'local', 'etc', 'mecabrc')
+default_tagger = MeCab.Tagger("-d{} -r{}".format(dicdir, rcfile))
+unk_tagger = MeCab.Tagger("-d{} -r{} --unk-feature 未知語,*,*,*,*,*,*,*,*".format(dicdir, rcfile))
+"""
+default_tagger = MeCab.Tagger("")
+unk_tagger = MeCab.Tagger("--unk-feature 未知語,*,*,*,*,*,*,*,*")
+
+DEFAULT_STOPTAGS = ['BOS/EOS']
+
+def lambda_handler(event, context):
+    sentence = event.get('sentence', '').encode('utf-8')
+    stoptags = event.get('stoptags', '').encode('utf-8').split(',') + DEFAULT_STOPTAGS
+    unk_feature = event.get('unk_feature', False)
+
+    tokens = []
+    tagger = unk_tagger if unk_feature else default_tagger
+    node = tagger.parseToNode(sentence)
+    while node:
+        feature = node.feature + ',*,*'
+        part_of_speech = get_part_of_speech(feature)
+        reading = get_reading(feature)
+        base_form = get_base_form(feature)
+        token = {
+            "surface": node.surface.decode('utf-8'),
+            "feature": node.feature.decode('utf-8'),
+            "pos": part_of_speech.decode('utf-8'),
+            "reading": reading.decode('utf-8'),
+            "baseform": base_form.decode('utf-8'),
+            "stat": node.stat,
+        }
+
+        if part_of_speech not in stoptags:
+            tokens.append(token)
+        node = node.next
+    return {"tokens": tokens}
+
+def get_part_of_speech(feature):
+    return '-'.join([v for v in feature.split(',')[:4] if v != '*'])
+
+def get_reading(feature):
+    return feature.split(',')[7]
+
+def get_base_form(feature):
+    return feature.split(',')[6]
+</code></pre>
+
+<h2>解決した課題と未解決の課題</h2>
+
+<p>この方法は undocumented な仕様に依存しているという課題がありましたが、一部は解決しています。</p>
+
+<h3>環境変数 LD_LIBRARY_PATH の設定に依存</h3>
+
+<p>これについては2017年12月現在ドキュメントに明示されています。</p>
+
+<ul>
+<li><a href="http://docs.aws.amazon.com/ja_jp/lambda/latest/dg/current-supported-versions.html#lambda-environment-variables">Lambda 関数で使用できる環境変数</a></li>
+</ul>
+
+
+<blockquote><p>/lib64、/usr/lib64、LAMBDA_TASK_ROOT、LAMBDA_TASK_ROOT/lib が含まれます。ヘルパーライブラリおよび関数コードの保存に使用されます。</p></blockquote>
+
+<p>「zip ファイルが展開されるパス」と「zip ファイルが展開されるパス/lib」が含まれているので問題ありません。</p>
+
+<p>また、<a href="https://shogo82148.github.io/blog/2016/02/10/mecab-in-lambda/">前回の記事</a>を書いたときは環境変数の上書きは出来ませんでしたが、現在では可能になっています。</p>
+
+<ul>
+<li><a href="https://dev.classmethod.jp/cloud/aws/aws-lambda-env-variables/">【アップデート】AWS Lambdaで環境変数を使えるようになりました！！！</a></li>
+</ul>
+
+
+<h3>.zip ファイルが展開されるパスを決め打ち</h3>
+
+<p>これに関してはドキュメントに明示的な記載を見つけることが出来ませんでした。
+決め打ちが怖い人は <code>LAMBDA_TASK_ROOT</code> 環境変数を参照することをオススメします。</p>
+
+<pre><code class="python lambda_function.py">root = os.environ.get("LAMBDA_TASK_ROOT", os.getcwd()) 
+dicdir = os.path.join(root, 'lib', 'mecab', 'dic', 'ipadic')
+rcfile = os.path.join(root, 'etc', 'mecabrc')
+default_tagger = MeCab.Tagger("-d{} -r{}".format(dicdir, rcfile))
+unk_tagger = MeCab.Tagger("-d{} -r{} --unk-feature 未知語,*,*,*,*,*,*,*,*".format(dicdir, rcfile))
+</code></pre>
+
+<h2>まとめ</h2>
+
+<p>MeCabをAWS Lambdaで動かす(2017年版)最新版をお伝えしました。
+通常のインストール方法との差はprefixの指定だけなので、
+今までMeCabを利用していた人にとってはさほど高いハードルではないと思います。</p>
+
+<p>とはいえ、依然としてLambda関数ビルド専用のLinux環境を用意する煩雑さはあります。
+オフィシャルに提供されているAMIに加え、
+<a href="https://github.com/lambci/docker-lambda">lambci/docker-lambda</a>Dockerイメージを使うという手もありますが、
+Goのクロスコンパイルの簡単さはやはり魅力的ですね・・・。</p>
+
+<h2>オマケ</h2>
+
+<p><a href="https://shogo82148.github.io/Grongish/">グロンギ語語翻訳機</a> はこの方法でMeCabをLambda上で動かし、
+API Gateway を用いてAPIとして公開しています。
+実装例として遊んでみて下さい。</p>
+
+<h2>参考</h2>
+
+<ul>
+<li><a href="https://dev.classmethod.jp/cloud/aws-lambda-with-mecab/">AWS Lambda で MeCab を動かす</a></li>
+<li><a href="https://dev.classmethod.jp/cloud/improved-aws-lambda-with-mecab/">【改】AWS Lambda で MeCab を動かす</a></li>
+<li><a href="https://qiita.com/norioxkimura/items/5ba3699cec54070566dc">AWS Lambda で JNI を利用する（MeCab を例として）</a></li>
+<li><a href="http://docs.aws.amazon.com/ja_jp/lambda/latest/dg/current-supported-versions.html">Lambda 実行環境と利用できるライブラリ</a></li>
+<li><a href="https://github.com/lambci/docker-lambda">lambci/docker-lambda</a></li>
+<li><a href="https://shogo82148.github.io/blog/2016/02/10/mecab-in-lambda/">AWS Lambda で MeCab を動かす(改)</a></li>
+</ul>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[AWS Lambda で MeCab を動かす(改)]]></title>
@@ -22,6 +219,10 @@
 <a href="http://dev.classmethod.jp/cloud/aws-lambda-with-mecab/">AWS Lambda で MeCab を動かす</a>という記事を見つけました。
 Lambdaの計算リソースで形態素解析できるのは楽しいですねー。
 ただ実装にまだまだ改善できそうな部分があったので修正してみました。</p>
+
+<p><strong>2017/12/06追記</strong>
+Norio Kimuraさんのコメントを受けて、<a href="https://shogo82148.github.io/blog/2017/12/06/mecab-in-lambda/">MeCabをAWS Lambdaで動かす(2017年版)</a>を書きました。
+以下の手順でも動きますが、少し簡単に出来るようになっています。</p>
 
 <!-- More -->
 
