@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Google Cloud Messaging for Chrome を試してみた"
-date: 2013-05-15 11:26
+date: 2013-05-15T11:26:00+09:00
 comments: true
 categories: [Chrome, Perl]
 ---

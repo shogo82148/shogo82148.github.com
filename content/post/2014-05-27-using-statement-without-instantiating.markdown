@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "初期化なしのusing文ってOK？"
-date: 2014-05-27 13:48
+date: 2014-05-27T13:48:00+09:00
 comments: true
 categories: [ C# ]
 ---

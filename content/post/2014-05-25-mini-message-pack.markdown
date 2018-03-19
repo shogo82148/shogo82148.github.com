@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "C# でお手軽にMessagePack解析！"
-date: 2014-05-25 01:38
+date: 2014-05-25T01:38:00+09:00
 comments: true
 categories: [c#, unity, messagepack]
 ---

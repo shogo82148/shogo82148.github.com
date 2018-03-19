@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "tweepyでApplication-only authenticationしてみた"
-date: 2013-05-09 23:29
+date: 2013-05-09T23:29:00+09:00
 comments: true
 categories: [Python, Twitter]
 ---

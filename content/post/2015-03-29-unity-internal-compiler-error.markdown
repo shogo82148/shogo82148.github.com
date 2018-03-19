@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "名前付き引数とオプション引数とオーバーロードを同時に使うとUnityが死ぬ"
-date: 2015-03-29 12:13
+date: 2015-03-29T12:13:00+09:00
 comments: true
 categories: [unity, csharp]
 ---

@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Goのトランザクションマネージャ作った"
-date: 2015-05-09 15:17
+date: 2015-05-09T15:17:00+09:00
 comments: true
 categories: [golang]
 ---

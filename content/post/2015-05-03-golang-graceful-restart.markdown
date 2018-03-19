@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Go言語でGraceful Restartをする"
-date: 2015-05-03 12:10
+date: 2015-05-03T12:10:00+09:00
 comments: true
 categories: [golang]
 ---

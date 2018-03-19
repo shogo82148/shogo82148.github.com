@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Goでデプロイ神社書いてみた"
-date: 2015-12-13 10:51
+date: 2015-12-13T10:51:00+09:00
 comments: true
 categories: [go]
 ---

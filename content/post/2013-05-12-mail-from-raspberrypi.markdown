@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "RaspberryPiからメールを送る"
-date: 2013-05-12 21:50
+date: 2013-05-12T21:50:00+09:00
 comments: true
 categories: [ RaspberryPi]
 ---

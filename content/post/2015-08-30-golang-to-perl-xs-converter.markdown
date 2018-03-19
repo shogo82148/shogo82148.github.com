@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "PerlからGolangを呼び出す"
-date: 2015-08-30 22:52
+date: 2015-08-30T22:52:00+09:00
 comments: true
 categories: [perl golang]
 ---

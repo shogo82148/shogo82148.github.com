@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "ランダム抽出アルゴリズムについて考える"
-date: 2013-07-13 22:13
+date: 2013-07-13T22:13:00+09:00
 comments: true
 categories: [perl]
 ---

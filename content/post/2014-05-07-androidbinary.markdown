@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Androidのバイナリファイルを解析するgoのライブラリ"
-date: 2014-05-07 13:29
+date: 2014-05-07T13:29:00+09:00
 comments: true
 categories: [android, go]
 ---

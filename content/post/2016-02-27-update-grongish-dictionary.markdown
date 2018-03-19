@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "グロンギ語翻訳辞書をアップデートしました"
-date: 2016-02-27 10:27
+date: 2016-02-27T10:27:00+09:00
 comments: true
 categories: 
 ---

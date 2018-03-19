@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "各ブランチの最後にコミットした人を知る"
-date: 2015-05-21 00:50
+date: 2015-05-21T00:50:00+09:00
 comments: true
 categories: [git]
 ---

@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "gitで作業ディレクトリの変更を破棄したのに差分が出続けて困った話"
-date: 2014-10-04 15:05
+date: 2014-10-04T15:05:00+09:00
 comments: true
 categories: [git]
 ---

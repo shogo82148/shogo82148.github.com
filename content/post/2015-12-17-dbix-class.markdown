@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "PerlのDBIx::Class利用上の注意点"
-date: 2015-12-17 18:35
+date: 2015-12-17T18:35:00+09:00
 comments: true
 categories: [perl]
 ---

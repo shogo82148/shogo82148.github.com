@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "じょりぼっとが起動して一年がたちました"
-date: 2013-01-22 13:57
+date: 2013-01-22T13:57:00+09:00
 comments: true
 categories: 
 ---

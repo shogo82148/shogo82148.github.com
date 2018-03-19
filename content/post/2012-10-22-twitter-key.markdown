@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Twitter公式クライアントのコンシューマキー流出について考える"
-date: 2012-10-22 20:46
+date: 2012-10-22T20:46:00+09:00
 comments: true
 categories: 
 ---

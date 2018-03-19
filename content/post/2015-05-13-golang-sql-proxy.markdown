@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Go言語でSQLのトレースをする"
-date: 2015-05-13 01:22
+date: 2015-05-13T01:22:00+09:00
 comments: true
 categories: ["golang"]
 ---

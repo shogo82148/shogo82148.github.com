@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "UDPのパケットをSSHを通してトンネルする"
-date: 2012-12-28 16:38
+date: 2012-12-28T16:38:00+09:00
 comments: true
 categories: [UDP, SSH]
 ---

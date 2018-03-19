@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "MeCabのGolangバインディングを書いてみた"
-date: 2016-02-11 19:32
+date: 2016-02-11T19:32:00+09:00
 comments: true
 categories: [mecab, golang]
 ---

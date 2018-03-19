@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "数値と文字列がごちゃ混ぜになっているJSONをよしなにParseするやつ作った"
-date: 2016-03-23 20:44
+date: 2016-03-23T20:44:00+09:00
 comments: true
 categories: [golang]
 ---

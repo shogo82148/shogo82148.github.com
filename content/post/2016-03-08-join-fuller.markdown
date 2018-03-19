@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "転職して一週間がたちました"
-date: 2016-03-08 15:55
+date: 2016-03-08T15:55:00+09:00
 comments: true
 categories: 
 ---

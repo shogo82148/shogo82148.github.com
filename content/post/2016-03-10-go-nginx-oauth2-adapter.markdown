@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "nginx-omniauth-adapterのGolangポート作った"
-date: 2016-03-10 12:51
+date: 2016-03-10T12:51:00+09:00
 comments: true
 categories: [go]
 ---

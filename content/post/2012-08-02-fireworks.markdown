@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "夏だ！花火だ！Androidで遊ぼう！"
-date: 2012-08-02 14:43
+date: 2012-08-02T14:43:00+09:00
 comments: true
 categories: ["Android"]
 ---

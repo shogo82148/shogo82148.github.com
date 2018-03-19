@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "travisがいつのまにやらcsharpをサポートしていた件"
-date: 2015-03-29 11:54
+date: 2015-03-29T11:54:00+09:00
 comments: true
 categories: [travis, csharp]
 ---

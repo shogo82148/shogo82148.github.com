@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "第1回 意味知識勉強会"
-date: 2012-04-20 15:12
+date: 2012-04-20T15:12:00+09:00
 comments: true
 categories: [勉強会, 意味知識勉強会]
 ---

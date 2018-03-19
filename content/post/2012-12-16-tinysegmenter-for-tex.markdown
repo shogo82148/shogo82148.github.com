@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "TinySegmenterをLaTeXに移植してみた"
-date: 2012-12-16 13:11
+date: 2012-12-16T13:11:00+09:00
 comments: true
 categories: [NLP, LaTeX]
 ---

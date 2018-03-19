@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "おねえさんのコンピュータを作ってみた"
-date: 2012-09-22 11:08
+date: 2012-09-22T11:08:00+09:00
 comments: true
 categories: 
 ---

@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Goオールスターズで登壇してきました"
-date: 2015-10-14 08:11
+date: 2015-10-14T08:11:00+09:00
 comments: true
 categories: golang
 ---

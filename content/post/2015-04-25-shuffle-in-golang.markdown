@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Go言語でshuffleする話"
-date: 2015-04-25 18:07
+date: 2015-04-25T18:07:00+09:00
 comments: true
 categories: [golang]
 ---

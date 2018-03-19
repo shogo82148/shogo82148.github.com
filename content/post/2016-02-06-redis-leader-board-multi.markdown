@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Redisでスコアを複数設定できるランキングを作ってみた"
-date: 2016-02-06 02:30
+date: 2016-02-06T02:30:00+09:00
 comments: true
 categories: [perl, redis]
 ---

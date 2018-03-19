@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Githubさんにpack exceeds maximum allowed sizeって言われた"
-date: 2014-09-13 10:51
+date: 2014-09-13T10:51:00+09:00
 comments: true
 categories: [git]
 ---

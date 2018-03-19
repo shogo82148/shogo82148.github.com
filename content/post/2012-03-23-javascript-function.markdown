@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Javascriptでの関数宣言"
-date: 2012-03-23 18:22
+date: 2012-03-23T18:22:00+09:00
 comments: true
 categories: [javascript, AjaxIME]
 ---

@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "GithubのIRCフックがgollumをサポートしました"
-date: 2014-11-15 22:24
+date: 2014-11-15T22:24:00+09:00
 comments: true
 categories: [github]
 ---

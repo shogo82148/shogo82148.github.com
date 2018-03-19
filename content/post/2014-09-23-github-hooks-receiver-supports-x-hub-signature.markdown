@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Github::Hooks::ReceiverがX-Hub-Signatureをサポートしました"
-date: 2014-09-23 00:25
+date: 2014-09-23T00:25:00+09:00
 comments: true
 categories: [perl]
 ---

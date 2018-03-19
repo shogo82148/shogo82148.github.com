@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "秘密鍵から公開鍵をつくる"
-date: 2014-09-03 13:40
+date: 2014-09-03T13:40:00+09:00
 comments: true
 categories: 
 ---

@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "net/httpで安全に静的ファイルを返す"
-date: 2016-04-13 02:29
+date: 2016-04-13T02:29:00+09:00
 comments: true
 categories: [golang]
 ---

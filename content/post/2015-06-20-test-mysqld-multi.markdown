@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Test::mysqld::Multiというモジュールを書いてみた"
-date: 2015-06-20 10:41
+date: 2015-06-20T10:41:00+09:00
 comments: true
 categories: [perl]
 ---

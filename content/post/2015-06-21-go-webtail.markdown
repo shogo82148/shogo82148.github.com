@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "go-webtailってのを書いた"
-date: 2015-06-21 23:28
+date: 2015-06-21T23:28:00+09:00
 comments: true
 categories: [go]
 ---

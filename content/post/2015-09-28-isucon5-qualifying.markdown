@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "ISUCON5の予選に参加して惨敗してきた"
-date: 2015-09-28 06:16
+date: 2015-09-28T06:16:00+09:00
 comments: true
 categories: [isucon]
 ---

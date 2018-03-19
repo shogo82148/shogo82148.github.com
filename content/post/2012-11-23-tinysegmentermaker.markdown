@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "TinySegmenterの学習ツールを作ってみた"
-date: 2012-11-23 14:37
+date: 2012-11-23T14:37:00+09:00
 comments: true
 categories: [NLP]
 ---

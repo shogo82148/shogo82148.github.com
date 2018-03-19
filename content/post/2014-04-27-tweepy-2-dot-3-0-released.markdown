@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Tweepyの2.3.0が出ました"
-date: 2014-04-27 21:51
+date: 2014-04-27T21:51:00+09:00
 comments: true
 categories: [python, tweepy, twitter]
 ---

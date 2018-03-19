@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "キレイになったコトバとハートを元に戻すツール作った"
-date: 2014-06-01 00:24
+date: 2014-06-01T00:24:00+09:00
 comments: true
 categories: [ javascript ]
 ---

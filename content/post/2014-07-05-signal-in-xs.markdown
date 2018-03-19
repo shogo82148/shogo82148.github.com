@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "PerlのXS中に起きたシグナルの扱い"
-date: 2014-07-05 11:56
+date: 2014-07-05T11:56:00+09:00
 comments: true
 categories: [ perl ]
 ---

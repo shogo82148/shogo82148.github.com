@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "PerlでもGoでも実行できるQuine書いた"
-date: 2016-04-06 10:07
+date: 2016-04-06T10:07:00+09:00
 comments: true
 categories: [perl, golang]
 ---

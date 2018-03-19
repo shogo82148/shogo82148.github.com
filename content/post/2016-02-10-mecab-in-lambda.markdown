@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "AWS Lambda で MeCab を動かす(改)"
-date: 2016-02-10 14:52
+date: 2016-02-10T14:52:00+09:00
 comments: true
 categories: [aws-lambda, python, mecab]
 ---

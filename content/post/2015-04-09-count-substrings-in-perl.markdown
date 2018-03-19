@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Perlで文字列の出現回数を調べる"
-date: 2015-04-09 23:28
+date: 2015-04-09T23:28:00+09:00
 comments: true
 categories: [perl]
 ---

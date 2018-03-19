@@ -1,7 +1,7 @@
 ---
 layout: post
 title: Redis::Fastってモジュールを書いた
-date: 2013-09-28 00:18
+date: 2013-09-28T00:18:00+09:00
 comments: true
 categories: [Perl, Redis]
 ---

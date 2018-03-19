@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Go言語でPerlのテストを早くする"
-date: 2015-09-19 21:49
+date: 2015-09-19T21:49:00+09:00
 comments: true
 categories: [perl, go]
 ---

@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Redis::Fast 0.13をリリースしました"
-date: 2014-10-16 23:51
+date: 2014-10-16T23:51:00+09:00
 comments: true
 categories: [perl, redis]
 ---

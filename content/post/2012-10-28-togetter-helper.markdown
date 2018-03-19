@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Togetterの編集作業便利にしたい"
-date: 2012-10-28 01:11
+date: 2012-10-28T01:11:00+09:00
 comments: true
 categories: [togetter, userscript]
 ---

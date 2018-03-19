@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "githubのタブサイズを変えるChrome拡張を作った"
-date: 2014-02-10 08:01
+date: 2014-02-10T08:01:00+09:00
 comments: true
 categories: [chrome, github]
 ---

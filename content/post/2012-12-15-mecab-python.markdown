@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "MeCabをPythonから使う注意点とか"
-date: 2012-12-15 17:38
+date: 2012-12-15T17:38:00+09:00
 comments: true
 categories: [NLP, MeCab, Python]
 ---

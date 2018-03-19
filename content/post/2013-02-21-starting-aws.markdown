@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "AWSをはじめてみた"
-date: 2013-02-21 01:01
+date: 2013-02-21T01:01:00+09:00
 comments: true
 categories: 
 ---

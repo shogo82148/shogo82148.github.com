@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "git diffでcsvの差分を見やすく表示する"
-date: 2015-03-24 23:08
+date: 2015-03-24T23:08:00+09:00
 comments: true
 categories: [git]
 ---

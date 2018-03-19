@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "ISUCON4にチームぽわわで参加しました"
-date: 2014-10-03 19:55
+date: 2014-10-03T19:55:00+09:00
 comments: true
 categories: [isucon]
 ---

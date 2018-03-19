@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "AnySan::Provider::Slackとape-slackを書いた"
-date: 2015-09-28 22:11
+date: 2015-09-28T22:11:00+09:00
 comments: true
 categories: [perl, go]
 ---

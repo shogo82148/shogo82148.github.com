@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Redis::Fastをcpanize＆アップデートしました"
-date: 2013-10-13 22:39
+date: 2013-10-13T22:39:00+09:00
 comments: true
 categories: [redis, perl]
 ---

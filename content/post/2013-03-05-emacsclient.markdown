@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "出、出〜〜〜〜wwww emacsをふたつ以上実行奴〜〜〜〜www(emacsclient編)"
-date: 2013-03-05 12:35
+date: 2013-03-05T12:35:00+09:00
 comments: true
 categories: [emacs]
 ---

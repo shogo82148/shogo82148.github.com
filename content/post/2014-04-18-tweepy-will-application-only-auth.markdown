@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Tweepy が Application-only authentication に対応します"
-date: 2014-04-18 06:37
+date: 2014-04-18T06:37:00+09:00
 comments: true
 categories: [python, twitter, tweepy]
 ---

@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "リアルタイムにテンションを上げてみた"
-date: 2012-10-03 11:42
+date: 2012-10-03T11:42:00+09:00
 comments: true
 categories: 
 ---
