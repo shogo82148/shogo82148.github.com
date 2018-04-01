@@ -3,7 +3,7 @@ layout: post
 title: "go-sql-proxyがcontextに対応しました"
 date: 2017-02-16 07:16:44 +0900
 comments: true
-categories: golang
+categories: [go, golang]
 ---
 
 Go1.8ではdatabase/sqlのcontextサポートが入ります。

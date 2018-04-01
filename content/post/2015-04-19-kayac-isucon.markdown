@@ -3,7 +3,7 @@ layout: post
 title: "社内ISUCONにチームぽわわ3.5で参加しました"
 date: 2015-04-19T19:12:00+09:00
 comments: true
-categories: 
+categories: [isucon]
 ---
 
 木曜日の社内ISUCONにチームぽわわ3.5として参加してきました。

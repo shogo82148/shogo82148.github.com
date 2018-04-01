@@ -3,7 +3,7 @@ layout: post
 title: "Go1.8のGraceful Shutdownとgo-gracedownの対応"
 date: 2017-01-21 12:44:32 +0900
 comments: true
-categories: golang
+categories: [go, golang]
 ---
 
 Go1.8beta1が出た時に、Go1.8で追加される予定のGraceful Shutdownについて書く！

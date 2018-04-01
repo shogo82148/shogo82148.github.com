@@ -3,7 +3,7 @@ layout: post
 title: "Go言語のヒープに確保するデータの初期化コストについて調べてみた(Go1.8.1版)"
 date: 2017-04-13 08:23:08 +0900
 comments: true
-categories: [golang]
+categories: [go, golang]
 ---
 
 {% oembed https://twitter.com/kaoriya/status/851983856966283265 %}

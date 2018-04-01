@@ -3,7 +3,7 @@ layout: post
 title: "net/httpで安全に静的ファイルを返す"
 date: 2016-04-13T02:29:00+09:00
 comments: true
-categories: [golang]
+categories: [go, golang]
 ---
 
 [net/httpで静的ファイルを返す](http://konboi.hatenablog.com/entry/2016/04/12/121105)で、

@@ -3,7 +3,7 @@ layout: post
 title: "ACMのドメイン検証をシミュレートするやつ書いた"
 date: 2017-10-22 15:45:02 +0900
 comments: true
-categories: [go]
+categories: [go, golang]
 ---
 
 始まりは一件のメールから。

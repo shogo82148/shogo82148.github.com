@@ -3,7 +3,7 @@ layout: post
 title: "go-JSONStoreの高速化と機能追加"
 date: 2017-03-05 16:19:25 +0900
 comments: true
-categories: [golang]
+categories: [go, golang]
 ---
 
 以前mattnさんが紹介していた[schollz/jsonstore](https://github.com/schollz/jsonstore)。

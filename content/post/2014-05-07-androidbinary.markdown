@@ -3,7 +3,7 @@ layout: post
 title: "Androidのバイナリファイルを解析するgoのライブラリ"
 date: 2014-05-07T13:29:00+09:00
 comments: true
-categories: [android, go]
+categories: [android, go, golang]
 ---
 
 Androidのアプリの実態はzipファイルなのでunzipすれば簡単に中身を見ることができるわけですが、

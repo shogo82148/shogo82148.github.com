@@ -3,7 +3,7 @@ layout: post
 title: "Go言語でshuffleする話"
 date: 2015-04-25T18:07:00+09:00
 comments: true
-categories: [golang]
+categories: [go, golang]
 ---
 
 [Fisher-Yates shuffle](http://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle)を使ってシャッフルライブラリ作ってみました。

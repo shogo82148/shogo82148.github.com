@@ -3,7 +3,7 @@ layout: post
 title: "Go言語でGraceful Restartをするときに取りこぼしを少なくする"
 date: 2015-11-23T20:51:00+09:00
 comments: true
-categories: [golang]
+categories: [go, golang]
 ---
 
 少し前に[Starlet](https://github.com/kazuho/Starlet)にGraceful Restartが時たま上手く動かない問題を修正する[pullreq](https://github.com/kazuho/Starlet/pull/21)を投げました。

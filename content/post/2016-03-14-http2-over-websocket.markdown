@@ -3,7 +3,7 @@ layout: post
 title: "ngrokみたいなHTTPプロキシを書いてみた"
 date: 2016-03-14T22:59:00+09:00
 comments: true
-categories: [golang, websocket]
+categories: [go, golang, websocket]
 ---
 
 開発中のWebアプリをみんなに試してほしいけど、

@@ -3,7 +3,7 @@ layout: post
 title: "go-webtailってのを書いた"
 date: 2015-06-21T23:28:00+09:00
 comments: true
-categories: [go]
+categories: [go, golang]
 ---
 
 Rubyで書かれた[webtail](https://github.com/r7kamura/webtail)のGo移植を書いてみました。

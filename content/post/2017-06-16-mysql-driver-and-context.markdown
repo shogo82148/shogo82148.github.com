@@ -3,7 +3,7 @@ layout: post
 title: "ぼくのかんがえたさいきょうのcontext対応版go-mysql-driverをマージしてもらった"
 date: 2017-06-16 07:11:15 +0900
 comments: true
-categories: [golang, mysql]
+categories: [go, golang, mysql]
 ---
 
 [go-sql-driver](https://github.com/go-sql-driver/mysql)に`context.Context`対応するプルリクエスト

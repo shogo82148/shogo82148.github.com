@@ -3,7 +3,7 @@ layout: post
 title: "Go言語のchanはいったいいくつ付けられるのか試してみた"
 date: 2017-03-17 21:10:25 +0900
 comments: true
-categories: [golang]
+categories: [go, golang]
 ---
 
 pecoに入った修正をみて、果たして`chan`はいくつまで付けられるのか気になったので、

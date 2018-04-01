@@ -3,7 +3,7 @@ layout: post
 title: "Re:golang の http.Client を速くする"
 date: 2017-01-14 17:02:12 +0900
 comments: true
-categories: golang
+categories: [go, golang]
 ---
 
 先日[mattn](https://twitter.com/mattn_jp)さんの記事を読みました。

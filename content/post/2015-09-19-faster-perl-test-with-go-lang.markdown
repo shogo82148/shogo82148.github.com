@@ -3,7 +3,7 @@ layout: post
 title: "Go言語でPerlのテストを早くする"
 date: 2015-09-19T21:49:00+09:00
 comments: true
-categories: [perl, go]
+categories: [perl, go, golang]
 ---
 
 [Test::mysqld::Multiというモジュールを書いてみた](http://shogo82148.github.io/blog/2015/06/20/test-mysqld-multi/)みたいな涙ぐましい努力により5分で終わるようになったテストですが、

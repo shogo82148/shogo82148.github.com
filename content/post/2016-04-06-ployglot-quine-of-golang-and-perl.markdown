@@ -3,7 +3,7 @@ layout: post
 title: "PerlでもGoでも実行できるQuine書いた"
 date: 2016-04-06T10:07:00+09:00
 comments: true
-categories: [perl, golang]
+categories: [perl, go, golang]
 ---
 
 [昨日のPolyglot](http://shogo82148.github.io/blog/2016/04/05/polyglot-of-perl-and-golang/)を元にPerlでもGoでも実行できるQuine書いた。

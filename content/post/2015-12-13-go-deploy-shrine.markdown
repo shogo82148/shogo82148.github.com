@@ -3,7 +3,7 @@ layout: post
 title: "Goでデプロイ神社書いてみた"
 date: 2015-12-13T10:51:00+09:00
 comments: true
-categories: [go]
+categories: [go, golang]
 ---
 
 [Go その2 Advent Calendar 2015](http://qiita.com/advent-calendar/2015/go2)の13日目の記事です。

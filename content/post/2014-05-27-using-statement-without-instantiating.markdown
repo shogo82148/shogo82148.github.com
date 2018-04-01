@@ -3,7 +3,7 @@ layout: post
 title: "初期化なしのusing文ってOK？"
 date: 2014-05-27T13:48:00+09:00
 comments: true
-categories: [ C# ]
+categories: [ csharp ]
 ---
 
 C# の using ステートメント、普通は変数の初期化とか new とかをまとめてやるものだと思ってたんですが、

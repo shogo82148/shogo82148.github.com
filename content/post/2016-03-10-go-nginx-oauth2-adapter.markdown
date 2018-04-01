@@ -3,7 +3,7 @@ layout: post
 title: "nginx-omniauth-adapterのGolangポート作った"
 date: 2016-03-10T12:51:00+09:00
 comments: true
-categories: [go]
+categories: [go, golang]
 ---
 
 「[nginx で omniauth を利用してアクセス制御を行う](http://techlife.cookpad.com/entry/2015/10/16/080000)」という記事で、

@@ -3,7 +3,7 @@ layout: post
 title: "MeCabをPython3から使う(中間報告)"
 date: 2015-06-02T23:12:00+09:00
 comments: true
-categories: [mecab, python3]
+categories: [mecab, python, python3]
 ---
 
 先日このようなツイートを見かけて、

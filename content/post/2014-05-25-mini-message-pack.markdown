@@ -3,7 +3,7 @@ layout: post
 title: "C# でお手軽にMessagePack解析！"
 date: 2014-05-25T01:38:00+09:00
 comments: true
-categories: [c#, unity, messagepack]
+categories: [csharp, unity, messagepack]
 ---
 
 [MiniMessagePack.cs](https://github.com/shogo82148/MiniMessagePack)ってのを作った。

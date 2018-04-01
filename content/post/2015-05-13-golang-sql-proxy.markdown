@@ -3,7 +3,7 @@ layout: post
 title: "Go言語でSQLのトレースをする"
 date: 2015-05-13T01:22:00+09:00
 comments: true
-categories: ["golang"]
+categories: [go, golang]
 ---
 
 ぴっぴ先輩が「Go言語で発行したクエリを確認したい」って言ってて、

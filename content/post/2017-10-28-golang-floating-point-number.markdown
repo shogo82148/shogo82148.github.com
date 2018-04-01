@@ -3,7 +3,7 @@ layout: post
 title: "Go言語の浮動小数点数のお話"
 date: 2017-10-28 20:12:48 +0900
 comments: true
-categories: ["golang"]
+categories: [go, golang]
 ---
 
 元ネタ:

@@ -3,7 +3,7 @@ layout: post
 title: "YAPCへ行ってきた(一日目)"
 date: 2013-09-20T21:48:00+09:00
 comments: true
-categories: [Perl, yapcasia]
+categories: [perl, yapcasia]
 ---
 
 YAPCの一日目に行ってきたよ。

@@ -3,7 +3,7 @@ layout: post
 title: "転職して一週間がたちました"
 date: 2016-03-08T15:55:00+09:00
 comments: true
-categories: 
+categories: []
 ---
 
 転職して1週間がたち，新しい生活サイクルにも慣れてきましたので近況報告をします．

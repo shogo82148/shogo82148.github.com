@@ -3,7 +3,7 @@ layout: post
 title: "Goのトランザクションマネージャ作った"
 date: 2015-05-09T15:17:00+09:00
 comments: true
-categories: [golang]
+categories: [go, golang]
 ---
 
 Golangの`database/sql`はBeginとCommitでトランザクションの制御を行うことができます。

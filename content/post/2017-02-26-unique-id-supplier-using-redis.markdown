@@ -3,7 +3,7 @@ layout: post
 title: "Redisを使ってユニークなIDを配布する"
 date: 2017-02-26 19:37:45 +0900
 comments: true
-categories: [golang, redis]
+categories: [go, golang, redis]
 ---
 
 スケーラブルにIDを生成する方法として

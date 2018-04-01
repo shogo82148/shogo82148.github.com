@@ -3,7 +3,7 @@ layout: post
 title: "PerlからGolangを呼び出す"
 date: 2015-08-30T22:52:00+09:00
 comments: true
-categories: [perl golang]
+categories: [perl, go, golang]
 ---
 
 GoのコードをPerlから呼び出せるようにする[go2xs](https://github.com/shogo82148/go2xs)を書いてみました。

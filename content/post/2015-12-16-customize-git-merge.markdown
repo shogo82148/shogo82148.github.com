@@ -3,7 +3,7 @@ layout: post
 title: "git-mergeの挙動をカスタマイズする"
 date: 2015-12-16T22:24:00+09:00
 comments: true
-categories: git
+categories: [git]
 ---
 
 最近gitのコンフリクト解消職人みたいになっていてすごくつらいです。

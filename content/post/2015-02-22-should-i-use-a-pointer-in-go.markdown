@@ -3,7 +3,7 @@ layout: post
 title: "map[string]Hoge or map[string]*Hoge ?"
 date: 2015-02-22T02:14:00+09:00
 comments: true
-categories: [go]
+categories: [go, golang]
 ---
 
 Go言語でポインタを使うべきか使わないべきか問題。

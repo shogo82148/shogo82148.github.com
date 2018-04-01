@@ -3,7 +3,7 @@ layout: post
 title: "AnySan::Provider::Slackとape-slackを書いた"
 date: 2015-09-28T22:11:00+09:00
 comments: true
-categories: [perl, go]
+categories: [perl, go, golang]
 ---
 
 先週、今のプロジェクトでのメインのコミュニケーションツールをIRCからSlack切り替えました。
