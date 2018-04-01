@@ -22,13 +22,20 @@ categories: [isucon]
 
 ### 〜開始
 
-{% oembed https://twitter.com/hisaichi5518/status/647559828068413442 %}
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">時間余裕でしょと思ったら全くそんなことなかった</p>&mdash; ひさいち (@hisaichi5518) <a href="https://twitter.com/hisaichi5518/status/647559828068413442?ref_src=twsrc%5Etfw">2015年9月25日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
 
-{% oembed https://twitter.com/shogo82148/status/647560930629279744 %}
 
-{% oembed https://twitter.com/shogo82148/status/647574277529583616 %}
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">時間余裕でしょと思ったら全くそんなことなかった</p>&mdash; Ichinose Shogo (@shogo82148) <a href="https://twitter.com/shogo82148/status/647560930629279744?ref_src=twsrc%5Etfw">2015年9月25日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
 
-{% oembed https://twitter.com/shogo82148/status/647579466898608128 %}
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">5時間で決着をつける <a href="https://t.co/AbnnSyHuZ8">https://t.co/AbnnSyHuZ8</a></p>&mdash; Ichinose Shogo (@shogo82148) <a href="https://twitter.com/shogo82148/status/647574277529583616?ref_src=twsrc%5Etfw">2015年9月26日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">バッテリ残量との戦いがすでに始まっている <a href="https://twitter.com/hashtag/ISUCON?src=hash&amp;ref_src=twsrc%5Etfw">#ISUCON</a> <a href="https://twitter.com/hashtag/%E3%82%A2%E3%83%80%E3%83%97%E3%82%BF%E5%BF%98%E3%82%8C%E3%81%9F?src=hash&amp;ref_src=twsrc%5Etfw">#アダプタ忘れた</a></p>&mdash; Ichinose Shogo (@shogo82148) <a href="https://twitter.com/shogo82148/status/647579466898608128?ref_src=twsrc%5Etfw">2015年9月26日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
 
 
 ### 〜午前中
@@ -51,13 +58,17 @@ SQLじゃ無理だってことで、Redisに切り替え。
 
 そしてここでバッテリー切れ・・・
 
-{% oembed https://twitter.com/shogo82148/status/647648583173275648 %}
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">あと3%…(ヽ´ω`)</p>&mdash; Ichinose Shogo (@shogo82148) <a href="https://twitter.com/shogo82148/status/647648583173275648?ref_src=twsrc%5Etfw">2015年9月26日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
 
 ### 〜16時
 
 アダプタを借りることができて延命しました。ありがとうございます！
 
-{% oembed https://twitter.com/shogo82148/status/647650705411473409 %}
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">アダプター貸していただけました。ありがとうございます！m(__)m <a href="https://twitter.com/hashtag/isucon?src=hash&amp;ref_src=twsrc%5Etfw">#isucon</a></p>&mdash; Ichinose Shogo (@shogo82148) <a href="https://twitter.com/shogo82148/status/647650705411473409?ref_src=twsrc%5Etfw">2015年9月26日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
 
 
 コメント部分のキャッシュが一応は動いたので、エントリ部分についてもRedisを使ったキャッシュ化を進めてました。

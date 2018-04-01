@@ -6,7 +6,9 @@ comments: true
 categories: [go, golang]
 ---
 
-{% oembed https://twitter.com/kaoriya/status/851983856966283265 %}
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">golangで<br>    p := new(Type)<br>と<br>    p := &amp;Type{}<br>の使い分けってどうするべきだろう?</p>&mdash; MURAOKA Taro (@kaoriya) <a href="https://twitter.com/kaoriya/status/851983856966283265?ref_src=twsrc%5Etfw">2017年4月12日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
 
 こちらのツイートに対して、以下のベンチ結果が紹介されていました。
 

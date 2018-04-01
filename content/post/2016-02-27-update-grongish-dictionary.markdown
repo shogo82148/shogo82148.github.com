@@ -9,7 +9,9 @@ categories: []
 やることがたくさんあるときに限ってどうでもいいことが捗ってこまっているいっちーです。
 先日、挑戦状を受け取ったので、グロンギ語翻訳の品質改善に挑戦しました。
 
-{% oembed https://twitter.com/p_bandai/status/699790752985931776 %}
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">《緊急告知》2月26日(金)、何かが起こる!!「仮面ライダークウガ」にまつわる新商品のようですが・・・。ページに書かれているのは、グロンギ語？お客様の中で、リントの言葉に翻訳できる方はいらっしゃいますか～？ <a href="https://t.co/hMDQCST6Tz">https://t.co/hMDQCST6Tz</a></p>&mdash; プレミアムバンダイ (@p_bandai) <a href="https://twitter.com/p_bandai/status/699790752985931776?ref_src=twsrc%5Etfw">2016年2月17日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
 
 - [仮面ライダークウガより衝撃の新アイテム登場 ボンジ・ジュグギゾ・ガギバギ・グスと判明!(投げやり)](http://nlab.itmedia.co.jp/nl/articles/1602/17/news123.html)
 

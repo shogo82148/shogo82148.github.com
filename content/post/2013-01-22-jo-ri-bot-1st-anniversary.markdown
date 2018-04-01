@@ -15,7 +15,9 @@ categories:
 今日まで生き延びられたことを嬉しく思います．
 
 ちなみに一番最初のツイートはこんなのでした．
-{% oembed https://twitter.com/JO_RI_bot/status/160941771273146368 %}
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">自分の教科にしましたというわけで終わりー。どっちも一部の断面図</p>&mdash; 狼とボット (@JO_RI_bot) <a href="https://twitter.com/JO_RI_bot/status/160941771273146368?ref_src=twsrc%5Etfw">2012年1月22日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
 
 
 # 学食メニュー

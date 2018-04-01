@@ -274,8 +274,9 @@ manners自体はシグナルの扱いをやってくれないみたいなので�
 
 
 ## 2015-05-07 追記
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">やーやー、ドキュメント書いてなくてごめん。「こっちみんな」的なコメント書いておいた <a href="https://t.co/T9Dx3EmBmo">https://t.co/T9Dx3EmBmo</a> <a href="https://twitter.com/hashtag/golang?src=hash&amp;ref_src=twsrc%5Etfw">#golang</a></p>&mdash; Daisuke Maki (anovaさん） (@lestrrat) <a href="https://twitter.com/lestrrat/status/596154619740303360?ref_src=twsrc%5Etfw">2015年5月7日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
 
-{% oembed https://twitter.com/lestrrat/status/596154619740303360 %}
 
 こっち見んな！
 作者の方によると、[go-server-starter-listener](https://github.com/lestrrat/go-server-starter-listener)は非推奨らしいです。

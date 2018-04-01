@@ -9,7 +9,9 @@ categories: [mecab, python, python3]
 先日このようなツイートを見かけて、
 「Python3になってGCの挙動変わったのかな？」と疑問に思ったので調査してみました。
 
-{% oembed https://twitter.com/knok/status/605197292086263808 %}
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">MeCabをPythonから使う注意点とか - Shogo&#39;s Blog <a href="http://t.co/vJnOqZfUd7">http://t.co/vJnOqZfUd7</a> <a href="https://twitter.com/shogo82148?ref_src=twsrc%5Etfw">@shogo82148</a>さんから python3だと変数に代入しなくても動くのだけど2.xでは留意しないといけない</p>&mdash; NOKUBI Takatsugu野首貴嗣 (@knok) <a href="https://twitter.com/knok/status/605197292086263808?ref_src=twsrc%5Etfw">2015年6月1日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
 
 <!-- More -->
 

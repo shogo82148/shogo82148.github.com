@@ -8,16 +8,20 @@ categories: [go, golang]
 
 元ネタ:
 
-{% oembed https://twitter.com/RIORAO/status/922871767147749376 %}
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">[JavaScriptの問題]<br>var a = 0.3 - 0.2;<br>var b = 0.2 - 0.1;<br>var c = a==b;<br><br>cの中身はどれ？</p>&mdash; RAO(らお)@けもケP-31 (@RIORAO) <a href="https://twitter.com/RIORAO/status/922871767147749376?ref_src=twsrc%5Etfw">2017年10月24日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
 
-{% oembed https://twitter.com/RIORAO/status/923599110262874112 %}
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">正確な実数計算をやらされるJavaScriptくん <a href="https://twitter.com/hashtag/%E6%93%AC%E7%AB%9C%E6%88%AF%E7%94%BB?src=hash&amp;ref_src=twsrc%5Etfw">#擬竜戯画</a> <a href="https://t.co/ipE56C2YbV">pic.twitter.com/ipE56C2YbV</a></p>&mdash; RAO(らお)@けもケP-31 (@RIORAO) <a href="https://twitter.com/RIORAO/status/923599110262874112?ref_src=twsrc%5Etfw">2017年10月26日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
 
 コンピューターで浮動小数点数を扱ったことのある人なら一度は経験する、
 数学上の計算とコンピューター上の計算が合わない計算の一例ですね。
 
 この件に関して、Go言語では正しく(=数学的な結果と同じように)計算できるとの情報が。
 
-{% oembed https://twitter.com/inukirom/status/923721661408411650 %}
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">おそらくGoはコンパイラがa=0.1とb=0.1に変換していると思われます。<br>添付した画像のコードだとtrueになりますが、constをvarに変更するとfalseになります。constはコンパイル時に計算されますが、varは実行時に計算されるためです。 <a href="https://t.co/LpKZF2kOjH">pic.twitter.com/LpKZF2kOjH</a></p>&mdash; morikuni (@inukirom) <a href="https://twitter.com/inukirom/status/923721661408411650?ref_src=twsrc%5Etfw">2017年10月27日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
 
 しかしながら、inukiromさんのこの推察、半分はあってますが、半分は間違っていると思います。
 なぜGo言語でこのような結果になったのか、検証してみました。
@@ -164,7 +168,9 @@ func main() {
 
 結果は以下のツイートの通り。
 
-{% oembed https://twitter.com/shogo82148/status/924156133522120705 %}
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">varのときは 0.09999999999999998 と 0.1 の比較に<br>const のときは 0.1 と 0.1 の比較になった ( go version go1.9.2 darwin/amd64 ) <a href="https://t.co/1obA95RzBC">pic.twitter.com/1obA95RzBC</a></p>&mdash; Ichinose Shogo (@shogo82148) <a href="https://twitter.com/shogo82148/status/924156133522120705?ref_src=twsrc%5Etfw">2017年10月28日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
 
 最適化の結果コンパイル時に計算が行われ、(計算結果に多少の誤差はありますが)
 `var` の場合でも `const` の場合でも `x`, `y`, `z` は消えてしまいました。

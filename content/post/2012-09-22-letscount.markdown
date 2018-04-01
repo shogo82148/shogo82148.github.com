@@ -9,7 +9,7 @@ categories:
 まだやってたのか、と言われてしまいそうですが、おねえさんが計算にかけた時間と比べればまだまだです。
 
 **『フカシギの数え方』 おねえさんといっしょ！ みんなで数えてみよう！**
-{% oembed http://www.youtube.com/watch?v=Q4gTV4r0zRs %}
+<iframe width="560" height="315" src="https://www.youtube.com/embed/Q4gTV4r0zRs" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
 
 この動画で出てくる[おねえさんのコンピュータ][]を作ってみた、というお話。
 

@@ -8,7 +8,7 @@ categories: [go, golang]
 
 先週の日曜日に登壇してきました。
 
-{% oembed http://www.slideshare.net/shogo82148/go-go-53787565 %}
+<iframe src="//www.slideshare.net/slideshow/embed_code/key/gC0o0V8Vx7tI9z" width="595" height="485" frameborder="0" marginwidth="0" marginheight="0" scrolling="no" style="border:1px solid #CCC; border-width:1px; margin-bottom:5px; max-width: 100%;" allowfullscreen> </iframe> <div style="margin-bottom:5px"> <strong> <a href="//www.slideshare.net/shogo82148/go-go-53787565" title="過去に自作したGoプロダクトの紹介 - Goオールスターズ" target="_blank">過去に自作したGoプロダクトの紹介 - Goオールスターズ</a> </strong> from <strong><a href="https://www.slideshare.net/shogo82148" target="_blank">Shogo Ichinose</a></strong> </div>
 
 - [過去に自作したGoプロダクトの紹介 - Goオールスタース](http://www.slideshare.net/shogo82148/go-go-53787565)
 
@@ -27,7 +27,9 @@ KAYACではGoプロダクトたくさん動いていますが説明は作者に�
 - [go-prove](https://github.com/shogo82148/go-prove)/[go-tap](https://github.com/shogo82148/go-tap) - [Go言語でPerlのテストを早くする](http://shogo82148.github.io/blog/2015/09/19/faster-perl-test-with-go-lang/)
 - [go-webtail](https://github.com/shogo82148/go-webtail)/[go-webtail](https://github.com/shogo82148/go-tail) - [Go-webtailってのを書いた](http://shogo82148.github.io/blog/2015/06/21/go-webtail/)
 
-{% oembed https://twitter.com/songmu/status/653100524296736768 %}
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">go-prove、CPANに上げればいいんじゃない？w <a href="https://twitter.com/hashtag/eventdots?src=hash&amp;ref_src=twsrc%5Etfw">#eventdots</a></p>&mdash; songmu (@songmu) <a href="https://twitter.com/songmu/status/653100524296736768?ref_src=twsrc%5Etfw">2015年10月11日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
 
 Perl Archive Network とはいったい・・・
 

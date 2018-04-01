@@ -37,7 +37,9 @@ Google先生の謎テクノロジーによってかなりの最適化がされ�
 **2017/01/16追記:**
 mattnさんはスプラトゥーンをプレイしていないそうです。残念。
 
-{% oembed https://twitter.com/mattn_jp/status/820236711149981696 %}
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">あとスプラトゥーンしてません。。。</p>&mdash; mattn (@mattn_jp) <a href="https://twitter.com/mattn_jp/status/820236711149981696?ref_src=twsrc%5Etfw">2017年1月14日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
 
 もちろん、ネットワークが混雑していたり、
 モバイルネットワークを利用していたり、という可能性もありますが、
@@ -458,9 +460,13 @@ TTLが過ぎてもキャッシュから本当に消えるわけではないの�
 
 fujiwaraさんからの返信を受けて、ちょっと考えたことがあったので追記。
 
-{% oembed https://twitter.com/fujiwara/status/820232828231163904 %}
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">この前Goのhttp clientで名前解決結果をキャッシュしたかったの、ベンチマークしててシナリオ的に新規接続が多かったのとローカルに立てたdnsmasqの負荷が気になるほど名前引いてからなので、キャッシュするにしても数秒で実用的には充分だった(TTLの心配するほどではない</p>&mdash; fujiwara (@fujiwara) <a href="https://twitter.com/fujiwara/status/820232828231163904?ref_src=twsrc%5Etfw">2017年1月14日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
 
-{% oembed https://twitter.com/fujiwara/status/820255789944143876 %}
+
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">アプリのcacheは(dnsが1段目として)2段目のcacheになるから、dnsに負荷掛けないためにするだけなら数秒で問題ないはずなので、そこまで短くするならちゃんとやる意味がなくて、TTLは専門家(dns)に任せるべきかなあと</p>&mdash; fujiwara (@fujiwara) <a href="https://twitter.com/fujiwara/status/820255789944143876?ref_src=twsrc%5Etfw">2017年1月14日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
 
 名前解決をキャッシュしたい理由は「用途はベンチマーク」「キャッシュは数秒で充分」とのことです。
 

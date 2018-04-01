@@ -74,7 +74,9 @@ DateTime.pmにはXSの実装とPurePerlの実装が含まれていますが、
 どちらの実装でも2012年7月1日に正しくうるう秒が挿入され、2012年6月1日にはうるう秒はありません。
 
 
-{% oembed https://twitter.com/kazoo04/status/808195587518578688 %}
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">プログラム書いてると「書いたとおりに動くんじゃなくて思った通りに動けよ」って思うけど、たまに「コード見たら絶対動かないはずなのになぜか思った通りにちゃんと動く」みたいな奴に出くわすと恐ろしくて夜も眠れなくなるのでやっぱり書いたとおりに動いて欲しい</p>&mdash; Kazuya Gokita (@kazoo04) <a href="https://twitter.com/kazoo04/status/808195587518578688?ref_src=twsrc%5Etfw">2016年12月12日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
 
 まさに、「コード見たら絶対動かないはずなのになぜか思った通りにちゃんと動く」といった感じです。
 

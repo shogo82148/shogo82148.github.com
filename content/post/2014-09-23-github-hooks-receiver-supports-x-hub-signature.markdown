@@ -69,7 +69,9 @@ String::Compare::ConstantTimeはXSで書かれたモジュールなんですが�
 
 Songmu先生よりコメントをいただきました。
 
-{% oembed https://twitter.com/songmu/status/514426458190528513 %}
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">これはいい機能。ちなみにIP制限は、Nginxとかでやるのがお手軽で、plackで完結させたいのであれば、Plack::Middlewareで弾いてやればいいと思います。 / “Github::Hooks::ReceiverがX-…” <a href="http://t.co/NM0uQzW1s8">http://t.co/NM0uQzW1s8</a></p>&mdash; songmu (@songmu) <a href="https://twitter.com/songmu/status/514426458190528513?ref_src=twsrc%5Etfw">2014年9月23日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
 
 確かにPlack::Middlewareとか使えばお手軽に弾けるので、
 X-Hub-SignatureだけでなくIP制限もやっておくと良いですね。

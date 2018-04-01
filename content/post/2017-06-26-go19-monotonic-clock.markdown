@@ -8,7 +8,8 @@ categories: [go, golang, leapsecond]
 
 先日Go1.9beta1がリリースされました。
 
-{% oembed https://twitter.com/golang/status/875117556595515392 %}
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="en" dir="ltr">Go 1.9 Beta 1 is released!<br><br>Announcement:<a href="https://t.co/lV5nvXwOoR">https://t.co/lV5nvXwOoR</a><br><br>Get it!<a href="https://t.co/2LhlOo2EtX">https://t.co/2LhlOo2EtX</a><a href="https://twitter.com/hashtag/golang?src=hash&amp;ref_src=twsrc%5Etfw">#golang</a> <a href="https://t.co/zm09DwX93q">pic.twitter.com/zm09DwX93q</a></p>&mdash; Go (@golang) <a href="https://twitter.com/golang/status/875117556595515392?ref_src=twsrc%5Etfw">2017年6月14日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
 
 - [Go 1.9 Release Notes](https://tip.golang.org/doc/go1.9)
 
@@ -340,7 +341,7 @@ monotonic clockになると、methaneさんが紹介している[zero time cache
 - [Gopher Fest 2017参加レポート](http://tech.mercari.com/entry/gopherfest2017_report)
 - [Gopher Fest 2017参加レポート(スライド)](https://www.slideshare.net/takuyaueda967/gopher-fest-2017)
 
-{% oembed https://www.slideshare.net/takuyaueda967/gopher-fest-2017 %}
+<iframe src="//www.slideshare.net/slideshow/embed_code/key/ebzs4FaAdpQVst" width="595" height="485" frameborder="0" marginwidth="0" marginheight="0" scrolling="no" style="border:1px solid #CCC; border-width:1px; margin-bottom:5px; max-width: 100%;" allowfullscreen> </iframe> <div style="margin-bottom:5px"> <strong> <a href="//www.slideshare.net/takuyaueda967/gopher-fest-2017" title="Gopher Fest 2017参加レポート" target="_blank">Gopher Fest 2017参加レポート</a> </strong> from <strong><a href="https://www.slideshare.net/takuyaueda967" target="_blank">Takuya Ueda</a></strong> </div>
 
 - [うるう秒とコンピュータクロック | NICT](http://jjy.nict.go.jp/tsp/link/leap.html)
 - [NTP設定](http://d.hatena.ne.jp/incarose86/20110505/1312522379)

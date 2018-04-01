@@ -44,7 +44,9 @@ HTTPでページを開いた場合はHTTPで、HTTPSでページを開いた場�
 HTTPとHTTPSは別URLとして扱われるようなので、過去の記事に対するはてブ数はリセットされてしまいます。
 解決方法は無いかと調べてみたものの、現象無理っぽいです。
 
-{% oembed https://twitter.com/masutaka/status/739747936318283776 %}
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">自分のブログは http から https に移行したけど、記事についたはてブを移行することは出来なかった（はてなのサポートに聞いた）。分からないでもないけど、https 移行の躊躇材料になるという点においてはイケてない。</p>&mdash; Takashi Masuda (@masutaka) <a href="https://twitter.com/masutaka/status/739747936318283776?ref_src=twsrc%5Etfw">2016年6月6日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
 
 はてなさんの方で対応してくれないかな・・・
 
