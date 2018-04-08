@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Android on Shogo&#39;s Blog</title>
+    <link>https://shogo82148.github.io/categories/android/</link>
+    <description>Recent content in Android on Shogo&#39;s Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>ja-jp</language>
+    <lastBuildDate>Wed, 07 May 2014 13:29:00 +0900</lastBuildDate>
+    
+	<atom:link href="https://shogo82148.github.io/categories/android/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>Androidのバイナリファイルを解析するgoのライブラリ</title>
+      <link>https://shogo82148.github.io/blog/2014/05/07/2014-05-07-androidbinary/</link>
+      <pubDate>Wed, 07 May 2014 13:29:00 +0900</pubDate>
+      
+      <guid>https://shogo82148.github.io/blog/2014/05/07/2014-05-07-androidbinary/</guid>
+      <description>Androidのアプリの実態はzipファイルなのでunzipすれば簡単に中身を見ることができるわけですが、 開いてもバイナリファイルが入っているだけでよくわかりません。 AndroidSDKに付属しているaaptというツールを使えば読めるんだけどインストールが大変で苦しんでいる人がいたので、 お手軽に解析できるgolangのライブラリを書いてみました。
+使い方 go getしてくる githubのレポジトリ からダウンロードしてきます。
+go get github.com/shogo82148/androidbinary AndroidManifest.xmlを解析する io.ReaderAtインターフェースを満たすオブジェクトをandroidbinary.NewXMLFileに渡すと解析してくれます。
+f, _ := os.Open(&amp;#34;AndroidManifest.xml&amp;#34;) xmlFile, _ := androidbinary.NewXMLFile(f) reader := xmlFile.Reader() // reader を読むと普通のXMLファイルとして読める resources.arscを解析する アプリ名などの設定はAndroidManifest.xmlには直接書かれておらず、 リソースファイルに書いてあることがほとんどです(開発者がよほどものぐさでなければ)。 リソースの情報はapk内のresources.arscに書かれているので、 このファイルを読む機能もついてます。
+f, _ := os.Open(&amp;#34;resources.arsc&amp;#34;) tableFile, _ := androidbinary.NewTableFile(f) // ID 0x7F040000 に対応するリソースを読む config := &amp;amp;androidbinary.ResTableConfig{} val, _ := tableFile.GetResource(androidbinary.ResId(0x7f040000), config) アプリ名はロケールによって変わったりするので、 configで設定できます。 例えば日本語の名前を取得したい場合はこんな感じ。
+// ID 0x7F040000 に対応するリソース(日本語)を読む config := &amp;amp;androidbinary.ResTableConfig{} config.Language[0] = &amp;#39;j&amp;#39; config.Language[1] = &amp;#39;a&amp;#39; val, _ := tableFile.</description>
+    </item>
+    
+    <item>
+      <title>OAuthの認証にWebViewを使うのはやめよう</title>
+      <link>https://shogo82148.github.io/blog/2012/11/24/2012-11-24-no-more-webview/</link>
+      <pubDate>Sat, 24 Nov 2012 23:06:00 +0900</pubDate>
+      
+      <guid>https://shogo82148.github.io/blog/2012/11/24/2012-11-24-no-more-webview/</guid>
+      <description>AndroidからTwitterへアクセスするためのライブラリとして，Twitter4Jが有名です． これを使ってみようと，「Android Twitter4J」と検索すると 認証にWebViewを使った例がたくさん出てきます．
+・・・いや，ちょっとまて． それはちょっとまずいだろう．
+そういうわけでもうちょっと賢い方法を探してみました．
+何がまずいのさ 「Android Twitter4J」と検索すると，上位にこんなページが出てきます．
+ Twitter4jを使ってOAuth認証をアプリ内で行う方法 Twitter4j-2.2.xを使ったOAuth認証のコーディング例 twitter4jでツイートする Android+Twitter4JでOAuthするためのソースコード  上のサイトでは次の様は方法をとっています．
+ アプリ内にWebViewを貼り付け WebViewでTwitterの認証画面を表示 onPageStarted や onPageFinished をオーバーライドして callback URL へのアクセスを検出 URL に入っている認証コードで認証  アプリ内でWebViewを使うとURLが表示されません． つまり ** 本当にツイッターにアクセスしているかわからない ** のです． もし，表示されるのが偽の認証画面だったら，アプリから簡単にパスワードがわかってしまいます．
+じゃあ，URL を表示させればいいかというとそういうわけでもありません． 画面上のURL表示なんて簡単に偽装できてしまいます． どんな工夫をしても ** アプリがパスワードの要求をしていることには変わりありません ** ． アプリはパスワードを簡単に取得できます．
+アプリのユーザはTwitterに限らずSNSへのログイン時にブラウザを開かないアプリは信用しないようにしましょう． どこかでパスワードの抜かれている可能性があります． (ただし，公式アプリは除く．公式アプリが信用できないならそもそもサービスを利用できないもんね．)
+じゃあどうするのさ じゃあ，開発者はどうするのかって話ですが，もう少し詳しく検索してみましょう． 他の方法を使っているページもでてきます．
+ PINコードを利用  TwitterでPIN番号認証を行う  Intent Fileterを利用しコールバック  twitter4jを使用したAndroid Twitterアプリケーション作成 Twitter4Jを使ってAndroidアプリでStreamingAPIのUserTimelineを取得する TwitterでOAuth認証を行う Twitterへのアプリケーション登録 Twitterの認証ページをブラウザで開く Access Tokenを取得する   PIN コードを利用 一つ目の方法はPC版クライアントでよく使われる方法． 認証後にPINコードと呼ばれる数字が表示されるので，それをアプリに入力します． twiccaなんかでも使われてますね． Twitter へのアプリケーション登録のときにコールバックURLを入力しないとこの認証方式になります．</description>
+    </item>
+    
+    <item>
+      <title>夏だ！花火だ！Androidで遊ぼう！</title>
+      <link>https://shogo82148.github.io/blog/2012/08/02/2012-08-02-fireworks/</link>
+      <pubDate>Thu, 02 Aug 2012 14:43:00 +0900</pubDate>
+      
+      <guid>https://shogo82148.github.io/blog/2012/08/02/2012-08-02-fireworks/</guid>
+      <description>さあ、皆さん！今年も長岡の大花火大会の季節がやって参りました！
+花火大会といえば、 光と音の速度差を体感できる絶好の機会です。 というわけで、去年もこんなアプリを作って遊んでました。 このアプリを頑張って改良したので、改めて紹介したいと思います。
+アプリをダウンロード
+使い方 起動すると、こんな画面が表示されます。
+花火が開いたら画面をタップ！ そして、花火が画面中央に来るよう素早く端末を動かします。 (※画像ははめ込み合成です)
+花火の音がしたら、目標をセンターに入れてタップ！
+タップの間隔から花火までの距離を計算し表示してくれます。 さらに、加速度センサの値から端末の仰角を読み取り、花火の高さや水平距離などを算出してくれるという機能もついてます。
+去年からの変更点 と、ここまでは、去年と一緒。 今年はさらにパワーアップしました。
+地図へのマッピング スマートフォンには磁気センサがついており、方位が分かります。 加えて、GPSもついているので、スマートフォンの現在位置も分かります。 これだけの情報が揃えば、地図にプロットできるはず！
+結果表示の画面で「地図を表示」を選ぶとマッピングしてくれます。 この画面でメニューキーを押すと、TwitterやGoogle+などで、花火の位置をみんなに知らせることもできます。
+GPS測位ができない場合は、デフォルトの位置を使用します。 この位置は設定画面で変更できます。
+自動花火検出 去年からの課題であった、花火の自動検出も試みてみました。 初期画面でメニューキーを押すと設定画面へ飛べます。
+ここで「花火を自動的に検出する」「花火の音を検出する」を選択すると、自動検出してくれるはずです(※理論値)。
+花火が開いたことは、画面が明るくなったことで検出します。 明るさの検出は初期画面中央の四角の中が使われます。 設定画面でこの四角の大きさを変えることができます。 明るさの変化が閾値を超えたら測定開始です。
+音は音量で検出します。 音声にDFTをかけて、周波数フィルタリングをかけてあります。 これで人ごみにまぎれても花火の音が検出できる・・・はず。 周波数0Hzにすると、周波数フィルタを通さずに振幅のみで判定します。
+検出した値は、画面の右上に表示しているので、設定の時の参考にしてください。
+ダウンロード アプリをダウンロード
+野良アプリなので、「設定→アプリケーション→提供元不明のアプリ」をチェックする必要があります。 スマートフォンの機能をフル活用するので権限をたくさん要求してきますが、きっとだいじょうぶ。 そろそろマーケットでの公開も試してみたいですね。
+** Google Play にリリースしました！ ** Google Play からアプリをダウンロード まとめ それでは、大幅に機能UPしたアプリと一緒に、長岡の大花火大会をお楽しみください。
+打ち上げはこのあたりらしいです。 ちゃんとマッピングできますかね？</description>
+    </item>
+    
+  </channel>
+</rss>

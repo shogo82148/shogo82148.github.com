@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <link href="http://gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+  
+  <link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  <link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  
+
+  
+  <title>git-mergeの挙動をカスタマイズする</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css">
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+  
+
+  
+
+  <meta name="description" content="">
+  <meta name="keywords" content="">
+
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.38.1" />
+
+  
+  
+
+</head>
+<body>
+
+
+<header role="banner"><hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+    <h2></h2>
+</hgroup></header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+
+<ul class="subscription">
+  
+
+</ul>
+
+
+<form action="https://www.google.com/search" method="get" target="_blank">
+  <fieldset role="search">
+  	<input class="search" type="text" name="q" results="0" placeholder="Search"/>
+    <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+  </fieldset>
+</form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+    <p class="meta">Dec 16, 2015
+         - 3 minute read 
+         - <a href="https://shogo82148.github.io/blog/2015/12/16/2015-12-16-customize-git-merge/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/git/">git </a>
+        
+    </p>
+    <h1 class="entry-title">
+         git-mergeの挙動をカスタマイズする 
+    </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          
+
+<p>最近gitのコンフリクト解消職人みたいになっていてすごくつらいです。
+普通のプログラムであれば順番が重要なので手動でのコンフリクト解消は避けられないのですが、
+僕が相手にしているのは最終的にMySQLに食わせるデータなのでそこまで順番は重要ではありません。
+順番に挿入したところで、MySQLが順番にかえしてくれるとは限りませんからね。
+このようなケースではある程度機械的にマージできるのでは？と調べてみました。</p>
+
+<!-- More -->
+
+<h2 id="merge-driver">merge driver</h2>
+
+<p>いろいろググってみると<a href="http://git-scm.com/docs/gitattributes">gitattributes</a>でファイル毎にマージの細かい挙動を制御できるようです。
+通常マージの方法はgitがよしなに選択してくれますが、merge属性に以下の項目を指定することでマージの方法を強制することができます。</p>
+
+<ul>
+<li>text
+
+<ul>
+<li>テキストファイルとしてマージする。</li>
+<li>コンフリクトすると <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code>, <code>=======</code>, <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code>でコンフリクトした場所を教えてくれる。</li>
+</ul></li>
+<li>binary
+
+<ul>
+<li>バイナリファイルとしてマージする。</li>
+<li>コンフリクトするとマージしようとしたファイルを残しておいてくれる。</li>
+</ul></li>
+<li>union
+
+<ul>
+<li>テキストファイルとしてマージする。</li>
+<li>textと違ってコンフリクトしてもマーカを付けない。どちらの変更も残すように適当にマージしてくれる。</li>
+<li>適当なので <strong>コンフリクト時の行の順番は保証されない</strong></li>
+</ul></li>
+</ul>
+
+<p>text, binaryはコンフリクトしたときによく見る挙動ですね。
+unionは初めて知ったので、簡単なレポジトリを作って挙動を確かめてみました。</p>
+<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash">$ <span class="c1"># masterブランチ上でmembers.txtにAliceを追加する
+</span><span class="c1"></span>$ git init
+$ <span class="nb">echo</span> Alice &gt; members.txt
+$ git add members.txt
+$ git commit -m <span class="s1">&#39;add Alice&#39;</span>
+<span class="o">[</span>master <span class="o">(</span>root-commit<span class="o">)</span> 8c39714<span class="o">]</span> add Alice
+ <span class="m">1</span> file changed, <span class="m">1</span> insertion<span class="o">(</span>+<span class="o">)</span>
+  create mode <span class="m">100644</span> members.txt
+$
+$ <span class="c1"># add-bobブランチ上でmembers.txtにBobを追加する
+</span><span class="c1"></span>$ git checkout -b add-bob
+Switched to a new branch <span class="s1">&#39;add-bob&#39;</span>
+$ <span class="nb">echo</span> <span class="s1">&#39;Bob&#39;</span> &gt;&gt; members.txt
+$ git add members.txt
+$ git commit -m <span class="s1">&#39;add Bob&#39;</span>
+<span class="o">[</span>add-bob 9c406ae<span class="o">]</span> add Bob
+ <span class="m">1</span> file changed, <span class="m">1</span> insertion<span class="o">(</span>+<span class="o">)</span>
+$
+$ <span class="c1"># masterブランチ上でmembers.txtにEveを追加する
+</span><span class="c1"></span>$ git checkout -
+ Switched to branch <span class="s1">&#39;master&#39;</span>
+$ <span class="nb">echo</span> <span class="s1">&#39;Eve&#39;</span> &gt;&gt; members.txt
+$ git add members.txt
+$ git commit -m <span class="s1">&#39;add Eve&#39;</span>
+<span class="o">[</span>master 9eabd8a<span class="o">]</span> add Eve
+ <span class="m">1</span> file changed, <span class="m">1</span> insertion<span class="o">(</span>+<span class="o">)</span>
+$ git merge add-bob
+ Auto-merging members.txt
+ CONFLICT <span class="o">(</span>content<span class="o">)</span>: Merge conflict in members.txt
+ Automatic merge failed<span class="p">;</span> fix conflicts and <span class="k">then</span> commit the result.
+$ cat members.txt
+ Alice
+ <span class="o">&lt;&lt;&lt;&lt;&lt;&lt;</span>&lt; HEAD
+ <span class="nv">Eve</span>
+ <span class="o">=======</span>
+ Bob
+ &gt;&gt;&gt;&gt;&gt;&gt;&gt; add-bob</code></pre></div>
+<p>わざとコンフリクトを起こしてみるテストです。
+ファイル末尾にEveとBobをそれぞれ別々のブランチで追加したためコンフリクトしてしまっています。</p>
+
+<p>では次にgitattributeを追加して<code>merge=union</code>を指定した場合に挙動を確認してみましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash">$ <span class="c1"># merge=union属性を追加
+</span><span class="c1"></span>$ <span class="nb">echo</span> <span class="s1">&#39;members.txt merge=union&#39;</span> &gt; .gitattributes
+$ git add -f .gitattributes
+$ git commit -m <span class="s1">&#39;add gitattributes&#39;</span>
+<span class="o">[</span>master 61d2cfc<span class="o">]</span> add gitattributes
+ <span class="m">1</span> file changed, <span class="m">1</span> insertion<span class="o">(</span>+<span class="o">)</span>
+  create mode <span class="m">100644</span> .gitattributes
+$
+$ <span class="c1"># もう一度マージしてみる
+</span><span class="c1"></span>$ git merge add-bob
+Auto-merging members.txt
+Merge made by the <span class="s1">&#39;recursive&#39;</span> strategy.
+ members.txt <span class="p">|</span> <span class="m">1</span> +
+  <span class="m">1</span> file changed, <span class="m">1</span> insertion<span class="o">(</span>+<span class="o">)</span>
+$ cat members.txt
+Alice
+Eve
+Bob</code></pre></div>
+<p>通常はコンフリクトするケースですが、今度はうまくマージできました。</p>
+
+<h2 id="merge-driverをカスタマイズする">merge driverをカスタマイズする</h2>
+
+<p>デフォルトではtext, binary, unionしか用意されていないmerge driverですが、<code>.git/config</code>をいじることで自前のmerge driverを追加することができます。
+unionでは行の順番が不定になって不便なので、試しに「必ずソートされており重複がないファイルをマージする」ためのmerge driverを作ってみます。
+まずはマージするためのコマンド用意しましょう。</p>
+
+<p>``` bash merge-sorted-set.sh
+#!/bin/bash
+A=&ldquo;$1&rdquo;
+O=&ldquo;$2&rdquo;
+B=&ldquo;$3&rdquo;
+tmpfile=$(mktemp temp.XXXXXX)
+cp &ldquo;$A&rdquo; &ldquo;$tmpfile&rdquo;
+git merge-file -p -q &ndash;union &ldquo;$tmpfile&rdquo; &ldquo;$O&rdquo; &ldquo;$B&rdquo; | sort | uniq &gt; &ldquo;$A&rdquo;
+rm &ldquo;$tmpfile&rdquo;</p>
+
+<pre><code>
+パスの通った場所にこのファイルを置き、`.git/config`にこれを呼び出す設定を書けば、gitattributeから使用できるようになります。
+
+``` plain .git/config
+[merge &quot;zset&quot;]
+        name = merge sorted set
+        driver = merge-sorted-set.sh %A %O %B
+</code></pre>
+
+<ul>
+<li><code>%A</code>: 現在のブランチの状態</li>
+<li><code>%B</code>: マージしようとしているブランチの状態</li>
+<li><code>%O</code>: 共通の祖先の状態</li>
+<li><code>%L</code>: コンフリクトマーカの長さ。<a href="https://github.com/git/git/commit/23a64c9e771e3caf19cf2ee9a32c8942ddde4a81">1.7から使えるらしい</a></li>
+<li><code>%P</code>: ファイルのパス。<a href="https://github.com/git/git/commit/ef45bb1f8156030446658d5bfb3983ce214a9e16">2.5.0から使えるらしい</a></li>
+</ul>
+
+<p>このmerge driverを使ってマージすると、先の例ではAlice, Bob, Eveの順番で並ぶようになります。</p>
+
+<h2 id="theirs-oursの順番に並べてみる">theirs-oursの順番に並べてみる</h2>
+
+<p>僕のケースではtheirs-oursの順番で並んでくれると都合が良いので、こんなスクリプトを書いてみました。</p>
+
+<p>``` bash merge-theirs-ours.sh
+#!/bin/bash
+A=&ldquo;$1&rdquo;
+O=&ldquo;$2&rdquo;
+B=&ldquo;$3&rdquo;
+tmpfile=$(mktemp temp.XXXXXX)
+cp &ldquo;$A&rdquo; &ldquo;$tmpfile&rdquo;
+git merge-file -p -q &ndash;union &ldquo;$B&rdquo; &ldquo;$O&rdquo; &ldquo;$tmpfile&rdquo; &gt; &ldquo;$A&rdquo;
+rm &ldquo;$tmpfile&rdquo;</p>
+
+<pre><code>
+``` plain .git/config
+[merge &quot;theirsours&quot;]
+        name = theirs first
+        driver = merge-theirs-ours.sh %A %O %B
+        recursive = text
+</code></pre>
+
+<p>あとは勝手にコンフリクト解消して欲しいファイルに対して
+.gitattributesで<code>merge=theirsours</code>を指定すれば通常はコンフリクトする場合でもマージしてくれます。</p>
+
+<p>ただ、さすがに全自動だとちょっと怖いので、以下の様にコンフリクトするようであればユーザに確認(<code>exit 1</code>するとコンフリクトした扱いになる)
+したほうが無難な気もしますね。</p>
+
+<p><code>bash merge-theirs-ours.sh
+#!/bin/bash
+A=&quot;$1&quot;
+O=&quot;$2&quot;
+B=&quot;$3&quot;
+if git merge-file -p -q &quot;$A&quot; &quot;$O&quot; &quot;$B&quot; &gt; /dev/null; then
+    git merge-file &quot;$A&quot; &quot;$O&quot; &quot;$B&quot;;
+else
+    tmpfile=$(mktemp temp.XXXXXX)
+    cp &quot;$A&quot; &quot;$tmpfile&quot;
+    git merge-file -p -q --union &quot;$B&quot; &quot;$O&quot; &quot;$tmpfile&quot; &gt; &quot;$A&quot;
+    rm &quot;$tmpfile&quot;
+    exit 1
+fi
+</code></p>
+
+<h2 id="まとめ">まとめ</h2>
+
+<p>gitattribute便利。
+gitattributeを使って<a href="http://shogo82148.github.io/blog/2015/03/24/git-diff-csv/">Git Diffでcsvの差分を見やすく表示する</a>のもどうぞ。</p>
+
+<p>ただmerge driverからはファイルのメタ情報に触れないので、「コミット日時が新しい方を残す」みたいなことができないのが残念です。
+<a href="http://stackoverflow.com/questions/7607125/git-merge-conflict-to-always-take-the-newest-file">ブランチ決め打ちにする</a>のはちょっと怖いし、
+merge strategyのカスタマイズは大変そう・・・
+(一応 <code>git-merge-hogehoge</code> をいうコマンドを用意しておけば <code>git merge --strategy hogehoge</code> と使えるようです。が、<code>git-merge-hogehoge &lt;base&gt;... -- &lt;head&gt; &lt;remote&gt; ...</code> の形式で渡ってくるので、そこから再実装するのはつらい・・・)</p>
+
+<h2 id="参考">参考</h2>
+
+<ul>
+<li><a href="http://git-scm.com/docs/gitattributes">gitattributes</a></li>
+<li><a href="http://stackoverflow.com/questions/23140240/git-how-do-i-add-a-custom-merge-strategy">git: How do I add a custom merge strategy?</a></li>
+<li><a href="http://stackoverflow.com/questions/7607125/git-merge-conflict-to-always-take-the-newest-file">Git merge conflict to always take the newest file</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>Dec 16, 2015</time>
+    
+    </span>
+  </p>
+
+  
+  
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2015/12/13/2015-12-13-go-deploy-shrine/" title="Goでデプロイ神社書いてみた">Goでデプロイ神社書いてみた</a>
+    
+
+    
+      <a class="basic-alignment right" href="https://shogo82148.github.io/blog/2015/12/17/2015-12-17-dbix-class/" title="PerlのDBIx::Class利用上の注意点">PerlのDBIx::Class利用上の注意点</a>
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+
+(function() {
+    
+    
+    
+    if (window.location.hostname == "localhost")
+        return;
+
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    var disqus_shortname = 'shogo82148';
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+       
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2018/01/02/2018-01-02-cloudformation-template-for-mackerel-integration/">Mackerel AWS Integration 用の CloudFormation テンプレートを書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/12/06/2017-12-06-mecab-in-lambda/">MeCabをAWS Lambdaで動かす(2017年版)</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/10/28/2017-10-28-golang-floating-point-number/">Go言語の浮動小数点数のお話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/10/22/2017-10-22-aws-certification-manager-validation/">ACMのドメイン検証をシミュレートするやつ書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/08/25/2017-08-25-unicode9-grapheme-cluster/">Perl 5.26 &amp; Unicode 9.0 で変わる書記素クラスタ(grapheme cluster)のお話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/06/26/2017-06-26-go19-monotonic-clock/">Go1.9から使える Monotonic Clocks を試してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/06/16/2017-06-16-mysql-driver-and-context/">ぼくのかんがえたさいきょうのcontext対応版go-mysql-driverをマージしてもらった</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/05/30/2017-05-30-grumpy/">Re: GoとPythonとGrumpyの速度ベンチマーク</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/05/04/2017-05-04-go-rerand/">String::RandomのGo移植を書いてみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/04/22/2017-04-22-postgresql-exclusion-constraint/">Re: PostgreSQLで排他制約がめっちゃ便利！！</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2018 Shogo Ichinose - <a href="https://shogo82148.github.io/license/">License</a> -
+  <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank" href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+</p>
+
+</footer>
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    displayMath: [['$$','$$'], ['\[','\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all.length) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+</script>
+
+
+<script>
+  var _gaq=[['_setAccount','UA-4526627-4'],['_trackPageview']];
+  (function(d,t){var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+  g.src=('https:'==location.protocol?'//ssl':'//www')+'.google-analytics.com/ga.js';
+  s.parentNode.insertBefore(g,s)}(document,'script'));
+</script>
+
+</body>
+</html>
+

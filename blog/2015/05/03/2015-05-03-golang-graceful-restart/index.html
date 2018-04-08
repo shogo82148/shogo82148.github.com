@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <link href="http://gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+  
+  <link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  <link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  
+
+  
+  <title>Go言語でGraceful Restartをする</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css">
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+  
+
+  
+
+  <meta name="description" content="">
+  <meta name="keywords" content="">
+
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.38.1" />
+
+  
+  
+
+</head>
+<body>
+
+
+<header role="banner"><hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+    <h2></h2>
+</hgroup></header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+
+<ul class="subscription">
+  
+
+</ul>
+
+
+<form action="https://www.google.com/search" method="get" target="_blank">
+  <fieldset role="search">
+  	<input class="search" type="text" name="q" results="0" placeholder="Search"/>
+    <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+  </fieldset>
+</form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+    <p class="meta">May 3, 2015
+         - 3 minute read 
+         - <a href="https://shogo82148.github.io/blog/2015/05/03/2015-05-03-golang-graceful-restart/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
+        
+    </p>
+    <h1 class="entry-title">
+         Go言語でGraceful Restartをする 
+    </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          
+
+<p>とあるHTTPサーバをGolangで立てようって話になったんだけど、
+止まると困るので無停止でサーバ再起動をしたい。
+Perlには<a href="https://metacpan.org/pod/Server::Starter">Server::Starter</a>という有名モジュールがあるんだけど、
+Golangはどうなってるの？ってことで調べてみました。</p>
+
+<p><strong>2017-01-22追記</strong>: Go1.8以降でGraceful Shutdownがbuild-inになるので、この記事で紹介したライブラリは不要となりました。
+詳しくは<a href="https://shogo82148.github.io/blog/2017/01/21/golang-1-dot-8-graceful-shutdown/">Go1.8のGraceful Shutdownとgo-gracedownの対応</a>を参照。</p>
+
+<!-- More -->
+
+<h2 id="gracefulじゃないバージョン">gracefulじゃないバージョン</h2>
+
+<p>Golangの標準ライブラリを使ってHTTPサーバを立ててみる例。
+レスポンスが一瞬で終わってしまうとよくわからないので、sleepするhandlerを追加しておきます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
+
+<span class="kn">import</span> <span class="p">(</span>
+	<span class="s">&#34;fmt&#34;</span>
+	<span class="s">&#34;log&#34;</span>
+	<span class="s">&#34;net/http&#34;</span>
+	<span class="s">&#34;os&#34;</span>
+	<span class="s">&#34;time&#34;</span>
+<span class="p">)</span>
+
+<span class="kd">var</span> <span class="nx">now</span> <span class="p">=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
+
+<span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+	<span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&#34;start pid %d\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Getpid</span><span class="p">())</span>
+	<span class="nx">s</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Server</span><span class="p">{</span><span class="nx">Addr</span><span class="p">:</span> <span class="s">&#34;:8080&#34;</span><span class="p">,</span> <span class="nx">Handler</span><span class="p">:</span> <span class="nx">newHandler</span><span class="p">()}</span>
+	<span class="nx">s</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">()</span>
+<span class="p">}</span>
+
+<span class="c1">// https://github.com/facebookgo/grace/blob/master/gracedemo/demo.go から一部拝借
+</span><span class="c1"></span><span class="kd">func</span> <span class="nx">newHandler</span><span class="p">()</span> <span class="nx">http</span><span class="p">.</span><span class="nx">Handler</span> <span class="p">{</span>
+	<span class="nx">mux</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">NewServeMux</span><span class="p">()</span>
+	<span class="nx">mux</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">&#34;/sleep/&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+		<span class="nx">duration</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">ParseDuration</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nx">FormValue</span><span class="p">(</span><span class="s">&#34;duration&#34;</span><span class="p">))</span>
+		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+			<span class="nx">http</span><span class="p">.</span><span class="nx">Error</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">err</span><span class="p">.</span><span class="nx">Error</span><span class="p">(),</span> <span class="mi">400</span><span class="p">)</span>
+			<span class="k">return</span>
+		<span class="p">}</span>
+		<span class="nx">time</span><span class="p">.</span><span class="nx">Sleep</span><span class="p">(</span><span class="nx">duration</span><span class="p">)</span>
+		<span class="nx">fmt</span><span class="p">.</span><span class="nx">Fprintf</span><span class="p">(</span>
+			<span class="nx">w</span><span class="p">,</span>
+			<span class="s">&#34;started at %s slept for %d nanoseconds from pid %d.\n&#34;</span><span class="p">,</span>
+			<span class="nx">now</span><span class="p">,</span>
+			<span class="nx">duration</span><span class="p">.</span><span class="nx">Nanoseconds</span><span class="p">(),</span>
+			<span class="nx">os</span><span class="p">.</span><span class="nx">Getpid</span><span class="p">(),</span>
+		<span class="p">)</span>
+	<span class="p">})</span>
+	<span class="k">return</span> <span class="nx">mux</span>
+<span class="p">}</span></code></pre></div>
+<p>以下のような感じで実行してみる。
+(それぞれのコマンドは処理が終わるまでブロックするので、コンソールを3つ程開いて実行してね！)</p>
+<div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">$ go run main.go
+2015/05/03 12:04:08 start pid 69046
+$ curl &#39;http://localhost:8080/sleep/?duration=20s&#39;
+$ kill -TERM 69046</code></pre></div>
+<p>curlからのリクエストをさばく前に終了してしまい
+<code>curl: (52) Empty reply from server</code> といわれてしまいます。</p>
+
+<h2 id="facebookgo-grace">facebookgo/grace</h2>
+
+<p>facebook製の<a href="https://github.com/facebookgo/grace/gracehttp">grace</a>は
+gracefulな終了と再起動をしてくれるライブラリ。</p>
+<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
+
+<span class="kn">import</span> <span class="p">(</span>
+	<span class="s">&#34;fmt&#34;</span>
+	<span class="s">&#34;log&#34;</span>
+	<span class="s">&#34;net/http&#34;</span>
+	<span class="s">&#34;os&#34;</span>
+	<span class="s">&#34;time&#34;</span>
+
+	<span class="s">&#34;github.com/facebookgo/grace/gracehttp&#34;</span>
+<span class="p">)</span>
+
+<span class="kd">var</span> <span class="nx">now</span> <span class="p">=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
+
+<span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+	<span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&#34;start pid %d\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Getpid</span><span class="p">())</span>
+	<span class="nx">s</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Server</span><span class="p">{</span><span class="nx">Addr</span><span class="p">:</span> <span class="s">&#34;:8080&#34;</span><span class="p">,</span> <span class="nx">Handler</span><span class="p">:</span> <span class="nx">newHandler</span><span class="p">()}</span>
+	<span class="c1">// s.ListenAndServe()
+</span><span class="c1"></span>	<span class="nx">gracehttp</span><span class="p">.</span><span class="nx">Serve</span><span class="p">(</span><span class="nx">s</span><span class="p">)</span>
+<span class="p">}</span>
+
+<span class="o">//</span> <span class="nx">newHanderは一緒なので</span><span class="err">、</span><span class="nx">以下省略</span><span class="err">。</span><span class="nx">適当に補完して実行して</span></code></pre></div>
+<p>さっきと同じように実行してみるとリクエストを捌き切るまで終了しなくなります。</p>
+<div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">$ go run main.go
+2015/05/03 12:04:08 start pid 69046
+2015/05/03 12:04:08 Serving [::]:8080 with pid 69046
+$ curl &#39;http://localhost:8080/sleep/?duration=20s&#39;
+started at 2015-05-04 12:04:08.562569712 +0900 JST slept for 20000000000 nanoseconds from pid
+$ kill -TERM 69046</code></pre></div>
+<p>TERMの代わりにUSR2シグナルを送るとgracefulに再起動できる。
+ただ、再起動すると最初のプロセスは死んでしまうので、daemontoolsみたいなデーモン管理ツールと一緒には使えない。
+そのためデーモン化に必要なもろもろ(PID・標準出力・標準エラー等をファイルに書き出す等)は全部自前でやる必要があります。
+<a href="https://github.com/facebookgo/cmdctrl">cmdctrl</a>を使うとそこら辺の処理をやってくれる。</p>
+<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
+
+<span class="kn">import</span> <span class="p">(</span>
+	<span class="s">&#34;fmt&#34;</span>
+	<span class="s">&#34;log&#34;</span>
+	<span class="s">&#34;net/http&#34;</span>
+	<span class="s">&#34;os&#34;</span>
+	<span class="s">&#34;time&#34;</span>
+
+	<span class="s">&#34;github.com/facebookgo/cmdctrl&#34;</span>
+	<span class="s">&#34;github.com/facebookgo/grace/gracehttp&#34;</span>
+<span class="p">)</span>
+
+<span class="kd">var</span> <span class="nx">now</span> <span class="p">=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
+
+<span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+	<span class="nx">cmdctrl</span><span class="p">.</span><span class="nx">SimpleStart</span><span class="p">()</span>
+
+	<span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&#34;start pid %d\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Getpid</span><span class="p">())</span>
+	<span class="nx">s</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Server</span><span class="p">{</span><span class="nx">Addr</span><span class="p">:</span> <span class="s">&#34;:8080&#34;</span><span class="p">,</span> <span class="nx">Handler</span><span class="p">:</span> <span class="nx">newHandler</span><span class="p">()}</span>
+	<span class="nx">gracehttp</span><span class="p">.</span><span class="nx">Serve</span><span class="p">(</span><span class="nx">s</span><span class="p">)</span>
+<span class="p">}</span>
+
+<span class="o">//</span> <span class="nx">newHanderは一緒なので</span><span class="err">、</span><span class="nx">以下省略</span><span class="err">。</span><span class="nx">適当に補完して実行して</span></code></pre></div><div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">$ go run main.go -c hoge.conf -pidfile hoge.pid start
+2015/05/03 12:04:08 start pid 69046
+2015/05/03 12:04:08 Serving [::]:8080 with pid 69046
+$ curl &#39;http://localhost:8080/sleep/?duration=20s&#39;
+started at 2015-05-04 12:04:08.562569712 +0900 JST slept for 20000000000 nanoseconds from pid
+$ go run main.go stop</code></pre></div>
+<p>ただ、デーモン化はされないみたいなので、実際に使うには他にもいろいろ工夫しないといけないっぽい。</p>
+
+<h2 id="go-server-starter-listener">go-server-starter-listener</h2>
+
+<p>牧さん作の<a href="https://github.com/lestrrat/go-server-starter-listener">go-server-starter-listener</a>。
+Perlの<a href="https://metacpan.org/pod/Server::Starter">Server::Starter</a>と一緒に使える。</p>
+<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
+
+<span class="kn">import</span> <span class="p">(</span>
+	<span class="s">&#34;fmt&#34;</span>
+	<span class="s">&#34;log&#34;</span>
+	<span class="s">&#34;net&#34;</span>
+	<span class="s">&#34;net/http&#34;</span>
+	<span class="s">&#34;os&#34;</span>
+	<span class="s">&#34;time&#34;</span>
+
+	<span class="s">&#34;github.com/lestrrat/go-server-starter-listener&#34;</span>
+<span class="p">)</span>
+
+<span class="kd">var</span> <span class="nx">now</span> <span class="p">=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
+
+<span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+	<span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&#34;start pid %d\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Getpid</span><span class="p">())</span>
+
+	<span class="nx">l</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">ss</span><span class="p">.</span><span class="nx">NewListener</span><span class="p">()</span>
+	<span class="k">if</span> <span class="nx">l</span> <span class="o">==</span> <span class="kc">nil</span> <span class="o">||</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="c1">// Fallback if not running under Server::Starter
+</span><span class="c1"></span>		<span class="nx">l</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Listen</span><span class="p">(</span><span class="s">&#34;tcp&#34;</span><span class="p">,</span> <span class="s">&#34;:8080&#34;</span><span class="p">)</span>
+		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+			<span class="nb">panic</span><span class="p">(</span><span class="s">&#34;Failed to listen to port 8080&#34;</span><span class="p">)</span>
+		<span class="p">}</span>
+	<span class="p">}</span>
+
+	<span class="nx">s</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Server</span><span class="p">{</span><span class="nx">Handler</span><span class="p">:</span> <span class="nx">newHandler</span><span class="p">()}</span>
+	<span class="nx">s</span><span class="p">.</span><span class="nx">Serve</span><span class="p">(</span><span class="nx">l</span><span class="p">)</span>
+<span class="p">}</span>
+
+<span class="o">//</span> <span class="nx">newHanderは一緒なので</span><span class="err">、</span><span class="nx">以下省略</span><span class="err">。</span><span class="nx">適当に補完して実行して</span></code></pre></div>
+<p>以下のようにstart_serverコマンドと組み合わせて起動することで、
+Server::Starterの管理下で実行されるようになります。</p>
+<div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">$ start_server --port=8080 ./main
+start_server (pid:6941) starting now...
+starting new worker 6942
+2015/05/03 08:27:54 start pid 6942
+$ kill -HUP 6941</code></pre></div>
+<p>ただ、<a href="https://github.com/lestrrat/go-server-starter-listener">go-server-starter-listener</a>自体はgracefulなシャットダウンに対応していないので、
+再起動の途中のコネクションは破棄されてしまいます。
+これを避けるには<a href="https://github.com/braintree/manners">manners</a>を使うといいようです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
+
+<span class="kn">import</span> <span class="p">(</span>
+	<span class="s">&#34;fmt&#34;</span>
+	<span class="s">&#34;log&#34;</span>
+	<span class="s">&#34;net&#34;</span>
+	<span class="s">&#34;net/http&#34;</span>
+	<span class="s">&#34;os&#34;</span>
+	<span class="s">&#34;os/signal&#34;</span>
+	<span class="s">&#34;syscall&#34;</span>
+	<span class="s">&#34;time&#34;</span>
+
+	<span class="s">&#34;github.com/braintree/manners&#34;</span>
+	<span class="s">&#34;github.com/lestrrat/go-server-starter-listener&#34;</span>
+<span class="p">)</span>
+
+<span class="kd">var</span> <span class="nx">now</span> <span class="p">=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
+
+<span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+	<span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&#34;start pid %d\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Getpid</span><span class="p">())</span>
+
+	<span class="nx">signal_chan</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Signal</span><span class="p">)</span>
+	<span class="nx">signal</span><span class="p">.</span><span class="nx">Notify</span><span class="p">(</span><span class="nx">signal_chan</span><span class="p">,</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span><span class="p">)</span>
+	<span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+		<span class="k">for</span> <span class="p">{</span>
+			<span class="nx">s</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">signal_chan</span>
+			<span class="k">if</span> <span class="nx">s</span> <span class="o">==</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span> <span class="p">{</span>
+				<span class="nx">manners</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+			<span class="p">}</span>
+		<span class="p">}</span>
+	<span class="p">}()</span>
+
+	<span class="nx">l</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">ss</span><span class="p">.</span><span class="nx">NewListener</span><span class="p">()</span>
+	<span class="k">if</span> <span class="nx">l</span> <span class="o">==</span> <span class="kc">nil</span> <span class="o">||</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="c1">// Fallback if not running under Server::Starter
+</span><span class="c1"></span>		<span class="nx">l</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Listen</span><span class="p">(</span><span class="s">&#34;tcp&#34;</span><span class="p">,</span> <span class="s">&#34;:8080&#34;</span><span class="p">)</span>
+		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+			<span class="nb">panic</span><span class="p">(</span><span class="s">&#34;Failed to listen to port 8080&#34;</span><span class="p">)</span>
+		<span class="p">}</span>
+	<span class="p">}</span>
+
+	<span class="nx">manners</span><span class="p">.</span><span class="nx">Serve</span><span class="p">(</span><span class="nx">l</span><span class="p">,</span> <span class="nx">newHandler</span><span class="p">())</span>
+<span class="p">}</span>
+
+<span class="o">//</span> <span class="nx">newHanderは一緒なので</span><span class="err">、</span><span class="nx">以下省略</span><span class="err">。</span><span class="nx">適当に補完して実行して</span></code></pre></div>
+<p>manners自体はシグナルの扱いをやってくれないみたいなので、
+そこだけ自分で書く必要がありますが、
+今回調べた中ではこれがベストっぽい。
+自前でデーモン化はできませんが、daemontoolsが使えるのでそれで十分でしょう。</p>
+
+<p>ちなみに、Server::StarterのGo版<a href="https://github.com/lestrrat/go-server-starter">go-server-starter</a>もあるので、
+デーモン化以外はGo化できそう。</p>
+
+<h2 id="2015-05-07-追記">2015-05-07 追記</h2>
+
+<p><blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">やーやー、ドキュメント書いてなくてごめん。「こっちみんな」的なコメント書いておいた <a href="https://t.co/T9Dx3EmBmo">https://t.co/T9Dx3EmBmo</a> <a href="https://twitter.com/hashtag/golang?src=hash&amp;ref_src=twsrc%5Etfw">#golang</a></p>&mdash; Daisuke Maki (anovaさん） (@lestrrat) <a href="https://twitter.com/lestrrat/status/596154619740303360?ref_src=twsrc%5Etfw">2015年5月7日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script></p>
+
+<p>こっち見んな！
+作者の方によると、<a href="https://github.com/lestrrat/go-server-starter-listener">go-server-starter-listener</a>は非推奨らしいです。
+<a href="https://github.com/lestrrat/go-server-starter">go-server-starter</a> にlistenerも一緒に入っているのでこちらを使います。</p>
+<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
+
+<span class="kn">import</span> <span class="p">(</span>
+	<span class="s">&#34;fmt&#34;</span>
+	<span class="s">&#34;log&#34;</span>
+	<span class="s">&#34;net&#34;</span>
+	<span class="s">&#34;net/http&#34;</span>
+	<span class="s">&#34;os&#34;</span>
+	<span class="s">&#34;os/signal&#34;</span>
+	<span class="s">&#34;syscall&#34;</span>
+	<span class="s">&#34;time&#34;</span>
+
+	<span class="s">&#34;github.com/braintree/manners&#34;</span>
+	<span class="s">&#34;github.com/lestrrat/go-server-starter/listener&#34;</span>
+<span class="p">)</span>
+
+<span class="kd">var</span> <span class="nx">now</span> <span class="p">=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
+
+<span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+	<span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&#34;start pid %d\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Getpid</span><span class="p">())</span>
+
+	<span class="nx">signal_chan</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Signal</span><span class="p">)</span>
+	<span class="nx">signal</span><span class="p">.</span><span class="nx">Notify</span><span class="p">(</span><span class="nx">signal_chan</span><span class="p">,</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span><span class="p">)</span>
+	<span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+		<span class="k">for</span> <span class="p">{</span>
+			<span class="nx">s</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">signal_chan</span>
+			<span class="k">if</span> <span class="nx">s</span> <span class="o">==</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span> <span class="p">{</span>
+				<span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&#34;SIGTERM!!!!\n&#34;</span><span class="p">)</span>
+				<span class="nx">manners</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+			<span class="p">}</span>
+		<span class="p">}</span>
+	<span class="p">}()</span>
+
+	<span class="nx">listeners</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ListenAll</span><span class="p">()</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+	<span class="p">}</span>
+	<span class="kd">var</span> <span class="nx">l</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Listener</span>
+	<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="nx">listeners</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span> <span class="p">{</span>
+		<span class="c1">// Fallback if not running under Server::Starter
+</span><span class="c1"></span>		<span class="nx">l</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Listen</span><span class="p">(</span><span class="s">&#34;tcp&#34;</span><span class="p">,</span> <span class="s">&#34;:8080&#34;</span><span class="p">)</span>
+		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+			<span class="nb">panic</span><span class="p">(</span><span class="s">&#34;Failed to listen to port 8080&#34;</span><span class="p">)</span>
+		<span class="p">}</span>
+	<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+		<span class="nx">l</span> <span class="p">=</span> <span class="nx">listeners</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+	<span class="p">}</span>
+
+	<span class="nx">manners</span><span class="p">.</span><span class="nx">Serve</span><span class="p">(</span><span class="nx">l</span><span class="p">,</span> <span class="nx">newHandler</span><span class="p">())</span>
+<span class="p">}</span>
+
+<span class="o">//</span> <span class="nx">newHanderは一緒なので</span><span class="err">、</span><span class="nx">以下省略</span><span class="err">。</span><span class="nx">適当に補完して実行して</span></code></pre></div>
+<p>こっちのほうが複数ポートの読み込みにも対応していて高機能みたいなので、
+<a href="https://github.com/lestrrat/go-server-starter">go-server-starter</a> を使いましょう！</p>
+
+<h3 id="2015-05-09-追記">2015-05-09 追記</h3>
+
+<p>検証が不十分で、<a href="https://github.com/lestrrat/go-server-starter">go-server-starter</a>を使った上記のコード
+Server::Starterから起動されなかった場合のフォールバックが正しく機能しません。
+現状では自前で<code>SERVER_STARTER_PORT</code>環境変数が定義されているのを確認するしかなさそうです。
+handlename先輩が<a href="https://github.com/lestrrat/go-server-starter/pull/3">PR</a>を出しているので、これがマージされたら状況が変わるかも。</p>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>May 3, 2015</time>
+    
+    </span>
+  </p>
+
+  
+  
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2015/04/25/2015-04-25-quantize-image-in-golang/" title="Go言語で画像の減色を行う">Go言語で画像の減色を行う</a>
+    
+
+    
+      <a class="basic-alignment right" href="https://shogo82148.github.io/blog/2015/05/09/2015-05-09-go-txmanager/" title="Goのトランザクションマネージャ作った">Goのトランザクションマネージャ作った</a>
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+
+(function() {
+    
+    
+    
+    if (window.location.hostname == "localhost")
+        return;
+
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    var disqus_shortname = 'shogo82148';
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+       
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2018/01/02/2018-01-02-cloudformation-template-for-mackerel-integration/">Mackerel AWS Integration 用の CloudFormation テンプレートを書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/12/06/2017-12-06-mecab-in-lambda/">MeCabをAWS Lambdaで動かす(2017年版)</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/10/28/2017-10-28-golang-floating-point-number/">Go言語の浮動小数点数のお話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/10/22/2017-10-22-aws-certification-manager-validation/">ACMのドメイン検証をシミュレートするやつ書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/08/25/2017-08-25-unicode9-grapheme-cluster/">Perl 5.26 &amp; Unicode 9.0 で変わる書記素クラスタ(grapheme cluster)のお話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/06/26/2017-06-26-go19-monotonic-clock/">Go1.9から使える Monotonic Clocks を試してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/06/16/2017-06-16-mysql-driver-and-context/">ぼくのかんがえたさいきょうのcontext対応版go-mysql-driverをマージしてもらった</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/05/30/2017-05-30-grumpy/">Re: GoとPythonとGrumpyの速度ベンチマーク</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/05/04/2017-05-04-go-rerand/">String::RandomのGo移植を書いてみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/04/22/2017-04-22-postgresql-exclusion-constraint/">Re: PostgreSQLで排他制約がめっちゃ便利！！</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2018 Shogo Ichinose - <a href="https://shogo82148.github.io/license/">License</a> -
+  <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank" href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+</p>
+
+</footer>
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    displayMath: [['$$','$$'], ['\[','\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all.length) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+</script>
+
+
+<script>
+  var _gaq=[['_setAccount','UA-4526627-4'],['_trackPageview']];
+  (function(d,t){var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+  g.src=('https:'==location.protocol?'//ssl':'//www')+'.google-analytics.com/ga.js';
+  s.parentNode.insertBefore(g,s)}(document,'script'));
+</script>
+
+</body>
+</html>
+

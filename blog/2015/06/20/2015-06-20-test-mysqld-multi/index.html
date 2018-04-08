@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <link href="http://gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+  
+  <link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  <link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  
+
+  
+  <title>Test::mysqld::Multiというモジュールを書いてみた</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css">
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+  
+
+  
+
+  <meta name="description" content="">
+  <meta name="keywords" content="">
+
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.38.1" />
+
+  
+  
+
+</head>
+<body>
+
+
+<header role="banner"><hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+    <h2></h2>
+</hgroup></header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+
+<ul class="subscription">
+  
+
+</ul>
+
+
+<form action="https://www.google.com/search" method="get" target="_blank">
+  <fieldset role="search">
+  	<input class="search" type="text" name="q" results="0" placeholder="Search"/>
+    <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+  </fieldset>
+</form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+    <p class="meta">Jun 20, 2015
+         - 1 minute read 
+         - <a href="https://shogo82148.github.io/blog/2015/06/20/2015-06-20-test-mysqld-multi/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a>
+        
+    </p>
+    <h1 class="entry-title">
+         Test::mysqld::Multiというモジュールを書いてみた 
+    </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          
+
+<p><a href="https://metacpan.org/pod/Test::mysqld">Test::mysqld</a>のインスタンスを一度に大量に作りたい人向けに
+Test::mysqld::Multiというモジュールを書いてみました。</p>
+
+<p><strong>2016/12/22追記</strong>: Test::mysqld::MultiはTest::mysqld 0.20 の一部として取り込まれました
+(<a href="https://github.com/kazuho/p5-test-mysqld/pull/13">p5-Test::mysqld#13</a>)。
+APIは少し変わっているので、詳しくは<a href="https://metacpan.org/pod/Test::mysqld">POD</a>を参照してください。
+合わせて<a href="https://metacpan.org/pod/App::Prove::Plugin::MySQLPool">App::Prove::Plugin::MySQLPool</a> 0.06 より、
+本記事で紹介した高速化が利用できます。</p>
+
+<!-- More -->
+
+<h2 id="背景">背景</h2>
+
+<p>先日<a href="http://tkuchiki.hatenablog.com/entry/2015/04/24/192851">Jenkins EC2 Plugin で Spot Instance を使ってテストを回す</a>というのを、
+tkuchikiさんにお願いして僕の関わっているプロジェクトでやっていただきました。
+CPUのたくさん載ったインスタンスを安く使えるようになったので、
+8並列で動いてたテストを24並列で動かせるようになりました。やった3倍速だ！！！
+9分程かかってたテストが7分で終わるようになりました！！！
+あれ・・・思ったほど早くなってない・・・。</p>
+
+<p>ログを眺めているとproveコマンドが立ち上がってから、実際にテストが走り始めるまで数分の時間がありました。
+<a href="http://maaash.jp/2013/03/perl-app-prove-plugin-mysqlpool/">App::Prove::Plugin::MySQLPool</a>を使っているのですが、
+ここで時間がかかっているようです。</p>
+
+<p>App::Prove::Plugin::MySQLPoolはテストの並列度分だけMySQLのインスタンスを立ち上げますが、
+一個インスタンスを立ち上げたら、それにアクセスできるようになるまでずっと待っているようです。
+MySQLの起動に5秒かかるとして24並列で動かしたら2分かかるわけで無視できない長さになります。</p>
+
+<h2 id="作ったもの">作ったもの</h2>
+
+<p>n個一度に立ち上げて全部にアクセスできるまで待つ実装にすれば速くなるのでは！ってことでTest::mysqld::Multiというのを書いて、
+App::Prove::Plugin::MySQLPoolからそれを使うようにしました。
+とりあえず<a href="https://github.com/mash/App-Prove-Plugin-MySQLPool/compare/master...shogo82148:test-mysqld-multi">test-mysql-multiブランチ</a>にコミットしてあります。
+App::Prove::Plugin::MySQLPoolに取り込んでもらうか別のモジュールとして分離するか、後々のことは未定。
+今のプロジェクトで使ってみてちょっとの間様子見してみます。
+7分かかってたテストが5分程度で終わるようになったので、効果はあるようです。</p>
+
+<p>ちなみに、並列度が24と半端なのはそれ以上並列度を上げても速くならなかったため。
+32コアあるマシンなんだけど使い切れてません。
+どこにボトルネックがあるんだろうな・・・。</p>
+
+<h2 id="まとめ">まとめ</h2>
+
+<p>プロセス一覧にmysqldが24個並ぶの楽しい</p>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>Jun 20, 2015</time>
+    
+    </span>
+  </p>
+
+  
+  
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2015/06/02/2015-06-02-mecab-in-python3/" title="MeCabをPython3から使う(中間報告)">MeCabをPython3から使う(中間報告)</a>
+    
+
+    
+      <a class="basic-alignment right" href="https://shogo82148.github.io/blog/2015/06/21/2015-06-21-go-webtail/" title="go-webtailってのを書いた">go-webtailってのを書いた</a>
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+
+(function() {
+    
+    
+    
+    if (window.location.hostname == "localhost")
+        return;
+
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    var disqus_shortname = 'shogo82148';
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+       
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2018/01/02/2018-01-02-cloudformation-template-for-mackerel-integration/">Mackerel AWS Integration 用の CloudFormation テンプレートを書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/12/06/2017-12-06-mecab-in-lambda/">MeCabをAWS Lambdaで動かす(2017年版)</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/10/28/2017-10-28-golang-floating-point-number/">Go言語の浮動小数点数のお話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/10/22/2017-10-22-aws-certification-manager-validation/">ACMのドメイン検証をシミュレートするやつ書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/08/25/2017-08-25-unicode9-grapheme-cluster/">Perl 5.26 &amp; Unicode 9.0 で変わる書記素クラスタ(grapheme cluster)のお話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/06/26/2017-06-26-go19-monotonic-clock/">Go1.9から使える Monotonic Clocks を試してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/06/16/2017-06-16-mysql-driver-and-context/">ぼくのかんがえたさいきょうのcontext対応版go-mysql-driverをマージしてもらった</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/05/30/2017-05-30-grumpy/">Re: GoとPythonとGrumpyの速度ベンチマーク</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/05/04/2017-05-04-go-rerand/">String::RandomのGo移植を書いてみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/04/22/2017-04-22-postgresql-exclusion-constraint/">Re: PostgreSQLで排他制約がめっちゃ便利！！</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2018 Shogo Ichinose - <a href="https://shogo82148.github.io/license/">License</a> -
+  <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank" href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+</p>
+
+</footer>
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    displayMath: [['$$','$$'], ['\[','\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all.length) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+</script>
+
+
+<script>
+  var _gaq=[['_setAccount','UA-4526627-4'],['_trackPageview']];
+  (function(d,t){var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+  g.src=('https:'==location.protocol?'//ssl':'//www')+'.google-analytics.com/ga.js';
+  s.parentNode.insertBefore(g,s)}(document,'script'));
+</script>
+
+</body>
+</html>
+

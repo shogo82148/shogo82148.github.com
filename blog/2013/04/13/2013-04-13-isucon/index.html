@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <link href="http://gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+  
+  <link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  <link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  
+
+  
+  <title>社内ISUCONに参加した</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css">
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+  
+
+  
+
+  <meta name="description" content="">
+  <meta name="keywords" content="">
+
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.38.1" />
+
+  
+  
+
+</head>
+<body>
+
+
+<header role="banner"><hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+    <h2></h2>
+</hgroup></header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+
+<ul class="subscription">
+  
+
+</ul>
+
+
+<form action="https://www.google.com/search" method="get" target="_blank">
+  <fieldset role="search">
+  	<input class="search" type="text" name="q" results="0" placeholder="Search"/>
+    <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+  </fieldset>
+</form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+    <p class="meta">Apr 13, 2013
+         - 1 minute read 
+         - <a href="https://shogo82148.github.io/blog/2013/04/13/2013-04-13-isucon/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - 
+        
+    </p>
+    <h1 class="entry-title">
+         社内ISUCONに参加した 
+    </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          
+
+<p>先日、社内 ISUCON(良い感じにスピードアップコンテスト) に参加してきました。
+Livedoorで開催された<a href="http://blog.livedoor.jp/techblog/archives/67693255.html">ISUCON</a>のミニ版で、
+Webアプリをひたすら高速化するコンテストです。</p>
+
+<p>高速化の対象はNoPaste。
+テキストを共有するWebアプリです。
+テキストの投稿・投稿の閲覧・投稿にスターをつける
+の3つの動作ができる簡単なアプリです。</p>
+
+<p>新卒 vs 先輩ということで、それぞれ4チームが参戦。
+チームは二人一組で僕は @Maco_Tasu くんと一緒でした。
+<a href="http://macotasu.hatenablog.com/entry/2013/04/12/233500">@Maco_Tasuくんのブログ</a>も参照。</p>
+
+<h2 id="recent-posts-生成クエリの高速化">Recent Posts 生成クエリの高速化</h2>
+
+<p>高速化前のアプリのベンチマークの結果、スコアは77(≒1分あたりの捌いたリクエスト数)。
+何も考えずにデータベースの全行を舐めるクエリを書いていたので、まあ、妥当なスコアですね。</p>
+
+<p>重いのはサイドバーに表示される Recent Posts。
+Recent Posts は表示回数が多く、
+複数の行、複数のテーブルへのアクセスが発生するため、
+きっとここがボトルネックになるだろうと予測してました。
+そこで最初にこの部分を解決することにしました。</p>
+
+<ul>
+<li>とりあえずインデックスを張る</li>
+<li>クエリを修正してアクセスする行を最小化</li>
+<li>スターのカウントした結果をテーブルに格納
+
+<ul>
+<li>オリジナルのデータベース構成では、スターした回数だけ行が増えてました</li>
+<li>必要なのは投稿ごとのスター数なので、独立したテーブルに</li>
+<li>この時点で早くも重大なバグを組み込んでしまったことに、この時はまだ気がついていなかった・・・</li>
+</ul></li>
+</ul>
+
+<h2 id="nginxによる静的ファイル配信">nginxによる静的ファイル配信</h2>
+
+<p>僕がクエリをいじっている間、@Maco_Tasuくんには
+サーバの設定をお願いしました。</p>
+
+<p>ログの様子を眺めてみると、cssとかjsとかの静的ファイルが結構な量ありました。
+最初のスクリプトでは静的ファイルの配信もアプリでやってたので、
+これをnginxを使って配信するように変更。
+その他のリクエストはリバースプロキシを設定してアプリに投げます。</p>
+
+<h2 id="starlet-と-server-starter">Starlet と Server::Starter</h2>
+
+<p>リバースプロキシを設定する際にアプリの起動スクリプトを編集する必要があったので、
+ついでに起動時の設定を色々変更。
+PSGI実行のStarletというのが速いと聞いてこれを採用。
+Starlet使い方調べてたら、Server::Starterを使った例が出てきたので一緒にインストール。
+ワーカーの数の数は適当に10個にしました。</p>
+
+<p>ここで2回目のベンチマークを実行。
+スコア1300程度で、その時点のトップ！</p>
+
+<h2 id="ssiを使ったサイドバーの埋め込み">SSIを使ったサイドバーの埋め込み</h2>
+
+<p>お昼を挟んで、さらなる高速化を目指します。</p>
+
+<p>topコマンドを眺めているとPerlで作ったアプリの負荷が大きい。
+ほとんどテンプレートエンジンを呼び出しているだけの単純なコードなので、
+ここを高速化するのは面倒くさい。
+そこで、前段のnginxでキャッシュする作戦を採用することにしました。</p>
+
+<p>もっともキャッシュが有効なのはサイドバーだろうと予想。
+クエリの最適化をしたとは言え、サイドバーには100件程度の投稿が表示されるので、
+クエリ実行にもレンダリングにも時間がかかるはず。
+さらにすべてのページでサイドバーは共有できるので、大幅な高速化が期待できるはずです。</p>
+
+<p>過去のISUCONの記事にSSI(Server Side Include)を使った例があったのを思い出し、
+これを使ってサイドバーのみキャッシュ、nginx内でサイドバーを埋め込むように。</p>
+
+<p>僕が SSIのタグ埋め込み、
+@Maco_Tasu くんにnginxのキャッシュ設定を行ってもらうという役割分担で作業を再開しました。</p>
+
+<h2 id="サイドバーのキャッシュ">サイドバーのキャッシュ</h2>
+
+<p>僕の作業はテンプレートを書き換えるだけだったのですぐ終わったんですが、
+nginxのキャッシュがうまくいかない。
+設定変えてnginxの再起動を何度も繰り返して、ここで2〜3時間時間を浪費してしまいました。</p>
+
+<p>数時間悩んだ挙句、Set-Cookieがレスポンスヘッダーに入っているとキャッシュされないことが判明。
+考えてみれば当たり前だ・・・人ごとに違うページが表示されるからサーバーでキャッシュされたら困る。
+アプリ側でサイドバーだけクッキー返さないのが正攻法かなとは思ったのですが、
+実際どうやるのかが時間内に調べられなかったので、
+<code>proxy_ignore_headers set-cookie Cache-Control Expires;</code>をサイドバーのURLに指定し、
+ヘッダーを無視するようにしました。</p>
+
+<p>この時のベンチでスコア1700！</p>
+
+<p>キャシュする時間は長いほどいいけど、長くするとサイドバーとスターの数etcが食い違い、テストにFAIL。
+そこで、Cache Purgeをnginxにインストールして、Perl側からキャッシュ削除。
+削除するキャッシュのキーを指定する方法でしばらく悩んで、結局決めうちというひどい設定
+(本当はURLなどを決定するはずだけどなぜかうまくいかなかった)。
+なにはともあれ、これでFAILはなくなるはず！</p>
+
+<p>・・・と思ったけど、なんだか時々FAILする。
+スコアは確実に上昇して2300前後をとれるようになったけど、本番でテストFAILしたら一環の終わり。
+キャッシュの寿命の設定だと思って、終了直前までキャッシュの長さの調整してました。</p>
+
+<h2 id="結果">結果</h2>
+
+<p>テストFAILした！！ No Score！！</p>
+
+<h2 id="敗因">敗因</h2>
+
+<p>敗因はただ一つ。** データベースの初期化スクリプトが間違ってた！！ **</p>
+
+<p>スターの個数を数えてテーブルに挿入するSQL文をベンチ開始前に走らせたんだけど、
+「テーブルにすでに値が存在したときのことを考慮してなかった」
+「スターが0個のときを考慮していなかった」
+という致命的なバグがあり、
+データベースが不完全な状態でした。</p>
+
+<p>うわあああああああ！！！！
+完全に僕のミスじゃいですかあああああああああ！！！</p>
+
+<p>Cache Purgeインストール後FAILしていたのもおそらく
+これが原因です。</p>
+
+<p>FAILしてなければ、事前のベンチでは先輩方と遜色がない程度のスコアが出てただけに、悔しい終わり方になってしまいました。
+さらに新卒組は全チームテストFAILという残念な結果。</p>
+
+<p>速いことよりも正しく動作することのほうが大事、
+ということを身を以て体験できた一日でした。</p>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>Apr 13, 2013</time>
+    
+    </span>
+  </p>
+
+  
+  
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2013/03/05/2013-03-05-emacsclient/" title="出、出〜〜〜〜wwww emacsをふたつ以上実行奴〜〜〜〜www(emacsclient編)">出、出〜〜〜〜wwww emacsをふたつ以上実行奴〜〜〜〜www(emacsclient編)</a>
+    
+
+    
+      <a class="basic-alignment right" href="https://shogo82148.github.io/blog/2013/05/09/2013-05-09-application-only-authentication-with-tweepy/" title="tweepyでApplication-only authenticationしてみた">tweepyでApplication-only authenticationしてみた</a>
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+
+(function() {
+    
+    
+    
+    if (window.location.hostname == "localhost")
+        return;
+
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    var disqus_shortname = 'shogo82148';
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+       
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2018/01/02/2018-01-02-cloudformation-template-for-mackerel-integration/">Mackerel AWS Integration 用の CloudFormation テンプレートを書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/12/06/2017-12-06-mecab-in-lambda/">MeCabをAWS Lambdaで動かす(2017年版)</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/10/28/2017-10-28-golang-floating-point-number/">Go言語の浮動小数点数のお話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/10/22/2017-10-22-aws-certification-manager-validation/">ACMのドメイン検証をシミュレートするやつ書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/08/25/2017-08-25-unicode9-grapheme-cluster/">Perl 5.26 &amp; Unicode 9.0 で変わる書記素クラスタ(grapheme cluster)のお話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/06/26/2017-06-26-go19-monotonic-clock/">Go1.9から使える Monotonic Clocks を試してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/06/16/2017-06-16-mysql-driver-and-context/">ぼくのかんがえたさいきょうのcontext対応版go-mysql-driverをマージしてもらった</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/05/30/2017-05-30-grumpy/">Re: GoとPythonとGrumpyの速度ベンチマーク</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/05/04/2017-05-04-go-rerand/">String::RandomのGo移植を書いてみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/04/22/2017-04-22-postgresql-exclusion-constraint/">Re: PostgreSQLで排他制約がめっちゃ便利！！</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2018 Shogo Ichinose - <a href="https://shogo82148.github.io/license/">License</a> -
+  <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank" href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+</p>
+
+</footer>
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    displayMath: [['$$','$$'], ['\[','\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all.length) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+</script>
+
+
+<script>
+  var _gaq=[['_setAccount','UA-4526627-4'],['_trackPageview']];
+  (function(d,t){var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+  g.src=('https:'==location.protocol?'//ssl':'//www')+'.google-analytics.com/ga.js';
+  s.parentNode.insertBefore(g,s)}(document,'script'));
+</script>
+
+</body>
+</html>
+

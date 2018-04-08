@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <link href="http://gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+  
+  <link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  <link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  
+
+  
+  <title>Shogo&#39;s Blog</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css">
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+  
+
+  <link href="https://shogo82148.github.io/index.xml" rel="alternate" type="application/rss+xml" title="Shogo&#39;s Blog" />
+
+  <meta name="description" content="">
+  <meta name="keywords" content="">
+
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.38.1" />
+
+  
+  
+
+</head>
+<body>
+
+
+<header role="banner"><hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+    <h2></h2>
+</hgroup></header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+
+<ul class="subscription">
+  
+
+</ul>
+
+
+<form action="https://www.google.com/search" method="get" target="_blank">
+  <fieldset role="search">
+  	<input class="search" type="text" name="q" results="0" placeholder="Search"/>
+    <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+  </fieldset>
+</form>
+
+</nav>
+
+
+<div id="main">
+ <div id="content">
+  <div class="blog-index">
+    
+    
+    <article>
+
+        
+        
+
+<header>
+    <p class="meta">Jul 5, 2014
+         - 1 minute read 
+         - <a href="https://shogo82148.github.io/blog/2014/07/05/2014-07-05-signal-in-xs/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a>
+        
+    </p>
+    <h1 class="entry-title">
+        <a href="https://shogo82148.github.io/blog/2014/07/05/2014-07-05-signal-in-xs/">PerlのXS中に起きたシグナルの扱い</a>
+    </h1>
+</header>
+
+
+        
+          <p>Redis::Fast にIssueが来ていたので、 それに関して調査したお話です。
+ 接続タイムアウトすると double free check に引っかかる brpop みたいな長時間ブロックするコマンド中にシグナルが入ると、最初の1回が無視される  前者はC言語つらいって話で頑張って double free になる条件を探せばいいんですが、 後者はシグナル時のPerlやPOSIX APIの挙動を知らなくと解決できなそう。 そういうわけで、主に後者について調べた結果をまとめておきます。
+PERL_ASYNC_CHECKってXS中から呼んでもいいの？ 言いたいことは最初に書いとけって偉い人に言われたので、最初にこの記事の結論を。 「よしななタイミングでPERL_ASYNC_CHECKを呼べばいいっぽい」みたいです。 でも、 ** 「PERL_ASYNC_CHECKってXS中から呼んでもいいの？」 ** という点に確証が持ててないので、 識者のご意見を募集してます！
+selectの挙動を調べる Redis::FastはRedisからのレスポンスを待つのにLinuxのselect apiを叩いてます。 ファイルとかが読み書き可能になるまで処理をブロックしてくれるいいやつです。 しかし、select が処理をブロックしている間にシグナルを受信すると、うまく処理ができてないらしい。 そこで割り込み発生時の挙動を確認してみます。
+困った時のmanページ(select) をちゃんと読めば書いてありますね。
+ エラーならば -1 を返し、 errno にエラーを示す値が設定される;
+EINTR シグナルを受信した。
+ Redis::Fastはerrnoを特に確認せず、とにかくエラーが発生したらリトライになってたのでダメだったみたいです。 通信にエラーが起きたわけではないので、再接続処理とかみたいな複雑なリトライ処理は必要なく、 単にもう一度selectしなおせば良さそうです。
+Perlさんのシグナル処理のタイミング 「割り込みかかったら再度select」っていうふうに修正してみたんですが、 今度はPerlのシグナルハンドラがなかなか呼び出されない！！
+use Redis::Fast; $SIG{TERM}= sub { warn &#34;TERM handler called&#34;; }; my $c =-&gt;new(reconnect=&gt;2, every =&gt; 100, server =&gt; &#34;localhost:6379&#34;); $c-&gt;brpop(&#34;a&#34;, 100); # 100秒経ったら諦めて戻ってくる このコードを実行中にSIGTERMを送ると、送った瞬間に&rdquo;TERM handler called&rdquo;と表示されて欲しいのですが、 brpopコマンドが終わるまで実行されない……</p>
+
+          
+              <footer>
+                  <a href="https://shogo82148.github.io/blog/2014/07/05/2014-07-05-signal-in-xs/" rel="full-article">Read On &rarr;</a>
+              </footer>
+          
+
+        
+
+    </article>
+    
+    <article>
+
+        
+        
+
+<header>
+    <p class="meta">Jun 4, 2014
+         - 1 minute read 
+         - <a href="https://shogo82148.github.io/blog/2014/06/04/2014-06-04-irc-healing-bot/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a><a class="label" href="https://shogo82148.github.io/categories/unazusan/">unazusan </a>
+        
+    </p>
+    <h1 class="entry-title">
+        <a href="https://shogo82148.github.io/blog/2014/06/04/2014-06-04-irc-healing-bot/">IRCに癒やしボットを入れてみた</a>
+    </h1>
+</header>
+
+
+        
+          <p>別チームがIRCに癒やしボットを入れてたので、自分のチームのチャンネルにも入れてみた。
+Instagramに登録する InstagramのDeveloperサイトに開発者として登録します。 Authentication のページを見ながら、Server-side (Explicit) Flow を参考にアクセストークンを取得します。
+Instagram APIを叩く https://api.instagram.com/v1/tags/$TAGNAME/media/recent?access_token=YOUR_ACCESS_TOKENを叩くと TAGNAMEに関連する画像の情報がJSONで帰ってくるので、 Perlからこのエンドポイントを叩きます。 IRCとのやりとりにはUnazuSanを使いました。
+!/usr/bin/env perl use 5.014; use warnings; use strict; use utf8; use Encode qw/encode_utf8/; use Furl; use JSON; use UnazuSan; sub neko { state $data = undef; state $time = 0; if( !$data || time - $time &gt; 60 * 60) { $time = time; my $furl = Furl-&gt;new; my $res = $furl-&gt;get(&#39;https://api.instagram.com/v1/tags/%E7%8C%AB/media/recent?access_token=YOUR_ACCESS_TOKEN&#39;); my $hash = JSON::decode_json($res-&gt;content); $data = $hash-&gt;{data}; } my $media = $data-&gt;[rand(scalar @$data)]; return $media-&gt;{images}{standard_resolution}{url}; } my $unazu_san; my $NICKNAME = &#39;iyashi&#39;; $unazu_san = UnazuSan-&gt;new( host =&gt; &#39;127.</p>
+
+          
+              <footer>
+                  <a href="https://shogo82148.github.io/blog/2014/06/04/2014-06-04-irc-healing-bot/" rel="full-article">Read On &rarr;</a>
+              </footer>
+          
+
+        
+
+    </article>
+    
+    <article>
+
+        
+        
+
+<header>
+    <p class="meta">Jun 1, 2014
+         - 1 minute read 
+         - <a href="https://shogo82148.github.io/blog/2014/06/01/2014-06-01-anti-sizukatter/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/javascript/">javascript </a>
+        
+    </p>
+    <h1 class="entry-title">
+        <a href="https://shogo82148.github.io/blog/2014/06/01/2014-06-01-anti-sizukatter/">キレイになったコトバとハートを元に戻すツール作った</a>
+    </h1>
+</header>
+
+
+        
+          <p>現実世界にご満足の方消えてなくなってほしいの！！！
+しずかったーを使うと個性あふれるコトバを使ってもキレイにしてくれるので とっても便利ですね！ でも、本当は何を言っているのか真意を知りたい・・・。
+そんな人のために、キレイになったコトバとハートを元に戻す アンチしずかったー を作りました。
+仕組み しずかったーは単純な文字列置換で動いているみたいなので、 対応表を頑張って作りました。 それをMeCab用の辞書に変換し、 Igoを使ってバイナリ辞書に変換、 igo-javascriptでブラ失礼しちゃう上で解析できるようにしました。
+既知の問題点 しずかったー前後の文脈関係なく変換しちゃうので、 同音異義語は元に戻らないことがあります。 特にひらがな・カタカナは失敗することが多いです。(「（お昼寝したい）ふわふわ」だとか「ブラ失礼しちゃう」だとか)
+あと、マシュマロ的な内緒の言葉はさすがのしずかちゃんでも代替表現が思いつかなかったらしく、 全部ハートになってしまいます。 元に戻せと言う方が頑張ればなんとかできそうなので期待しないでく時代が変わればかっこいい。
+まとめ またおもしろいものを作ってしまいましたが、 igo-javascriptのバグを発見できたりしたので、いいのです。
+自宅警備員でお時間ある方の皆様、天才だと思ったらぜひおしゃべり広場や「いいね！」広場で共有をお願いします。</p>
+
+          
+
+        
+
+    </article>
+    
+    <article>
+
+        
+        
+
+<header>
+    <p class="meta">May 29, 2014
+         - 2 minute read 
+         - <a href="https://shogo82148.github.io/blog/2014/05/29/2014-05-29-conditional-attribute/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/csharp/">csharp </a>
+        
+    </p>
+    <h1 class="entry-title">
+        <a href="https://shogo82148.github.io/blog/2014/05/29/2014-05-29-conditional-attribute/">C#のconditional Attributeのコンパイル結果を見てみる</a>
+    </h1>
+</header>
+
+
+        
+          <p>C#で「ある環境では関数の定義ごと消したい」みたいな要件があって、 そういう用途にconditinal attributeが使えるのかなーと話題のあがったので、実際に確認してみました。
+結論から言えばできないのですが、せっかく調べたのでメモとして残しておきます。
+conditional attribute 「デバッグ時のみにしか実行して欲しくない関数」みたいなものを定義するための機能です。
+using System; using System.IO; using System.Diagnostics; namespace ConditionalAttributeTest { class MainClass { public static void Main (string[] args) { Log(&#34;fugu&#34;); }[ConditionalAttribute(&#34;DEBUG&#34;)] public static void Log(string message) { Console.WriteLine(message); } } } こんなふうに書いておくと DEBUG シンボルが定義されている時にだけLogの呼び出しが行われます。
+&gt; mcs -d:DEBUG ConditionalAttributeTest.cs &gt; mono ConditionalAttributeTest fugu &gt; mcs ConditionalAttributeTest.cs &gt; mono ConditionalAttributeTest 逆アセンブルしてみる DEBUG付きでコンパイルした結果を逆アセンブルしてみます。
+// ...前略 // method line 2 .method public static hidebysig default void Main (string[] args) cil managed { // Method begins at RVA 0x2058 .</p>
+
+          
+              <footer>
+                  <a href="https://shogo82148.github.io/blog/2014/05/29/2014-05-29-conditional-attribute/" rel="full-article">Read On &rarr;</a>
+              </footer>
+          
+
+        
+
+    </article>
+    
+    <article>
+
+        
+        
+
+<header>
+    <p class="meta">May 27, 2014
+         - 3 minute read 
+         - <a href="https://shogo82148.github.io/blog/2014/05/27/2014-05-27-using-statement-without-instantiating/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/csharp/">csharp </a>
+        
+    </p>
+    <h1 class="entry-title">
+        <a href="https://shogo82148.github.io/blog/2014/05/27/2014-05-27-using-statement-without-instantiating/">初期化なしのusing文ってOK？</a>
+    </h1>
+</header>
+
+
+        
+          <p>C# の using ステートメント、普通は変数の初期化とか new とかをまとめてやるものだと思ってたんですが、 某プロジェクトでusing文をこんな感じで使っているのを見かけました。
+var hoge = new Hoge(); using(hoge) { // using( var hoge = new Hoge() ) { ならよく見る  ... } 見慣れない書き方だったので、本当にリソース解放が行われているのか不安・・・。 リソース解放が行われているのか調べてみました。
+まずは結論  リソース解放自体は行われているので、ちゃんと書いてあれば問題なし しかしエラーをコンパイル時に見つけられない場合があるので非推奨  逆アセンブルして調べてみた コンパイル結果見ればちゃんとリソース解放されているかわかるよね！ ってことでバイナリを逆アセンブルして調べてみました。
+サンプルコード 検証に使ったのはこんなコード。
+using System; using System.IO; namespace UsingTest { class MainClass { public static void Main (string[] args) { var sr = new StreamReader (&#34;hoge.txt&#34;); Console.WriteLine (&#34;Hoge: {0}&#34;, sr.ReadLine ()); } } } 僕はMac使いに転向したので、Monoを使います。 mcsを使ってコンパイル、monodis ってのを使うとILを見れるらしいです。 Windowsだったら .</p>
+
+          
+              <footer>
+                  <a href="https://shogo82148.github.io/blog/2014/05/27/2014-05-27-using-statement-without-instantiating/" rel="full-article">Read On &rarr;</a>
+              </footer>
+          
+
+        
+
+    </article>
+    
+    <article>
+
+        
+        
+
+<header>
+    <p class="meta">May 25, 2014
+         - 1 minute read 
+         - <a href="https://shogo82148.github.io/blog/2014/05/25/2014-05-25-mini-message-pack/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/csharp/">csharp </a><a class="label" href="https://shogo82148.github.io/categories/unity/">unity </a><a class="label" href="https://shogo82148.github.io/categories/messagepack/">messagepack </a>
+        
+    </p>
+    <h1 class="entry-title">
+        <a href="https://shogo82148.github.io/blog/2014/05/25/2014-05-25-mini-message-pack/">C# でお手軽にMessagePack解析！</a>
+    </h1>
+</header>
+
+
+        
+          <p>MiniMessagePack.csってのを作った。 C#のプロジェクトにファイルひとつ導入するだけで、お手軽にMessagePackの解析ができます。
+なんで作ったの？ MiniJSON の置き換えが目的です。 とあるUnityプロジェクトでMB単位のJSONをパースする箇所があってですね・・・ パースにはMiniJSONを使っているのですが、さすがに対象がでかすぎて重たい。 そこでMessagePackへの置き換えを検討してみたわけです。
+もちろん C# で動く MessagePack のパーサはすでにあって、 messagepack-cliとかmessagepack-unityとか見つけました。 しかし、Unityのちょっと古いMonoで動かすためにちょっとゴニョゴニョしないといけなかったり、 MiniJSON との互換性を取るためにもゴニョゴニョしないといけなかったり(実際やってみたらキャストが大量に失敗して辛かった・・・)、 今回の用途にはちょっと高機能かなーと思ったので作っちゃいました！
+つかいかた デコードする byteの配列を渡すとパースして返してくれます。 配列はList&lt;object&gt;で、マップはDictionary&lt;string, object&gt;になります。
+using MiniMessagePack; // it means {&#34;compact&#34;:true,&#34;schema&#34;:0} in JSON var msgpack = new byte[] { 0x82, 0xa7, 0x63, 0x6f, 0x6d, 0x70, 0x61, 0x63, 0x74, 0xc3, 0xa6, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x00 }; var packer = new MiniMessagePacker (); object unpacked_data = packer.Unpack (msgpack); /* unpacked_data = new Dictionary&lt;string, object&gt; { { &#34;compact&#34;, true }, { &#34;schema&#34;, 0}, }; */ エンコードする オブジェクトを渡すと MessagePack にエンコードして返してくれます。</p>
+
+          
+              <footer>
+                  <a href="https://shogo82148.github.io/blog/2014/05/25/2014-05-25-mini-message-pack/" rel="full-article">Read On &rarr;</a>
+              </footer>
+          
+
+        
+
+    </article>
+    
+    <article>
+
+        
+        
+
+<header>
+    <p class="meta">May 22, 2014
+         - 1 minute read 
+         - <a href="https://shogo82148.github.io/blog/2014/05/22/2014-05-22-use-cpp11-in-travis/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/c&#43;&#43;/">c&#43;&#43; </a><a class="label" href="https://shogo82148.github.io/categories/travis/">travis </a>
+        
+    </p>
+    <h1 class="entry-title">
+        <a href="https://shogo82148.github.io/blog/2014/05/22/2014-05-22-use-cpp11-in-travis/">travis-ciでC&#43;&#43;11のテストをする</a>
+    </h1>
+</header>
+
+
+        
+          <p>今 C++ を書くなら C++11 だよね！と言うわけでC++11の新機能を使ってコードを書いたので、 travis-cliでテストしたらFAIL。
+$ g++ -std=gnu++0x hogehoge.cpp sorry, unimplemented: non-static data member initializers unimplemented・・・だと・・・。
+頑張って動かしてみたのでメモ。
+autoconf の設定をする autotoolsを使っていたので、 C++11 に対応しているかのチェックを追加しておきます。
+ax_cxx_compile_stdcxx_11.m4をダウンロードし、 configure.ac でm4ファイルをダウンロードするようにしておきます。
+``` plain configure.ac m4_include([m4/ax_cxx_compile_stdcxx_11.m4]) AX_CXX_COMPILE_STDCXX_11 AC_LANG([C++])
+ ## travis.yaml を設定する ぐぐったら[stackoverflowでやり方を見つけました](http://stackoverflow.com/questions/22111549/travis-ci-with-clang-3-4-and-c11)。 標準でテストに使われるコンパイラは古いようなので、新しいバージョンのものをインストールするように設定します。 ``` plain language: cpp compiler: - clang - gcc before_install: # g++4.8.1 - if [ &quot;$CXX&quot; == &quot;g++&quot; ]; then sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test; fi # clang 3.4 - if [ &quot;$CXX&quot; == &quot;clang++&quot; ]; then sudo add-apt-repository -y ppa:h-rayflood/llvm; fi - sudo apt-get update -qq install: # g++4.</p>
+
+          
+              <footer>
+                  <a href="https://shogo82148.github.io/blog/2014/05/22/2014-05-22-use-cpp11-in-travis/" rel="full-article">Read On &rarr;</a>
+              </footer>
+          
+
+        
+
+    </article>
+    
+    <article>
+
+        
+        
+
+<header>
+    <p class="meta">May 18, 2014
+         - 1 minute read 
+         - <a href="https://shogo82148.github.io/blog/2014/05/18/2014-05-18-test-with-google-test/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/c/">c </a><a class="label" href="https://shogo82148.github.io/categories/c&#43;&#43;/">c&#43;&#43; </a><a class="label" href="https://shogo82148.github.io/categories/google-test/">google test </a>
+        
+    </p>
+    <h1 class="entry-title">
+        <a href="https://shogo82148.github.io/blog/2014/05/18/2014-05-18-test-with-google-test/">Google Test を使ってC&#43;&#43;のテストしてみた</a>
+    </h1>
+</header>
+
+
+        
+          <p>C++ なライブラリを書こうと思い、C++のテストってどうやるんだろうと調べたメモ。 テストフレームワークとして Google C++ Testing Framework を使用、 コンパイルにはautotoolを使ってtravis-ciでテストするところまでやってみました。
+やってみた結果→ cpp-test
+Testを書く Google Test の入門ガイドに書いてあったテストをコピペしてきました。
+``` c++ test/factorial.cpp #include &ldquo;gtest/gtest.h&rdquo;
+int Factorial(int n);
+TEST(FractionTest, hoge) { EXPECT_EQ(1, Factorial(1)); EXPECT_EQ(2, Factorial(2)); EXPECT_EQ(6, Factorial(3)); EXPECT_EQ(40320, Factorial(8)); }
+ テストの対象となる関数はこちら。 ``` c++ src/factorial.cpp // calculate 1 * 2 * 3 * ... * n int Factorial(int n) { if(n == 0) return 1; return n * Factorial(n - 1); }  テスト用実行ファイルのビルドをする せっかくならしっかりしたものをつくろうと、Autotoolsを使ってビルドしてみました。 新しめの Autotools (Autoconf&amp;Automake) を使ってみよう を参考に Makefileのひな形を書いていきます。</p>
+
+          
+              <footer>
+                  <a href="https://shogo82148.github.io/blog/2014/05/18/2014-05-18-test-with-google-test/" rel="full-article">Read On &rarr;</a>
+              </footer>
+          
+
+        
+
+    </article>
+    
+    <article>
+
+        
+        
+
+<header>
+    <p class="meta">May 17, 2014
+         - 1 minute read 
+         - <a href="https://shogo82148.github.io/blog/2014/05/17/2014-05-17-redis-fast-0-dot-07-released/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/redis/">redis </a><a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a>
+        
+    </p>
+    <h1 class="entry-title">
+        <a href="https://shogo82148.github.io/blog/2014/05/17/2014-05-17-redis-fast-0-dot-07-released/">Redis::Fast 0.07 をリリースしました！</a>
+    </h1>
+</header>
+
+
+        
+          <p>Redis::Fast 0.07 をリリースしました。 現時点での最新バージョンである Redis.pm 1.974 とコンパチブルになります。
+主な修正点は以下の通りです
+ Redis Sentinel 対応 トランザクション内での再接続禁止 再接続にDB選択し直し  Redis Sentinel 対応 Redis Sentinel というのは自動フェールオーバーの仕組みらしいです。 (ソースはコピペしたきただけで仕組みはあまり理解していない) どんなものかは本家ドキュメントや実際に検証してみた人の記事をご参照ください。
+ Redis Sentinel Documentation Redis 2.8 の Sentinel の動きを検証してみた Redis Sentinelを動かしてみた  前から移植作業は進めてたのですが、本家 Redis.pm でもテストがコケたりしてちょっと不安だったのでリリースを見送ってました。 今日 Redis.pm の安定版がリリースされたのでこっちも追従しますよ！！
+コネクションを作るときに sentinels を渡すと Redis Sentinel から接続情報を取ってきてくれます。 一緒に reconnect を設定しておいてあげると、Masterに何かあった時に接続情報を再取得→ 自動的に Slave へフェールオーバーしてくれます。
+use Redis::Fast; my $redis = Redis::Fast-&gt;new( sentinels =&gt; [ &#39;127.0.0.1:26379&#39; ], service =&gt; &#39;mymaster&#39;, reconnect =&gt; 1, ); トランザクション内での再接続禁止 Redisにも簡単なトランザクション機能があって、 複数の命令を同時に実行することができます。 トランザクション中に再接続が発生するとトランザクションがリセットされてしまうので、 接続前の命令を再投入する必要があるのですが、Redis.</p>
+
+          
+              <footer>
+                  <a href="https://shogo82148.github.io/blog/2014/05/17/2014-05-17-redis-fast-0-dot-07-released/" rel="full-article">Read On &rarr;</a>
+              </footer>
+          
+
+        
+
+    </article>
+    
+    <article>
+
+        
+        
+
+<header>
+    <p class="meta">May 7, 2014
+         - 2 minute read 
+         - <a href="https://shogo82148.github.io/blog/2014/05/07/2014-05-07-androidbinary/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/android/">android </a><a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
+        
+    </p>
+    <h1 class="entry-title">
+        <a href="https://shogo82148.github.io/blog/2014/05/07/2014-05-07-androidbinary/">Androidのバイナリファイルを解析するgoのライブラリ</a>
+    </h1>
+</header>
+
+
+        
+          <p>Androidのアプリの実態はzipファイルなのでunzipすれば簡単に中身を見ることができるわけですが、 開いてもバイナリファイルが入っているだけでよくわかりません。 AndroidSDKに付属しているaaptというツールを使えば読めるんだけどインストールが大変で苦しんでいる人がいたので、 お手軽に解析できるgolangのライブラリを書いてみました。
+使い方 go getしてくる githubのレポジトリ からダウンロードしてきます。
+go get github.com/shogo82148/androidbinary AndroidManifest.xmlを解析する io.ReaderAtインターフェースを満たすオブジェクトをandroidbinary.NewXMLFileに渡すと解析してくれます。
+f, _ := os.Open(&#34;AndroidManifest.xml&#34;) xmlFile, _ := androidbinary.NewXMLFile(f) reader := xmlFile.Reader() // reader を読むと普通のXMLファイルとして読める resources.arscを解析する アプリ名などの設定はAndroidManifest.xmlには直接書かれておらず、 リソースファイルに書いてあることがほとんどです(開発者がよほどものぐさでなければ)。 リソースの情報はapk内のresources.arscに書かれているので、 このファイルを読む機能もついてます。
+f, _ := os.Open(&#34;resources.arsc&#34;) tableFile, _ := androidbinary.NewTableFile(f) // ID 0x7F040000 に対応するリソースを読む config := &amp;androidbinary.ResTableConfig{} val, _ := tableFile.GetResource(androidbinary.ResId(0x7f040000), config) アプリ名はロケールによって変わったりするので、 configで設定できます。 例えば日本語の名前を取得したい場合はこんな感じ。
+// ID 0x7F040000 に対応するリソース(日本語)を読む config := &amp;androidbinary.ResTableConfig{} config.Language[0] = &#39;j&#39; config.Language[1] = &#39;a&#39; val, _ := tableFile.</p>
+
+          
+              <footer>
+                  <a href="https://shogo82148.github.io/blog/2014/05/07/2014-05-07-androidbinary/" rel="full-article">Read On &rarr;</a>
+              </footer>
+          
+
+        
+
+    </article>
+    
+    
+    
+
+
+
+
+<div class="pagination">
+
+    
+        
+        
+        
+        <a href="/" aria-label="First" class="label-pagination"><i class="fa fa-angle-double-left fa-lg"></i></a>
+    
+
+    
+    
+        <a href="/page/8/" aria-label="Previous" class="label-pagination"><i class="fa fa-angle-left fa-lg"></i></a>
+    
+
+    
+        <a href="/" class="label-pagination">1</a>
+    
+        <a href="/page/2/" class="label-pagination">2</a>
+    
+        <a href="/page/3/" class="label-pagination">3</a>
+    
+        <a href="/page/4/" class="label-pagination">4</a>
+    
+        <a href="/page/5/" class="label-pagination">5</a>
+    
+        <a href="/page/6/" class="label-pagination">6</a>
+    
+        <a href="/page/7/" class="label-pagination">7</a>
+    
+        <a href="/page/8/" class="label-pagination">8</a>
+    
+        <a href="/page/9/" class="label-pagination">9</a>
+    
+        <a href="/page/10/" class="label-pagination">10</a>
+    
+        <a href="/page/11/" class="label-pagination">11</a>
+    
+        <a href="/page/12/" class="label-pagination">12</a>
+    
+        <a href="/page/13/" class="label-pagination">13</a>
+    
+        <a href="/page/14/" class="label-pagination">14</a>
+    
+        <a href="/page/15/" class="label-pagination">15</a>
+    
+        <a href="/page/16/" class="label-pagination">16</a>
+    
+
+    
+    
+        <a href="/page/10/" aria-label="Next" class="label-pagination"><i class="fa fa-angle-right fa-lg"></i></a>
+    
+
+    
+    
+        <a href="/page/16/" aria-label="Last"><i class="fa fa-angle-double-right fa-lg"></i></a>
+    
+
+</div>
+
+  
+
+  </div>
+
+  
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+       
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2018/01/02/2018-01-02-cloudformation-template-for-mackerel-integration/">Mackerel AWS Integration 用の CloudFormation テンプレートを書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/12/06/2017-12-06-mecab-in-lambda/">MeCabをAWS Lambdaで動かす(2017年版)</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/10/28/2017-10-28-golang-floating-point-number/">Go言語の浮動小数点数のお話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/10/22/2017-10-22-aws-certification-manager-validation/">ACMのドメイン検証をシミュレートするやつ書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/08/25/2017-08-25-unicode9-grapheme-cluster/">Perl 5.26 &amp; Unicode 9.0 で変わる書記素クラスタ(grapheme cluster)のお話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/06/26/2017-06-26-go19-monotonic-clock/">Go1.9から使える Monotonic Clocks を試してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/06/16/2017-06-16-mysql-driver-and-context/">ぼくのかんがえたさいきょうのcontext対応版go-mysql-driverをマージしてもらった</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/05/30/2017-05-30-grumpy/">Re: GoとPythonとGrumpyの速度ベンチマーク</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/05/04/2017-05-04-go-rerand/">String::RandomのGo移植を書いてみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/04/22/2017-04-22-postgresql-exclusion-constraint/">Re: PostgreSQLで排他制約がめっちゃ便利！！</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+    
+ </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2018 Shogo Ichinose - <a href="https://shogo82148.github.io/license/">License</a> -
+  <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank" href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+</p>
+
+</footer>
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    displayMath: [['$$','$$'], ['\[','\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all.length) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+</script>
+
+
+<script>
+  var _gaq=[['_setAccount','UA-4526627-4'],['_trackPageview']];
+  (function(d,t){var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+  g.src=('https:'==location.protocol?'//ssl':'//www')+'.google-analytics.com/ga.js';
+  s.parentNode.insertBefore(g,s)}(document,'script'));
+</script>
+
+</body>
+</html>
+   

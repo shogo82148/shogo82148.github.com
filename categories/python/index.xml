@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Python on Shogo&#39;s Blog</title>
+    <link>https://shogo82148.github.io/categories/python/</link>
+    <description>Recent content in Python on Shogo&#39;s Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>ja-jp</language>
+    <lastBuildDate>Wed, 06 Dec 2017 05:39:57 +0900</lastBuildDate>
+    
+	<atom:link href="https://shogo82148.github.io/categories/python/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>MeCabをAWS Lambdaで動かす(2017年版)</title>
+      <link>https://shogo82148.github.io/blog/2017/12/06/2017-12-06-mecab-in-lambda/</link>
+      <pubDate>Wed, 06 Dec 2017 05:39:57 +0900</pubDate>
+      
+      <guid>https://shogo82148.github.io/blog/2017/12/06/2017-12-06-mecab-in-lambda/</guid>
+      <description>AWS Lambda上で鯖(Mackerel)の曖昧性問題を機械学習で解決しようの記事の中で、 Lambda上でMeCabを動かすことについて以下のように触れられています。
+ 日本語を扱う自然言語処理ではMeCabを扱うことが多いですが、Lambda上でMeCabを動かすのは一手間必要なようです。
+ 確かにLambda上でMeCabを動かすのは一手間必要です。 しかし、参照している記事は少し古くて、今はもう少し手軽にできるようになっています。
+ブコメでも言及しましたが、改めて記事として残しておこうと思います。
+ビルド方法(2017年版) 結論から言うと Norio Kimura さんのコメント 通りにビルドするのが、2017年12月現在一番楽な方法です。 (お返事すっかり忘れていてスイマセン・・・情報提供ありがとうございます)
+ 調べてみると、AWS Lambda では環境変数 LD_LIBRARY_PATH が既に設定されていて /var/task/lib を含んでいました。元記事で ./configure &amp;ndash;prefix=$PROJECT_HOME/local ではなく ./configure &amp;ndash;prefix=$PROJECT_HOME とすればライブラリとの動的リンクは何もしなくても実現できます。さらにコードが展開されるディレクトリ /var/task を固定値だと決め打ちして PROJECT_HOME を /var/task にして開発すれば MeCab に渡すパラメーターの設定（-d, -r）も不要になります。undocumented な仕様に２つも依存していて気持ち悪いですが、MeCab を呼ぶ側のコードを Lambda 用に変更する必要がなくなります。
+ コメント中の元記事というのは、こちらの記事のことです。
+ AWS Lambda で MeCab を動かす  ``` bash install.sh export PROJECT_HOME=/var/task # LAMBDA_TASK_ROOT
+1. プロジェクト用にディレクトリを作成 mkdir -p &amp;ldquo;$PROJECT_HOME&amp;rdquo;
+2. MeCabのダウンロードとインストール googlecodeサービス終了に伴い、ダウンロードURLが元記事と変わっていることに注意 cd &amp;ldquo;$HOME&amp;rdquo; curl -fsSL &amp;ldquo;https://drive.</description>
+    </item>
+    
+    <item>
+      <title>AWS Lambda で MeCab を動かす(改)</title>
+      <link>https://shogo82148.github.io/blog/2016/02/10/2016-02-10-mecab-in-lambda/</link>
+      <pubDate>Wed, 10 Feb 2016 14:52:00 +0900</pubDate>
+      
+      <guid>https://shogo82148.github.io/blog/2016/02/10/2016-02-10-mecab-in-lambda/</guid>
+      <description>MeCabのPythonバインディングをいじってた関係で、MeCabについてインターネットをさまよっていたら、 AWS Lambda で MeCab を動かすという記事を見つけました。 Lambdaの計算リソースで形態素解析できるのは楽しいですねー。 ただ実装にまだまだ改善できそうな部分があったので修正してみました。
+2017/12/06追記 Norio Kimuraさんのコメントを受けて、MeCabをAWS Lambdaで動かす(2017年版)を書きました。 以下の手順でも動きますが、少し簡単に出来るようになっています。
+問題点 第一に「外部プロセスを起動しているので遅い」という点です。 外部プロセスの起動は非常に重くて数百msかかります。 MeCabは非常に高速で数msもあれば解析が終わるのに、もったいないですよね。
+第二に「OSコマンドインジェクションの危険性がある」という点です。 解析対象の文字列をコマンドライン引数として渡しており、この際シェルを経由しています。 そのため、{&amp;quot;sentence&amp;quot;: &amp;quot;$(ls)&amp;quot;}のような文字列を渡すと、シェルがコマンドとして実行してしまいます。 API Gatewayなどで外部に公開した場合、第三者が何でもし放題な状態になってしまいます。
+頑張ってMeCabをライブラリとして呼ぶ 全ての元凶は外部プロセス起動にあるので、頑張ってMeCabをライブラリとして呼んでみましょう。 そもそもなんで外部プロセス起動をしていたかというと、 LD_LIBRARY_PATHが正しく設定されていないためimport MeCab時にlibmecab.soを発見できないからです。 なんとかならないものかと探したところ、Stack Overflowにそれっぽい記事がありました。
+ Setting LD_LIBRARY_PATH from inside Python  「環境変数を設定してから自分自身をexecし直す方法」と「ctypesを使って絶対パス指定で読み込む方法」が紹介されています。 前者の方がvoteは多いですがLambdaでこれをやるのは大変そうなので、後者で試してみます。
+``` python lambda_function.py
+preload libmecab import os import ctypes libdir = os.path.join(os.getcwd(), &amp;lsquo;local&amp;rsquo;, &amp;lsquo;lib&amp;rsquo;) libmecab = ctypes.cdll.LoadLibrary(os.path.join(libdir, &amp;lsquo;libmecab.so&amp;rsquo;))
+ 一度読み込んでしまったライブラリは再利用されるため、 `import MeCab`はここで読み込んだライブラリにリンクされます(importの順番が重要なの闇な感じがする)。 `LD_LIBRARY_PATH`が正しく設定されている必要はありません。 さて、これで`lambda_function.py`と`tokenizer.py`が分かれている必要がなくなったので、二つを合体してみましょう。 ``` python lambda_function.py # coding=utf-8 import os import settings import logging logger = logging.</description>
+    </item>
+    
+    <item>
+      <title>MeCabをPython3から使う(続報)</title>
+      <link>https://shogo82148.github.io/blog/2015/12/20/2015-12-20-mecab-in-python3-final/</link>
+      <pubDate>Sun, 20 Dec 2015 01:03:00 +0900</pubDate>
+      
+      <guid>https://shogo82148.github.io/blog/2015/12/20/2015-12-20-mecab-in-python3-final/</guid>
+      <description>Python3からMeCabを扱おうとして挫折していたのですが (MeCabをPython3から使う(中間報告))、 改めて調査して、上手くいかなかった原因が分かったのでご報告します。
+おさらい Python3で以下のようにMeCabを使おうとすると
+import MeCab tagger = MeCab.Tagger(&amp;#39;&amp;#39;) text = u&amp;#39;MeCabで遊んでみよう!&amp;#39; node = tagger.parseToNode(text) while node: print(node.surface + &amp;#39;\t&amp;#39; + node.feature) node = node.next surfaceが全く読み取れないという現象に遭遇していました。
+BOS/EOS,*,*,*,*,*,*,*,* 名詞,一般,*,*,*,*,* 助詞,格助詞,一般,*,*,*,で,デ,デ 動詞,自立,*,*,五段・バ行,連用タ接続,遊ぶ,アソン,アソン 助詞,接続助詞,*,*,*,*,で,デ,デ Traceback (most recent call last): File &amp;#34;m.py&amp;#34;, line 10, in &amp;lt;module&amp;gt; print( node.surface + &amp;#39;\t&amp;#39; + node.feature ) UnicodeDecodeError: &amp;#39;utf-8&amp;#39; codec can&amp;#39;t decode byte 0xa3 in position 1: invalid start byte 解決策 詳しい原因なんてどうでもいいからMeCabを使いたい人向けに、最初に解決方法を書いておきます。 以下のように本当に解析したい対象を解析する前に、一度parseをしておけばOKです。
+import MeCab tagger = MeCab.</description>
+    </item>
+    
+    <item>
+      <title>MeCabをPython3から使う(中間報告)</title>
+      <link>https://shogo82148.github.io/blog/2015/06/02/2015-06-02-mecab-in-python3/</link>
+      <pubDate>Tue, 02 Jun 2015 23:12:00 +0900</pubDate>
+      
+      <guid>https://shogo82148.github.io/blog/2015/06/02/2015-06-02-mecab-in-python3/</guid>
+      <description>先日このようなツイートを見かけて、 「Python3になってGCの挙動変わったのかな？」と疑問に思ったので調査してみました。
+MeCabをPythonから使う注意点とか - Shogo&amp;#39;s Blog http://t.co/vJnOqZfUd7 @shogo82148さんから python3だと変数に代入しなくても動くのだけど2.xでは留意しないといけない
+&amp;mdash; NOKUBI Takatsugu野首貴嗣 (@knok) 2015年6月1日 
+Python3へのMeCabインストール 手元のPython3.4.3にMeCab Bindingをインストールします。 MeCabの公式(Google Codeサービス停止にともないgithub pageへ移行している模様)から落とせる Python BindingはPython2.x向けのため、setup.pyがそのままでは動きません。 Python3.xでは非互換な文法の変更が入ったので以下のように書き換える必要があります。
+diff --git a/setup.py.org b/setup.py index 4486cbb..657945a 100644 --- a/setup.py.org +++ b/setup.py @@ -7,7 +7,7 @@ def cmd1(str):  return os.popen(str).readlines()[0][:-1] def cmd2(str): - return string.split (cmd1(str)) + return cmd1(str).split()  setup(name = &amp;#34;mecab-python&amp;#34;, version = cmd1(&amp;#34;mecab-config --version&amp;#34;),  あとは python setup.py install で入ります。
+動かしてみる 以前書いた「MeCabをPythonから使う注意点とか」を見返しながら、 GCされて上手く動かない例 をPython3.</description>
+    </item>
+    
+    <item>
+      <title>Tweepyの2.3.0が出ました</title>
+      <link>https://shogo82148.github.io/blog/2014/04/27/2014-04-27-tweepy-2-dot-3-0-released/</link>
+      <pubDate>Sun, 27 Apr 2014 21:51:00 +0900</pubDate>
+      
+      <guid>https://shogo82148.github.io/blog/2014/04/27/2014-04-27-tweepy-2-dot-3-0-released/</guid>
+      <description>Tweepyの2.3.0が出ました。 「Tweepy が Application-only Authentication に対応します」僕のprも取り込まれていて、 Application-only Authentication が標準で使えるようになりました。 というわけで、早速遊んでみます。
+Application-only Authenticationで遊ぶ 使い方は「tweepyでApplication-only Authenticationしてみた」のときとほぼ同じ。 Tweepy本体に取り込んでもらったので、名前空間がちょこっと変わったくらいです。 Consumer Key と Consumer Secretだけ設定すればいいので、簡単に使えます。
+#!/usr/bin/env python # -*- coding: utf-8 -*- import tweepy import codecs import sys sys.stdin = codecs.getreader(&amp;#39;utf-8&amp;#39;)(sys.stdin) sys.stdout = codecs.getwriter(&amp;#39;utf-8&amp;#39;)(sys.stdout) CONSUMER_KEY = &amp;#39;YOUR CONSUMER KEY&amp;#39; CONSUMER_SECRET = &amp;#39;YOUR CONSUMER SECRET&amp;#39; def main(): user_id = &amp;#34;JO_RI&amp;#34; auth = tweepy.AppAuthHandler(CONSUMER_KEY, CONSUMER_SECRET) api = tweepy.API(auth) arg = {&amp;#39;id&amp;#39;: user_id, &amp;#39;include_rts&amp;#39;: 1} user_statuses = tweepy.</description>
+    </item>
+    
+    <item>
+      <title>Tweepy が Application-only authentication に対応します</title>
+      <link>https://shogo82148.github.io/blog/2014/04/18/2014-04-18-tweepy-will-application-only-auth/</link>
+      <pubDate>Fri, 18 Apr 2014 06:37:00 +0900</pubDate>
+      
+      <guid>https://shogo82148.github.io/blog/2014/04/18/2014-04-18-tweepy-will-application-only-auth/</guid>
+      <description>以前 「tweepyでApplication-only Authenticationしてみた」で 書いたTweepyのAuthHandlerを本体に取り込んでもらいました。 リリースタイミングとかよくわかってないですが、次のリリースとかでApplication-only Authenticationを簡単に使えるようになります、たぶん。
+(2014-04-27追記) このprを取り込んだTweepy 2.3.0がリリースされました。早速遊んでみたのでこちらもどうぞ&amp;gt;Tweepyの2.3.0が出ました
+取り込まれるまでの経緯  「Application-only Authentication 対応しないの？」って質問は去年からあった(tweepy#318) 先日「ここに動くコード載ってるよ」と僕の記事が紹介される 昨日の夕方「コントリビュートしてみない？」とブログやgithub経由で頼まれる やるしか無い！と思って昨日のうちにpr作成 朝起きたら取り込まれてた  日本語なんてマイナーな言語で記事が書いてあっても、読んでくれる人は読んでくれるんですね。 Tweepy は僕も何度か使ったことがあるので Issue とかみて開発状況をチェックしていたんですが、 見覚えのある名前が見えたときはびっくりしました。
+ちょっとしたコードでも公開しておくといいことがあるよ、というお話でした。 最近ここも全然更新してないので、もっとアウトプットしていかないと・・・。</description>
+    </item>
+    
+    <item>
+      <title>RaspberryPiでhttps通信が失敗するのを何とかする</title>
+      <link>https://shogo82148.github.io/blog/2013/05/12/2013-05-12-raspberry-pi-https-connection/</link>
+      <pubDate>Sun, 12 May 2013 16:48:00 +0900</pubDate>
+      
+      <guid>https://shogo82148.github.io/blog/2013/05/12/2013-05-12-raspberry-pi-https-connection/</guid>
+      <description>RaspberryPiをネットつないでみたので、PythonからいろんなURLを叩いて遊んでいたんだけど、 一部のhttps通信が Connection Timed Out で失敗しちゃう。 プログラムの問題かと思ったけど、curlで叩いてもやっぱりタイムアウト。 Macで全く同じ事をするとうまくいく・・・。 いろいろ調べて、何とかしてみたお話。
+原因 接続先がTLSv1にしか対応していないのにSSLv3でアクセスしようとしていたことが問題だったらしい。 明示的にTLSv1を使うように指定して curl を叩いてみるとうまくいった。
+$ curl --tlsv3 https://hogehoge なぜRaspberryPiではダメで Macでは成功するのか、という根本的な原因はよくわからなかった。 SSLv3に対応していないなら自動的にフォールバックしてくれてもよさそうなものだけど、 なぜうまく行かないんだろう・・・？
+Pythonでの対処 PythonでもTLSv3を使えばうまくいくはずなんだけど、 暗号化方式を指定するオプションは見当たらない(2.7での話)。 どうやら標準ライブラリのファイルを直接書き換えるか、 実行時に中身を入れ替えるかしないとできないみたいだ。 この問題普通のUbuntuでも起こるらしく、 そのフォーラムで置き換えコードを見つけた。
+import httplib from httplib import HTTPConnection, HTTPS_PORT import ssl class HTTPSConnection(HTTPConnection): &amp;#34;This class allows communication via SSL.&amp;#34; default_port = HTTPS_PORT def __init__(self, host, port=None, key_file=None, cert_file=None, strict=None, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, source_address=None): HTTPConnection.__init__(self, host, port, strict, timeout, source_address) self.key_file = key_file self.cert_file = cert_file def connect(self): &amp;#34;Connect to a host on a given (SSL) port.</description>
+    </item>
+    
+    <item>
+      <title>tweepyでApplication-only authenticationしてみた</title>
+      <link>https://shogo82148.github.io/blog/2013/05/09/2013-05-09-application-only-authentication-with-tweepy/</link>
+      <pubDate>Thu, 09 May 2013 23:29:00 +0900</pubDate>
+      
+      <guid>https://shogo82148.github.io/blog/2013/05/09/2013-05-09-application-only-authentication-with-tweepy/</guid>
+      <description>Twitter の API リファレンスを久しぶりに見たら、 Application-only authenticationとかいうのを発見。 特定のユーザと関連付けられない代わりに、普通に認証するより制限が緩いみたい。 3月に追加されてたらしい。
+知らなかった・・・。 最近API叩いてなかったからな・・・。
+便利そうなので、Python用のTwitterライブラリであるTweepyから使ってみた。
+AuthHandler Tweepy用のAuthHandler。 認証部分は TwitterのApplication-only authenticationを試してみた のページからほぼコピペ。
+``` python AppAuthHandler.py import tweepy import urllib import urllib2 import base64 import json
+class AppAuthHandler(tweepy.auth.AuthHandler): TOKEN_URL = &amp;lsquo;https://api.twitter.com/oauth2/token&#39;
+def __init__(self, consumer_key, consumer_secret): token_credential = urllib.quote(consumer_key) + &#39;:&#39; + urllib.quote(consumer_secret) credential = base64.b64encode(token_credential) value = {&#39;grant_type&#39;: &#39;client_credentials&#39;} data = urllib.urlencode(value) req = urllib2.Request(self.TOKEN_URL) req.add_header(&#39;Authorization&#39;, &#39;Basic &#39; + credential) req.add_header(&#39;Content-Type&#39;, &#39;application/x-www-form-urlencoded;charset=UTF-8&#39;) response = urllib2.urlopen(req, data) json_response = json.</description>
+    </item>
+    
+    <item>
+      <title>MeCabをPythonから使う注意点とか</title>
+      <link>https://shogo82148.github.io/blog/2012/12/15/2012-12-15-mecab-python/</link>
+      <pubDate>Sat, 15 Dec 2012 17:38:00 +0900</pubDate>
+      
+      <guid>https://shogo82148.github.io/blog/2012/12/15/2012-12-15-mecab-python/</guid>
+      <description>日本語の文章をコンピュータで色々いじるときに， 必ずと言っていいほどよく使うのが形態素解析器． スペースなどの明示的な区切りの無い日本語を単語に分割してくれるツールです． 中でもMeCabが非常に有名で，さまざまなところで使われています．
+MeCabはいろいろな言語から呼び出すことができます． 自然言語処理の分野ではPythonが人気のようですね．僕も使っています． しかし，MeCabをPythonから使う場合，注意する点がいくつかあります． そこにハマっている後輩を見かけたので，文章として残しておくことにします． Python2系が対象です(3系はよくわからない)． 注意するのは以下の二点です．
+ MeCabに渡す文字列はencode，戻ってきた文字列はdecodeする MeCabに渡した文字列は必ず変数に入れておく  EncodeとDecode Python2系の文字列には，バイト列として扱われる文字列(str)と，Unicodeで表現された文字列(unicode)があります． 日本語を扱う場合，strだといろいろ問題があるので，特に理由がなければunicodeを使うべきです． しかし，MeCabはstrしか受け付けません． そこでMeCabに渡す直前・直後でencode・decodeするようにします．
+import MeCab tagger = MeCab.tagger(&amp;#39;-Owakati&amp;#39;) text = u&amp;#39;MeCabで遊んでみよう！&amp;#39; result = tagger.parse(text) # エラー！ encoded_text = text.encode(&amp;#39;utf-8&amp;#39;) # encodeが必要 encoded_result = tagger.parse(text) result = result.decode(&amp;#39;utf-8&amp;#39;) # 必ずdecode &#39;utf-8&#39;の部分は辞書の文字コードに合わせて適宜書き換えてください． デフォルトはeuc-jpですが，utf-8の方が幸せになれると思います．
+必ず変数に入れる 次にMeCabの作ったノードに直接アクセスして，品詞情報などを取ってくることを考えます． 適当に書いてみるとこんな感じでしょうか．
+import MeCab tagger = MeCab.tagger(&amp;#39;&amp;#39;) text = u&amp;#39;MeCabで遊んでみよう！&amp;#39; node = tagger.parseToNode(text.encode(&amp;#39;utf-8&amp;#39;)) while node: #printはstrを渡す必要があるのでdecodeは不要 print node.surface + &amp;#39;\t&amp;#39; + node.</description>
+    </item>
+    
+    <item>
+      <title>PythonでCaboChaを美味しくいただく</title>
+      <link>https://shogo82148.github.io/blog/2012/11/01/2012-11-01-cabocha/</link>
+      <pubDate>Thu, 01 Nov 2012 23:02:00 +0900</pubDate>
+      
+      <guid>https://shogo82148.github.io/blog/2012/11/01/2012-11-01-cabocha/</guid>
+      <description>日本語構文解析器CaboChaをPythonから使ってみたメモ．
+インストール CaboCha自体のインストールは公式のドキュメントを参照． ググれば他の人のレポートも出てくるはず．
+CaboChaのソースコードを展開したディレクトリの中の pythonディレクトリにPython-bindingが入ってます． そこに移動した後，管理者権限で以下のコマンドを実行すればインストール完了．
+python setup.py install 食べ方 解析結果を文字列出力 python/test.py に書いてあるとおり．
+``` python test.py http://code.google.com/p/cabocha/source/browse/trunk/python/test.py #!/usr/bin/python
+-- coding: utf-8 -- import CaboCha
+c = CaboCha.Parser(&amp;ldquo;&amp;rdquo;); c = CaboCha.Parser()
+sentence = &amp;ldquo;太郎はこの本を二郎を見た女性に渡した。&amp;rdquo;
+print c.parseToString(sentence)
+tree = c.parse(sentence)
+print tree.toString(CaboCha.FORMAT_TREE) print tree.toString(CaboCha.FORMAT_LATTICE)
+ 以下のような結果が得られれば成功． ``` plain &amp;lt;PERSON&amp;gt;太郎&amp;lt;/PERSON&amp;gt;は-----------D この-D | 本を---D | 二郎を-D | 見た-D | 女性に-D 渡した。 EOS &amp;lt;PERSON&amp;gt;太郎&amp;lt;/PERSON&amp;gt;は-----------D この-D | 本を---D | 二郎を-D | 見た-D | 女性に-D 渡した。 EOS * 0 6D 0/1 2.</description>
+    </item>
+    
+  </channel>
+</rss>
