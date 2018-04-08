@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "ぼくのかんがえたさいきょうのcontext対応版go-mysql-driverをマージしてもらった"
+slug: mysql-driver-and-context
 date: 2017-06-16 07:11:15 +0900
 comments: true
 categories: [go, golang, mysql]

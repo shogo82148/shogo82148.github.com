@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "AnySan::Provider::Slackとape-slackを書いた"
+slug: anysan-provider-slack-and-ape-slack
 date: 2015-09-28T22:11:00+09:00
 comments: true
 categories: [perl, go, golang]

@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Go言語でPerlのテストを早くする"
+slug: faster-perl-test-with-go-lang
 date: 2015-09-19T21:49:00+09:00
 comments: true
 categories: [perl, go, golang]

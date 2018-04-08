@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Go言語のchanはいったいいくつ付けられるのか試してみた"
+slug: how-many-chan-can-i-write-in-golang
 date: 2017-03-17 21:10:25 +0900
 comments: true
 categories: [go, golang]

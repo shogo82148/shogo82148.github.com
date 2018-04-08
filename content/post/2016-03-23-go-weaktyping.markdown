@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "数値と文字列がごちゃ混ぜになっているJSONをよしなにParseするやつ作った"
+slug: go-weaktyping
 date: 2016-03-23T20:44:00+09:00
 comments: true
 categories: [go, golang]

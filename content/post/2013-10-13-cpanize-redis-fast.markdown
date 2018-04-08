@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Redis::Fastをcpanize＆アップデートしました"
+slug: cpanize-redis-fast
 date: 2013-10-13T22:39:00+09:00
 comments: true
 categories: [redis, perl]

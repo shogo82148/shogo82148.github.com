@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "社内ISUCONにチームぽわわ3.5で参加しました"
+slug: kayac-isucon
 date: 2015-04-19T19:12:00+09:00
 comments: true
 categories: [isucon]

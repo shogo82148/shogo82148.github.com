@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Re: PostgreSQLで排他制約がめっちゃ便利！！"
+slug: postgresql-exclusion-constraint
 date: 2017-04-22 19:10:21 +0900
 comments: true
 categories: ['postgresql']

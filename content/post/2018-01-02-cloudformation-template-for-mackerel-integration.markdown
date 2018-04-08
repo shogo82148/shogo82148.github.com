@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Mackerel AWS Integration 用の CloudFormation テンプレートを書いた"
+slug: cloudformation-template-for-mackerel-integration
 date: 2018-01-02 12:36:51 +0900
 comments: true
 categories: [mackerel]

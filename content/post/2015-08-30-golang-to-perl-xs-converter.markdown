@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "PerlからGolangを呼び出す"
+slug: golang-to-perl-xs-converter
 date: 2015-08-30T22:52:00+09:00
 comments: true
 categories: [perl, go, golang]

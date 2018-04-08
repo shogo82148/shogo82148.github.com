@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Togetterの編集作業便利にしたい"
+slug: togetter-helper
 date: 2012-10-28T01:11:00+09:00
 comments: true
 categories: [togetter, userscript]

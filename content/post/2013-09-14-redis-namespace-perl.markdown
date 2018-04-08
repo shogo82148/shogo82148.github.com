@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Redis::NamespaceのPerl版書いた"
+slug: redis-namespace-perl
 date: 2013-09-14T18:36:00+09:00
 comments: true
 categories: [perl, redis]

@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "MeCabをPython3から使う(続報)"
+slug: mecab-in-python3-final
 date: 2015-12-20T01:03:00+09:00
 comments: true
 categories: [python, mecab]

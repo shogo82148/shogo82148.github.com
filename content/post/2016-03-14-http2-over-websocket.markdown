@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "ngrokみたいなHTTPプロキシを書いてみた"
+slug: http2-over-websocket
 date: 2016-03-14T22:59:00+09:00
 comments: true
 categories: [go, golang, websocket]

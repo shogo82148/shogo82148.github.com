@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "おねえさんのコンピュータを作ってみた"
+slug: letscount
 date: 2012-09-22T11:08:00+09:00
 comments: true
 categories: 

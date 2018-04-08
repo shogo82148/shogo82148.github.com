@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "スパコンで約2時間36分かかったという、5×5の魔方陣の全解列挙を、おねえさんのコンピュータで試す"
+slug: letscount-magic-square
 date: 2014-03-19T18:26:00+09:00
 comments: true
 categories: []

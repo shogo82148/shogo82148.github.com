@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Go言語のヒープに確保するデータの初期化コストについて調べてみた(Go1.8.1版)"
+slug: go1-8-allocation
 date: 2017-04-13 08:23:08 +0900
 comments: true
 categories: [go, golang]

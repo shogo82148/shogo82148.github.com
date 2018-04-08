@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "go-JSONStoreの高速化と機能追加"
+slug: tune-up-go-jsonstore
 date: 2017-03-05 16:19:25 +0900
 comments: true
 categories: [go, golang]

@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Goでデプロイ神社書いてみた"
+slug: go-deploy-shrine
 date: 2015-12-13T10:51:00+09:00
 comments: true
 categories: [go, golang]

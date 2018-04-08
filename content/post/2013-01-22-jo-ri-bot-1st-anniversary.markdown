@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "じょりぼっとが起動して一年がたちました"
+slug: jo-ri-bot-1st-anniversary
 date: 2013-01-22T13:57:00+09:00
 comments: true
 categories: 

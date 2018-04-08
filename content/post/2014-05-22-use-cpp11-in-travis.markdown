@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "travis-ciでC++11のテストをする"
+slug: use-cpp11-in-travis
 date: 2014-05-22T23:34:00+09:00
 comments: true
 categories: [c++, travis]

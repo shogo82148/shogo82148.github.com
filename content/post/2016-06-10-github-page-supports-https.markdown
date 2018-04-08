@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "GitHub Pagesがhttpsをサポートしたので切り替えてみた"
+slug: github-page-supports-https
 date: 2016-06-10 00:53:51 +0900
 comments: true
 categories: [web]

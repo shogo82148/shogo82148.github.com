@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "DateTime.pmにうるう秒の修正が入った話"
+slug: leap-second-in-datetime-dot-pm
 date: 2016-12-15 22:17:47 +0900
 comments: true
 categories: [perl, leapsecond]

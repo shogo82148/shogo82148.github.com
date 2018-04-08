@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "net/httpで安全に静的ファイルを返す"
+slug: serving-static-files-in-golang
 date: 2016-04-13T02:29:00+09:00
 comments: true
 categories: [go, golang]

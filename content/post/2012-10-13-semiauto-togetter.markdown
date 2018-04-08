@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "半自動トゥギャりスクリプトを書いてみた"
+slug: semiauto-togetter
 date: 2012-10-13T17:35:00+09:00
 comments: true
 categories: [togetter, bookmarklet]

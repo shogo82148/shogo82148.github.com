@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "C# でお手軽にMessagePack解析！"
+slug: mini-message-pack
 date: 2014-05-25T01:38:00+09:00
 comments: true
 categories: [csharp, unity, messagepack]

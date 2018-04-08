@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Ark-View-DataTable グラフや表やCSVを簡単に表示したい"
+slug: ark-view-datatable
 date: 2013-12-07T20:11:00+09:00
 comments: true
 categories: [perl,ark]

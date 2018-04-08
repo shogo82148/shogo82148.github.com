@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "YAPCへ行ってきた(二日目)"
+slug: yapc-second-day
 date: 2013-09-24T07:52:00+09:00
 comments: true
 categories: [perl, yapcasia]

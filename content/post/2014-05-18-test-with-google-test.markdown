@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Google Test を使ってC++のテストしてみた"
+slug: test-with-google-test
 date: 2014-05-18T21:24:00+09:00
 comments: true
 categories: [c, c++, google test]

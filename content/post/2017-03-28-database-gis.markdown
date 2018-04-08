@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Redis、PostgreSQL、MySQLで近傍検索"
+slug: database-gis
 date: 2017-03-28 19:59:49 +0900
 comments: true
 categories: [mysql, redis, postgresql]

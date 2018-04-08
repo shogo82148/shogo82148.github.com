@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "PerlでもGoでも実行できるQuine書いた"
+slug: ployglot-quine-of-golang-and-perl
 date: 2016-04-06T10:07:00+09:00
 comments: true
 categories: [perl, go, golang]

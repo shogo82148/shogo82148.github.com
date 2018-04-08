@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "C#のconditional Attributeのコンパイル結果を見てみる"
+slug: conditional-attribute
 date: 2014-05-29T19:20:00+09:00
 comments: true
 categories: [ csharp ]

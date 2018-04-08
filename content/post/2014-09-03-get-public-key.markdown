@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "秘密鍵から公開鍵をつくる"
+slug: get-public-key
 date: 2014-09-03T13:40:00+09:00
 comments: true
 categories: []

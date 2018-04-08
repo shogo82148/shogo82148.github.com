@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Githubさんにpack exceeds maximum allowed sizeって言われた"
+slug: github-remote-push-pack-size-exceeded
 date: 2014-09-13T10:51:00+09:00
 comments: true
 categories: [git]

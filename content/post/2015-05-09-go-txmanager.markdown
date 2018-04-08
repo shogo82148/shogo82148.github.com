@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Goのトランザクションマネージャ作った"
+slug: go-txmanager
 date: 2015-05-09T15:17:00+09:00
 comments: true
 categories: [go, golang]

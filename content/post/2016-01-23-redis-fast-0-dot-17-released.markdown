@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Redis::Fast 0.17 をリリースしました"
+slug: redis-fast-0-dot-17-released
 date: 2016-01-23T16:20:00+09:00
 comments: true
 categories: [perl, redis]

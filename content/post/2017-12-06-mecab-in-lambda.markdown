@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "MeCabをAWS Lambdaで動かす(2017年版)"
+slug: mecab-in-lambda
 date: 2017-12-06 05:39:57 +0900
 comments: true
 categories: [aws-lambda, python, mecab]

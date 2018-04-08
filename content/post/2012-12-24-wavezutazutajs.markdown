@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "JavaScript版WaveZutaZuta作ってみた"
+slug: wavezutazutajs
 date: 2012-12-24T13:51:00+09:00
 comments: true
 categories: [JavaScript, WebAudio]

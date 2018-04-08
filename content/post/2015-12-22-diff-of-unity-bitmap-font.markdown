@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "UnityのBitmapフォントの収録文字のdiffを取る"
+slug: diff-of-unity-bitmap-font
 date: 2015-12-22T19:04:00+09:00
 comments: true
 categories: [unity, git]

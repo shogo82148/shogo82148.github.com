@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Go言語でコンパイル時フィボナッチ数列計算"
+slug: golang-compile-time-fib
 date: 2017-02-19 09:06:05 +0900
 comments: true
 categories: [go, golang]

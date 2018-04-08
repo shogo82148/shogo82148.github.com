@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "go-sql-proxyがcontextに対応しました"
+slug: go-sql-proxy-in-go18
 date: 2017-02-16 07:16:44 +0900
 comments: true
 categories: [go, golang]

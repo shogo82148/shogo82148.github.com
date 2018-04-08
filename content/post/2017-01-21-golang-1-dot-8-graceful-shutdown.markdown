@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Go1.8のGraceful Shutdownとgo-gracedownの対応"
+slug: golang-1-dot-8-graceful-shutdown
 date: 2017-01-21 12:44:32 +0900
 comments: true
 categories: [go, golang]

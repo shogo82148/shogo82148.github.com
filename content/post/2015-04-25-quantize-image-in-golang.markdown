@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Go言語で画像の減色を行う"
+slug: quantize-image-in-golang
 date: 2015-04-25T21:49:00+09:00
 comments: true
 categories: [go, golang]

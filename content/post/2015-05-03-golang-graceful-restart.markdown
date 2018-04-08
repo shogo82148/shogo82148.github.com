@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Go言語でGraceful Restartをする"
+slug: golang-graceful-restart
 date: 2015-05-03T12:10:00+09:00
 comments: true
 categories: [go, golang]

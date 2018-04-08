@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "キレイになったコトバとハートを元に戻すツール作った"
+slug: anti-sizukatter
 date: 2014-06-01T00:24:00+09:00
 comments: true
 categories: [ javascript ]

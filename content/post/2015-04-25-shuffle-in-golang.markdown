@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Go言語でshuffleする話"
+slug: shuffle-in-golang
 date: 2015-04-25T18:07:00+09:00
 comments: true
 categories: [go, golang]

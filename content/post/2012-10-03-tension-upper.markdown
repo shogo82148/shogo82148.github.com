@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "リアルタイムにテンションを上げてみた"
+slug: tension-upper
 date: 2012-10-03T11:42:00+09:00
 comments: true
 categories: 

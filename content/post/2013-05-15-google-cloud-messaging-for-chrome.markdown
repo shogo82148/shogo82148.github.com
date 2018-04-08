@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Google Cloud Messaging for Chrome を試してみた"
+slug: google-cloud-messaging-for-chrome
 date: 2013-05-15T11:26:00+09:00
 comments: true
 categories: [chrome, perl]

@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "転職して一週間がたちました"
+slug: join-fuller
 date: 2016-03-08T15:55:00+09:00
 comments: true
 categories: []

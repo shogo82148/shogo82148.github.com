@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "tweepyでApplication-only authenticationしてみた"
+slug: application-only-authentication-with-tweepy
 date: 2013-05-09T23:29:00+09:00
 comments: true
 categories: [Python, Twitter]

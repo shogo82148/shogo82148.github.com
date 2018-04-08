@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "nginx-omniauth-adapterのGolangポート作った"
+slug: go-nginx-oauth2-adapter
 date: 2016-03-10T12:51:00+09:00
 comments: true
 categories: [go, golang]

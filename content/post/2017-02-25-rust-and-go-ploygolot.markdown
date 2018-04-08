@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Rust vs Go の終戦へ向けてPolyglotを作ってみた"
+slug: rust-and-go-ploygolot
 date: 2017-02-25 16:58:27 +0900
 comments: true
 categories: [rust, rustlang, go, golang]

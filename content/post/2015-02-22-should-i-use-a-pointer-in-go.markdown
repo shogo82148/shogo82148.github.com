@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "map[string]Hoge or map[string]*Hoge ?"
+slug: should-i-use-a-pointer-in-go
 date: 2015-02-22T02:14:00+09:00
 comments: true
 categories: [go, golang]

@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "ISUCON3の予選に参加してきた"
+slug: isucon3-qualify
 date: 2013-10-07T13:03:00+09:00
 comments: true
 categories: [isucon, perl]

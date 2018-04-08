@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Redisのトランザクション・スクリプト・ランキングを扱うPerlモジュールを公開しました"
+slug: releaes-redis-modules
 date: 2016-03-18T22:16:00+09:00
 comments: true
 categories: [perl, redis]

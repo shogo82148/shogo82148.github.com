@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "UDPのパケットをSSHを通してトンネルする"
+slug: tunneling-udp-via-ssh
 date: 2012-12-28T16:38:00+09:00
 comments: true
 categories: [UDP, SSH]

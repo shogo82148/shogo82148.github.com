@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "RaspberryPiからメールを送る"
+slug: mail-from-raspberrypi
 date: 2013-05-12T21:50:00+09:00
 comments: true
 categories: [ RaspberryPi]

@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Go言語でGraceful Restartをするときに取りこぼしを少なくする"
+slug: golang-graceful-restart-2nd
 date: 2015-11-23T20:51:00+09:00
 comments: true
 categories: [go, golang]

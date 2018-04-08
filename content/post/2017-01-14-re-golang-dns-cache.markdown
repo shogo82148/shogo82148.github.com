@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Re:golang の http.Client を速くする"
+slug: re-golang-dns-cache
 date: 2017-01-14 17:02:12 +0900
 comments: true
 categories: [go, golang]

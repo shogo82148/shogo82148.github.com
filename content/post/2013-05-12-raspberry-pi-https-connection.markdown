@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "RaspberryPiでhttps通信が失敗するのを何とかする"
+slug: raspberry-pi-https-connection
 date: 2013-05-12T16:48:00+09:00
 comments: true
 categories: [RaspberryPi, Python]

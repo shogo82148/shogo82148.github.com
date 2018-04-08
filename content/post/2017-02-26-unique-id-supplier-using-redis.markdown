@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Redisを使ってユニークなIDを配布する"
+slug: unique-id-supplier-using-redis
 date: 2017-02-26 19:37:45 +0900
 comments: true
 categories: [go, golang, redis]

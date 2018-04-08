@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "OAuthの認証にWebViewを使うのはやめよう"
+slug: no-more-webview
 date: 2012-11-24T23:06:00+09:00
 comments: true
 categories: [Android, Twitter]

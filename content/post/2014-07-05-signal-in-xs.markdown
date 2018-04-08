@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "PerlのXS中に起きたシグナルの扱い"
+slug: signal-in-xs
 date: 2014-07-05T11:56:00+09:00
 comments: true
 categories: [ perl ]

@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Go言語でSQLのトレースをする"
+slug: golang-sql-proxy
 date: 2015-05-13T01:22:00+09:00
 comments: true
 categories: [go, golang]

@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "聞こえますか…自動生成…してみた…よ…"
+slug: kikoemasuka
 date: 2012-12-05T23:07:00+09:00
 comments: true
 categories: 

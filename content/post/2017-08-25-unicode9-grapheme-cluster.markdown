@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Perl 5.26 & Unicode 9.0 で変わる書記素クラスタ(grapheme cluster)のお話"
+slug: unicode9-grapheme-cluster
 date: 2017-08-25 07:08:44 +0900
 comments: true
 categories: [perl]

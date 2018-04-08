@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "AWSをはじめてみた"
+slug: starting-aws
 date: 2013-02-21T01:01:00+09:00
 comments: true
 categories: 

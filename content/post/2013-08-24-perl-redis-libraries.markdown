@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Perl の Redis ライブラリを調べた"
+slug: perl-redis-libraries
 date: 2013-08-24T17:51:00+09:00
 comments: true
 categories: [perl, redis]

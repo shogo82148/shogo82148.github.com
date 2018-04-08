@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "IRCに癒やしボットを入れてみた"
+slug: irc-healing-bot
 date: 2014-06-04T07:37:00+09:00
 comments: true
 categories: [ perl, unazusan ]

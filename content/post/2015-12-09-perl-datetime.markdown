@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Perl の DateTime 利用上の注意点"
+slug: perl-datetime
 date: 2015-12-09T00:00:00+09:00
 comments: true
 categories: [perl, leapsecond]

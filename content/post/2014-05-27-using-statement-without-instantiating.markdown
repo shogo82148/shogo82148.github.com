@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "初期化なしのusing文ってOK？"
+slug: using-statement-without-instantiating
 date: 2014-05-27T13:48:00+09:00
 comments: true
 categories: [ csharp ]

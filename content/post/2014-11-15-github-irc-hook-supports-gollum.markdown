@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "GithubのIRCフックがgollumをサポートしました"
+slug: github-irc-hook-supports-gollum
 date: 2014-11-15T22:24:00+09:00
 comments: true
 categories: [github]

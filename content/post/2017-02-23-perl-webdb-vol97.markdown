@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "WEB+DB PRESS Vol.97にPerlとRedisの記事を寄稿しました"
+slug: perl-webdb-vol97
 date: 2017-02-23 18:27:53 +0900
 comments: true
 categories: [perl, redis]

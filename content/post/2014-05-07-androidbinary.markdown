@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Androidのバイナリファイルを解析するgoのライブラリ"
+slug: androidbinary
 date: 2014-05-07T13:29:00+09:00
 comments: true
 categories: [android, go, golang]

@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "MeCabのGolangバインディングを書いてみた"
+slug: golang-mecab-binding
 date: 2016-02-11T19:32:00+09:00
 comments: true
 categories: [mecab, go, golang]

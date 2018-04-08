@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "Redis::NamespaceとRedis::Keyをリリースしました"
+slug: redis-namespace-and-redis-key
 date: 2013-10-18T23:21:00+09:00
 comments: true
 categories: [perl, redis]

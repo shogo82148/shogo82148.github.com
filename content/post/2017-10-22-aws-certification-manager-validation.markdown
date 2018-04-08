@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "ACMのドメイン検証をシミュレートするやつ書いた"
+slug: aws-certification-manager-validation
 date: 2017-10-22 15:45:02 +0900
 comments: true
 categories: [go, golang]

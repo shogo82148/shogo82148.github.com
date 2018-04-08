@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "git-mergeの挙動をカスタマイズする"
+slug: customize-git-merge
 date: 2015-12-16T22:24:00+09:00
 comments: true
 categories: [git]

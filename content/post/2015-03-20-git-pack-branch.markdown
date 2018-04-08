@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "git で管理しているリポジトリの各ブランチの中身をそれぞれ個別のディレクトリにエクスポートする(git-archive版)"
+slug: git-pack-branch
 date: 2015-03-20T18:38:00+09:00
 comments: true
 categories: [git]

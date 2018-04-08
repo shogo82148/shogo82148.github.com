@@ -1,6 +1,7 @@
 ---
 layout: post
 title: "ISUCON4にチームぽわわで参加しました"
+slug: isucon-powawa-4
 date: 2014-10-03T19:55:00+09:00
 comments: true
 categories: [isucon]
