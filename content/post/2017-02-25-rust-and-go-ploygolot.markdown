@@ -19,7 +19,7 @@ RustとGoのPloyglotを作ってみました。
 
 ## 結果
 
-``` rust polyglot.rs
+``` rust
 /*/*/
 package main
 
@@ -34,7 +34,7 @@ fn main() {
 }
 ```
 
-``` go polyglot.go
+``` go
 /*/*/
 package main
 
@@ -76,7 +76,7 @@ GoからRustのコードを呼び出すサンプルコードを見つけたの�
 `main.go`と`lib.go`を以下のように置き換えます。
 内容は一緒なので、シンボリックリンクにすると編集が楽でいいかもしれませんね。
 
-``` go main.go
+``` go
 /*golang code starts from here/*/
 package main
 
@@ -102,7 +102,7 @@ pub extern "C" fn hello(name: *const libc::c_char) {
 }
 ```
 
-``` rust lib.rs
+``` rust
 /*golang code starts from here/*/
 package main
 
