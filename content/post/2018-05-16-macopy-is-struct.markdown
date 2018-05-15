@@ -89,7 +89,7 @@ Gopherなみなさんなら `go vet` はCIとかエディターの拡張等で�
 これはもともと [sync.Mutex](https://golang.org/pkg/sync/#Mutex)構造体のコピーを防ぐための機能です。
 この機能がどうやって実装されているか `go vet` のコードをあさっていくと・・・
 
-```
+```go
 // https://github.com/golang/go/blob/3868a371a85f2edbf2132d0bd5a6ed9193310dd7/src/cmd/vet/copylock.go#L240-L244
 
 	if plock := types.NewMethodSet(types.NewPointer(typ)).Lookup(tpkg, "Lock"); plock != nil {
