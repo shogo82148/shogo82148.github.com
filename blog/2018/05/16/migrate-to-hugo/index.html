@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <link href="http://gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+  
+  <link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  <link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  
+
+  
+  <title>Goの構造体のコピーを防止する方法</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css">
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+  
+
+  
+
+  <meta name="description" content="">
+  <meta name="keywords" content="">
+
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.38.1" />
+
+  
+  
+
+</head>
+<body>
+
+
+<header role="banner"><hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+    <h2></h2>
+</hgroup></header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+
+<ul class="subscription">
+  
+
+</ul>
+
+
+<form action="https://www.google.com/search" method="get" target="_blank">
+  <fieldset role="search">
+  	<input class="search" type="text" name="q" results="0" placeholder="Search"/>
+    <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+  </fieldset>
+</form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+    <p class="meta">May 16, 2018
+         - 1 minute read 
+         - <a href="https://shogo82148.github.io/blog/2018/05/16/migrate-to-hugo/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
+        
+    </p>
+    <h1 class="entry-title">
+         Goの構造体のコピーを防止する方法 
+    </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          
+
+<p><a href="https://github.com/kuiperbelt/kuiperbelt/pull/34/files#diff-ac30af7ac3674a84335ddfddbe2d4d03R12">去年仕込んだネタ</a>が見つかってしまったので、macopy構造体について一応解説。</p>
+
+<p><blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr"><a href="https://t.co/mHq6oWY3rj">https://t.co/mHq6oWY3rj</a><br><br>macopyさん構造体だったのか・・・</p>&mdash; serinuntius (@_serinuntius) <a href="https://twitter.com/_serinuntius/status/996040976274608128?ref_src=twsrc%5Etfw">2018年5月14日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script></p>
+
+<h2 id="目的">目的</h2>
+
+<p>深淵な理由でGoの構造体のコピーを禁止したい場合があると思います。
+kuiperbeltのケースでは、<a href="https://golang.org/pkg/sync/atomic/">sync/atomicパッケージ</a>を使ってフィールドを更新しているので、
+フィールドへの読み書きは必ずsync/atomicパッケージを使わなければなりません。
+sync/atomicパッケージを使わずに構造体をコピーするとレースコンディションが発生してしまうので、コピーを禁止する必要がありました。</p>
+<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="c1">// https://github.com/kuiperbelt/kuiperbelt/blob/e3c1432ed798716c8e88183518f9126951c227f3/stats.go#L20-L28
+</span><span class="c1"></span><span class="kd">type</span> <span class="nx">Stats</span> <span class="kd">struct</span> <span class="p">{</span>
+	<span class="nx">connections</span>        <span class="kt">int64</span>
+	<span class="nx">totalConnections</span>   <span class="kt">int64</span>
+	<span class="nx">totalMessages</span>      <span class="kt">int64</span>
+	<span class="nx">connectErrors</span>      <span class="kt">int64</span>
+	<span class="nx">messageErrors</span>      <span class="kt">int64</span>
+	<span class="nx">closingConnections</span> <span class="kt">int64</span>
+	<span class="nx">noCopy</span>             <span class="nx">macopy</span>
+<span class="p">}</span>
+
+<span class="c1">// atomic.AddInt64 を使っているので、s.connections の読み取り時には必ずこのメソッドを呼んで欲しい。
+</span><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">s</span> <span class="o">*</span><span class="nx">Stats</span><span class="p">)</span> <span class="nx">Connections</span><span class="p">()</span> <span class="kt">int64</span> <span class="p">{</span>
+  <span class="c1">// return s.connections ではレースコンディションになってしまう。
+</span><span class="c1"></span>	<span class="k">return</span> <span class="nx">atomic</span><span class="p">.</span><span class="nx">LoadInt64</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">s</span><span class="p">.</span><span class="nx">connections</span><span class="p">)</span>
+<span class="p">}</span>
+
+<span class="kd">func</span> <span class="p">(</span><span class="nx">s</span> <span class="o">*</span><span class="nx">Stats</span><span class="p">)</span> <span class="nx">ConnectEvent</span><span class="p">()</span> <span class="p">{</span>
+	<span class="nx">atomic</span><span class="p">.</span><span class="nx">AddInt64</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">s</span><span class="p">.</span><span class="nx">totalConnections</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+	<span class="nx">atomic</span><span class="p">.</span><span class="nx">AddInt64</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">s</span><span class="p">.</span><span class="nx">connections</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="p">}</span></code></pre></div>
+<h2 id="macopy構造体の使い方">macopy構造体の使い方</h2>
+
+<p>そこで登場するのがmacopy構造体です(いや、もちろん別の名前でもいいんですが)。</p>
+<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="c1">// https://github.com/kuiperbelt/kuiperbelt/blob/e3c1432ed798716c8e88183518f9126951c227f3/stats.go#L12-L18
+</span><span class="c1"></span>
+<span class="c1">// macopy may be embedded into structs which must not be copied
+</span><span class="c1">// after the first use.
+</span><span class="c1">// See https://github.com/golang/go/issues/8005#issuecomment-190753527
+</span><span class="c1">// for details.
+</span><span class="c1"></span><span class="kd">type</span> <span class="nx">macopy</span> <span class="kd">struct</span><span class="p">{}</span>
+
+<span class="kd">func</span> <span class="p">(</span><span class="o">*</span><span class="nx">macopy</span><span class="p">)</span> <span class="nx">Lock</span><span class="p">()</span> <span class="p">{}</span></code></pre></div>
+<p>ここで例えば以下のようなコードを書いてしまったとします。</p>
+<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">kuiperbelt</span>
+
+<span class="kd">func</span> <span class="nx">hoge</span><span class="p">()</span> <span class="p">{</span>
+	<span class="kd">var</span> <span class="nx">noCopy</span> <span class="nx">macopy</span>
+	<span class="nx">_</span> <span class="p">=</span> <span class="nx">noCopy</span>
+<span class="p">}</span></code></pre></div>
+<p>このコードを <code>go vet</code> でチェックすると、誤ってコピーしていることを指摘してくれます。</p>
+
+<pre><code>$ go vet
+# github.com/kuiperbelt/kuiperbelt
+./test.go:5: assignment copies lock value to _: kuiperbelt.macopy
+</code></pre>
+
+<p>コンパイル自体はできてしまうので完全に禁止することはできませんが、
+Gopherなみなさんなら <code>go vet</code> はCIとかエディターの拡張等で自動的に実行するようにしてあるでしょうから、
+これでコピーを防ぐことができるでしょう。</p>
+
+<p>もちろんこの機能は構造体のフィールドに含まれている場合も指摘してくれます。</p>
+
+<h2 id="原理">原理</h2>
+
+<p>これはもともと <a href="https://golang.org/pkg/sync/#Mutex">sync.Mutex</a>構造体のコピーを防ぐための機能です。
+この機能がどうやって実装されているか <code>go vet</code> のコードをあさっていくと・・・</p>
+
+<pre><code>// https://github.com/golang/go/blob/3868a371a85f2edbf2132d0bd5a6ed9193310dd7/src/cmd/vet/copylock.go#L240-L244
+
+	if plock := types.NewMethodSet(types.NewPointer(typ)).Lookup(tpkg, &quot;Lock&quot;); plock != nil {
+		if lock := types.NewMethodSet(typ).Lookup(tpkg, &quot;Lock&quot;); lock == nil {
+			return []types.Type{typ}
+		}
+	}
+</code></pre>
+
+<p><code>sync.Mutex</code>構造体のコピーをチェックしているのではなく、
+<code>Lock</code> メソッドが存在している型のコピーをチェックしていることがわかります。</p>
+
+<p>というわけで、<code>sync.Mutex</code>構造体にかぎらず、<a href="https://github.com/kuiperbelt/kuiperbelt/blob/e3c1432ed798716c8e88183518f9126951c227f3/stats.go#L16"><code>Lock</code>メソッドを実装</a>さえしていればOKなので、自作可能というわけです。</p>
+
+<h2 id="まとめ">まとめ</h2>
+
+<p>必要なところにはどんどんまこぴー仕込んでいきましょう。</p>
+
+<p><blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">今後は「ここ、まこぴーしこんどいたほうが良いですね」という会話がGo使いの間でなされるのか</p>&mdash; 猫型🐱蓄音機 (@shinpei0213) <a href="https://twitter.com/shinpei0213/status/996392941957496832?ref_src=twsrc%5Etfw">2018年5月15日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script></p>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>May 16, 2018</time>
+    
+    </span>
+  </p>
+
+  
+  
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2018/04/10/migrate-to-hugo/" title="OctopressからHugoに乗り換えた">OctopressからHugoに乗り換えた</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+
+(function() {
+    
+    
+    
+    if (window.location.hostname == "localhost")
+        return;
+
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    var disqus_shortname = 'shogosblog';
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+       
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2018/05/16/migrate-to-hugo/">Goの構造体のコピーを防止する方法</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/04/10/migrate-to-hugo/">OctopressからHugoに乗り換えた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/01/02/cloudformation-template-for-mackerel-integration/">Mackerel AWS Integration 用の CloudFormation テンプレートを書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/12/06/mecab-in-lambda/">MeCabをAWS Lambdaで動かす(2017年版)</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/10/28/golang-floating-point-number/">Go言語の浮動小数点数のお話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/10/22/aws-certification-manager-validation/">ACMのドメイン検証をシミュレートするやつ書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/08/25/unicode9-grapheme-cluster/">Perl 5.26 &amp; Unicode 9.0 で変わる書記素クラスタ(grapheme cluster)のお話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/06/26/go19-monotonic-clock/">Go1.9から使える Monotonic Clocks を試してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/06/16/mysql-driver-and-context/">ぼくのかんがえたさいきょうのcontext対応版go-mysql-driverをマージしてもらった</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/05/30/grumpy/">Re: GoとPythonとGrumpyの速度ベンチマーク</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2018 Shogo Ichinose - <a href="https://shogo82148.github.io/license/">License</a> -
+  <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank" href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+</p>
+
+</footer>
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    displayMath: [['$$','$$'], ['\[','\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all.length) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+</script>
+
+
+<script>
+  var _gaq=[['_setAccount','UA-4526627-4'],['_trackPageview']];
+  (function(d,t){var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+  g.src=('https:'==location.protocol?'//ssl':'//www')+'.google-analytics.com/ga.js';
+  s.parentNode.insertBefore(g,s)}(document,'script'));
+</script>
+
+</body>
+</html>
+
