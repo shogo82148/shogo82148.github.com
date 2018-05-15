@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Goの構造体のコピーを防止する方法"
-slug: migrate-to-hugo
+slug: macopy-is-struct
 date: 2018-05-16 07:29:00 +0900
 comments: true
 categories: [go, golang]
