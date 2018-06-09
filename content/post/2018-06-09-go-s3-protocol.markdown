@@ -7,7 +7,7 @@ comments: true
 categories: [go, golang]
 ---
 
-Goの [`http.Transport` には `RegisterProtocol` をいうメソッドが生えていて](https://golang.org/pkg/net/http/#Transport.RegisterProtocol) これを使うと、
+Goの [`http.Transport` には `RegisterProtocol` というメソッドが生えていて](https://golang.org/pkg/net/http/#Transport.RegisterProtocol) これを使うと、
 HTTP以外のプロトコルを透過的に扱うことができます。
 代表的なのは `http.NewFileTransport` で、これを使うと、`file://path/to/file.txt` みたいなURLでファイルにアクセスすることができます。
 ([Goオフィシャルの例](https://golang.org/pkg/net/http/#NewFileTransport))
