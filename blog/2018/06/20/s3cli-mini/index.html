@@ -16,7 +16,7 @@
   
 
   
-  <title>じょりぼっとが起動して一年がたちました</title>
+  <title>S3からファイルを落とすだけのツールを作った</title>
 
   
   
@@ -103,18 +103,18 @@
         
 
 <header>
-    <p class="meta">Jan 22, 2013
-         - 2 minute read 
-         - <a href="https://shogo82148.github.io/blog/2013/01/22/jo-ri-bot-1st-anniversary/#disqus_thread">Comments</a>
+    <p class="meta">Jun 20, 2018
+         - 1 minute read 
+         - <a href="https://shogo82148.github.io/blog/2018/06/20/s3cli-mini/#disqus_thread">Comments</a>
 
         
         
         
-            - 
+            - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
         
     </p>
     <h1 class="entry-title">
-         じょりぼっとが起動して一年がたちました 
+         S3からファイルを落とすだけのツールを作った 
     </h1>
 </header>
 
@@ -126,203 +126,66 @@
           
           
 
-<p><a href="https://twitter.com/JO_RI_bot">じょりぼっと</a>が初めてつぶやいてから
-今日でちょうど一年となりました．</p>
+<p>S3からファイルを落とすだけのツールを作りました。</p>
 
-<!-- More -->
+<ul>
+<li><a href="https://github.com/shogo82148/s3cli-mini">s3cli-mini</a></li>
+</ul>
 
-<p><a href="http://togetter.com/li/260576">突然の凍結</a>，74回にも及ぶバルスなどなどを乗り越え，
-今日まで生き延びられたことを嬉しく思います．</p>
+<h2 id="目的">目的</h2>
 
-<p>ちなみに一番最初のツイートはこんなのでした．
-<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">自分の教科にしましたというわけで終わりー。どっちも一部の断面図</p>&mdash; 狼とボット (@JO_RI_bot) <a href="https://twitter.com/JO_RI_bot/status/160941771273146368?ref_src=twsrc%5Etfw">2012年1月22日</a></blockquote>
-<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script></p>
+<p>流行りのCD(継続的デリバリー)を実践するために、専用のデプロイツールをダウンロードする目的で作りました。</p>
 
-<h1 id="学食メニュー">学食メニュー</h1>
+<p>主なデプロイ先はAWSなので、デプロイ操作には awscli が必要です。
+しかしCDに使用している<a href="https://circleci.jp/">CircleCI</a>が公式に提供しているコンテナイメージにはawscliがインストールされていません。
+もちろん <code>apt-get install awscli</code> であとからインストールすることは可能ですが、そのぶんジョブの実行時間が長くなってしまいます。
+また、インストールされる awscli のバージョンが古く、ローカル環境ではうまく動くけど、
+CircleCI上では最新の機能が使えず失敗するということがありました。</p>
 
-<p>じょりぼっとが一周年を迎えるということは，
-起動当初から続けてきた学食メニュー表示機能も一周年ということです．
-一年分のメニューは<a href="https://docs.google.com/spreadsheet/ccc?key=0AmjmnXFuHdP0dDh0UHE4LU5EYXZtMzBZNUtOZnRnWmc&amp;hl=ja#gid=0">こちら</a>にストックしてあります．
-どんなメニューが出されることが多いのか，簡単な統計を取って見ました．</p>
+<p>そこでもう awscli を使うことは諦めて、Goで AWS API を叩いてデプロイするバイナリを作ってしまうことを考えました。
+Goであればシングルバイナリでインストール可能で、CI/CD環境とローカルでバージョンが一致せず悩まされることはありません。
+また並行処理が得意なので、デプロイの時間短縮も図れます。</p>
 
-<h2 id="1食昼食a定">1食昼食A定</h2>
+<p>しかし、このデプロイ用のバイナリをどこに置くか・・・プロジェクト固有の処理が入っているので外部には公開したくない。
+かといってプライベートなS3バケットに置くと、ダウンロードに awscli が必要になってしまう・・・。
+awscli を使うのは諦めたはずでは・・・という、いわゆる「鶏が先か、卵が先か」問題に陥ってしまいました。</p>
 
-<ol>
-<li>回鍋肉 13</li>
-<li>鶏肉と味噌漬け焼き 9</li>
-<li>チキン唐揚げ 8</li>
-<li>豚肉キムチ炒め 7</li>
-<li>ちきんカツ 7</li>
-<li>チキン唐揚げ&lt;スパイシーカレー&gt; 7</li>
-<li>豚肉朝鮮焼き 7</li>
-<li>焼肉とピーマン肉詰めフライ 7</li>
-<li>チキンソテーさわやかソース 7</li>
-<li>チキンマスタード焼き 7</li>
-<li>鶏肉キムチ焼き 7</li>
-<li>チキンピザソース焼 7</li>
-</ol>
+<p>そこでS3からのダウンロードの処理に特化したミニawscliが欲しくなって作成したのが <a href="https://github.com/shogo82148/s3cli-mini">s3cli-mini</a> です。</p>
 
-<h2 id="1食夕食a定">1食夕食A定</h2>
+<h2 id="使い方">使い方</h2>
 
-<ol>
-<li>チキンピザソース焼 13</li>
-<li>酢豚 11</li>
-<li>豚カツ 9</li>
-<li>チキンソテーさわやかソース 9</li>
-<li>グリルドチキンイタリア風 9</li>
-<li>鶏肉と味噌漬け焼き 8</li>
-<li>エッグ焼肉 8</li>
-<li>Bigメンチ 8</li>
-<li>焼肉と春巻き 8</li>
-<li>チキンステーキタルタルソース 8</li>
-</ol>
+<p>現状v0.0.1でサポートしているのは <code>cp</code> コマンドのみです。
+S3バケットからファイルをダウンロードしたり、S3バケットへファイルをアップロードしたり、
+別のS3バケットへファイルを転送することができます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash"><span class="c1"># download from a S3 bucket
+</span><span class="c1"></span>s3cli-mini cp s3://your-bucket/foobar.zip .
 
-<h2 id="1食昼食b定">1食昼食B定</h2>
+<span class="c1"># upload to a S3 bucket
+</span><span class="c1"></span>s3cli-mini cp foobar.zip s3://your-bucket/
 
-<ol>
-<li>筑前煮 16</li>
-<li>いりどり 13</li>
-<li>八宝菜 12</li>
-<li>白身魚フライの卵とじ 11</li>
-<li>白身魚のピリピリ漬け 10</li>
-<li>鯖の生姜焼き 9</li>
-<li>白身魚フライチーズ焼き 9</li>
-<li>うずら卵と野菜の五目煮 8</li>
-<li>鶏肉の酢豚風 8</li>
-<li>シューマイの中華風旨煮 8</li>
-<li>チキンブラウンソース煮 8</li>
-<li>サーモンシチュー 8</li>
-<li>アジフライとツナサラダ 8</li>
-<li>白身魚の磯辺揚げ 8</li>
-</ol>
+<span class="c1"># copy the file from a S3 bucket to another S3 bucket.
+</span><span class="c1"></span>s3cli-mini cp s3://your-bucket/foobar.zip s3://another-bucket/</code></pre></div>
+<p>一応サブコマンドを追加できるようにしましたが、今の所 <code>cp</code> コマンド以外の追加予定はありません。</p>
 
-<h2 id="1食夕食b定">1食夕食B定</h2>
+<h2 id="aws-sdk-go-v2">aws-sdk-go-v2</h2>
 
-<ol>
-<li>すき焼き風旨煮 19</li>
-<li>うずら卵と野菜の五目煮 13</li>
-<li>スペイン風オムレツとコロッケ 13</li>
-<li>ピザ卵とコロッケ 12</li>
-<li>鶏肉と野菜の七味炒め 12</li>
-<li>鮭の野菜あんかけ 11</li>
-<li>鶏肉とヤングコーンの豆板醤炒め 10</li>
-<li>アジフライとツナサラダ 9</li>
-<li>チキンブラウンソース煮 9</li>
-<li>白身魚のピリピリ漬け 9</li>
-</ol>
+<p>これだけだと面白くないので、<a href="https://github.com/aws/aws-sdk-go-v2">aws-sdk-go-v2</a> を使ってみました。
+僕自身つい最近知ったのですが、昨年末に公開されたものです(<a href="https://aws.amazon.com/jp/blogs/developer/aws-sdk-for-go-2-0-developer-preview/">AWS SDK for Go 2.0 Developer Preview</a>)。
+2018年6月20日現在の最新バージョンは<a href="https://github.com/aws/aws-sdk-go-v2/releases/tag/v2.0.0-preview.4">v2.0.0-preview.4 (2018-05-25)</a>とまだ正式リリース前ですが、
+練習も兼ねて採用しました。</p>
 
-<h2 id="1食昼食セット">1食昼食セット</h2>
+<p>詳しい変更点は <a href="https://github.com/aws/aws-sdk-go-v2/blob/master/CHANGELOG.md#release-v200-preview1-2017-12-21">CHANGELOG</a> を見てもらうとして、
+今回楽になったと感じたのは <code>~/.aws/config</code> を勝手に読んでくれることです。
+これによりリージョンの指定などを省略することができます。
+また、AssumeRoleも解釈してくれるので <a href="https://github.com/fujiwara/aswrap">aswrap</a> のような工夫が要らなくなります。</p>
 
-<ol>
-<li>オムライス 16</li>
-<li>五目あんかけ焼きそば 13</li>
-<li>鮭チャーハン 12</li>
-<li>ねぎトロ丼 12</li>
-<li>鶏肉ときのこのチャーハン 11</li>
-<li>トルコライス 11</li>
-<li>三色丼 9</li>
-<li>鶏の照り焼き丼 9</li>
-<li>ビビンバ丼 9</li>
-<li>親子丼 9</li>
-<li>麻婆丼 9</li>
-</ol>
+<ul>
+<li><a href="https://sfujiwara.hatenablog.com/entry/2017/12/13/122952">aswrap - ~/.aws/(config|credentials) で定義した AssumeRole 定義から一時キーを取得してコマンドを起動してくれる wrapper を書いた</a></li>
+</ul>
 
-<h2 id="1食夕食セット">1食夕食セット</h2>
+<h2 id="まとめ">まとめ</h2>
 
-<ol>
-<li>キーマカレー 13</li>
-<li>ビビンバ丼 10</li>
-<li>肉たれうどんとぶっ玉丼 10</li>
-<li>海の幸うどん 9</li>
-<li>すき焼き丼 8</li>
-<li>肉うどんとカレーライス 8</li>
-<li>ねぎトロ丼 8</li>
-<li>イタリア風チキンカツ丼 8</li>
-<li>鶏の照り焼き丼 6</li>
-<li>とろろそばとミニカツ丼 6</li>
-<li>鮭茶漬け 6</li>
-</ol>
-
-<h2 id="1食昼食単品">1食昼食単品</h2>
-
-<ol>
-<li>鶏肉とブロッコリー炒め 16</li>
-<li>さつま汁 15</li>
-<li>揚ギョーザ 13</li>
-<li>のっぺ 13</li>
-<li>イカ野菜カツ 13</li>
-<li>揚げ豆腐の旨煮 13</li>
-<li>かぼちゃのそぼろあんかけ 12</li>
-<li>ハムチーズサンドフライ 12</li>
-<li>エビ風味グラタンコロッケ 12</li>
-<li>鶏肉とタケノコの旨煮 12</li>
-<li>ブロッコリーとカリフラワーの炒め 12</li>
-<li>茄子の中華風旨煮 12</li>
-<li>豚肉と野菜の煮込み 12</li>
-<li>卵と玉ねぎのソテー 12</li>
-</ol>
-
-<h2 id="1食夕食単品">1食夕食単品</h2>
-
-<ol>
-<li>鶏肉とチーズ焼き 17</li>
-<li>レバニラ炒め 15</li>
-<li>豆腐きのこあんかけ 13</li>
-<li>ゆで卵 13</li>
-<li>ちくわの二色揚げ 12</li>
-<li>鶏肉と里芋の煮物 11</li>
-<li>蒸シューマイ 11</li>
-<li>けんちん汁 11</li>
-<li>五目金平 11</li>
-<li>五目肉じゃが 10</li>
-<li>シューマイのカレー揚げ 10</li>
-<li>ブロッコリーとカリフラワーの炒め 10</li>
-</ol>
-
-<h2 id="2食お昼ごはん定食">2食お昼ごはん定食</h2>
-
-<ol>
-<li>ピーマン肉詰めフライ 13</li>
-<li>ちきんチーズ焼き 13</li>
-<li>ハッシュドビーフ 12</li>
-<li>鶏肉のピリカラ味噌焼き 10</li>
-<li>カレーコロッケ 8</li>
-<li>春巻き 7</li>
-<li>野菜コロッケ 7</li>
-<li>鰹の刺し丼 7</li>
-<li>ちきんカツ 7</li>
-<li>豚玉丼 7</li>
-<li>レッドホットチキン 7</li>
-<li>きじ焼き丼 7</li>
-<li>ちきん南蛮漬け 7</li>
-<li>ハンバーグ 7</li>
-<li>海老グラタンコロッケ 7</li>
-</ol>
-
-<h2 id="2食晩御飯定食">2食晩御飯定食</h2>
-
-<ol>
-<li>545円定食 34</li>
-<li>545円丼 16</li>
-<li>フライアンドフライ 13</li>
-<li>ちきん南蛮 11</li>
-<li>新潟タレカツどん 11</li>
-<li>中華角煮丼 10</li>
-<li>ねぎトロ丼 9</li>
-<li>スパイシードライカレー 9</li>
-<li>レッドほっとマヨ 9</li>
-<li>545丼 8</li>
-</ol>
-
-<p>2食に関しては，集計か3月からなのでまだ一年たっていません．
-それにしても圧倒的な545円定食の出現頻度．
-結局何が食べられるのか全くわからないのですが・・・．</p>
-
-<h1 id="おわりに">おわりに</h1>
-
-<p>今年も<a href="https://twitter.com/JO_RI_bot">じょりぼっと</a>をお願いします．
-来年度から僕が学食メニューの更新を行えなくなるので，** 後継者も探してます **．
-誰か手伝って！</p>
+<p>AWS ムズカシイ</p>
 
         </div>
         
@@ -331,7 +194,7 @@
   <p class="meta">
     <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
     
-    <time>Jan 22, 2013</time>
+    <time>Jun 20, 2018</time>
     
     </span>
   </p>
@@ -343,11 +206,9 @@
 
   <p class="meta">
     
-        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2012/12/28/tunneling-udp-via-ssh/" title="UDPのパケットをSSHを通してトンネルする">UDPのパケットをSSHを通してトンネルする</a>
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2018/06/09/go-s3-protocol/" title="GoでHTTPとS3を透過的に扱う">GoでHTTPとS3を透過的に扱う</a>
     
 
-    
-      <a class="basic-alignment right" href="https://shogo82148.github.io/blog/2013/02/21/starting-aws/" title="AWSをはじめてみた">AWSをはじめてみた</a>
     
   </p>
   
