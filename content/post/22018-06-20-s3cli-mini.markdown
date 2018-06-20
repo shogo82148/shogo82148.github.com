@@ -1,0 +1,69 @@
+---
+layout: post
+title: "S3からファイルを落とすだけのツールを作った"
+slug: s3cli-mini
+date: 2018-06-20 07:29:00 +0900
+comments: true
+categories: [go, golang]
+---
+
+S3からファイルを落とすだけのツールを作りました。
+
+- [s3cli-mini](https://github.com/shogo82148/s3cli-mini)
+
+## 目的
+
+流行りのCD(継続的デリバリー)を実践するために、専用のデプロイツールをダウンロードする目的で作りました。
+
+主なデプロイ先はAWSなので、デプロイ操作には awscli が必要です。
+しかしCDに使用している[CircleCI](https://circleci.jp/)が公式に提供しているコンテナイメージにはawscliがインストールされていません。
+もちろん `apt-get install awscli` であとからインストールすることは可能ですが、そのぶんジョブの実行時間が長くなってしまいます。
+また、インストールされる awscli のバージョンが古く、ローカル環境ではうまく動くけど、
+CircleCI上では最新の機能が使えず失敗するということがありました。
+
+そこでもう awscli を使うことは諦めて、Goで AWS API を叩いてデプロイするバイナリを作ってしまうことを考えました。
+Goであればシングルバイナリでインストール可能で、CI/CD環境とローカルでバージョンが一致せず悩まされることはありません。
+また並行処理が得意なので、デプロイの時間短縮も図れます。
+
+しかし、このデプロイ用のバイナリをどこに置くか・・・プロジェクト固有の処理が入っているので外部には公開したくない。
+かといってプライベートなS3バケットに置くと、ダウンロードに awscli が必要になってしまう・・・。
+awscli を使うのは諦めたはずでは・・・という、いわゆる「鶏が先か、卵が先か」問題に陥ってしまいました。
+
+そこでS3からのダウンロードの処理に特化したミニawscliが欲しくなって作成したのが [s3cli-mini](https://github.com/shogo82148/s3cli-mini) です。
+
+## 使い方
+
+現状v0.0.1でサポートしているのは `cp` コマンドのみです。
+S3バケットからファイルをダウンロードしたり、S3バケットへファイルをアップロードしたり、
+別のS3バケットへファイルを転送することができます。
+
+``` bash
+# download from a S3 bucket
+s3cli-mini cp s3://your-bucket/foobar.zip .
+
+# upload to a S3 bucket
+s3cli-mini cp foobar.zip s3://your-bucket/
+
+# copy the file from a S3 bucket to another S3 bucket.
+s3cli-mini cp s3://your-bucket/foobar.zip s3://another-bucket/
+```
+
+一応サブコマンドを追加できるようにしましたが、今の所 `cp` コマンド以外の追加予定はありません。
+
+## aws-sdk-go-v2
+
+これだけだと面白くないので、[aws-sdk-go-v2](https://github.com/aws/aws-sdk-go-v2) を使ってみました。
+僕自身つい最近知ったのですが、昨年末に公開されたものです([AWS SDK for Go 2.0 Developer Preview](https://aws.amazon.com/jp/blogs/developer/aws-sdk-for-go-2-0-developer-preview/))。
+2018年6月20日現在の最新バージョンは[v2.0.0-preview.4 (2018-05-25)](https://github.com/aws/aws-sdk-go-v2/releases/tag/v2.0.0-preview.4)とまだ正式リリース前ですが、
+練習も兼ねて採用しました。
+
+詳しい変更点は [CHANGELOG](https://github.com/aws/aws-sdk-go-v2/blob/master/CHANGELOG.md#release-v200-preview1-2017-12-21) を見てもらうとして、
+今回楽になったと感じたのは `~/.aws/config` を勝手に読んでくれることです。
+これによりリージョンの指定などを省略することができます。
+また、AssumeRoleも解釈してくれるので [aswrap](https://github.com/fujiwara/aswrap) のような工夫が要らなくなります。
+
+- [aswrap - ~/.aws/(config|credentials) で定義した AssumeRole 定義から一時キーを取得してコマンドを起動してくれる wrapper を書いた](https://sfujiwara.hatenablog.com/entry/2017/12/13/122952)
+
+## まとめ
+
+AWS ムズカシイ
