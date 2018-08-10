@@ -55,6 +55,7 @@ DST(Daylight Saving Time)の表示が出て、夏時間に切り替わったこ�
 - [Webブラウザを使って電波を出してみた](https://shogo82148.github.io/blog/2016/03/29/web-jjy/)
 - [サマータイムで日本中の電波時計がゴミになる(かも)という話](https://mzsm.me/2018/08/08/jjy-dst/)
 - [サマータイム導入で「電波時計が狂う」？　メーカーに聞いた](http://www.itmedia.co.jp/news/articles/1808/09/news094.html)
+- [「サマータイム導入はコンピュータシステム的に難あり」は本当か](http://blogos.com/article/317015/)
 
 <iframe src="//www.slideshare.net/slideshow/embed_code/key/dcdqZKvIZ1tukL" width="595" height="485" frameborder="0" marginwidth="0" marginheight="0" scrolling="no" style="border:1px solid #CCC; border-width:1px; margin-bottom:5px; max-width: 100%;" allowfullscreen> </iframe> <div style="margin-bottom:5px"> <strong> <a href="//www.slideshare.net/tetsutalow/ss-109290879" title="サマータイム実施は不可能である" target="_blank">サマータイム実施は不可能である</a> </strong> from <strong><a href="https://www.slideshare.net/tetsutalow" target="_blank">UEHARA, Tetsutaro</a></strong> </div>
 
