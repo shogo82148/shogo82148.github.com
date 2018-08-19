@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <link href="http://gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+  
+  <link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  <link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  
+
+  
+  <title>GoAst ViewerをWebAssemblyへビルドしてみた</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css">
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+  
+
+  
+
+  <meta name="description" content="">
+  <meta name="keywords" content="">
+
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.38.1" />
+
+  
+  
+
+</head>
+<body>
+
+
+<header role="banner"><hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+    <h2></h2>
+</hgroup></header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+
+<ul class="subscription">
+  
+
+</ul>
+
+
+<form action="https://www.google.com/search" method="get" target="_blank">
+  <fieldset role="search">
+  	<input class="search" type="text" name="q" results="0" placeholder="Search"/>
+    <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+  </fieldset>
+</form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+    <p class="meta">Aug 19, 2018
+         - 1 minute read 
+         - <a href="https://shogo82148.github.io/blog/2018/08/19/goast-viewer-using-wasm/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a><a class="label" href="https://shogo82148.github.io/categories/wasm/">wasm </a>
+        
+    </p>
+    <h1 class="entry-title">
+         GoAst ViewerをWebAssemblyへビルドしてみた 
+    </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          
+
+<p>もうすぐリリースのGo1.11ではWebAssemblyのサポートが予定されています。
+(2018/08/19現在の最新版はGo1.11rc1)</p>
+
+<ul>
+<li><a href="https://www.publickey1.jp/blog/18/gowebassemblygoarchwasmgoosjs.html">Go言語がWebAssemblyをサポートへ。GOARCHは「wasm」、GOOSは「js」に</a></li>
+</ul>
+
+<p>正式リリース前に少し遊んでみようということで、<a href="https://twitter.com/yuroyoro">@yuroyoro</a>さんの<a href="http://goast.yuroyoro.net/">GoAst Viewer</a>をWebAssemblyへビルドしてみました。</p>
+
+<ul>
+<li><a href="https://shogo82148.github.io/goast-viewer/">GoAst Viewer WebAssembly Version</a></li>
+<li><a href="https://github.com/shogo82148/goast-viewer">shogo82148/goast-viewer</a></li>
+</ul>
+
+<h2 id="javascriptの連携方法">JavaScriptの連携方法</h2>
+
+<p>コードをASTに変換し、JSONとしてエンコードする部分(<a href="https://github.com/shogo82148/goast-viewer/blob/master/ast.go">ast.go</a>)に関しては、一切変更しなくても動きました。素晴らしい。</p>
+
+<p>ただし、さすがにブラウザ上でHTTPサーバーは動かない(そういえば試してないけど、動かないよね？？)ので、JavaScriptとの連携部分を実装してあげる必要があります。
+<a href="https://tip.golang.org/pkg/syscall/js/">syscall/js</a>パッケージはまだ実験段階というステータスで機能が限られているので、
+連携には少し工夫が必要です。</p>
+
+<h3 id="javascriptからgoの関数を呼ぶ">JavaScriptからGoの関数を呼ぶ</h3>
+
+<p>JavaScriptからGoの関数を呼ぶには <code>window</code> にコールバック関数として必要な関数を登録します。</p>
+<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="c1">// GoASTParse 関数を定義(Go言語)
+</span><span class="c1"></span><span class="nx">js</span><span class="p">.</span><span class="nx">Global</span><span class="p">().</span><span class="nx">Set</span><span class="p">(</span><span class="s">&#34;GoASTParse&#34;</span><span class="p">,</span> <span class="nx">js</span><span class="p">.</span><span class="nx">NewCallback</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">args</span> <span class="p">[]</span><span class="nx">js</span><span class="p">.</span><span class="nx">Value</span><span class="p">)</span> <span class="p">{</span>
+    <span class="nx">source</span> <span class="o">:=</span> <span class="nx">args</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">String</span><span class="p">()</span>
+    <span class="c1">// ...ASTへの変換処理...
+</span><span class="c1"></span><span class="p">}))</span></code></pre></div>
+<h3 id="戻り値をgoからjavascriptへ返す">戻り値をGoからJavaScriptへ返す</h3>
+
+<p><code>js.NewCallback</code> なのですが、もともとは <code>addEventListener</code> にわたすコールバック関数なので、
+関数の戻り値を受けわたす方法がありません。
+回避方法はいろいろあるでしょうが、今回はコールバック関数の引数にコールバック関数指定してもらうことにしました。</p>
+<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="c1">// GoASTParse 関数を定義(Go言語)
+</span><span class="c1"></span><span class="nx">js</span><span class="p">.</span><span class="nx">Global</span><span class="p">().</span><span class="nx">Set</span><span class="p">(</span><span class="s">&#34;GoASTParse&#34;</span><span class="p">,</span> <span class="nx">js</span><span class="p">.</span><span class="nx">NewCallback</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">args</span> <span class="p">[]</span><span class="nx">js</span><span class="p">.</span><span class="nx">Value</span><span class="p">)</span> <span class="p">{</span>
+    <span class="nx">source</span> <span class="o">:=</span> <span class="nx">args</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">String</span><span class="p">()</span>
+    <span class="c1">// ...ASTへの変換処理...
+</span><span class="c1"></span>    <span class="nx">args</span><span class="p">[</span><span class="mi">1</span><span class="p">].</span><span class="nx">Invoke</span><span class="p">(</span><span class="nb">string</span><span class="p">(</span><span class="nx">body</span><span class="p">))</span>
+<span class="p">}))</span></code></pre></div><div class="highlight"><pre class="chroma"><code class="language-javascript" data-lang="javascript"><span class="c1">// GoASTParseを呼び出す(JavaScript)
+</span><span class="c1"></span><span class="nx">GoASTParse</span><span class="p">(</span><span class="s2">&#34;package main; func main() {}&#34;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">body</span><span class="p">)</span> <span class="p">{</span>
+    <span class="c1">// ASTの表示処理
+</span><span class="c1"></span><span class="p">})</span>
+</code></pre></div>
+<h2 id="まとめ">まとめ</h2>
+
+<p>Goのバイナリ全般に言えることですが、WASMになってもやっぱりサイズが大きい(3.5M)。
+今後のパフォーマンス向上に期待です。</p>
+
+<p>GoよりAngulerJSの方が難しかったʕ　 ﾟ皿ﾟ ʔ</p>
+
+<h2 id="参考">参考</h2>
+
+<ul>
+<li><a href="https://www.publickey1.jp/blog/18/gowebassemblygoarchwasmgoosjs.html">Go言語がWebAssemblyをサポートへ。GOARCHは「wasm」、GOOSは「js」に</a></li>
+<li><a href="https://yuroyoro.hatenablog.com/entry/2014/06/30/220356">ʕ　 ﾟ皿ﾟ ʔ GolangのASTを可視化するツールを作った</a></li>
+<li><a href="https://github.com/yuroyoro/goast-viewer">yuroyoro/goast-viewer</a></li>
+<li><a href="https://qiita.com/cia_rana/items/bbb4112b480636ab9d87">サクッと Go → WebAssembly を試す</a></li>
+<li><a href="https://blog.owulveryck.info/2018/06/08/some-notes-about-the-upcoming-webassembly-support-in-go.html">Some notes about the upcoming WebAssembly support in Go</a></li>
+<li><a href="https://tip.golang.org/pkg/syscall/js/">Package js</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>Aug 19, 2018</time>
+    
+    </span>
+  </p>
+
+  
+  
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2018/08/11/web-jjy-summer-time-support/" title="Web JJY が夏時間に対応しました">Web JJY が夏時間に対応しました</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+
+(function() {
+    
+    
+    
+    if (window.location.hostname == "localhost")
+        return;
+
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    var disqus_shortname = 'shogosblog';
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+       
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2018/08/19/goast-viewer-using-wasm/">GoAst ViewerをWebAssemblyへビルドしてみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/08/11/web-jjy-summer-time-support/">Web JJY が夏時間に対応しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/06/20/s3cli-mini/">S3からファイルを落とすだけのツールを作った</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/06/09/go-s3-protocol/">GoでHTTPとS3を透過的に扱う</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/05/16/macopy-is-struct/">Goの構造体のコピーを防止する方法</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/04/10/migrate-to-hugo/">OctopressからHugoに乗り換えた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/01/02/cloudformation-template-for-mackerel-integration/">Mackerel AWS Integration 用の CloudFormation テンプレートを書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/12/06/mecab-in-lambda/">MeCabをAWS Lambdaで動かす(2017年版)</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/10/28/golang-floating-point-number/">Go言語の浮動小数点数のお話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2017/10/22/aws-certification-manager-validation/">ACMのドメイン検証をシミュレートするやつ書いた</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2018 Shogo Ichinose - <a href="https://shogo82148.github.io/license/">License</a> -
+  <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank" href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+</p>
+
+</footer>
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    displayMath: [['$$','$$'], ['\[','\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all.length) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+</script>
+
+
+<script>
+  var _gaq=[['_setAccount','UA-4526627-4'],['_trackPageview']];
+  (function(d,t){var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+  g.src=('https:'==location.protocol?'//ssl':'//www')+'.google-analytics.com/ga.js';
+  s.parentNode.insertBefore(g,s)}(document,'script'));
+</script>
+
+</body>
+</html>
+
