@@ -105,6 +105,49 @@
         
 
 <header>
+    <p class="meta">Mar 28, 2017
+         - 4 minute read 
+         - <a href="https://shogo82148.github.io/blog/2017/03/28/database-gis/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/mysql/">mysql </a><a class="label" href="https://shogo82148.github.io/categories/redis/">redis </a><a class="label" href="https://shogo82148.github.io/categories/postgresql/">postgresql </a>
+        
+    </p>
+    <h1 class="entry-title">
+        <a href="https://shogo82148.github.io/blog/2017/03/28/database-gis/">Redis、PostgreSQL、MySQLで近傍検索</a>
+    </h1>
+</header>
+
+
+        
+          <p>「サーバーで付近の情報を通知するサービスのつくり方」 という、Geohashを使って近傍検索を実現する記事をみつけました。 最近Redisに関する記事を書いた関係で、 この記事をみて「GeohashはRedisと一緒に使うともっと便利だよ！」と思わず宣伝したくなったのですが、 MySQL5.7でInnoDBに空間インデックス(Spatial Index)のサポートが入ったので 「MySQLでももっと簡単にできるのでは？」と思い、 RedisやMySQLを含めたいろんなDBで近傍検索を実現する方法を調べてみました。
+以前、スマートフォンのセンサを活用して花火の打ち上げ場所を推定するアプリを作った関係で、 地球上での距離計算の実装も気になったので、それについても調査してみました。
+関連知識 GeoHash Geohash（ジオハッシュ） は緯度・経度を短い文字列に変換する方法です。 距離が近い2地点のGeohashは似たような文字列になるという特徴があります(一部例外あり)。 この特徴を利用すると、文字列検索だけで近傍検索が実現できます。
+地球上の二点間の距離 地球は完全な球体ではなく、回転楕円体であることが知られています。 地球の形がわからないと緯度・経度などを決められないので、 地球楕円体が定義されています。 近似方法によっていくつか種類があるのですが、GPSなどで使われているWGS84がよく使われているようです。
+国土地理院が提供している測量計算サイトでは 距離と方位角の計算を使って緯度・経度から距離を計算できます。 回転楕円体上の距離の厳密解は求められない(要出典)ので、 数値計算によって求めることになります。 計算式を見て分かる通り非常に複雑なので、なんらかの近似をしている実装がほとんどです。
+各種DBでの実現方法 Redis Redisでは3.2からGEO関連の機能をサポートしています。 ソート済みセットにGeohashを組み合わせて実現しています。
+簡単に試してみました。データは以下の記事から拝借したものを使用します。
+ MySQLで指定した緯度経度から半径nメートル内検索っぽいのを実現するSQL PostgreSQLとOracleで緯度経度から半径nメートル内検索を実行してみる。  GEOADDでデータ挿入です。 ちなみにデータを削除するGEODELは用意されていないとのこと。 中身はソート済みセットなので、ZREMでいいんですね。
+$ cat command.txt GEOADD geotable 139.777254 35.713768 上野駅 139.774029 35.711846 西郷隆盛像 GEOADD geotable 139.774744 35.712737 上野の森美術館 139.770872 35.712351 不忍池弁財天 GEOADD geotable 139.775696 35.716293 野口英世博士像 139.775803 35.715420 国立西洋美術館 GEOADD geotable 139.776544 35.716319 国立科学博物館 139.</p>
+
+          
+              <footer>
+                  <a href="https://shogo82148.github.io/blog/2017/03/28/database-gis/" rel="full-article">Read On &rarr;</a>
+              </footer>
+          
+
+        
+
+    </article>
+    
+    <article>
+
+        
+        
+
+<header>
     <p class="meta">Mar 17, 2017
          - 2 minute read 
          - <a href="https://shogo82148.github.io/blog/2017/03/17/how-many-chan-can-i-write-in-golang/#disqus_thread">Comments</a>
@@ -468,55 +511,6 @@ package main import ( &#34;context&#34; &#34;fmt&#34; &#34;log&#34; &#34;net&#34
 
     </article>
     
-    <article>
-
-        
-        
-
-<header>
-    <p class="meta">Jan 14, 2017
-         - 5 minute read 
-         - <a href="https://shogo82148.github.io/blog/2017/01/14/re-golang-dns-cache/#disqus_thread">Comments</a>
-
-        
-        
-        
-            - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
-        
-    </p>
-    <h1 class="entry-title">
-        <a href="https://shogo82148.github.io/blog/2017/01/14/re-golang-dns-cache/">Re:golang の http.Client を速くする</a>
-    </h1>
-</header>
-
-
-        
-          <p>先日mattnさんの記事を読みました。
- golang の http.Client を速くする  nettというパッケージを使って 名前解決の結果をキャッシュすることで、http.Clientを早くするというものです。 この記事に関して、ちょっと疑問に思ったことがあったので、検証してみました。
-疑問 疑問に思ったのは以下の点です。
-名前解決遅すぎでは？ ベンチマークの結果を見ると5億ns(=500ms)ほど速度が改善しています。 3つのURLに対してリクエストを投げているので、初回を除く2回DNSのキャッシュがヒットし、 名前解決2回分の速度改善になるはずです。 と、いうことは、名前解決1回あたり250msかかっている計算になります。 googleのsearchは302でリダイレクトがかかるので、Client.Getの呼び出し1回あたり2回リクエストが飛ぶ、 ということを計算に入れても100msほどかかる計算です。
-Google先生の謎テクノロジーによってかなりの最適化がされているはずですし、 ネットワークプロバイダのDNSキャッシュにヒットする可能性も高いでしょう。 名前解決程度にこんなに時間がかかっていたらスプラトゥーンが出来ない！ (mattnさんがスプラトゥーンをプレイしているかは知らない)
-2017/01/16追記: mattnさんはスプラトゥーンをプレイしていないそうです。残念。
-あとスプラトゥーンしてません。。。
-&mdash; mattn (@mattn_jp) 2017年1月14日 
-もちろん、ネットワークが混雑していたり、 モバイルネットワークを利用していたり、という可能性もありますが、 ちょっと不自然な印象を受けました。
-Keep-Aliveされてるのでは？ スキーマがhttpsになっているので、Google先生相手ならHTTP2で通信していてもおかしくありません。 HTTP2は基本的にドメイン毎にコネクションを1つだけ張って、それを使いまわします。 もし仮にHTTP1.1で通信していたとしても、http.ClientはデフォルトでKeep-Aliveが有効になっているので、 普通に使うとコネクションを再利用してくれます。
-そういうわけで、名前解決以前にそもそもTCPのコネクション確立もスキップされている可能性が高いのでは？ と思ったわけです。 この予想が正しければ、名前解決は初回リクエストでしか行われないので、ベンチマークに差はでないはずです。
-HTTPリクエストの様子をトレースしてみる これらの疑問を解消するために、HTTPリクエストの様子をさらに詳細に解析してみることにしました。
-DNSキャッシュなし版をトレースする Go1.7からnet/http/httptraceというパッケージが追加され、 名前解決やコネクション確立etcのタイミングにフックを仕込めるようになりました。 これを利用すれば各段階でどの程度時間がかかっているかが具体的に分かるはずです。
-頑張って自前でフックを差し込んでもよいのですが、 deeeetさんのgo-httpstatという便利パッケージがあるので、 これをありがたく利用させていただきます。 go-httpstatを使うと時間計測を行うコードを簡単に差し込むことができます。
-package main import ( &#34;io&#34; &#34;io/ioutil&#34; &#34;log&#34; &#34;net/http&#34; &#34;time&#34; &#34;github.com/tcnksm/go-httpstat&#34; ) var ( urls = []string{ &#34;https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/&#34;, &#34;https://shogo82148.</p>
-
-          
-              <footer>
-                  <a href="https://shogo82148.github.io/blog/2017/01/14/re-golang-dns-cache/" rel="full-article">Read On &rarr;</a>
-              </footer>
-          
-
-        
-
-    </article>
-    
     
     
 
@@ -636,6 +630,12 @@ package main import ( &#34;io&#34; &#34;io/ioutil&#34; &#34;log&#34; &#34;net/ht
           
             
               <li class="post">
+                <a href="/blog/2018/09/24/go-phper-json/">PHPer向けGoのJSONデコーダーを作った</a>
+              </li>
+            
+          
+            
+              <li class="post">
                 <a href="/blog/2018/08/20/summer-time-homework/">〜夏休みの自由研究〜 電波時計のサマータイム対応状況を調べてみた</a>
               </li>
             
@@ -685,12 +685,6 @@ package main import ( &#34;io&#34; &#34;io/ioutil&#34; &#34;log&#34; &#34;net/ht
             
               <li class="post">
                 <a href="/blog/2017/12/06/mecab-in-lambda/">MeCabをAWS Lambdaで動かす(2017年版)</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2017/10/28/golang-floating-point-number/">Go言語の浮動小数点数のお話</a>
               </li>
             
           
