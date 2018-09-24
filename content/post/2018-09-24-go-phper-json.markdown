@@ -22,7 +22,8 @@ PHPでエンコードしたJSONをいい感じにデコードしてくれるGo�
 PHPはとても便利なプログラミング言語なので、配列を扱うことができます。
 ここでPHPの配列のマニュアルを読んでみましょう。
 
-> http://php.net/manual/ja/language.types.array.php 
+> http://php.net/manual/ja/language.types.array.php
+> 
 > PHP の配列は、実際には順番付けられたマップです。マップは型の一種で、 値をキーに関連付けます。 この型は、さまざまな使い道にあわせて最適化されます。 **配列としてだけでなく、リスト (ベクター)、 ハッシュテーブル (マップの実装の一つ)、辞書、コレクション、スタック、 キュー等として使用することが可能です。** PHP の配列には他の PHP 配列を値として保持することができるため、 非常に簡単にツリー構造を表現することが可能です。
 > (強調部分は筆者によるもの)
 
@@ -74,15 +75,16 @@ $a["foo"] = "bar";
 print json_encode($a, JSON_FORCE_OBJECT); // {"0":1,"1":2,"2":3,"foo":"bar"}
 ```
 
-`\[1,2,3\]` が来るか、 `{"0":1,"1":2,"2":3}` が来るか、深遠な事情により知ることはできません。
-Goの型が `\[\]interface{}` になるか `map\[string\]interface{}` になるかで、
+<code>&#x5b;1,2,3&#x5d;</code> が来るか、 `{"0":1,"1":2,"2":3}` が来るか、深遠な事情により知ることはできません。
+Goの型が <code>&#x5b;&#x5d;interface{}</code> になるか <code>map&#x5b;string&#x5d;interface{}</code> になるかで、
 扱い方が全く違うので困ったことです。
 
 ### PHPのType Jaggling
 
 PHPは文脈によって型が柔軟に変わります。
 
-> http://php.net/manual/ja/language.types.type-juggling.php 
+> http://php.net/manual/ja/language.types.type-juggling.php
+> 
 > PHP は、変数定義時に明示的な型定義を必要と(または、サポート) しません。ある変数の型は、その変数が使用される文により定義されます。 
 
 動的型付けなので、文字列として処理していたのにうっかり整数になっちゃった、
