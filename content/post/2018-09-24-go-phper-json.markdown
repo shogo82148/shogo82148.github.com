@@ -74,8 +74,8 @@ $a["foo"] = "bar";
 print json_encode($a, JSON_FORCE_OBJECT); // {"0":1,"1":2,"2":3,"foo":"bar"}
 ```
 
-`[1,2,3]` が来るか、 `{"0":1,"1":2,"2":3}` が来るか、深遠な事情により知ることはできません。
-Goの型が `[]interface{}` になるか `map[string]interface{}` になるかで、
+`\[1,2,3\]` が来るか、 `{"0":1,"1":2,"2":3}` が来るか、深遠な事情により知ることはできません。
+Goの型が `\[\]interface{}` になるか `map\[string\]interface{}` になるかで、
 扱い方が全く違うので困ったことです。
 
 ### PHPのType Jaggling
