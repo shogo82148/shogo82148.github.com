@@ -105,6 +105,53 @@
         
 
 <header>
+    <p class="meta">Jan 21, 2017
+         - 5 minute read 
+         - <a href="https://shogo82148.github.io/blog/2017/01/21/golang-1-dot-8-graceful-shutdown/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
+        
+    </p>
+    <h1 class="entry-title">
+        <a href="https://shogo82148.github.io/blog/2017/01/21/golang-1-dot-8-graceful-shutdown/">Go1.8のGraceful Shutdownとgo-gracedownの対応</a>
+    </h1>
+</header>
+
+
+        
+          <p>Go1.8beta1が出た時に、Go1.8で追加される予定のGraceful Shutdownについて書く！ とTwitterに書き込んで早1ヶ月。 この前の金曜日にGo1.8rc2がリリースされ、正式リリースも間近になってきて、 さすがに書かねばという気持ちになって来たので、がんばって検証してみます。
+公式サポートで増える予定の機能 以前Go言語でGraceful Restartをするときに取りこぼしを少なくするで 紹介したようにshogo82148/go-gracedownというものを書きました。 あれから時は経ち、ついにGo1.8からはGraceful Shudownがbuild-inの機能として提供される予定です。 公式サポートが入ることによって、以下のような機能を使えるようになります。
+HTTP/2のGraceful Shutdownができる HTTP/2ではGOAWAYフレームという接続を切ることを通知する機能があります。 Go1.8からはシャットダウン時にこのGOAWAYフレームを送ってくれるようになります。 GOAWAYフレームはサーバ側から任意のタイミングで送ることができ、 どこまで正常に処理できたかをクライアントに伝えられるという利点があります。
+余談ですが、この機能はx/net/http2を利用している場合は動かないらしいです。 importしたときには動かないけどbundleしたときにだけ動く黒魔術が使われているためです。 覚えておいても今後絶対使うことはなさそう。というか使いたくない・・・。
+contextが使える go-gracedownを作った頃は、contextはまだ標準パッケージに取り込まれていなかったので対応していませんでした。 (1.7のリリース時に対応を怠っていただけとも言える) net/httpのシャットダウンはもちろんcontextに対応しています。 これにより、Graceful Shutdownを中断して強制終了する、 ということが簡単にできるようになります。
+公式サポートで変更になる予定の挙動 Keep-Aliveでのリクエストの挙動が少し変わります。 1.7以前のgo-gracedownでは、クライアントにKeep-Aliveが無効になったのを伝え、 クライアント側から接続を切るのを待つように実装してしました。 多少接続時間が延びたとしてもクライアント側でよくわからないエラーになるよりはマシだろ、との考えからです。
+1.8からはシャットダウン時にIdle状態(TCP接続は有効だけど、リクエストは処理していない状態)な接続は切断されます。 内部で使っているServer.SetKeepAlivesEnabledの 挙動が変更になったためです。
+Goの中の人的には「この挙動が原因で万が一トラブルになっても、クライアントがリトライしてくれるから大丈夫でしょ」とのことのようです。 サーバシャットダウン以外にもネットワークトラブル等でも接続は切れるので、 クライアント側で頑張ってというのは正論ですが、 どの程度エラーが増えるのかは気になるところです。
+go-gracedownの対応 go-gracedownはGo1.8でコンパイルされたときはbuild-inの機能を直接使うようになります。 中身はほとんどがインターフェースの互換性を保つためのコードなので、 機能的なメリットは完全になくなってしまいました・・・。 HTTP/2サポートも問題なく動くはずです。 逆にパッケージの依存が増えること以外はデメリットはないともいえます。
+Go1.7以下では今までの方法にフォールバックしてくれます。 というわけで、以下のような人には有用です。
+ 深淵な理由でGo1.7以下しか使えない人 Go1.8とGo1.7以下のサポートがどうしても必要な人 Go1.8にアップグレードしたけど、graceful shutdownの処理を書き換えるのがめんどくさい人  ところで、環境が悪いときに性能を落としたり機能を制限することをフォールバック(fall back)というわけですが、 逆に環境が良いときに性能を上げたり機能を拡張することはなんていうんですかね？ モデムでは通信環境が良いときに高速な通信方式に切り変えることを「フォールフォワード(fall forward)」というらしいです。 「Go1.8ではbild-inのGraceful Shutdownにフォールフォワードする」で使い方あってます？
+使い方 Server.Shutdownを使う Go(その3) Advent Calendarの 最終日の記事でも扱ってますが改めて。
+package main import ( &#34;context&#34; &#34;fmt&#34; &#34;log&#34; &#34;net&#34; &#34;net/http&#34; &#34;os&#34; &#34;os/signal&#34; &#34;syscall&#34; &#34;github.</p>
+
+          
+              <footer>
+                  <a href="https://shogo82148.github.io/blog/2017/01/21/golang-1-dot-8-graceful-shutdown/" rel="full-article">Read On &rarr;</a>
+              </footer>
+          
+
+        
+
+    </article>
+    
+    <article>
+
+        
+        
+
+<header>
     <p class="meta">Jan 14, 2017
          - 5 minute read 
          - <a href="https://shogo82148.github.io/blog/2017/01/14/re-golang-dns-cache/#disqus_thread">Comments</a>
@@ -469,45 +516,6 @@ package main; import ( &#34;fmt&#34; . &#34;math&#34; ); var (s=0/*==); sub impo
 
     </article>
     
-    <article>
-
-        
-        
-
-<header>
-    <p class="meta">Mar 23, 2016
-         - 1 minute read 
-         - <a href="https://shogo82148.github.io/blog/2016/03/23/go-weaktyping/#disqus_thread">Comments</a>
-
-        
-        
-        
-            - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
-        
-    </p>
-    <h1 class="entry-title">
-        <a href="https://shogo82148.github.io/blog/2016/03/23/go-weaktyping/">数値と文字列がごちゃ混ぜになっているJSONをよしなにParseするやつ作った</a>
-    </h1>
-</header>
-
-
-        
-          <p>Goは数値と文字列を厳格に区別しますが、他の言語もそうとは限りません。 例えばPerlは数値と文字列を自動変換してくれるので、気をつけていないといつの間にか数値が文字列になっていたりします。 その言語の中に閉じていいれば問題ないのですが、Goとやり取りしようとすると困ります。 そんなときに使えるライブラリを書いてみました。
- shogo82148/go-weaktyping  背景 map[string][]*stringを返してくるライブラリがあって、 そのままだと扱いにくいのでなんとか構造体にできないかと頭を悩ませていました。 JSONに一旦変換すれば楽かなーとも思ったのですが、一部フィールドを数値に変換する必要がありました。 JSONの数値と文字列を区別するため、JSONの文字列をGoの数値型に変換するのは厄介です。 タグにjson:&quot;,string&quot;と指定すると変換可能になりますが、逆にJSONの数値を受け付けなくなりますし、 JSONに変換すると文字列になってしまいます。 変換先の構造体は普通のJSONの操作にも使いたかったので、これでは困ります。 「数値も文字列もUnmarshalできて、Marshalするときには数値になる」ようなJSONライブラリが必要でした。
-&quot;encoding/json&quot;に代わる新しいJSONライブラリを・・・とも考えたのですが、 よく考えるとUnmarshal時の挙動は&quot;encoding/json&quot;.Unmarshalerインターフェースを実装することでカスタマイズ可能です。 こうして作ったのが go-weaktyping です。
-使い方 builtinの型の先頭を大文字にしたものを用意しているので、 適当にUnmarshalして欲しいところでbuiltinの型の代わりに指定するだけです。 以下は整数型をUnmarshalする例です。
-package main import ( &#34;encoding/json&#34; &#34;fmt&#34; &#34;log&#34; &#34;github.com/shogo82148/go-weaktyping&#34; ) func main() { ptr := &amp;struct { Foo weaktyping.Int `json:&#34;foo&#34;` }{} if err := json.Unmarshal([]byte(`{&#34;foo&#34;:123}`), ptr); err != nil { log.Fatal(err) } fmt.Println(&#34;Foo:&#34;, ptr.Foo) if err := json.Unmarshal([]byte(`{&#34;foo&#34;:&#34;456&#34;}`), ptr); err != nil { log.Fatal(err) } fmt.</p>
-
-          
-              <footer>
-                  <a href="https://shogo82148.github.io/blog/2016/03/23/go-weaktyping/" rel="full-article">Read On &rarr;</a>
-              </footer>
-          
-
-        
-
-    </article>
-    
     
     
 
@@ -561,6 +569,8 @@ package main import ( &#34;encoding/json&#34; &#34;fmt&#34; &#34;log&#34; &#34;g
     
         <a href="/page/16/" class="label-pagination">16</a>
     
+        <a href="/page/17/" class="label-pagination">17</a>
+    
 
     
     
@@ -569,7 +579,7 @@ package main import ( &#34;encoding/json&#34; &#34;fmt&#34; &#34;log&#34; &#34;g
 
     
     
-        <a href="/page/16/" aria-label="Last"><i class="fa fa-angle-double-right fa-lg"></i></a>
+        <a href="/page/17/" aria-label="Last"><i class="fa fa-angle-double-right fa-lg"></i></a>
     
 
 </div>
@@ -627,6 +637,12 @@ package main import ( &#34;encoding/json&#34; &#34;fmt&#34; &#34;log&#34; &#34;g
           
             
               <li class="post">
+                <a href="/blog/2018/11/22/go-nil/">Goのnil,true,falseは変数名に使えるという話</a>
+              </li>
+            
+          
+            
+              <li class="post">
                 <a href="/blog/2018/09/24/go-phper-json/">PHPer向けGoのJSONデコーダーを作った</a>
               </li>
             
@@ -676,12 +692,6 @@ package main import ( &#34;encoding/json&#34; &#34;fmt&#34; &#34;log&#34; &#34;g
             
               <li class="post">
                 <a href="/blog/2018/01/02/cloudformation-template-for-mackerel-integration/">Mackerel AWS Integration 用の CloudFormation テンプレートを書いた</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2017/12/06/mecab-in-lambda/">MeCabをAWS Lambdaで動かす(2017年版)</a>
               </li>
             
           
