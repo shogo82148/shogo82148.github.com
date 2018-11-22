@@ -1,0 +1,148 @@
+---
+layout: post
+title: "Goのnil,true,falseは変数名に使えるという話"
+slug: go-nil
+date: 2018-11-22 17:44:00 +0900
+comments: true
+categories: [go, golang]
+---
+
+@Linda_pp さんのツイートをみて
+
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">Go 言語の nil って NilLit じゃなくて Ident &quot;nil&quot; としてパースされるのか．それで気付いたけど nil := 42 みたいに普通に変数宣言できる（unused でエラーになるけど）</p>&mdash; ドッグ (@Linda_pp) <a href="https://twitter.com/Linda_pp/status/1065447785166565378?ref_src=twsrc%5Etfw">2018年11月22日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+なるほど、これは面白い。
+と少し遊んでみたメモ。
+
+-----
+
+言語仕様にある通り、[Goのキーワード](https://golang.org/ref/spec#Keywords)は以下の25個です(Go1.11.2)。
+
+```
+break        default      func         interface    select
+case         defer        go           map          struct
+chan         else         goto         package      switch
+const        fallthrough  if           range        type
+continue     for          import       return       var
+```
+
+この一覧に `nil` や `true`, `false` は入っていません。
+これらは [builtin](https://golang.org/pkg/builtin/)という扱いになっており、識別子として利用可能です。
+
+そのため、変数名等に利用可能というわけですね。面白い。
+
+```go
+package main
+
+import (
+	"fmt"
+)
+
+func main() {
+	nil := 42
+	fmt.Println(nil)
+	// Output:
+	// 42
+}
+```
+
+以下、色々遊んでみた例。
+
+組み込みの型である `int` も識別子として利用可能。
+
+```go
+package main
+
+import (
+	"fmt"
+)
+
+
+func main() {
+	int := 42
+	fmt.Println(int)
+	// Output:
+	// 42
+}
+```
+
+`true` と `false` を入れ替えることができる。
+
+```go
+package main
+
+import (
+	"fmt"
+)
+
+func main() {
+	true, false := false, true
+	fmt.Println(true, false)
+	// Output:
+	// false true
+}
+```
+
+Go 1.9 で追加された Type Alias を使えば、組み込みの型を上書きすることだって可能。便利(？)
+
+```go
+package main
+
+import (
+	"fmt"
+)
+
+type int = float64
+
+func main() {
+	var i int
+	fmt.Printf("%T", i)
+	// Output:
+	// float64
+}
+```
+
+# 考察
+
+@Linda_pp さんがGitHubに突撃してくれました。(この行動力すごい。自分は英語書く時点でギブアップ・・・)
+
+- [nil literal should not be parsed as ast.Ident #28918](https://github.com/golang/go/issues/28918)
+
+すぐに返事が来て、「これは意図したもので、キーワードではなく事前定義された識別子(predeclared identifier)」とのこと。
+
+:thinking_face:
+
+自分なりに誰が得するのか考えてみたんですが、後方互換性を保つために、キーワードをなるべく増やしたくない・・・とか？
+
+例えば、最近 Python 3.7 にasync/await が新キーワードとして追加され、互換性が壊れたと少し話題になってましたね。
+
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">Python 3.7 で async/await が新キーワードとして追加されたと聞いて、互換性軽視っぷりに驚いたんだけど、それに加えて async/await で書いたものをコルーチンと呼んでいて頭を抱えている。<br>Python は Guido が独裁者を辞めた途端、おかしくなってしまったのだろうか……。<a href="https://t.co/RvsuzMzx4O">https://t.co/RvsuzMzx4O</a> <a href="https://t.co/Q87NcEVunY">pic.twitter.com/Q87NcEVunY</a></p>&mdash; Yusuke Endoh (@mametter) <a href="https://twitter.com/mametter/status/1064367829393170432?ref_src=twsrc%5Etfw">2018年11月19日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">これ今 tensorflow で async 変数が使われてて壊れてるんですよね</p>&mdash; 死後強まるツイート (@mizchi) <a href="https://twitter.com/mizchi/status/1064368453358776320?ref_src=twsrc%5Etfw">2018年11月19日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+このように、言語仕様に新しいキーワードを追加することは、容易に互換性を壊してしまします。
+
+「事前定義された識別子」の追加であれば、万が一既存のコードと識別子がかぶってしまっても、正しくコンパイルすることができます。
+例えば、最初に書いたこのコード、 `nil` が事前定義された識別子であっても、そうでなくても、同じ挙動になります。
+`nil` がキーワードだったら、このコードはコンパイルできなくなってしまいます。
+
+```go
+package main
+
+import (
+	"fmt"
+)
+
+func main() {
+	nil := 42
+	fmt.Println(nil)
+	// Output:
+	// 42
+}
+```
+
+というわけで、この仕様はなるべく互換性を崩さない工夫なのかなあ、というのが僕の結論です。
+何か他にご意見のある方は golang-nuts mailing list へどうぞ！！
