@@ -105,6 +105,45 @@
         
 
 <header>
+    <p class="meta">Feb 22, 2015
+         - 3 minute read 
+         - <a href="https://shogo82148.github.io/blog/2015/02/22/should-i-use-a-pointer-in-go/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
+        
+    </p>
+    <h1 class="entry-title">
+        <a href="https://shogo82148.github.io/blog/2015/02/22/should-i-use-a-pointer-in-go/">map[string]Hoge or map[string]*Hoge ?</a>
+    </h1>
+</header>
+
+
+        
+          <p>Go言語でポインタを使うべきか使わないべきか問題。 「ケース・バイ・ケースなので、状況に応じて使い分けましょう！」という結論が出るのは目に見えているので、 具体例について検証してみた結果を書いておきます。
+背景 他の人のコードレビューを見ていたら、 レビュアーが「コピーをしないで済むのでstructの受け渡しにはポインタ使ったほうがいいと思います！」とコメントしていて、 そうなのか？と思ったのですがあんまり自信がなかったので検証してみました。 コメントがついていたのは以下のようなコード。
+package hoge import ( &#34;strconv&#34; ) type Hoge struct { A int B int C int } func NewHogeMapStruct() map[string]Hoge { m := make(map[string]Hoge) for i := 0; i &lt; 10000; i++ { m[strconv.Itoa(i)] = Hoge{i, i, i} } return m } ポイントは以下の点です。
+ 受け渡すstructはintが3つ程度の小さなもの mapに入れて返す  benchmarkを使って検証する ポインタを使わない版と使う版を両方作ってベンチマークをとってみます。
+package hoge import ( &#34;strconv&#34; ) type Hoge struct { A int B int C int } // ポインタ使わない版 func NewHogeMapStruct() map[string]Hoge { m := make(map[string]Hoge) for i := 0; i &lt; 10000; i++ { m[strconv.</p>
+
+          
+              <footer>
+                  <a href="https://shogo82148.github.io/blog/2015/02/22/should-i-use-a-pointer-in-go/" rel="full-article">Read On &rarr;</a>
+              </footer>
+          
+
+        
+
+    </article>
+    
+    <article>
+
+        
+        
+
+<header>
     <p class="meta">Nov 15, 2014
          - 1 minute read 
          - <a href="https://shogo82148.github.io/blog/2014/11/15/github-irc-hook-supports-gollum/#disqus_thread">Comments</a>
@@ -447,50 +486,6 @@ ssh-keygenを使うとできます。
 
     </article>
     
-    <article>
-
-        
-        
-
-<header>
-    <p class="meta">Jul 5, 2014
-         - 1 minute read 
-         - <a href="https://shogo82148.github.io/blog/2014/07/05/signal-in-xs/#disqus_thread">Comments</a>
-
-        
-        
-        
-            - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a>
-        
-    </p>
-    <h1 class="entry-title">
-        <a href="https://shogo82148.github.io/blog/2014/07/05/signal-in-xs/">PerlのXS中に起きたシグナルの扱い</a>
-    </h1>
-</header>
-
-
-        
-          <p>Redis::Fast にIssueが来ていたので、 それに関して調査したお話です。
- 接続タイムアウトすると double free check に引っかかる brpop みたいな長時間ブロックするコマンド中にシグナルが入ると、最初の1回が無視される  前者はC言語つらいって話で頑張って double free になる条件を探せばいいんですが、 後者はシグナル時のPerlやPOSIX APIの挙動を知らなくと解決できなそう。 そういうわけで、主に後者について調べた結果をまとめておきます。
-PERL_ASYNC_CHECKってXS中から呼んでもいいの？ 言いたいことは最初に書いとけって偉い人に言われたので、最初にこの記事の結論を。 「よしななタイミングでPERL_ASYNC_CHECKを呼べばいいっぽい」みたいです。 でも、 ** 「PERL_ASYNC_CHECKってXS中から呼んでもいいの？」 ** という点に確証が持ててないので、 識者のご意見を募集してます！
-selectの挙動を調べる Redis::FastはRedisからのレスポンスを待つのにLinuxのselect apiを叩いてます。 ファイルとかが読み書き可能になるまで処理をブロックしてくれるいいやつです。 しかし、select が処理をブロックしている間にシグナルを受信すると、うまく処理ができてないらしい。 そこで割り込み発生時の挙動を確認してみます。
-困った時のmanページ(select) をちゃんと読めば書いてありますね。
- エラーならば -1 を返し、 errno にエラーを示す値が設定される;
-EINTR シグナルを受信した。
- Redis::Fastはerrnoを特に確認せず、とにかくエラーが発生したらリトライになってたのでダメだったみたいです。 通信にエラーが起きたわけではないので、再接続処理とかみたいな複雑なリトライ処理は必要なく、 単にもう一度selectしなおせば良さそうです。
-Perlさんのシグナル処理のタイミング 「割り込みかかったら再度select」っていうふうに修正してみたんですが、 今度はPerlのシグナルハンドラがなかなか呼び出されない！！
-use Redis::Fast; $SIG{TERM}= sub { warn &#34;TERM handler called&#34;; }; my $c =-&gt;new(reconnect=&gt;2, every =&gt; 100, server =&gt; &#34;localhost:6379&#34;); $c-&gt;brpop(&#34;a&#34;, 100); # 100秒経ったら諦めて戻ってくる このコードを実行中にSIGTERMを送ると、送った瞬間に&rdquo;TERM handler called&rdquo;と表示されて欲しいのですが、 brpopコマンドが終わるまで実行されない……</p>
-
-          
-              <footer>
-                  <a href="https://shogo82148.github.io/blog/2014/07/05/signal-in-xs/" rel="full-article">Read On &rarr;</a>
-              </footer>
-          
-
-        
-
-    </article>
-    
     
     
 
@@ -612,6 +607,12 @@ use Redis::Fast; $SIG{TERM}= sub { warn &#34;TERM handler called&#34;; }; my $c 
           
             
               <li class="post">
+                <a href="/blog/2018/11/30/perl-in-lambda/">PerlをAWS Lambdaで動かす</a>
+              </li>
+            
+          
+            
+              <li class="post">
                 <a href="/blog/2018/11/22/go-nil/">Goのnil,true,falseは変数名に使えるという話</a>
               </li>
             
@@ -661,12 +662,6 @@ use Redis::Fast; $SIG{TERM}= sub { warn &#34;TERM handler called&#34;; }; my $c 
             
               <li class="post">
                 <a href="/blog/2018/04/10/migrate-to-hugo/">OctopressからHugoに乗り換えた</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2018/01/02/cloudformation-template-for-mackerel-integration/">Mackerel AWS Integration 用の CloudFormation テンプレートを書いた</a>
               </li>
             
           

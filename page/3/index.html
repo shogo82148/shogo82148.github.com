@@ -106,6 +106,48 @@
 
 <header>
     <p class="meta">Apr 13, 2017
+         - 2 minute read 
+         - <a href="https://shogo82148.github.io/blog/2017/04/13/perl-int64/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a>
+        
+    </p>
+    <h1 class="entry-title">
+        <a href="https://shogo82148.github.io/blog/2017/04/13/perl-int64/">Perl&#43;List::Utilの64bit整数の罠にはまった話</a>
+    </h1>
+</header>
+
+
+        
+          <p>先日 Google Code Jam Qualification Round 2017 が開催されました (って何？というひとはAboutのページを確認。本題では無いので説明略)。
+僕もこれに参加して、D以外の問題A,B,Cを解いて、無事Round1へ進むことができました。 しかしPerlで解いたC-largeだけ何故か間違いの判定。 原因を探ってみたところ、PerlおよびList::Utilの64bit整数の罠にはまっていたことに気が付いたので、その備忘録として残しておきます。
+問題が発生したコード 問題が発生するのは以下の計算をするコードです。
+ max: 250000000000000000と249999999999999999で大きい方を返す div: 249999999999999999を2で割った商を求める  この計算をそれぞれ二通りの計算方法で実装してみます。
+use 5.24.0; use List::Util qw(max); say &#34;max:&#34;; say max(250000000000000000, 249999999999999999); say max(249999999999999999, 250000000000000000); say &#34;div:&#34;; say int(249999999999999999/2); say 249999999999999999 &gt;&gt; 1;  max: 順番を変えただけなので、同じ結果をになるはず div: 割り算と等価なビットシフトに置き換えたので、同じ結果になるはず  僕は「同じ結果になるはず」と期待していました。 しかし、これを実行してみると以下のようになります。
+ [Wandbox]三へ( へ՞ਊ ՞)へ ﾊｯﾊｯ https://wandbox.org/permlink/5fUBzLmBCRKUo4xZ  max: 249999999999999999 250000000000000000 div: 125000000000000000 124999999999999999 原因 250000000000000000は大体2^57.8なので、64bitの整数で十分表現できます。 しかし倍精度浮動小数点数として扱われると、精度が53bit分しかないので正確に表現できないのです。
+例えば以下のコードは&rdquo;true&rdquo;を出力します(ここだけ何故かGo)。
+package main import ( &#34;fmt&#34; ) func main() { fmt.</p>
+
+          
+              <footer>
+                  <a href="https://shogo82148.github.io/blog/2017/04/13/perl-int64/" rel="full-article">Read On &rarr;</a>
+              </footer>
+          
+
+        
+
+    </article>
+    
+    <article>
+
+        
+        
+
+<header>
+    <p class="meta">Apr 13, 2017
          - 3 minute read 
          - <a href="https://shogo82148.github.io/blog/2017/04/13/go1-8-allocation/#disqus_thread">Comments</a>
 
@@ -468,47 +510,6 @@ package main import &#34;fmt&#34; const Fib0 = 1 // 0だけはうまくいかな
 
     </article>
     
-    <article>
-
-        
-        
-
-<header>
-    <p class="meta">Feb 16, 2017
-         - 2 minute read 
-         - <a href="https://shogo82148.github.io/blog/2017/02/16/go-sql-proxy-in-go18/#disqus_thread">Comments</a>
-
-        
-        
-        
-            - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
-        
-    </p>
-    <h1 class="entry-title">
-        <a href="https://shogo82148.github.io/blog/2017/02/16/go-sql-proxy-in-go18/">go-sql-proxyがcontextに対応しました</a>
-    </h1>
-</header>
-
-
-        
-          <p>Go1.8ではdatabase/sqlのcontextサポートが入ります。 (きっと今日のGo 1.8 Release Partyで詳しく説明があるはず、たぶん) それにともないGo言語でSQLのトレースをするで紹介した shogo82148/go-sql-proxyでもcontextを扱えるようにしました。
-Go1.8新機能のサポート Golang 1.8 でやってくる database/sql の変更点で mattnさんが紹介しているように、Go1.8ではdatabase/sqlにいくつか新機能が追加されます。 (mattnさんの対応が早すぎて、メソッド名とか微妙に変更が入っているので注意)
-特に大きなのがcontextのサポートでしょう。以下のようなコードでクエリのキャンセルが可能になります。
-ctx, cancel := context.WithCancel(context.Background()) go func() { // 1秒待ってからキャンセル  time.Sleep(1 * time.Second) cancel() }() rows, err := db.QueryContext(ctx, &#34;SELECT name FROM test where id = ?&#34;, id) if err != nil { log.Fatal(err) } go-sql-proxyでもcontext対応を行ったので、 proxyを経由した場合でも、キャンセルが可能になります。 (もちろん、originとなるドライバの対応も必要です)
-Go1.8ではcontextサポート以外にもいくつか新機能が追加される予定です。 これらについても、originとなるドライバが対応していれば、go-sql-proxy経由でも全く同じように扱えます。
-contextとHookの関連付け contextにHookを関連付けて、一部のクエリにだけHookを付けることができるようになりました。 例えば以下のようなコードでctxに関連したクエリだけログを出力できます。
-package main import ( &#34;context&#34; &#34;database/sql&#34; &#34;github.com/shogo82148/go-sql-proxy&#34; ) var tracer = proxy.</p>
-
-          
-              <footer>
-                  <a href="https://shogo82148.github.io/blog/2017/02/16/go-sql-proxy-in-go18/" rel="full-article">Read On &rarr;</a>
-              </footer>
-          
-
-        
-
-    </article>
-    
     
     
 
@@ -630,6 +631,12 @@ package main import ( &#34;context&#34; &#34;database/sql&#34; &#34;github.com/s
           
             
               <li class="post">
+                <a href="/blog/2018/11/30/perl-in-lambda/">PerlをAWS Lambdaで動かす</a>
+              </li>
+            
+          
+            
+              <li class="post">
                 <a href="/blog/2018/11/22/go-nil/">Goのnil,true,falseは変数名に使えるという話</a>
               </li>
             
@@ -679,12 +686,6 @@ package main import ( &#34;context&#34; &#34;database/sql&#34; &#34;github.com/s
             
               <li class="post">
                 <a href="/blog/2018/04/10/migrate-to-hugo/">OctopressからHugoに乗り換えた</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2018/01/02/cloudformation-template-for-mackerel-integration/">Mackerel AWS Integration 用の CloudFormation テンプレートを書いた</a>
               </li>
             
           
