@@ -104,6 +104,11 @@ zip -r ../dist.zip
 
 - [AWS Lambda Custom Runtime芸人 Advent Calendar 2018](https://qiita.com/advent-calendar/2018/lambda-custom-runtime)
 
+追記:
+
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">Perlを久々に見ました <a href="https://t.co/V7uMytci7D">pic.twitter.com/V7uMytci7D</a></p>&mdash; ひさいち (@hisaichi5518) <a href="https://twitter.com/hisaichi5518/status/1068432981591617537?ref_src=twsrc%5Etfw">2018年11月30日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
 ## 参考
 
 - [AWS Lambda の新機能でサーバーレス・シェルスクリプト！ カスタムランタイムのチュートリアルを動かしてみた #reinvent](https://dev.classmethod.jp/cloud/aws/tutorial-lambda-custom-runtime-with-shellscript/)
