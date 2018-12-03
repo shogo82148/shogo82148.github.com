@@ -102,7 +102,7 @@ zip -r ../dist.zip
 
 すでに AWS Lambda Custom Runtime芸人 が大量に湧いていた。
 
-- [AWS Lambda Custom Runtime芸人 Advent Calendar 2018](https://qiita.com/advent-calendar/2018/lambda-custom-runtime)
+- [AWS Lambda Custom Runtime芸人 Advent Calendar 2018](https://qiita.com/advent-calendar/2018/lambda-custom-runtimes)
 
 追記:
 
