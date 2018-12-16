@@ -7,6 +7,11 @@ comments: true
 categories: [perl, aws, lambda]
 ---
 
+この記事は [Perl Advent Calendar 2018](https://qiita.com/advent-calendar/2018/perl)の15日目の記事です。
+(キリの良いところまでできたのと、記事が書かれていなかったので代打投稿)
+
+-----
+
 Custom Runtime のリリースにより、AWS Lambda 上でPerlが動くようになりました。
 
 - [PerlをAWS Lambdaで動かす](https://shogo82148.github.io/blog/2018/11/30/perl-in-lambda/)
@@ -260,6 +265,10 @@ AWS Lambda 上で CGIアクセスカウンターが動きました。
 
 あとは CGI::Compile が動いてくれれば、forkのコストを気にする必要がなくなるので、CGI+Perlを使った開発がはかどりますね！
 (その場合、結局最後はPSGIアプリケーションに変換されるんだけど、気にしない気にしない)
+
+-----
+
+16日目は [@magnolia_k_](https://twitter.com/magnolia_k_)さんで「[Time::Pieceを使って日付の計算をしようとしてハマった話をします](https://qiita.com/magnolia_k_/items/19cd1dd748b1611963d8)」です！
 
 ## 参考
 
