@@ -251,7 +251,7 @@ sub handle {
     - 「Can't set $0 with prctl(): Operation not permitted」だ、そうです
 - API Gatewayでレスポンスにバイナリを含むことができない
     - ALBはリクエスト、レスポンスともにBodyにバイナリを含むことができます
-    - リクエストに関してはAPI Gatewayでも「Binary Media Types」にメディアタイプを追加することで送信できました
+    - リクエストに関してはAPI Gatewayでも「Binary Media Types」にメディアタイプを追加することで送信できました
     - [Enable Binary Support Using the API Gateway Console](https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-payload-encodings-configure-with-console.html)
 
 ## まとめ
