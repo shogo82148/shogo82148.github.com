@@ -1,0 +1,119 @@
+---
+layout: post
+title: "IAM認証でAWS RDSへ接続するMySQLドライバを作った"
+slug: rdsmysql
+date: 2019-01-13 17:44:00 +0900
+comments: true
+categories: [go, golang, mysql, aws]
+---
+
+AWS RDS には IAM 認証を使って接続する機能があります。
+
+- [MySQL および PostgreSQL に対する IAM データベース認証](https://docs.aws.amazon.com/ja_jp/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.html)
+- [IAM 認証情報を使用して Amazon RDS への接続をユーザーに許可する方法を教えてください。](https://aws.amazon.com/jp/premiumsupport/knowledge-center/users-connect-rds-iam/)
+
+これを使って接続するGo言語のSQLドライバを書いてみました。
+
+- [https://github.com/shogo82148/rdsmysql](https://github.com/shogo82148/rdsmysql)
+
+## 使い方
+
+IAMデータベース認証はデフォルトで無効になっているので、まずはこれを有効化します。
+次に `AWSAuthenticationPlugin` を認証方式に指定して、新しいユーザーを作りましょう。
+
+- [IAM データベース認証の有効化と無効化](https://docs.aws.amazon.com/ja_jp/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.Enabling.html)
+- [データベースアカウントの作成](https://docs.aws.amazon.com/ja_jp/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.DBAccounts.html)
+
+```sql
+CREATE USER jane_doe IDENTIFIED WITH AWSAuthenticationPlugin AS 'RDS';
+```
+
+他のSQLドライバはimportするだけで使えるのですが、
+rdsmysqlではAWSへの権限情報を設定しなければならない都合上、 `sql.Register` を自前で呼び出す必要があります。
+とは言っても、AWS SDKがいい感じに設定ファイルとか環境変数とか読んでくれるので、
+[`rdsmysql.Driver`](https://godoc.org/github.com/shogo82148/rdsmysql#Driver) にAWSセッションを渡すだけです。
+
+```go
+c := aws.NewConfig().WithRegion("ap-northeast-1")
+s := session.Must(session.NewSession(c))
+d := &Driver{
+    Session: s,
+}
+sql.Register("rdsmysql", d)
+
+db, err := sql.Open("rdsmysql", "jane_doe:@tcp(db-foobar.ap-northeast-1.rds.amazonaws.com:3306)/")
+if err != nil {
+    log.Fatal(err)
+}
+defer db.Close()
+```
+
+あとは通常のMySQLドライバとして呼び出すだけです。
+[go-sql-driver/mysql](https://godoc.org/github.com/go-sql-driver/mysql) のラッパーになっているので、
+DNS等の書き方はこれに準じます。
+認証部分は rdsmysql がやってくれるので、パスワードは空でOKです。
+パスワードの管理から開放されて楽ですね！
+
+なお、接続に使用するIAMユーザーもしくはロールには以下の権限が必要です。
+
+- [IAM データベースアクセス用の IAM ポリシーの作成と使用](https://docs.aws.amazon.com/ja_jp/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.IAMPolicy.html)
+
+```json
+{
+   "Version": "2012-10-17",
+   "Statement": [
+      {
+         "Effect": "Allow",
+         "Action": [
+             "rds-db:connect"
+         ],
+         "Resource": [
+             "arn:aws:rds-db:ap-northeast-1:1234567890:dbuser:db-foobar/jane_doe"
+         ]
+      }
+   ]
+}
+```
+
+
+## コマンドライン・インターフェイス
+
+この方法、一応CLIからも行けるんですが、 `aws rds generate-db-auth-token` コマンドを叩いて、
+数百の文字のトークンを頑張って `mysql` コマンドにわたす必要があって、かなり面倒くさい。
+
+- [コマンドライン: AWS CLI および mysql クライアントからの DB インスタンス への接続](https://docs.aws.amazon.com/ja_jp/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.Connecting.AWSCLI.html)
+
+そこで、 `mysql` コマンドのラッパーも一緒に作りました。
+いつもどおり `go get` でインストール可能です。
+
+``` bash
+go get github.com/shogo82148/rdsmysql/cmd/rdsmysql
+go get github.com/shogo82148/rdsmysql/cmd/rdsmysqldump
+```
+
+ユーザー名とホスト名を指定するだけでお手軽に接続できます。
+
+```
+rdsmysql -u jane_doe -h db-foobar.ap-northeast-1.rds.amazonaws.com
+```
+
+なお、 `rdsmysql` は `mysql` のラッパーなので、 `mysql` の事前インストールが必要です。
+
+RDSクラスターに Public IP を割り振っておけば、踏み台サーバー等を経由せずとも、ローカルのPCから安全にアクセスが可能です。
+
+- [IAM認証によるRDS接続を試してみた](https://dev.classmethod.jp/cloud/aws/iam-auth-rds/)
+
+## まとめ
+
+- AWS RDS の IAM 認証を行うドライバを作った
+- IAM 認証用のCLIラッパーを作った
+
+なおプロダクションへの投入はまだしてないです。
+ちょっとしたユーティリティツールを書いただけで、バックエンドのリクエストをさばいたことはありません。
+
+> https://docs.aws.amazon.com/ja_jp/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.html#UsingWithRDS.IAMDBAuth.ConnectionsPerSecond
+> MySQL で IAM データベース認証を使用する場合、1 秒あたりの新しい接続数は 20 までに制限されます。db.t2.micro インスタンスクラスを使用している場合、この制限は 1 秒あたり 10 接続に制限されます。
+
+さて・・・Goの場合コネクションプールがあるので、たぶん問題ないとは思ってるんですが・・・・
+この制限に引っかかった状況をまだ検証できてません。
+人柱募集中。
