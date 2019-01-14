@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <link href="http://gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+  
+  <link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  <link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  
+
+  
+  <title>IAM認証でAWS RDSへ接続するMySQLドライバを作った</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css">
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+  
+
+  
+
+  <meta name="description" content="">
+  <meta name="keywords" content="">
+
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.38.1" />
+
+  
+  
+
+</head>
+<body>
+
+
+<header role="banner"><hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+    <h2></h2>
+</hgroup></header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+
+<ul class="subscription">
+  
+
+</ul>
+
+
+<form action="https://www.google.com/search" method="get" target="_blank">
+  <fieldset role="search">
+  	<input class="search" type="text" name="q" results="0" placeholder="Search"/>
+    <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+  </fieldset>
+</form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+    <p class="meta">Jan 13, 2019
+         - 1 minute read 
+         - <a href="https://shogo82148.github.io/blog/2019/01/13/rdsmysql/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a><a class="label" href="https://shogo82148.github.io/categories/mysql/">mysql </a><a class="label" href="https://shogo82148.github.io/categories/aws/">aws </a>
+        
+    </p>
+    <h1 class="entry-title">
+         IAM認証でAWS RDSへ接続するMySQLドライバを作った 
+    </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          
+
+<p>AWS RDS には IAM 認証を使って接続する機能があります。</p>
+
+<ul>
+<li><a href="https://docs.aws.amazon.com/ja_jp/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.html">MySQL および PostgreSQL に対する IAM データベース認証</a></li>
+<li><a href="https://aws.amazon.com/jp/premiumsupport/knowledge-center/users-connect-rds-iam/">IAM 認証情報を使用して Amazon RDS への接続をユーザーに許可する方法を教えてください。</a></li>
+</ul>
+
+<p>これを使って接続するGo言語のSQLドライバを書いてみました。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/rdsmysql">https://github.com/shogo82148/rdsmysql</a></li>
+</ul>
+
+<h2 id="使い方">使い方</h2>
+
+<p>IAMデータベース認証はデフォルトで無効になっているので、まずはこれを有効化します。
+次に <code>AWSAuthenticationPlugin</code> を認証方式に指定して、新しいユーザーを作りましょう。</p>
+
+<ul>
+<li><a href="https://docs.aws.amazon.com/ja_jp/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.Enabling.html">IAM データベース認証の有効化と無効化</a></li>
+<li><a href="https://docs.aws.amazon.com/ja_jp/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.DBAccounts.html">データベースアカウントの作成</a></li>
+</ul>
+<div class="highlight"><pre class="chroma"><code class="language-sql" data-lang="sql"><span class="k">CREATE</span> <span class="k">USER</span> <span class="n">jane_doe</span> <span class="n">IDENTIFIED</span> <span class="k">WITH</span> <span class="n">AWSAuthenticationPlugin</span> <span class="k">AS</span> <span class="s1">&#39;RDS&#39;</span><span class="p">;</span></code></pre></div>
+<p>他のSQLドライバはimportするだけで使えるのですが、
+rdsmysqlではAWSへの権限情報を設定しなければならない都合上、 <code>sql.Register</code> を自前で呼び出す必要があります。
+とは言っても、AWS SDKがいい感じに設定ファイルとか環境変数とか読んでくれるので、
+<a href="https://godoc.org/github.com/shogo82148/rdsmysql#Driver"><code>rdsmysql.Driver</code></a> にAWSセッションを渡すだけです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="nx">c</span> <span class="o">:=</span> <span class="nx">aws</span><span class="p">.</span><span class="nx">NewConfig</span><span class="p">().</span><span class="nx">WithRegion</span><span class="p">(</span><span class="s">&#34;ap-northeast-1&#34;</span><span class="p">)</span>
+<span class="nx">s</span> <span class="o">:=</span> <span class="nx">session</span><span class="p">.</span><span class="nx">Must</span><span class="p">(</span><span class="nx">session</span><span class="p">.</span><span class="nx">NewSession</span><span class="p">(</span><span class="nx">c</span><span class="p">))</span>
+<span class="nx">d</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">Driver</span><span class="p">{</span>
+    <span class="nx">Session</span><span class="p">:</span> <span class="nx">s</span><span class="p">,</span>
+<span class="p">}</span>
+<span class="nx">sql</span><span class="p">.</span><span class="nx">Register</span><span class="p">(</span><span class="s">&#34;rdsmysql&#34;</span><span class="p">,</span> <span class="nx">d</span><span class="p">)</span>
+
+<span class="nx">db</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">sql</span><span class="p">.</span><span class="nx">Open</span><span class="p">(</span><span class="s">&#34;rdsmysql&#34;</span><span class="p">,</span> <span class="s">&#34;jane_doe:@tcp(db-foobar.ap-northeast-1.rds.amazonaws.com:3306)/&#34;</span><span class="p">)</span>
+<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+    <span class="nx">log</span><span class="p">.</span><span class="nx">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+<span class="p">}</span>
+<span class="k">defer</span> <span class="nx">db</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span></code></pre></div>
+<p>あとは通常のMySQLドライバとして呼び出すだけです。
+<a href="https://godoc.org/github.com/go-sql-driver/mysql">go-sql-driver/mysql</a> のラッパーになっているので、
+DNS等の書き方はこれに準じます。
+認証部分は rdsmysql がやってくれるので、パスワードは空でOKです。
+パスワードの管理から開放されて楽ですね！</p>
+
+<p>なお、接続に使用するIAMユーザーもしくはロールには以下の権限が必要です。</p>
+
+<ul>
+<li><a href="https://docs.aws.amazon.com/ja_jp/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.IAMPolicy.html">IAM データベースアクセス用の IAM ポリシーの作成と使用</a></li>
+</ul>
+<div class="highlight"><pre class="chroma"><code class="language-json" data-lang="json"><span class="p">{</span>
+   <span class="nt">&#34;Version&#34;</span><span class="p">:</span> <span class="s2">&#34;2012-10-17&#34;</span><span class="p">,</span>
+   <span class="nt">&#34;Statement&#34;</span><span class="p">:</span> <span class="p">[</span>
+      <span class="p">{</span>
+         <span class="nt">&#34;Effect&#34;</span><span class="p">:</span> <span class="s2">&#34;Allow&#34;</span><span class="p">,</span>
+         <span class="nt">&#34;Action&#34;</span><span class="p">:</span> <span class="p">[</span>
+             <span class="s2">&#34;rds-db:connect&#34;</span>
+         <span class="p">],</span>
+         <span class="nt">&#34;Resource&#34;</span><span class="p">:</span> <span class="p">[</span>
+             <span class="s2">&#34;arn:aws:rds-db:ap-northeast-1:1234567890:dbuser:db-foobar/jane_doe&#34;</span>
+         <span class="p">]</span>
+      <span class="p">}</span>
+   <span class="p">]</span>
+<span class="p">}</span></code></pre></div>
+<h2 id="コマンドライン-インターフェイス">コマンドライン・インターフェイス</h2>
+
+<p>この方法、一応CLIからも行けるんですが、 <code>aws rds generate-db-auth-token</code> コマンドを叩いて、
+数百の文字のトークンを頑張って <code>mysql</code> コマンドにわたす必要があって、かなり面倒くさい。</p>
+
+<ul>
+<li><a href="https://docs.aws.amazon.com/ja_jp/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.Connecting.AWSCLI.html">コマンドライン: AWS CLI および mysql クライアントからの DB インスタンス への接続</a></li>
+</ul>
+
+<p>そこで、 <code>mysql</code> コマンドのラッパーも一緒に作りました。
+いつもどおり <code>go get</code> でインストール可能です。</p>
+<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash">go get github.com/shogo82148/rdsmysql/cmd/rdsmysql
+go get github.com/shogo82148/rdsmysql/cmd/rdsmysqldump</code></pre></div>
+<p>ユーザー名とホスト名を指定するだけでお手軽に接続できます。</p>
+
+<pre><code>rdsmysql -u jane_doe -h db-foobar.ap-northeast-1.rds.amazonaws.com
+</code></pre>
+
+<p>なお、 <code>rdsmysql</code> は <code>mysql</code> のラッパーなので、 <code>mysql</code> の事前インストールが必要です。</p>
+
+<p>RDSクラスターに Public IP を割り振っておけば、踏み台サーバー等を経由せずとも、ローカルのPCから安全にアクセスが可能です。</p>
+
+<ul>
+<li><a href="https://dev.classmethod.jp/cloud/aws/iam-auth-rds/">IAM認証によるRDS接続を試してみた</a></li>
+</ul>
+
+<h2 id="まとめ">まとめ</h2>
+
+<ul>
+<li>AWS RDS の IAM 認証を行うドライバを作った</li>
+<li>IAM 認証用のCLIラッパーを作った</li>
+</ul>
+
+<p>なおプロダクションへの投入はまだしてないです。
+ちょっとしたユーティリティツールを書いただけで、バックエンドのリクエストをさばいたことはありません。</p>
+
+<blockquote>
+<p><a href="https://docs.aws.amazon.com/ja_jp/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.html#UsingWithRDS.IAMDBAuth.ConnectionsPerSecond">https://docs.aws.amazon.com/ja_jp/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.html#UsingWithRDS.IAMDBAuth.ConnectionsPerSecond</a>
+MySQL で IAM データベース認証を使用する場合、1 秒あたりの新しい接続数は 20 までに制限されます。db.t2.micro インスタンスクラスを使用している場合、この制限は 1 秒あたり 10 接続に制限されます。</p>
+</blockquote>
+
+<p>さて・・・Goの場合コネクションプールがあるので、たぶん問題ないとは思ってるんですが・・・・
+この制限に引っかかった状況をまだ検証できてません。
+人柱募集中。</p>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>Jan 13, 2019</time>
+    
+    </span>
+  </p>
+
+  
+  
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2018/12/16/run-cgi-in-aws-lambda/" title="AWS LambdaでCGIを蘇らせる">AWS LambdaでCGIを蘇らせる</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+
+(function() {
+    
+    
+    
+    if (window.location.hostname == "localhost")
+        return;
+
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    var disqus_shortname = 'shogosblog';
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+       
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2019/01/13/rdsmysql/">IAM認証でAWS RDSへ接続するMySQLドライバを作った</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/12/16/run-cgi-in-aws-lambda/">AWS LambdaでCGIを蘇らせる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/11/30/perl-in-lambda/">PerlをAWS Lambdaで動かす</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/11/22/go-nil/">Goのnil,true,falseは変数名に使えるという話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/09/24/go-phper-json/">PHPer向けGoのJSONデコーダーを作った</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/08/20/summer-time-homework/">〜夏休みの自由研究〜 電波時計のサマータイム対応状況を調べてみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/08/19/goast-viewer-using-wasm/">GoAst ViewerをWebAssemblyへビルドしてみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/08/11/web-jjy-summer-time-support/">Web JJY が夏時間に対応しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/06/20/s3cli-mini/">S3からファイルを落とすだけのツールを作った</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/06/09/go-s3-protocol/">GoでHTTPとS3を透過的に扱う</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2019 Shogo Ichinose - <a href="https://shogo82148.github.io/license/">License</a> -
+  <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank" href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+</p>
+
+</footer>
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    displayMath: [['$$','$$'], ['\\[','\\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all.length) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+</script>
+
+
+<script>
+  var _gaq=[['_setAccount','UA-4526627-4'],['_trackPageview']];
+  (function(d,t){var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+  g.src=('https:'==location.protocol?'//ssl':'//www')+'.google-analytics.com/ga.js';
+  s.parentNode.insertBefore(g,s)}(document,'script'));
+</script>
+
+</body>
+</html>
+
