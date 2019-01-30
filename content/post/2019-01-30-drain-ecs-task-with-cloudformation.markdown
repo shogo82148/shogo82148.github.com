@@ -2,7 +2,7 @@
 layout: post
 title: "CloudFormationでECSタスクのドレインをやる"
 slug: drain-ecs-task-with-cloudformation
-date: 2019-01-26 17:44:00 +0900
+date: 2019-01-30 17:44:00 +0900
 comments: true
 categories: [go, golang, mysql, aws]
 ---
