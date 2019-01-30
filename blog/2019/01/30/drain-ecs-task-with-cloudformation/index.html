@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <link href="http://gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+  
+  <link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  <link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  
+
+  
+  <title>CloudFormationでECSタスクのドレインをやる</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css">
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+  
+
+  
+
+  <meta name="description" content="">
+  <meta name="keywords" content="">
+
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.38.1" />
+
+  
+  
+
+</head>
+<body>
+
+
+<header role="banner"><hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+    <h2></h2>
+</hgroup></header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+
+<ul class="subscription">
+  
+
+</ul>
+
+
+<form action="https://www.google.com/search" method="get" target="_blank">
+  <fieldset role="search">
+  	<input class="search" type="text" name="q" results="0" placeholder="Search"/>
+    <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+  </fieldset>
+</form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+    <p class="meta">Jan 30, 2019
+         - 2 minute read 
+         - <a href="https://shogo82148.github.io/blog/2019/01/30/drain-ecs-task-with-cloudformation/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a><a class="label" href="https://shogo82148.github.io/categories/mysql/">mysql </a><a class="label" href="https://shogo82148.github.io/categories/aws/">aws </a>
+        
+    </p>
+    <h1 class="entry-title">
+         CloudFormationでECSタスクのドレインをやる 
+    </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          
+
+<p>やってみたはいいものの、1年後には仕組みを忘れていそうなのでメモ。</p>
+
+<h2 id="背景">背景</h2>
+
+<p>昔はサービス毎にポコポコEC2インスタンスを立てていたのですが、
+幸か不幸かインスタンスのリソースが余り気味でした。
+そこで、最近流行りのコンテナ技術に乗っかって Amazon ECS (Amazon Elastic Container Service) を使って、
+ひとつのインスタンスに複数のサービスを載せようと目論みました。</p>
+
+<p>ちょうどその頃、<a href="https://docs.aws.amazon.com/ja_jp/AWSEC2/latest/UserGuide/spot-fleet.html">Spot Fleet</a>というものを使うと、
+スポットインスタンスをお手軽に借りられるという話を聞いたので、
+Spot Fleet + ECS で格安クラスターを作ってみよう！と手を出してみました。</p>
+
+<hr />
+
+<p>(・・・もちろん、Fargateが東京リージョンで使えるようになったことは知っているけれど、スポットインスタンスの価格に負けてしまった・・・)</p>
+
+<ul>
+<li><a href="https://aws.amazon.com/jp/blogs/news/aws-fargate-tokyo/">AWS Fargate 東京リージョン サービス開始のお知らせ</a></li>
+<li><a href="https://aws.amazon.com/jp/about-aws/whats-new/2019/01/announcing-aws-fargate-price-reduction-by-up-to-50-/">AWS Fargate で最大 50% の値下げを発表</a></li>
+</ul>
+
+<h3 id="ecs最適化インスタンスの更新問題">ECS最適化インスタンスの更新問題</h3>
+
+<p>クラスターを作るだけなら、そう難しくはなく、インスタンス起動時に<a href="https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/al2ami.html">Amazon ECS-Optimized Amazon Linux AMI</a>を使うだけです。
+問題はこのイメージは定期的に更新される、ということです。
+更新情報を流しているSNSトピックがあるので、これをサブスクライブしておくと、時たま更新通知が来ます。</p>
+
+<ul>
+<li><a href="https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/ECS-AMI-SubscribeTopic.html">Amazon ECS-Optimized Amazon Linux AMI の更新の通知のサブスクライブ</a></li>
+</ul>
+
+<p>この更新には機能追加はもちろん、セキュリティーフィックスも含まれているので、
+なるべく早く新しいイメージに移行する必要があります。
+移行は大まかに以下の手順で進めます。</p>
+
+<ol>
+<li>新しいAMIイメージに更新した Spot Fleet を作成する</li>
+<li><strong>古いインスタンスに残っているタスクをいい感じに終了する(ドレイン)</strong>
+
+<ul>
+<li>突然殺すとユーザーにエラーが見えてしまうので、受付中のリクエストを捌き切ってから終了しないといけない</li>
+<li>ドレインが始まるとECSがタスク数を調整するために、新しいインスタンスにタスクをお引越ししてくれる</li>
+</ul></li>
+<li>ドレインが終了したら、古いインスタンスをシャットダウンする</li>
+</ol>
+
+<p>ここで問題になってくるのが「古いインスタンスに残っているタスクをいい感じに終了する(ドレイン)」の部分。
+コンソールからポチポチするのも面倒なので、自動化したいところですが、
+いろいろとドキュメントをあさってみたのですが、公式ブログでも 「APIかawscliを叩く」「SNSとAWS Lambda をうまいこと組み合わせて頑張る」みたいな方法しか見当たらない・・・</p>
+
+<ul>
+<li><a href="https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/container-instance-draining.html">コンテナインスタンスのドレイン</a></li>
+<li><a href="https://aws.amazon.com/jp/blogs/compute/how-to-automate-container-instance-draining-in-amazon-ecs/">How to Automate Container Instance Draining in Amazon ECS</a></li>
+<li><a href="https://aws.amazon.com/jp/blogs/news/how-to-automate-container-instance-draining-in-amazon-ecs/">Amazon ECS におけるコンテナ インスタンス ドレイニングの自動化方法</a></li>
+</ul>
+
+<p>・・・みんなどうやってるの・・・？</p>
+
+<h2 id="cloudformationでecsタスクのドレイン">CloudFormationでECSタスクのドレイン</h2>
+
+<p>クラスターインスタンスを自由に選べるのが利点なので、自分で頑張れってことなんだろうと、仕方なく頑張ってみました。
+インフラ構築にはCloudFormationを利用しているので、うまいこと連携できないかと探ってみました。</p>
+
+<h3 id="cloudformationのカスタムリソース">CloudFormationのカスタムリソース</h3>
+
+<p>そこで目をつけたのが <a href="https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/template-custom-resources.html">CloudFormationのカスタムリソース</a> です。
+これを使うとCloudFormationが直接サポートしていないリソースをCloudFormationの管理下に置けます。
+リソースの作成・更新・削除を行うべきタイミングで Amazon SNS や AWS Lambda 経由でイベントを受け取ることができるので、
+プログラムで自動更新できるものは何でもCloudFormationの管理下に置けます。</p>
+
+<p>この機能を使って、「ドレイン対象のECSタスク」をCloudFormationの管理下においてしまおう、という作戦です。</p>
+
+<h3 id="カスタムリソースの仕組み">カスタムリソースの仕組み</h3>
+
+<p><code>Custom::</code> で始まるリソースタイプは自由に名前をつけることができるので、
+好きな名前を <code>Type</code> にタイプを指定します。
+プロパティーの <code>ServiceToken</code> には、カスタムリソースの更新イベントを受け取る Amazon SNS や AWS Lambda の arn を指定います。
+必須項目はこれだけで、あとのプロパティーは、カスタムリソースの提供者が自由に決められます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml">ECSDrain<span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="c"># 先頭に Custom:: をつけるだけ。簡単！　ECSDrain の部分は自由に決められる</span><span class="w">
+</span><span class="w">    </span>Type<span class="p">:</span><span class="w"> </span>Custom<span class="p">::</span>ECSDrain<span class="w">
+</span><span class="w">    </span>Version<span class="p">:</span><span class="w"> </span><span class="s1">&#39;1.0&#39;</span><span class="w">
+</span><span class="w">    </span>Properties<span class="p">:</span><span class="w">
+</span><span class="w">        </span><span class="c"># カスタムリソースの更新を行うLambda関数を指定</span><span class="w">
+</span><span class="w">        </span>ServiceToken<span class="p">:</span><span class="w"> </span>!GetAtt<span class="w"> </span>Function.Arn<span class="w">
+</span><span class="w">
+</span><span class="w">        </span><span class="c"># 残りのプロパティーは自由に決めることができる</span><span class="w">
+</span><span class="w">        </span>SpotFleet<span class="p">:</span><span class="w"> </span>!Ref<span class="w"> </span>SpotFleet</code></pre></div>
+<p>流れてくるイベントはこんな感じです(作成時の例)。
+プロパティーの内容が渡ってくるので、これをもとにリソース更新を行います。</p>
+<div class="highlight"><pre class="chroma"><code class="language-json" data-lang="json"><span class="p">{</span>
+    <span class="nt">&#34;RequestType&#34;</span><span class="p">:</span> <span class="s2">&#34;Create&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;ServiceToken&#34;</span><span class="p">:</span> <span class="s2">&#34;arn:aws:lambda:ap-northeast-1:1234567890:function:funcation-name&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;ResponseURL&#34;</span><span class="p">:</span> <span class="s2">&#34;https://cloudformation-custom-resource-response-apnortheast1.s3-ap-northeast-1.amazonaws.com/xxxxx&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;StackId&#34;</span><span class="p">:</span> <span class="s2">&#34;arn:aws:cloudformation:ap-northeast-1:1234567890:stack/foobar/12345678-1234-1234-1234-123456789abc&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;RequestId&#34;</span><span class="p">:</span> <span class="s2">&#34;12345678-1234-1234-1234-123456789abc&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;LogicalResourceId&#34;</span><span class="p">:</span> <span class="s2">&#34;ECSDrain&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;ResourceType&#34;</span><span class="p">:</span> <span class="s2">&#34;Custom::ECSDrain&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;ResourceProperties&#34;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="nt">&#34;ServiceToken&#34;</span><span class="p">:</span> <span class="s2">&#34;arn:aws:lambda:ap-northeast-1:1234567890:function:funcation-name&#34;</span><span class="p">,</span>
+        <span class="nt">&#34;SpotFleet&#34;</span><span class="p">:</span> <span class="s2">&#34;sfr-12345678-1234-1234-1234-123456789abc&#34;</span>
+    <span class="p">}</span>
+<span class="p">}</span></code></pre></div>
+<p>リソースの更新が終わったら、 <code>ResponseURL</code> に結果を投げます(S3のURLなの面白い)。
+あとから作成したカスタムリソースを特定できるように <code>PhysicalResourceId</code> を一緒に返します。</p>
+<div class="highlight"><pre class="chroma"><code class="language-json" data-lang="json"><span class="p">{</span>
+    <span class="nt">&#34;Status&#34;</span><span class="p">:</span> <span class="s2">&#34;SUCCESS&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;PhysicalResourceId&#34;</span><span class="p">:</span> <span class="s2">&#34;my-custom-resource&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;StackId&#34;</span><span class="p">:</span> <span class="s2">&#34;arn:aws:cloudformation:ap-northeast-1:1234567890:stack/foobar/12345678-1234-1234-1234-123456789abc&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;RequestId&#34;</span><span class="p">:</span> <span class="s2">&#34;12345678-1234-1234-1234-123456789abc&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;LogicalResourceId&#34;</span><span class="p">:</span> <span class="s2">&#34;ECSDrain&#34;</span><span class="p">,</span>
+<span class="p">}</span></code></pre></div>
+<h3 id="ecsタスクドレイン用カスタムリソース">ECSタスクドレイン用カスタムリソース</h3>
+
+<p>さて、本題のECSタスクドレイン用カスタムリソースです。
+「カスタムリソースは Spot Fleet に依存する」というふうに定義しておくと、
+「Spot Fleet が作成された後」<strong>「Spot Fleet が削除される前」</strong>に作成・削除のイベントを受け取ることができます。
+「Spot Fleet が削除される前」のイベントで、タスクのドレインを行えば、インスタンス終了前にタスクを安全に終了することができるはずです。</p>
+
+<p>・・・というわけで、頑張って書いたのがこちら。</p>
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml"><span class="w">  </span>ECSDrainFunction<span class="p">:</span><span class="w">
+</span><span class="w">    </span>Type<span class="p">:</span><span class="w"> </span>AWS<span class="p">::</span>Lambda<span class="p">::</span>Function<span class="w">
+</span><span class="w">    </span>Properties<span class="p">:</span><span class="w">
+</span><span class="w">      </span>Code<span class="p">:</span><span class="w">
+</span><span class="w">        </span>ZipFile<span class="p">:</span><span class="w"> </span><span class="sd">|
+</span><span class="sd">          import boto3, json, logging, time
+</span><span class="sd">          from botocore.vendored import requests
+</span><span class="sd">          logging.basicConfig()
+</span><span class="sd">          logger = logging.getLogger()
+</span><span class="sd">          logger.setLevel(logging.DEBUG)
+</span><span class="sd">          ec2 = boto3.client(&#39;ec2&#39;)
+</span><span class="sd">          ecs = boto3.client(&#39;ecs&#39;)
+</span><span class="sd">          def cfn_response(url, body):
+</span><span class="sd">              data = json.dumps(body)
+</span><span class="sd">              headers = {&#39;content-type&#39; : &#39;&#39;,&#39;content-length&#39; : str(len(data))}
+</span><span class="sd">              requests.put(url, data=data, headers=headers)</span><span class="w">
+</span><span class="w">        
+</span><span class="w">          </span><span class="c"># リソースの作成イベント処理。タスクの作成は ECS::Service で行うので、特に何もしない。</span><span class="w">
+</span><span class="w">          </span>def<span class="w"> </span>_create(ret<span class="p">,</span><span class="w"> </span>event)<span class="p">:</span><span class="w">
+</span><span class="w">              </span>ret<span class="p">[</span><span class="s1">&#39;Status&#39;</span><span class="p">]</span><span class="w"> </span>=<span class="w"> </span><span class="s1">&#39;SUCCESS&#39;</span><span class="w">
+</span><span class="w">              </span>ret<span class="p">[</span><span class="s1">&#39;PhysicalResourceId&#39;</span><span class="p">]</span><span class="w"> </span>=<span class="w"> </span>event<span class="p">[</span><span class="s1">&#39;ResourceProperties&#39;</span><span class="p">][</span><span class="s1">&#39;SpotFleet&#39;</span><span class="p">]</span><span class="w">
+</span><span class="w">              </span>return<span class="w"> </span>ret<span class="w">
+</span><span class="w">
+</span><span class="w">          </span><span class="c"># リソースの更新イベント処理。PhysicalResourceId に更新前とは異なる値を設定しているのがポイント</span><span class="w">
+</span><span class="w">          </span>def<span class="w"> </span>_update(ret<span class="p">,</span><span class="w"> </span>event)<span class="p">:</span><span class="w">
+</span><span class="w">              </span>ret<span class="p">[</span><span class="s1">&#39;Status&#39;</span><span class="p">]</span><span class="w"> </span>=<span class="w"> </span><span class="s1">&#39;SUCCESS&#39;</span><span class="w">
+</span><span class="w">              </span>ret<span class="p">[</span><span class="s1">&#39;PhysicalResourceId&#39;</span><span class="p">]</span><span class="w"> </span>=<span class="w"> </span>event<span class="p">[</span><span class="s1">&#39;ResourceProperties&#39;</span><span class="p">][</span><span class="s1">&#39;SpotFleet&#39;</span><span class="p">]</span><span class="w">
+</span><span class="w">              </span>return<span class="w"> </span>ret<span class="w">
+</span><span class="w">
+</span><span class="w">          </span><span class="c"># リソースの削除イベント処理。 Spot Fleet 内のタスクをドレイン。</span><span class="w">
+</span><span class="w">          </span>def<span class="w"> </span>_delete(ret<span class="p">,</span><span class="w"> </span>event)<span class="p">:</span><span class="w">
+</span><span class="w">              </span>ret<span class="p">[</span><span class="s1">&#39;Status&#39;</span><span class="p">]</span><span class="w"> </span>=<span class="w"> </span><span class="s1">&#39;SUCCESS&#39;</span><span class="w">
+</span><span class="w">              </span>fleet<span class="w"> </span>=<span class="w"> </span>event<span class="p">[</span><span class="s1">&#39;PhysicalResourceId&#39;</span><span class="p">]</span><span class="w">
+</span><span class="w">              </span>instances<span class="w"> </span>=<span class="w"> </span>get_targets(fleet)<span class="w">
+</span><span class="w">              </span>logging.debug(<span class="s1">&#39;start to drain {}&#39;</span>.format(instances))<span class="w">
+</span><span class="w">              </span>while<span class="w"> </span>True<span class="p">:</span><span class="w">
+</span><span class="w">                  </span>logging.debug(<span class="s1">&#39;check instance state&#39;</span>)<span class="w">
+</span><span class="w">                  </span>tasks<span class="w"> </span>=<span class="w"> </span>drain(instances)<span class="w">
+</span><span class="w">                  </span>if<span class="w"> </span>tasks<span class="w"> </span>==<span class="w"> </span><span class="m">0</span><span class="p">:</span><span class="w">
+</span><span class="w">                      </span>break<span class="w">
+</span><span class="w">                  </span>logging.debug(<span class="s1">&#39;{} tasks are running&#39;</span>.format(tasks))<span class="w">
+</span><span class="w">                  </span>time.sleep(<span class="m">10</span>)<span class="w">
+</span><span class="w">              </span>logging.debug(<span class="s1">&#39;drain complete&#39;</span>)<span class="w">
+</span><span class="w">              </span>ret<span class="p">[</span><span class="s1">&#39;PhysicalResourceId&#39;</span><span class="p">]</span><span class="w"> </span>=<span class="w"> </span>fleet<span class="w">
+</span><span class="w">              </span>return<span class="w"> </span>ret<span class="w">
+</span><span class="w">
+</span><span class="w">          </span><span class="c"># Spot Fleet 内のインスタンス取得</span><span class="w">
+</span><span class="w">          </span>def<span class="w"> </span>get_targets(fleet)<span class="p">:</span><span class="w">
+</span><span class="w">              </span>pages<span class="w"> </span>=<span class="w"> </span>ec2.get_paginator(<span class="s1">&#39;describe_spot_fleet_instances&#39;</span>).paginate(SpotFleetRequestId=fleet)<span class="w">
+</span><span class="w">              </span>instances<span class="w"> </span>=<span class="w"> </span>set()<span class="w">
+</span><span class="w">              </span>for<span class="w"> </span>page<span class="w"> </span>in<span class="w"> </span>pages<span class="p">:</span><span class="w">
+</span><span class="w">                  </span>for<span class="w"> </span>instance<span class="w"> </span>in<span class="w"> </span>page<span class="p">[</span><span class="s1">&#39;ActiveInstances&#39;</span><span class="p">]:</span><span class="w">
+</span><span class="w">                      </span>instances.add(instance<span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]</span>)<span class="w">
+</span><span class="w">              </span>return<span class="w"> </span>instances<span class="w">
+</span><span class="w">
+</span><span class="w">          </span><span class="c"># 実際にドレインを実行する関数</span><span class="w">
+</span><span class="w">          </span><span class="c"># ドレインが終了するまでポーリング！！</span><span class="w">
+</span><span class="w">          </span>def<span class="w"> </span>drain(instances)<span class="p">:</span><span class="w">
+</span><span class="w">              </span>tasks<span class="w"> </span>=<span class="w"> </span><span class="m">0</span><span class="w">
+</span><span class="w">              </span>pages<span class="w"> </span>=<span class="w"> </span>ecs.get_paginator(<span class="s1">&#39;list_container_instances&#39;</span>).paginate(cluster=<span class="s1">&#39;komtar-wordpress&#39;</span>)<span class="w">
+</span><span class="w">              </span>for<span class="w"> </span>page<span class="w"> </span>in<span class="w"> </span>pages<span class="p">:</span><span class="w">
+</span><span class="w">                  </span>resp<span class="w"> </span>=<span class="w"> </span>ecs.describe_container_instances(cluster=<span class="s1">&#39;komtar-wordpress&#39;</span><span class="p">,</span>containerInstances=page<span class="p">[</span><span class="s1">&#39;containerInstanceArns&#39;</span><span class="p">]</span>)<span class="w">
+</span><span class="w">                  </span>for<span class="w"> </span>instance<span class="w"> </span>in<span class="w"> </span>resp<span class="p">[</span><span class="s1">&#39;containerInstances&#39;</span><span class="p">]:</span><span class="w">
+</span><span class="w">                      </span>if<span class="w"> </span>instance<span class="p">[</span><span class="s1">&#39;ec2InstanceId&#39;</span><span class="p">]</span><span class="w"> </span>not<span class="w"> </span>in<span class="w"> </span>instances<span class="p">:</span><span class="w">
+</span><span class="w">                          </span>continue<span class="w">
+</span><span class="w">                      </span>logger.debug(instance)<span class="w">
+</span><span class="w">                      </span>arn<span class="w"> </span>=<span class="w"> </span>instance<span class="p">[</span><span class="s1">&#39;containerInstanceArn&#39;</span><span class="p">]</span><span class="w">
+</span><span class="w">                      </span>if<span class="w"> </span>instance<span class="p">[</span><span class="s1">&#39;status&#39;</span><span class="p">]</span><span class="w"> </span>!=<span class="w"> </span><span class="s1">&#39;DRAINING&#39;</span><span class="p">:</span><span class="w">
+</span><span class="w">                          </span>logging.debug(<span class="s1">&#39;drain {}&#39;</span>.format(arn))<span class="w">
+</span><span class="w">                          </span>ecs.update_container_instances_state(cluster=<span class="s1">&#39;komtar-wordpress&#39;</span><span class="p">,</span>containerInstances=<span class="p">[</span>arn<span class="p">],</span>status=<span class="s1">&#39;DRAINING&#39;</span>)<span class="w">
+</span><span class="w">                      </span>tasks<span class="w"> </span>+=<span class="w"> </span>instance<span class="p">[</span><span class="s1">&#39;runningTasksCount&#39;</span><span class="p">]</span><span class="w">
+</span><span class="w">              </span>return<span class="w"> </span>tasks<span class="w">
+</span><span class="w">
+</span><span class="w">          </span><span class="c"># RequestType に応じて処理を切り替え </span><span class="w">
+</span><span class="w">          </span>def<span class="w"> </span>lambda_handler(event<span class="p">,</span><span class="w"> </span>context)<span class="p">:</span><span class="w">
+</span><span class="w">              </span>logger.debug(event)<span class="w">
+</span><span class="w">              </span>ret<span class="w"> </span>=<span class="w"> </span>{<span class="w">
+</span><span class="w">                  </span><span class="s1">&#39;StackId&#39;</span><span class="p">:</span><span class="w"> </span>event<span class="p">[</span><span class="s1">&#39;StackId&#39;</span><span class="p">],</span><span class="w">
+</span><span class="w">                  </span><span class="s1">&#39;RequestId&#39;</span><span class="p">:</span><span class="w"> </span>event<span class="p">[</span><span class="s1">&#39;RequestId&#39;</span><span class="p">],</span><span class="w">
+</span><span class="w">                  </span><span class="s1">&#39;LogicalResourceId&#39;</span><span class="p">:</span><span class="w"> </span>event<span class="p">[</span><span class="s1">&#39;LogicalResourceId&#39;</span><span class="p">]</span><span class="w">
+</span><span class="w">              </span>}<span class="w">
+</span><span class="w">              </span>try<span class="p">:</span><span class="w">
+</span><span class="w">                  </span>if<span class="w"> </span>event<span class="p">[</span><span class="s1">&#39;RequestType&#39;</span><span class="p">]</span><span class="w"> </span>==<span class="w"> </span><span class="s1">&#39;Create&#39;</span><span class="p">:</span><span class="w">
+</span><span class="w">                      </span>_create(ret<span class="p">,</span><span class="w"> </span>event)<span class="w">
+</span><span class="w">                  </span>elif<span class="w"> </span>event<span class="p">[</span><span class="s1">&#39;RequestType&#39;</span><span class="p">]</span><span class="w"> </span>==<span class="w"> </span><span class="s1">&#39;Update&#39;</span><span class="p">:</span><span class="w">
+</span><span class="w">                      </span>_update(ret<span class="p">,</span><span class="w"> </span>event)<span class="w">
+</span><span class="w">                  </span>elif<span class="w"> </span>event<span class="p">[</span><span class="s1">&#39;RequestType&#39;</span><span class="p">]</span><span class="w"> </span>==<span class="w"> </span><span class="s1">&#39;Delete&#39;</span><span class="p">:</span><span class="w">
+</span><span class="w">                      </span>_delete(ret<span class="p">,</span><span class="w"> </span>event)<span class="w">
+</span><span class="w">              </span>except<span class="w"> </span>Exception<span class="w"> </span>as<span class="w"> </span>err<span class="p">:</span><span class="w">
+</span><span class="w">                  </span>logger.debug(err)<span class="w">
+</span><span class="w">                  </span>ret<span class="p">[</span><span class="s1">&#39;Status&#39;</span><span class="p">]</span><span class="w"> </span>=<span class="w"> </span><span class="s1">&#39;SUCCESS&#39;</span><span class="w">
+</span><span class="w">                  </span>ret<span class="p">[</span><span class="s1">&#39;PhysicalResourceId&#39;</span><span class="p">]</span><span class="w"> </span>=<span class="w"> </span>event<span class="p">[</span><span class="s1">&#39;PhysicalResourceId&#39;</span><span class="p">]</span><span class="w">
+</span><span class="w">              </span>finally<span class="p">:</span><span class="w">
+</span><span class="w">                  </span>cfn_response(event<span class="p">[</span><span class="s1">&#39;ResponseURL&#39;</span><span class="p">],</span><span class="w"> </span>ret)<span class="w">
+</span><span class="w">
+</span><span class="w">      </span>Description<span class="p">:</span><span class="w"> </span>manage<span class="w"> </span>ECS<span class="w"> </span>Cluster<span class="w"> </span>and<span class="w"> </span>Spot<span class="w"> </span>Fleet<span class="w">
+</span><span class="w">      </span>Handler<span class="p">:</span><span class="w"> </span>index.lambda_handler<span class="w">
+</span><span class="w">      </span>MemorySize<span class="p">:</span><span class="w"> </span><span class="m">256</span><span class="w">
+</span><span class="w">      </span>Runtime<span class="p">:</span><span class="w"> </span>python3.<span class="m">6</span><span class="w">
+</span><span class="w">      </span>Timeout<span class="p">:</span><span class="w"> </span><span class="m">900</span><span class="w">
+</span><span class="w">      </span>Role<span class="p">:</span><span class="w"> </span>!GetAtt<span class="w"> </span>ECSDrainRole.Arn</code></pre></div>
+<p>Spot Fleet で起動するイメージを変更するには、Spot Fleet の作り直しが必要なので、
+イメージを変更すると Spot Fleet のIDが更新され、カスタムリソースの Update イベントが実行されます。
+このとき <code>PhysicalResourceId</code> にUpdate前とは異なる値を設定しているのが一番のポイントです。
+こうすると、 CloudFormation は「これは置換を伴う更新だ」と判断して、古いリソースの削除を自動的に行ってくれます。
+置換処理を自前で書く必要はありません。
+カスタムリソースの削除はリソース間の依存関係を保ったまま行われるので、置換後の古いSpot Fleetは古いカスタムリソースの削除が終わった後に実行されます。</p>
+
+<h2 id="未解決の課題">未解決の課題</h2>
+
+<p>さて、先に挙げた「<a href="https://aws.amazon.com/jp/blogs/news/how-to-automate-container-instance-draining-in-amazon-ecs/">Amazon ECS におけるコンテナ インスタンス ドレイニングの自動化方法</a>」では、
+ドレイン終了を待つのに Amazon SNS を使っています。</p>
+
+<p>しかし、構成要素が増えてプログラムも複雑になって面倒なので、今回書いたプログラムは <strong>Lambda 関数の中でドレイン終了までポーリングする</strong> ようにしました！！</p>
+
+<p>Lambdaの制約上、タイムアウトの時間は15分から伸ばせません。
+ドレインが15分で終わらない場合どうなるのか・・・
+とりあえず何回か試しているけどタイムアウトしたことはない。</p>
+
+<h2 id="まとめ">まとめ</h2>
+
+<p>CloudFormationの AWS Lambda-backend カスタムリソースの応用例をして、ECSタスクのドレインを行う例を紹介しました。</p>
+
+<p>・・・もっといい方法知っている人教えて</p>
+
+<p>いや、金の弾丸で Fargate 使えばいいんだけども</p>
+
+<h2 id="参考">参考</h2>
+
+<ul>
+<li><a href="https://aws.amazon.com/jp/blogs/news/aws-fargate-tokyo/">AWS Fargate 東京リージョン サービス開始のお知らせ</a></li>
+<li><a href="https://aws.amazon.com/jp/about-aws/whats-new/2019/01/announcing-aws-fargate-price-reduction-by-up-to-50-/">AWS Fargate で最大 50% の値下げを発表</a></li>
+<li><a href="https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/al2ami.html">Amazon ECS-Optimized Amazon Linux AMI</a></li>
+<li><a href="https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/ECS-AMI-SubscribeTopic.html">Amazon ECS-Optimized Amazon Linux AMI の更新の通知のサブスクライブ</a></li>
+<li><a href="https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/container-instance-draining.html">コンテナインスタンスのドレイン</a></li>
+<li><a href="https://aws.amazon.com/jp/blogs/compute/how-to-automate-container-instance-draining-in-amazon-ecs/">How to Automate Container Instance Draining in Amazon ECS</a></li>
+<li><a href="https://aws.amazon.com/jp/blogs/news/how-to-automate-container-instance-draining-in-amazon-ecs/">Amazon ECS におけるコンテナ インスタンス ドレイニングの自動化方法</a></li>
+<li><a href="https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/template-custom-resources.html">CloudFormation カスタムリソース</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>Jan 30, 2019</time>
+    
+    </span>
+  </p>
+
+  
+  
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2019/01/13/rdsmysql/" title="IAM認証でAWS RDSへ接続するMySQLドライバを作った">IAM認証でAWS RDSへ接続するMySQLドライバを作った</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+
+(function() {
+    
+    
+    
+    if (window.location.hostname == "localhost")
+        return;
+
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    var disqus_shortname = 'shogosblog';
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+       
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2019/01/30/drain-ecs-task-with-cloudformation/">CloudFormationでECSタスクのドレインをやる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/01/13/rdsmysql/">IAM認証でAWS RDSへ接続するMySQLドライバを作った</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/12/16/run-cgi-in-aws-lambda/">AWS LambdaでCGIを蘇らせる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/11/30/perl-in-lambda/">PerlをAWS Lambdaで動かす</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/11/22/go-nil/">Goのnil,true,falseは変数名に使えるという話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/09/24/go-phper-json/">PHPer向けGoのJSONデコーダーを作った</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/08/20/summer-time-homework/">〜夏休みの自由研究〜 電波時計のサマータイム対応状況を調べてみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/08/19/goast-viewer-using-wasm/">GoAst ViewerをWebAssemblyへビルドしてみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/08/11/web-jjy-summer-time-support/">Web JJY が夏時間に対応しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/06/20/s3cli-mini/">S3からファイルを落とすだけのツールを作った</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2019 Shogo Ichinose - <a href="https://shogo82148.github.io/license/">License</a> -
+  <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank" href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+</p>
+
+</footer>
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    displayMath: [['$$','$$'], ['\\[','\\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all.length) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+</script>
+
+
+<script>
+  var _gaq=[['_setAccount','UA-4526627-4'],['_trackPageview']];
+  (function(d,t){var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+  g.src=('https:'==location.protocol?'//ssl':'//www')+'.google-analytics.com/ga.js';
+  s.parentNode.insertBefore(g,s)}(document,'script'));
+</script>
+
+</body>
+</html>
+
