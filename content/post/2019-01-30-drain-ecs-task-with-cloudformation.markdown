@@ -47,8 +47,9 @@ Spot Fleet + ECS で格安クラスターを作ってみよう！と手を出し
 3. ドレインが終了したら、古いインスタンスをシャットダウンする
 
 ここで問題になってくるのが「古いインスタンスに残っているタスクをいい感じに終了する(ドレイン)」の部分。
-コンソールからポチポチするのも面倒なので、自動化したいところですが、
-いろいろとドキュメントをあさってみたのですが、公式ブログでも 「APIかawscliを叩く」「SNSとAWS Lambda をうまいこと組み合わせて頑張る」みたいな方法しか見当たらない・・・
+コンソールからポチポチするのも面倒なので、自動化したいところ。
+しかし、いろいろとドキュメントをあさってみたのですが、「APIかawscliを叩く」「SNSとAWS Lambda をうまいこと組み合わせて頑張る」みたいな方法しか見当たらない・・・
+しかもAWSの公式ブログ
 
 - [コンテナインスタンスのドレイン](https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/container-instance-draining.html)
 - [How to Automate Container Instance Draining in Amazon ECS](https://aws.amazon.com/jp/blogs/compute/how-to-automate-container-instance-draining-in-amazon-ecs/)
@@ -73,7 +74,7 @@ Spot Fleet + ECS で格安クラスターを作ってみよう！と手を出し
 ### カスタムリソースの仕組み
 
 `Custom::` で始まるリソースタイプは自由に名前をつけることができるので、
-好きな名前を `Type` にタイプを指定します。
+好きな名前を `Type` に指定します。
 プロパティーの `ServiceToken` には、カスタムリソースの更新イベントを受け取る Amazon SNS や AWS Lambda の arn を指定います。
 必須項目はこれだけで、あとのプロパティーは、カスタムリソースの提供者が自由に決められます。
 
