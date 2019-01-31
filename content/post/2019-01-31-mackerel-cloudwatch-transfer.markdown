@@ -35,11 +35,11 @@ Secure String として登録しておきます。
 スクショでは Mackerel のものだと分かりやすいよう `/development/api.mackerelio.com/headers/X-Api-Key` という名前をつけました。
 この名前を後で使うので覚えておきましょう。
 
-![パラメーターストア](/static/images/2019-01-31-parameter-store.png)
+![パラメーターストア](/images/2019-01-31-parameter-store.png)
 
 次に AWS Lambda の画面を開き、「関数の作成」をクリックします。
 
-![関数の作成](/static/images/2019-01-31-create-new-function.png)
+![関数の作成](/images/2019-01-31-create-new-function.png)
 
 「一から作る」「設計図」「AWS Serverless Application Repository」の3つの選択肢が表れるので、
 **「AWS Serverless Application Repository」** を選択します。
@@ -47,19 +47,19 @@ Secure String として登録しておきます。
 出てくるので、それを選択します。
 なお、この選択肢はデフォルトでは表示ないので、「**Show apps that create custom IAM roles or resource policies**」にチェックを入れましょう。
 
-![アプリケーションの検索](/static/images/2019-01-31-search-application.png)
+![アプリケーションの検索](/images/2019-01-31-search-application.png)
 
 アプリケーションの内容とパラメーターの設定画面に移ります。
 「ParameterName」にパラメーターストアに登録したパラメーター名を入れましょう。
 スクショの例では「`/development/api.mackerelio.com/headers/X-Api-Key`」を入力します。
 
-![内容を確認してデプロイ](/static/images/2019-01-31-deploy.png)
+![内容を確認してデプロイ](/images/2019-01-31-deploy.png)
 
 「カスタムIAMロールを作成することに同意」のチェックボックスを選択したあと、デプロイ！
 
 しばらく待っていると CloudFormation を利用して [mackerel-cloudwatch-forwarder](https://serverlessrepo.aws.amazon.com/applications/arn:aws:serverlessrepo:us-east-1:445285296882:applications~mackerel-cloudwatch-forwarder) がデプロイされます。
 
-![アプリケーションがデプロイされました](/static/images/2019-01-31-deployed.png)
+![アプリケーションがデプロイされました](/images/2019-01-31-deployed.png)
 
 
 ## 実装
@@ -243,7 +243,7 @@ CloudWatchメトリクスからMackerelメトリクスへの変換方法は、�
 
 `metric` の指定方法は CloudWatch のダッシュボードを参考にしました。
 
-![CloudWatch](/static/images/2019-01-31-cloudwatch.png)
+![CloudWatch](/images/2019-01-31-cloudwatch.png)
 
 CloudWatchのコンソールからメトリクスを確認するときに、「ソース」タブをクリックするとグラフの定義が現れます。
 ここでプレビューを確認して、ソースの `metrics` 部分をそのままコピペすれば動くという寸法です。
