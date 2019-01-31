@@ -24,7 +24,7 @@ AWS CloudWatch に投稿されたメトリクスが Mackerel で見れれば十�
 
 ## デプロイしてみる
 
-今回はなんと！皆さんの AWS Console から、クリックひとつでデプロイできるようにしてみました！
+今回はなんと！皆さんの AWSマネジメントコンソールから、クリックひとつでデプロイできるようにしてみました！
 
 - [mackerel-cloudwatch-forwarder](https://serverlessrepo.aws.amazon.com/applications/arn:aws:serverlessrepo:us-east-1:445285296882:applications~mackerel-cloudwatch-forwarder)
 
@@ -261,6 +261,7 @@ CloudWatchのコンソールからメトリクスを確認するときに、「�
 
 AWS の中で完結すると楽なんですが、監視に関してはやっぱり Mackerel 便利なんですよね・・・世の中うまくいかない。
 
+mackerel-cloudwatch-forwarder は、米国東部 (オハイオ)、米国東部 (バージニア北部)、米国西部(北カリフォルニア)、米国西部 (オレゴン)、アジアパシフィック (東京)、アジアパシフィック (ソウル)、アジアパシフィック (ムンバイ)、アジアパシフィック (シンガポール)、アジアパシフィック(シドニー)、カナダ (中部)、欧州 (フランクフルト)、欧州 (アイルランド)、欧州 (ロンドン)、および南米 (サンパウロ) のリージョンでご利用いただけます。 
 
 ## 参考
 
