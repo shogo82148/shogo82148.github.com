@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Let's Encryt の証明書取得を AWS Lambda でやってみた"
+title: "Let's Encrypt の証明書取得を AWS Lambda でやってみた"
 slug: acme-cert-updater
 date: 2019-02-07 19:22:00 +0900
 comments: true
