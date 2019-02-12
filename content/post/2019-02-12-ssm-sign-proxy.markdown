@@ -2,7 +2,7 @@
 layout: post
 title: "外部サービスでもIAM Roleで認証がしたい！"
 slug: ssm-sign-proxy
-date: 2019-02-12 19:22:00 +0900
+date: 2019-02-12 12:46:00 +0900
 comments: true
 categories: [go, golang, aws, lambda]
 ---
