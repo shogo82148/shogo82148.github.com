@@ -105,6 +105,45 @@
         
 
 <header>
+    <p class="meta">Oct 16, 2014
+         - 1 minute read 
+         - <a href="https://shogo82148.github.io/blog/2014/10/16/redis-fast-0-dot-13-released/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a><a class="label" href="https://shogo82148.github.io/categories/redis/">redis </a>
+        
+    </p>
+    <h1 class="entry-title">
+        <a href="https://shogo82148.github.io/blog/2014/10/16/redis-fast-0-dot-13-released/">Redis::Fast 0.13をリリースしました</a>
+    </h1>
+</header>
+
+
+        
+          <p>Redis::Fast 0.13をリリースしました。 主な変更点は以下のとおりです。
+ passwordオプションの対応 maxclientsに達した場合に、deep recursion することがある問題の修正 トランザクション内で再接続処理が行われる問題の修正  passwordオプションの対応 今更感のある機能ですね。昔は対応してたんです。 対応してたんですが、Sentinel対応のために接続開始周りをごそっと入れ替えて、そのときに間違ってパスワード認証機能を削除しちゃってたっぽいです(・ω&lt;) なんというかごめんなさい。
+実際実装してテストしてみると、認証失敗したときにdouble freeで落ちてちょっとハマりました。 hiredisを使う場合はredisAsyncSetConnectCallbackに指定する関数内で、コネクションを切断するような処理(password認証とか)はしないようにしましょう。
+maxclientsに達した場合に、deep recursion することがある問題の修正 Redis::Fastでは、接続処理の中で、コネクションに名前をつけたり、パスワード認証したり、その他独自の処理を実行しています。 この処理の途中でも再接続処理が走ってしまい、 再接続処理の中で再接続処理が実行されて、その再接続処理の中で再接続が&hellip; というような無限ループに突入する場合があります。 maxclientsに達した場合、一度コネクションの確立に成功したあとに接続が切られるので、この無限ループに入ってしまうようです。
+接続処理中は再接続処理を行わないようにすることで対応しました。
+トランザクション内で再接続処理が行われる問題の修正 Redis::Fast 0.07以降、MULTI-EXECコマンドを遣ったトランザクションの中にいるときは再接続処理が行わないようになっています。 その仕組みを作るにあたって、トランザクションの中にいるか外にいるかを表すフラグをコマンド送信前に更新していました。
+ 再接続を禁止する MULTI コマンドを送る 結果を受け取る 必要なコマンド発行を行う 再接続を許可する EXECコマンドを実行する 結果を受け取る  しかしこれだと 5 と 6 の間で再接続が起こってしまいます。 EXECコマンドがまだ実行されていないので、ここはまだトランザクションの中ですね。
+Redis::Fast 0.13ではフラグの更新はコマンドが成功したときに変更してあります。
+ MULTIコマンドを送る 結果を受け取る 再接続を禁止する 必要なコマンド発行を行う EXECコマンドを実行する 結果を受け取る 再接続を許可する  これでトランザクション中に再接続処理が走ることは無いはずです。</p>
+
+          
+
+        
+
+    </article>
+    
+    <article>
+
+        
+        
+
+<header>
     <p class="meta">Oct 4, 2014
          - 2 minute read 
          - <a href="https://shogo82148.github.io/blog/2014/10/04/gitattribute-eol-equals-crlf/#disqus_thread">Comments</a>
@@ -452,46 +491,6 @@ Instagram APIを叩く https://api.instagram.com/v1/tags/$TAGNAME/media/recent?a
 
     </article>
     
-    <article>
-
-        
-        
-
-<header>
-    <p class="meta">May 29, 2014
-         - 2 minute read 
-         - <a href="https://shogo82148.github.io/blog/2014/05/29/conditional-attribute/#disqus_thread">Comments</a>
-
-        
-        
-        
-            - <a class="label" href="https://shogo82148.github.io/categories/csharp/">csharp </a>
-        
-    </p>
-    <h1 class="entry-title">
-        <a href="https://shogo82148.github.io/blog/2014/05/29/conditional-attribute/">C#のconditional Attributeのコンパイル結果を見てみる</a>
-    </h1>
-</header>
-
-
-        
-          <p>C#で「ある環境では関数の定義ごと消したい」みたいな要件があって、 そういう用途にconditinal attributeが使えるのかなーと話題のあがったので、実際に確認してみました。
-結論から言えばできないのですが、せっかく調べたのでメモとして残しておきます。
-conditional attribute 「デバッグ時のみにしか実行して欲しくない関数」みたいなものを定義するための機能です。
-using System; using System.IO; using System.Diagnostics; namespace ConditionalAttributeTest { class MainClass { public static void Main (string[] args) { Log(&#34;fugu&#34;); }[ConditionalAttribute(&#34;DEBUG&#34;)] public static void Log(string message) { Console.WriteLine(message); } } } こんなふうに書いておくと DEBUG シンボルが定義されている時にだけLogの呼び出しが行われます。
-&gt; mcs -d:DEBUG ConditionalAttributeTest.cs &gt; mono ConditionalAttributeTest fugu &gt; mcs ConditionalAttributeTest.cs &gt; mono ConditionalAttributeTest 逆アセンブルしてみる DEBUG付きでコンパイルした結果を逆アセンブルしてみます。
-// ...前略 // method line 2 .method public static hidebysig default void Main (string[] args) cil managed { // Method begins at RVA 0x2058 .</p>
-
-          
-              <footer>
-                  <a href="https://shogo82148.github.io/blog/2014/05/29/conditional-attribute/" rel="full-article">Read On &rarr;</a>
-              </footer>
-          
-
-        
-
-    </article>
-    
     
     
 
@@ -613,6 +612,12 @@ using System; using System.IO; using System.Diagnostics; namespace ConditionalAt
           
             
               <li class="post">
+                <a href="/blog/2019/02/28/leak-gengo/">新元号の候補約4510万件が漏洩！！</a>
+              </li>
+            
+          
+            
+              <li class="post">
                 <a href="/blog/2019/02/12/ssm-sign-proxy/">外部サービスでもIAM Roleで認証がしたい！</a>
               </li>
             
@@ -662,12 +667,6 @@ using System; using System.IO; using System.Diagnostics; namespace ConditionalAt
             
               <li class="post">
                 <a href="/blog/2018/09/24/go-phper-json/">PHPer向けGoのJSONデコーダーを作った</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2018/08/20/summer-time-homework/">〜夏休みの自由研究〜 電波時計のサマータイム対応状況を調べてみた</a>
               </li>
             
           
