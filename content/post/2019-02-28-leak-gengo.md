@@ -9,11 +9,8 @@ categories: []
 
 平成の次の元号候補、4510万4656件の漏洩が確認された。
 
-- テキスト形式: https://s3-ap-northeast-1.amazonaws.com/shogo82148-jis0208/product.txt (301MB)
-- SHA512: 245f3f616f3ee627ee2e2edd426663bba86fd2fbdb756505ff9d9f69fed7d6f16e2e711cf03cb1fb1b9efdcc261bf1b968de0756660cfa98cf1acbd43f89ae18
-
-- gz圧縮版: https://s3-ap-northeast-1.amazonaws.com/shogo82148-jis0208/product.txt.gz (108MB)
-- SHA512: c3802935335371bf264114fe0c005220a2dcbf8ab1c8e925b9b8563171221b2598cb8a5fb8a9adc9d75646826140ee2998123de26d4fbcf5fa7ea17b39f8e76d
+- [テキスト形式](https://s3-ap-northeast-1.amazonaws.com/shogo82148-jis0208/product.txt) (301MB)
+- [gz圧縮版](https://s3-ap-northeast-1.amazonaws.com/shogo82148-jis0208/product.txt.gz) (108MB)
 
 政府は「[新元号、情報管理を徹底へ　漏洩なら差し替え](https://www.nikkei.com/article/DGXMZO41696000V20C19A2PP8000/)」との方針を示しており、
 早急な差し替え対応を行うと思われる。
