@@ -17,7 +17,7 @@ categories: []
 
 -----
 
-と、まあ、二番煎じなわけですが。
+と、まあ、二番煎じなわけですが。$$ $$
 
 <blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">新元号は漏洩すると変更されるということなので常用漢字2文字の全組み合わせ約228万通りをすべて記載したテキストファイルを作成しました。漏洩させていきましょう。<a href="https://t.co/G06utDbgka">https://t.co/G06utDbgka</a> <a href="https://t.co/8UcPDqNdXo">pic.twitter.com/8UcPDqNdXo</a></p>&mdash; いんぐらむ (@kazuokiriyama_) <a href="https://twitter.com/kazuokiriyama_/status/1100347532675149825?ref_src=twsrc%5Etfw">2019年2月26日</a></blockquote>
 <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
