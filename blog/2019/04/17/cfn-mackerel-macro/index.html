@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <link href="http://gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+  
+  <link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  <link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  
+
+  
+  <title>CloudFormationのMackerel用インテグレーションを作ってる話</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css">
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+  
+
+  
+
+  <meta name="description" content="">
+  <meta name="keywords" content="">
+
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.38.1" />
+
+  
+  
+
+</head>
+<body>
+
+
+<header role="banner"><hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+    <h2></h2>
+</hgroup></header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+
+<ul class="subscription">
+  
+
+</ul>
+
+
+<form action="https://www.google.com/search" method="get" target="_blank">
+  <fieldset role="search">
+  	<input class="search" type="text" name="q" results="0" placeholder="Search"/>
+    <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+  </fieldset>
+</form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+    <p class="meta">Apr 17, 2019
+         - 2 minute read 
+         - <a href="https://shogo82148.github.io/blog/2019/04/17/cfn-mackerel-macro/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a><a class="label" href="https://shogo82148.github.io/categories/aws/">aws </a><a class="label" href="https://shogo82148.github.io/categories/cloudformation/">cloudformation </a><a class="label" href="https://shogo82148.github.io/categories/mackerelio/">mackerelio </a>
+        
+    </p>
+    <h1 class="entry-title">
+         CloudFormationのMackerel用インテグレーションを作ってる話 
+    </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          
+
+<p><a href="https://mackerel.io/">Mackerel</a> は <a href="https://mackerel.io/ja/docs/entry/advanced/cli">mkr</a> コマンドを用いて cli から操作ができます。
+mkr コマンドを用いると <a href="https://mackerel.io/ja/docs/entry/advanced/monitors-github">監視ルールを GitHub で管理</a> したり、
+カスタムダッシュボードを管理したり、といったことができます。
+しかし、個人的に以下のような不満があります。</p>
+
+<ul>
+<li>サービス、ロール、ホスト、新ダッシュボード等々、監視設定以外のリソースに対応していない
+
+<ul>
+<li>旧ダッシュボードは対応しているんだけど、新ダッシュボード対応がまだ</li>
+<li>新ダッシュボードのUIは使いやすくてすごくいいんだけど、コピペや一斉置換ができないので、テキストで管理したい</li>
+</ul></li>
+<li>出力がJSONなのつらい
+
+<ul>
+<li>JSON手で書くの難しくないですか？</li>
+</ul></li>
+<li>メトリックスの送信設定と監視設定の管理が別になってしまう
+
+<ul>
+<li>カスタムメトリックス送っているのに監視設定を忘れた、みたいなことが起こる</li>
+</ul></li>
+</ul>
+
+<p>メトリックスの送信設定については、以前 <a href="https://shogo82148.github.io/blog/2019/01/31/mackerel-cloudwatch-transfer/">サーバーレスでCloudWatchメトリクスをMackerelに転送する</a> で
+CloudFormation上での管理を実現しました。
+ここにさらに Mackerel の監視設定を追加できれば、最強なのでは？とやってみました。</p>
+
+<h2 id="例">例</h2>
+
+<p>あれこれ説明する前に例を見てもらったほうがわかりやすいと思うので、こんなことができますよ、という設定例から。</p>
+
+<h3 id="例1-レスポンスタイムの99-パーセンタイルを監視する">例1: レスポンスタイムの99%パーセンタイルを監視する</h3>
+
+<p><a href="https://mackerel.io/ja/docs/entry/integrations/aws/alb">Mackerel の AWSインテグレーション</a> は ALB に対応していますが、
+レスポンスタイムのメトリックスは平均レスポンスタイムだけです。
+「平均」は代表的な統計値ですが、全体としては速いんだけど一部のリクエストだけ遅い、という状況を見逃してしまいます。
+レスポンスタイムの大まかな分布をパーセンタイルで把握したい、ということはよくありますよね？
+(K社でZabbixを使って監視していたときによくお世話になった)</p>
+
+<p>今回作ったインテグレーションを使えば、以下のように「Mackerelのサービス定義」「メトリックスの転送設定」「監視設定」が
+CloudFormation のテンプレートとして表現できます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml">AWSTemplateFormatVersion<span class="p">:</span><span class="w"> </span><span class="ld">2010-09-09</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="c"># Type: Mackerel::* を使うためのおまじない</span><span class="w">
+</span><span class="w"></span>Transform<span class="p">:</span><span class="w">
+</span><span class="w">  </span>-<span class="w"> </span>AWS<span class="p">::</span>Serverless-<span class="ld">2016-10-31</span><span class="w">
+</span><span class="w">  </span>-<span class="w"> </span>Mackerel<span class="w">
+</span><span class="w">  </span>-<span class="w"> </span>JSONString<span class="w">
+</span><span class="w">
+</span><span class="w"></span>Resources<span class="p">:</span><span class="w">
+</span><span class="w">  </span>MackerelService<span class="p">:</span><span class="w">
+</span><span class="w">    </span>Type<span class="p">:</span><span class="w"> </span>Mackerel<span class="p">::</span>Service<span class="w">
+</span><span class="w">    </span>Properties<span class="p">:</span><span class="w">
+</span><span class="w">      </span>Name<span class="p">:</span><span class="w"> </span><span class="s2">&#34;awesome-service&#34;</span><span class="w">
+</span><span class="w">
+</span><span class="w">  </span><span class="c"># メトリックスを転送する Lambda 関数</span><span class="w">
+</span><span class="w">  </span>MetricsForwarder<span class="p">:</span><span class="w">
+</span><span class="w">    </span>Type<span class="p">:</span><span class="w"> </span>AWS<span class="p">::</span>Serverless<span class="p">::</span>Application<span class="w">
+</span><span class="w">    </span>Properties<span class="p">:</span><span class="w">
+</span><span class="w">      </span>Location<span class="p">:</span><span class="w">
+</span><span class="w">        </span>ApplicationId<span class="p">:</span><span class="w"> </span>arn<span class="p">:</span>aws<span class="p">:</span>serverlessrepo<span class="p">:</span>us-east-<span class="m">1</span><span class="p">:</span><span class="m">445285296882</span><span class="p">:</span>applications/mackerel-cloudwatch-forwarder<span class="w">
+</span><span class="w">        </span>SemanticVersion<span class="p">:</span><span class="w"> </span><span class="m">0.0</span>.<span class="m">9</span><span class="w">
+</span><span class="w">      </span>Parameters<span class="p">:</span><span class="w">
+</span><span class="w">        </span>ParameterName<span class="p">:</span><span class="w"> </span><span class="s2">&#34;/api-keys/api.mackerelio.com/headers/X-Api-Key&#34;</span><span class="w">
+</span><span class="w">        </span>ForwardSettings<span class="p">:</span><span class="w"> </span>!GetAtt<span class="w"> </span>MetricsForwarderSettings.Query<span class="w">
+</span><span class="w">
+</span><span class="w">  </span><span class="c"># CloudWatch から99%パーセンタイルを取得する</span><span class="w">
+</span><span class="w">  </span>MetricsForwarderSettings<span class="p">:</span><span class="w">
+</span><span class="w">    </span>Type<span class="p">:</span><span class="w"> </span>JSON<span class="p">::</span>String<span class="w">
+</span><span class="w">    </span>Properties<span class="p">:</span><span class="w">
+</span><span class="w">      </span>Query<span class="p">:</span><span class="w">
+</span><span class="w">        </span>-<span class="w"> </span>service<span class="p">:</span><span class="w"> </span>!GetAtt<span class="w"> </span>MackerelService.Name<span class="w">
+</span><span class="w">          </span>name<span class="p">:</span><span class="w"> </span>request_percentile.p99<span class="w">
+</span><span class="w">          </span>metric<span class="p">:</span><span class="w">
+</span><span class="w">            </span>-<span class="w"> </span>AWS/ApplicationELB<span class="w">
+</span><span class="w">            </span>-<span class="w"> </span>TargetResponseTime<span class="w">
+</span><span class="w">            </span>-<span class="w"> </span>LoadBalancer<span class="w">
+</span><span class="w">            </span>-<span class="w"> </span>!GetAtt<span class="w"> </span>LoadBalancer.FullName<span class="w">
+</span><span class="w">            </span>-<span class="w"> </span>TargetGroup<span class="w">
+</span><span class="w">            </span>-<span class="w"> </span>!GetAtt<span class="w"> </span>TargetGroup.TargetGroupFullName<span class="w">
+</span><span class="w">          </span>stat<span class="p">:</span><span class="w"> </span>p99<span class="w">
+</span><span class="w">
+</span><span class="w">  </span>MonitorP99<span class="p">:</span><span class="w">
+</span><span class="w">    </span>Type<span class="p">:</span><span class="w"> </span>Mackerel<span class="p">::</span>Monitor<span class="w">
+</span><span class="w">    </span>Properties<span class="p">:</span><span class="w">
+</span><span class="w">      </span>Type<span class="p">:</span><span class="w"> </span>service<span class="w">
+</span><span class="w">      </span>Name<span class="p">:</span><span class="w"> </span>request_percentile.p99<span class="w">
+</span><span class="w">      </span>Duration<span class="p">:</span><span class="w"> </span><span class="m">1</span><span class="w">
+</span><span class="w">      </span>Service<span class="p">:</span><span class="w"> </span>!Ref<span class="w"> </span>MackerelService<span class="w">
+</span><span class="w">      </span>Metric<span class="p">:</span><span class="w"> </span>request_percentile.p99<span class="w">
+</span><span class="w">      </span>Operator<span class="p">:</span><span class="w"> </span><span class="s2">&#34;&gt;&#34;</span><span class="w">
+</span><span class="w">      </span>Warning<span class="p">:</span><span class="w"> </span><span class="m">3</span><span class="w"> </span><span class="c"># 3秒を超えたらWarning</span><span class="w">
+</span><span class="w">      </span>Critical<span class="p">:</span><span class="w"> </span><span class="m">10</span><span class="w"> </span><span class="c"># 10秒を超えたらCritical</span><span class="w">
+</span><span class="w">      </span>MaxCheckAttempts<span class="p">:</span><span class="w"> </span><span class="m">3</span></code></pre></div>
+<h3 id="例2-ログに吐かれたエラーを監視する">例2: ログに吐かれたエラーを監視する</h3>
+
+<p><code>check-aws-cloudwatch-logs</code> を使うと、 CloudWatch Logs に吐かれたログを検索して、エラーを見つけたらアラートを飛ばすということができます。</p>
+
+<ul>
+<li><a href="https://mackerel.io/ja/blog/entry/weekly/20181001">AWS CloudWatch Logs のチェック監視プラグインを追加しました ほか</a></li>
+</ul>
+
+<p>しかし、check pluginを使うには mackerel-agent をインストールするサーバーが必要です。
+運用が大変になるので管理するサーバーはあまり増やしたくありません。</p>
+
+<p>いろいろと調べた結果、 CloudWatch Logs のメトリックスフィルターが使えそうです。
+CloudFormation のテンプレートは以下のようになります。</p>
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml">AWSTemplateFormatVersion<span class="p">:</span><span class="w"> </span><span class="ld">2010-09-09</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="c"># Type: Mackerel::* を使うためのおまじない</span><span class="w">
+</span><span class="w"></span>Transform<span class="p">:</span><span class="w">
+</span><span class="w">  </span>-<span class="w"> </span>AWS<span class="p">::</span>Serverless-<span class="ld">2016-10-31</span><span class="w">
+</span><span class="w">  </span>-<span class="w"> </span>Mackerel<span class="w">
+</span><span class="w">  </span>-<span class="w"> </span>JSONString<span class="w">
+</span><span class="w">
+</span><span class="w"></span>Resources<span class="p">:</span><span class="w">
+</span><span class="w">  </span>MackerelService<span class="p">:</span><span class="w">
+</span><span class="w">    </span>Type<span class="p">:</span><span class="w"> </span>Mackerel<span class="p">::</span>Service<span class="w">
+</span><span class="w">    </span>Properties<span class="p">:</span><span class="w">
+</span><span class="w">      </span>Name<span class="p">:</span><span class="w"> </span><span class="s2">&#34;awesome-service&#34;</span><span class="w">
+</span><span class="w">
+</span><span class="w">  </span>LogGroup<span class="p">:</span><span class="w">
+</span><span class="w">    </span>Type<span class="p">:</span><span class="w"> </span>AWS<span class="p">::</span>Logs<span class="p">::</span>LogGroup<span class="w">
+</span><span class="w">    </span>Properties<span class="p">:</span><span class="w">
+</span><span class="w">      </span>LogGroupName<span class="p">:</span><span class="w"> </span>awesome-service-log<span class="w">
+</span><span class="w">
+</span><span class="w">  </span><span class="c"># ログの検索結果をメトリックスとして保存し、傾向をモニタリングできる</span><span class="w">
+</span><span class="w">  </span><span class="c"># https://docs.aws.amazon.com/ja_jp/AmazonCloudWatch/latest/logs/Counting404Responses.html</span><span class="w">
+</span><span class="w">  </span>MetricFilter<span class="p">:</span><span class="w">
+</span><span class="w">    </span>Type<span class="p">:</span><span class="w"> </span>AWS<span class="p">::</span>Logs<span class="p">::</span>MetricFilter<span class="w">
+</span><span class="w">    </span>Properties<span class="p">:</span><span class="w">
+</span><span class="w">      </span><span class="c"># JSON形式のログに対応しているので、エラーのみをフィルタリング</span><span class="w">
+</span><span class="w">      </span>FilterPattern<span class="p">:</span><span class="w"> </span><span class="s1">&#39;{ $.level = &#34;error&#34; }&#39;</span><span class="w">
+</span><span class="w">      </span>LogGroupName<span class="p">:</span><span class="w"> </span>!Ref<span class="w"> </span>LogGroup<span class="w">
+</span><span class="w">      </span>MetricTransformations<span class="p">:</span><span class="w">
+</span><span class="w">        </span>-<span class="w"> </span>DefaultValue<span class="p">:</span><span class="w"> </span><span class="m">0</span><span class="w">
+</span><span class="w">          </span>MetricName<span class="p">:</span><span class="w"> </span>error_count<span class="w">
+</span><span class="w">          </span>MetricNamespace<span class="p">:</span><span class="w"> </span>awesome-service<span class="w">
+</span><span class="w">          </span>MetricValue<span class="p">:</span><span class="w"> </span><span class="m">1</span><span class="w">
+</span><span class="w">
+</span><span class="w">  </span><span class="c"># メトリックスを転送する Lambda 関数</span><span class="w">
+</span><span class="w">  </span>MetricsForwarder<span class="p">:</span><span class="w">
+</span><span class="w">    </span>Type<span class="p">:</span><span class="w"> </span>AWS<span class="p">::</span>Serverless<span class="p">::</span>Application<span class="w">
+</span><span class="w">    </span>Properties<span class="p">:</span><span class="w">
+</span><span class="w">      </span>Location<span class="p">:</span><span class="w">
+</span><span class="w">        </span>ApplicationId<span class="p">:</span><span class="w"> </span>arn<span class="p">:</span>aws<span class="p">:</span>serverlessrepo<span class="p">:</span>us-east-<span class="m">1</span><span class="p">:</span><span class="m">445285296882</span><span class="p">:</span>applications/mackerel-cloudwatch-forwarder<span class="w">
+</span><span class="w">        </span>SemanticVersion<span class="p">:</span><span class="w"> </span><span class="m">0.0</span>.<span class="m">9</span><span class="w">
+</span><span class="w">      </span>Parameters<span class="p">:</span><span class="w">
+</span><span class="w">        </span>ParameterName<span class="p">:</span><span class="w"> </span><span class="s2">&#34;/api-keys/api.mackerelio.com/headers/X-Api-Key&#34;</span><span class="w">
+</span><span class="w">        </span>ForwardSettings<span class="p">:</span><span class="w"> </span>!GetAtt<span class="w"> </span>MetricsForwarderSettings.Query<span class="w">
+</span><span class="w">
+</span><span class="w">  </span><span class="c"># エラー発生数を Mackerel に転送する設定</span><span class="w">
+</span><span class="w">  </span>MetricsForwarderSettings<span class="p">:</span><span class="w">
+</span><span class="w">    </span>Type<span class="p">:</span><span class="w"> </span>JSON<span class="p">::</span>String<span class="w">
+</span><span class="w">    </span>Properties<span class="p">:</span><span class="w">
+</span><span class="w">      </span>Query<span class="p">:</span><span class="w">
+</span><span class="w">        </span>-<span class="w"> </span>service<span class="p">:</span><span class="w"> </span>!GetAtt<span class="w"> </span>MackerelService.Name<span class="w">
+</span><span class="w">          </span>name<span class="p">:</span><span class="w"> </span>error_count<span class="w">
+</span><span class="w">          </span>metric<span class="p">:</span><span class="w">
+</span><span class="w">            </span>-<span class="w"> </span>awesome-service<span class="w">
+</span><span class="w">            </span>-<span class="w"> </span>error_count<span class="w">
+</span><span class="w">          </span>stat<span class="p">:</span><span class="w"> </span>Sum<span class="w">
+</span><span class="w">
+</span><span class="w">  </span><span class="c"># 監視設定</span><span class="w">
+</span><span class="w">  </span>MonitorError<span class="p">:</span><span class="w">
+</span><span class="w">    </span>Type<span class="p">:</span><span class="w"> </span>Mackerel<span class="p">::</span>Monitor<span class="w">
+</span><span class="w">    </span>Properties<span class="p">:</span><span class="w">
+</span><span class="w">      </span>Type<span class="p">:</span><span class="w"> </span>service<span class="w">
+</span><span class="w">      </span>Name<span class="p">:</span><span class="w"> </span>error_count<span class="w">
+</span><span class="w">      </span>Duration<span class="p">:</span><span class="w"> </span><span class="m">1</span><span class="w">
+</span><span class="w">      </span>Service<span class="p">:</span><span class="w"> </span>!Ref<span class="w"> </span>MackerelService<span class="w">
+</span><span class="w">      </span>Metric<span class="p">:</span><span class="w"> </span>error_count<span class="w">
+</span><span class="w">      </span>Operator<span class="p">:</span><span class="w"> </span><span class="s2">&#34;&gt;&#34;</span><span class="w">
+</span><span class="w">      </span>Warning<span class="p">:</span><span class="w"> </span><span class="m">0</span><span class="w"> </span><span class="c"># 1件でもエラーが発生したらWarning</span><span class="w">
+</span><span class="w">      </span>Critical<span class="p">:</span><span class="w"> </span><span class="m">10</span><span class="w"> </span><span class="c"># 10件でCritical</span><span class="w">
+</span><span class="w">      </span>MaxCheckAttempts<span class="p">:</span><span class="w"> </span><span class="m">3</span></code></pre></div>
+<h2 id="仕組み">仕組み</h2>
+
+<h3 id="cloudformation-マクロとトランスフォーム">CloudFormation マクロとトランスフォーム</h3>
+
+<p>CloudFormation マクロはテンプレートを実際に反映する前に、テンプレートの中身を書き換えることのできる機能です。
+CloufFormationのテンプレートはどうしても長くなってしまいがちですが、
+マクロを使うことでショートハンドを自作することができます。</p>
+
+<p>AWS Serverless Application Model (SAM) も、実態はAWSが提供するCloudFormationマクロです。
+テンプレートの Transform セクションに指定した <code>AWS::Serverless-2016-10-31</code> マクロが
+SAMのショートハンドを展開し、最終的に通常の CloudFormation テンプレートへと変換します。</p>
+
+<p>マクロは Lambda 関数で自作ができるので、好きな言語を使ってテンプレートを自由に書き換えることができます。
+GitHubで公開されている <a href="https://github.com/awslabs/aws-cloudformation-templates/tree/master/aws/services/CloudFormation/MacrosExamples/">MacrosExamples</a> を見てもらうとわかりますが、
+<a href="https://github.com/awslabs/aws-cloudformation-templates/tree/master/aws/services/CloudFormation/MacrosExamples/ShortHand">ショートハンドを定義する</a>のはもちろん、
+<a href="https://github.com/awslabs/aws-cloudformation-templates/tree/master/aws/services/CloudFormation/MacrosExamples/PyPlate">テンプレート内でPythonを実行</a>できるようにしたりと、
+入出力の形式さえ守っていれば何でもできます。
+何でも出来すぎて怖いですね。</p>
+
+<p>上に挙げた例では <code>Type: Mackerel::Monitor</code> が指定されたリソースをカスタムリソースに書き換えることで、
+他のAWSリソースと同じような記法で Mackerel のリソースを定義できるようにしています。
+(MacrosExamplesに比べると、非常におとなしい書き換えに見えますね)</p>
+
+<h3 id="cloudformation-カスタムリソース">CloudFormation カスタムリソース</h3>
+
+<p>CloudFormation カスタムリソースは、リソースの「作成」「更新」「削除」の処理をユーザーが定義することで、
+CloudFormation 自体が対応していないリソースであっても、CloudFormation上で扱うことのできる機能です。
+リソースの操作には Lambda 関数を使用できるので、 Mackerel のような外部サービスであっても、
+「作成」「更新」「削除」の処理さえ実行できればOKです。</p>
+
+<p>嬉しいことに Go の Lambda ライブラリには、カスタムリソースを扱うためパッケージが含まれるので、
+カスタムリソースを提供する Lambda 関数を簡単に作れます。</p>
+
+<ul>
+<li><a href="https://github.com/aws/aws-lambda-go/tree/master/cfn">aws/aws-lambda-go/cfn</a></li>
+<li><a href="https://godoc.org/github.com/aws/aws-lambda-go/cfn">godoc</a></li>
+</ul>
+
+<p>また、作成したリソースの属性を <code>Fn:GetAtt</code> 組み込み関数を利用して参照可能できます。
+さらにリソースIDさえテキトウに発行すれば、実リソースを持たず、CloudFormation上で属性だけを持つリソースを作成可能です。
+このことを利用して <code>JSON::String</code> カスタムリソースは、実リソースを作成せず、 <code>Properties</code> をJSONでエンコードした文字列を属性として返します。
+これにより YAML の中に JSON 書く苦行から開放されました。</p>
+
+<h2 id="使い方">使い方</h2>
+
+<p>ソースコードとテンプレートはすべて GitHub に公開しています。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/cfn-mackerel-macro">shogo82148/cfn-mackerel-macro</a></li>
+<li><a href="https://github.com/shogo82148/cfn-json-string-macro">shogo82148/cfn-json-string-macro</a></li>
+</ul>
+
+<p>マクロを利用するには、自分の AWS アカウントにマクロをインストールする必要があります。
+S3にテンプレートとビルド済みバイナリを上げておいたので、インストールは awscli でいっぱつです。</p>
+
+<pre><code>aws cloudformation create-stack \
+    --template-url https://s3-ap-northeast-1.amazonaws.com/shogo82148-cloudformation-template-ap-northeast-1/cfn-mackerel-macro/latest.yaml \
+    --stack-name cfn-mackerel-macro \
+    --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND
+
+aws cloudformation create-stack \
+    --template-url https://s3-ap-northeast-1.amazonaws.com/shogo82148-cloudformation-template-ap-northeast-1/cfn-json-string-macro/latest.yaml \
+    --stack-name json-macro \
+    --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND
+</code></pre>
+
+<p>あとはマクロを使うための「おまじない」をテンプレートに追加すればOKです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml">Transform<span class="p">:</span><span class="w">
+</span><span class="w">  </span>-<span class="w"> </span>AWS<span class="p">::</span>Serverless-<span class="ld">2016-10-31</span><span class="w">
+</span><span class="w">  </span>-<span class="w"> </span>Mackerel<span class="w">
+</span><span class="w">  </span>-<span class="w"> </span>JSONString</code></pre></div>
+<p>プロパティー名は <a href="https://mackerel.io/ja/api-docs/">Mackerel API ドキュメント（v0）</a> を参考にしてください。
+とはいえ、ドキュメントがまったくないのは不便なので、徐々に整備していこうと思います・・・。</p>
+
+<h2 id="まとめ">まとめ</h2>
+
+<p>CloudFormation の「マクロ」「トランスフォーム」「カスタムリソース」を利用して、
+Mackerel の構成管理に挑戦しているお話を紹介しました。</p>
+
+<p>CloudFormation 意外と遊べて便利ですね()</p>
+
+<h2 id="参考">参考</h2>
+
+<ul>
+<li><a href="https://mackerel.io/ja/api-docs/">Mackerel API ドキュメント（v0）</a></li>
+<li><a href="https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/transform-section-structure.html">トランスフォーム</a></li>
+<li><a href="https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/template-macros.html">AWS CloudFormation マクロを使用したテンプレートのカスタム処理の実行</a></li>
+<li><a href="https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md">AWS Serverless Application Model (SAM)</a></li>
+<li><a href="https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/template-custom-resources.html">カスタムリソース</a></li>
+<li><a href="https://github.com/aws/aws-lambda-go/tree/master/cfn">aws/aws-lambda-go/cfn</a></li>
+<li><a href="https://github.com/awslabs/aws-cloudformation-templates/tree/master/aws/services/CloudFormation/MacrosExamples/">MacrosExamples</a></li>
+<li><a href="https://shogo82148.github.io/blog/2019/01/31/mackerel-cloudwatch-transfer/">サーバーレスでCloudWatchメトリクスをMackerelに転送する</a></li>
+<li><a href="https://docs.aws.amazon.com/ja_jp/AmazonCloudWatch/latest/logs/MonitoringLogData.html">ログデータの検索およびフィルタリング</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>Apr 17, 2019</time>
+    
+    </span>
+  </p>
+
+  
+  
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2019/02/28/leak-gengo/" title="新元号の候補約4510万件が漏洩！！">新元号の候補約4510万件が漏洩！！</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+
+(function() {
+    
+    
+    
+    if (window.location.hostname == "localhost")
+        return;
+
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    var disqus_shortname = 'shogosblog';
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+       
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2019/04/17/cfn-mackerel-macro/">CloudFormationのMackerel用インテグレーションを作ってる話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/02/28/leak-gengo/">新元号の候補約4510万件が漏洩！！</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/02/12/ssm-sign-proxy/">外部サービスでもIAM Roleで認証がしたい！</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/02/07/acme-cert-updater/">Let&#39;s Encrypt の証明書取得を AWS Lambda でやってみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/01/31/mackerel-cloudwatch-transfer/">サーバーレスでCloudWatchメトリクスをMackerelに転送する</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/01/30/drain-ecs-task-with-cloudformation/">CloudFormationでECSタスクのドレインをやる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/01/13/rdsmysql/">IAM認証でAWS RDSへ接続するMySQLドライバを作った</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/12/16/run-cgi-in-aws-lambda/">AWS LambdaでCGIを蘇らせる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/11/30/perl-in-lambda/">PerlをAWS Lambdaで動かす</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/11/22/go-nil/">Goのnil,true,falseは変数名に使えるという話</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2019 Shogo Ichinose - <a href="https://shogo82148.github.io/license/">License</a> -
+  <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank" href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+</p>
+
+</footer>
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    displayMath: [['$$','$$'], ['\\[','\\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all.length) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+</script>
+
+
+<script>
+  var _gaq=[['_setAccount','UA-4526627-4'],['_trackPageview']];
+  (function(d,t){var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+  g.src=('https:'==location.protocol?'//ssl':'//www')+'.google-analytics.com/ga.js';
+  s.parentNode.insertBefore(g,s)}(document,'script'));
+</script>
+
+</body>
+</html>
+
