@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <link href="http://gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+  
+  <link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  <link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  
+
+  
+  <title>サーバーの時刻を伝える time wellknown uri を実装してみた</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css">
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+  
+
+  
+
+  <meta name="description" content="">
+  <meta name="keywords" content="">
+
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.38.1" />
+
+  
+  
+
+</head>
+<body>
+
+
+<header role="banner"><hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+    <h2></h2>
+</hgroup></header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+
+<ul class="subscription">
+  
+
+</ul>
+
+
+<form action="https://www.google.com/search" method="get" target="_blank">
+  <fieldset role="search">
+  	<input class="search" type="text" name="q" results="0" placeholder="Search"/>
+    <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+  </fieldset>
+</form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+    <p class="meta">May 27, 2019
+         - 1 minute read 
+         - <a href="https://shogo82148.github.io/blog/2019/05/27/time-over-https/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
+        
+    </p>
+    <h1 class="entry-title">
+         サーバーの時刻を伝える time wellknown uri を実装してみた 
+    </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          
+
+<p>インターネットをさまよっていたら、 <code>/.well-known/time</code> の存在を知ったので、雑に実装してみました。</p>
+
+<h2 id="使い方">使い方</h2>
+
+<p>うまいこと共存できそうだったので、<a href="https://shogo82148.github.io/blog/2017/03/11/go-webntp/">HTTP/WebSocketで時刻同期するWebNTPを書いた</a> で作成した WebNTP の一部として実装してあります。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/go-webntp">shogo82148/go-webntp</a></li>
+</ul>
+
+<pre><code>$ go get github.com/shogo82148/go-webntp/cmd/webntp
+$ webntp -serve :8080
+
+$ curl -I localhost:8080/.well-known/time
+HTTP/1.1 204 No Content
+X-Httpstime: 1558915632.285965
+Date: Mon, 27 May 2019 00:07:12 GMT
+</code></pre>
+
+<h2 id="仕様">仕様</h2>
+
+<p>HTTPには「予約済みのURI」というものが定義されています。(<a href="https://tools.ietf.org/html/rfc5785">RFC5785</a>)。</p>
+
+<ul>
+<li><a href="https://www.iana.org/assignments/well-known-uris/well-known-uris.xhtml">Well-Known URIs</a></li>
+</ul>
+
+<p><a href="https://letsencrypt.org/">Let&rsquo;s Encrypt</a> でドメインの所有権確認に使用される <a href="https://tools.ietf.org/html/rfc8555">ACMEプロトコル(RFC8555)</a> や、
+<a href="https://joinmastodon.org/">Mastodon</a> のユーザーディスカバリーに使用する <a href="https://tools.ietf.org/html/rfc7033">WebFinger(RFC7033)</a>等々、
+近年話題になったサービスの裏方で使われています。</p>
+
+<ul>
+<li>/.well-known/acme-challenge <a href="https://tools.ietf.org/html/rfc8555">ACMEプロトコル(RFC8555)</a></li>
+<li>/.well-known/webfinger <a href="https://tools.ietf.org/html/rfc7033">WebFinger(RFC7033)</a></li>
+</ul>
+
+<p>Time over HTTPS も Well-Known URIs を利用するプロトコルのひとつです。</p>
+
+<ul>
+<li>/.well-known/time <a href="http://phk.freebsd.dk/time/20151129/">Time over HTTPS specification</a></li>
+</ul>
+
+<p>仕様としては非常に単純で、サーバー側は HTTP の <code>HEAD</code> に対して、 <code>Date</code> ヘッダーをつけたリクエストを返すだけ。
+より高精度な時刻を得るために <code>X-HTTPSTIME</code> ヘッダーに秒未満の情報を入れた Unix タイムスタンプ を返すこともできます。</p>
+
+<hr />
+
+<p>WebNTP を書いたときから「まあHTTPで時刻同期なんて二番煎じなんだろうなあ」とは思っていたものの、
+IANAのような公共レジストリに Well-Known URIs として登録されているのには驚きました。</p>
+
+<p>しかも登録者は <a href="https://en.wikipedia.org/wiki/Poul-Henning_Kamp">Poul-Henning_Kamp</a>。
+FreeBSDのコミッターを務めたり、<a href="https://github.com/varnishcache/varnish-cache">Varnish</a>の開発をしている凄腕ハッカーですが、
+プロジェクト名義ではなく、個人名義で登録されています。</p>
+
+<p>Well-Known URIs への登録って個人でもできるんですね・・・知らなかった。</p>
+
+<h2 id="実装">実装</h2>
+
+<p>さて、かなり簡単な仕様なので、実装も簡単です。
+Goだとサーバーサイドの実装は、最低限以下のコードでOKです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="nx">serve</span><span class="p">(</span><span class="nx">rw</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">req</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+  <span class="nx">now</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
+  <span class="nx">rw</span><span class="p">.</span><span class="nx">Header</span><span class="p">().</span><span class="nx">Set</span><span class="p">(</span><span class="s">&#34;X-HTTPSTIME&#34;</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nx">Sprintf</span><span class="p">(</span><span class="s">&#34;%d.%09d&#34;</span><span class="p">,</span> <span class="nx">now</span><span class="p">.</span><span class="nx">Unix</span><span class="p">(),</span> <span class="nx">now</span><span class="p">.</span><span class="nx">Nanosecond</span><span class="p">()))</span>
+  <span class="nx">rw</span><span class="p">.</span><span class="nx">WriteHeader</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">StatusNoContent</span><span class="p">)</span>
+<span class="p">}</span></code></pre></div>
+<p>一方クライアントサイドは <code>X-HTTPSTIME</code> ヘッダーに未対応のサーバー対応や、TLSハンドシェイク時間の考慮など、精度を高めるためには考慮すべきことがたくさんあり、ちょっと面倒です。
+(WebNTPではまだ実装してない)</p>
+
+<h2 id="まとめ">まとめ</h2>
+
+<p>いろいろ書いたけど、「Well-Known URIs の登録は個人名義でもできる」ということに驚いた、ってことを言いたかった。</p>
+
+<h2 id="参考">参考</h2>
+
+<ul>
+<li><a href="https://www.iana.org/assignments/well-known-uris/well-known-uris.xhtml">Well-Known URIs</a></li>
+<li><a href="http://phk.freebsd.dk/time/20151129/">Time over HTTPS specification</a></li>
+<li><a href="https://en.wikipedia.org/wiki/Poul-Henning_Kamp">Poul-Henning_Kamp</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>May 27, 2019</time>
+    
+    </span>
+  </p>
+
+  
+  
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2019/04/17/cfn-mackerel-macro/" title="CloudFormationのMackerel用インテグレーションを作ってる話">CloudFormationのMackerel用インテグレーションを作ってる話</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+
+(function() {
+    
+    
+    
+    if (window.location.hostname == "localhost")
+        return;
+
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    var disqus_shortname = 'shogosblog';
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+       
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2019/05/27/time-over-https/">サーバーの時刻を伝える time wellknown uri を実装してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/04/17/cfn-mackerel-macro/">CloudFormationのMackerel用インテグレーションを作ってる話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/02/28/leak-gengo/">新元号の候補約4510万件が漏洩！！</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/02/12/ssm-sign-proxy/">外部サービスでもIAM Roleで認証がしたい！</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/02/07/acme-cert-updater/">Let&#39;s Encrypt の証明書取得を AWS Lambda でやってみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/01/31/mackerel-cloudwatch-transfer/">サーバーレスでCloudWatchメトリクスをMackerelに転送する</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/01/30/drain-ecs-task-with-cloudformation/">CloudFormationでECSタスクのドレインをやる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/01/13/rdsmysql/">IAM認証でAWS RDSへ接続するMySQLドライバを作った</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/12/16/run-cgi-in-aws-lambda/">AWS LambdaでCGIを蘇らせる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2018/11/30/perl-in-lambda/">PerlをAWS Lambdaで動かす</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2019 Shogo Ichinose - <a href="https://shogo82148.github.io/license/">License</a> -
+  <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank" href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+</p>
+
+</footer>
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    displayMath: [['$$','$$'], ['\\[','\\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all.length) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+</script>
+
+
+<script>
+  var _gaq=[['_setAccount','UA-4526627-4'],['_trackPageview']];
+  (function(d,t){var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+  g.src=('https:'==location.protocol?'//ssl':'//www')+'.google-analytics.com/ga.js';
+  s.parentNode.insertBefore(g,s)}(document,'script'));
+</script>
+
+</body>
+</html>
+
