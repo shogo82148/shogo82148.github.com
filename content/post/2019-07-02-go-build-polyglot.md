@@ -111,3 +111,10 @@ main:1112: invalid multibyte char (UTF-8)
 ```
 
 `#!ruby` が何故か二回登場している、ということまではわかったけど、ここで飽きたので誰か任せた。
+
+実行環境は以下の通り
+
+```plain
+$ go version
+go version go1.12.6 darwin/amd64
+```
