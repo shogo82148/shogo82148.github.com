@@ -105,6 +105,47 @@
         
 
 <header>
+    <p class="meta">Jan 30, 2019
+         - 2 minute read 
+         - <a href="https://shogo82148.github.io/blog/2019/01/30/drain-ecs-task-with-cloudformation/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a><a class="label" href="https://shogo82148.github.io/categories/mysql/">mysql </a><a class="label" href="https://shogo82148.github.io/categories/aws/">aws </a>
+        
+    </p>
+    <h1 class="entry-title">
+        <a href="https://shogo82148.github.io/blog/2019/01/30/drain-ecs-task-with-cloudformation/">CloudFormationでECSタスクのドレインをやる</a>
+    </h1>
+</header>
+
+
+        
+          <p>やってみたはいいものの、1年後には仕組みを忘れていそうなのでメモ。
+背景 昔はサービス毎にポコポコEC2インスタンスを立てていたのですが、 幸か不幸かインスタンスのリソースが余り気味でした。 そこで、最近流行りのコンテナ技術に乗っかって Amazon ECS (Amazon Elastic Container Service) を使って、 ひとつのインスタンスに複数のサービスを載せようと目論みました。
+ちょうどその頃、Spot Fleetというものを使うと、 スポットインスタンスをお手軽に借りられるという話を聞いたので、 Spot Fleet + ECS で格安クラスターを作ってみよう！と手を出してみました。
+(・・・もちろん、Fargateが東京リージョンで使えるようになったことは知っているけれど、スポットインスタンスの価格に負けてしまった・・・)
+ AWS Fargate 東京リージョン サービス開始のお知らせ AWS Fargate で最大 50% の値下げを発表  ECS最適化インスタンスの更新問題 クラスターを作るだけなら、そう難しくはなく、インスタンス起動時にAmazon ECS-Optimized Amazon Linux AMIを使うだけです。 問題はこのイメージは定期的に更新される、ということです。 更新情報を流しているSNSトピックがあるので、これをサブスクライブしておくと、時たま更新通知が来ます。
+ Amazon ECS-Optimized Amazon Linux AMI の更新の通知のサブスクライブ  この更新には機能追加はもちろん、セキュリティーフィックスも含まれているので、 なるべく早く新しいイメージに移行する必要があります。 移行は大まかに以下の手順で進めます。
+ 新しいAMIイメージに更新した Spot Fleet を作成する 古いインスタンスに残っているタスクをいい感じに終了する(ドレイン)  突然殺すとユーザーにエラーが見えてしまうので、受付中のリクエストを捌き切ってから終了しないといけない ドレインが始まるとECSがタスク数を調整するために、新しいインスタンスにタスクをお引越ししてくれる  ドレインが終了したら、古いインスタンスをシャットダウンする  ここで問題になってくるのが「古いインスタンスに残っているタスクをいい感じに終了する(ドレイン)」の部分。 コンソールからポチポチするのも面倒なので、自動化したいところ。 しかし、いろいろとドキュメントをあさってみたのですが、「APIかawscliを叩く」「SNSとAWS Lambda をうまいこと組み合わせて頑張る」みたいな方法しか見当たらない・・・ しかもAWSの公式ブログ</p>
+
+          
+              <footer>
+                  <a href="https://shogo82148.github.io/blog/2019/01/30/drain-ecs-task-with-cloudformation/" rel="full-article">Read On &rarr;</a>
+              </footer>
+          
+
+        
+
+    </article>
+    
+    <article>
+
+        
+        
+
+<header>
     <p class="meta">Jan 13, 2019
          - 1 minute read 
          - <a href="https://shogo82148.github.io/blog/2019/01/13/rdsmysql/#disqus_thread">Comments</a>
@@ -496,43 +537,6 @@ DST(Daylight Saving Time)の表示が出て、夏時間に切り替わったこ�
 
     </article>
     
-    <article>
-
-        
-        
-
-<header>
-    <p class="meta">Jun 9, 2018
-         - 1 minute read 
-         - <a href="https://shogo82148.github.io/blog/2018/06/09/go-s3-protocol/#disqus_thread">Comments</a>
-
-        
-        
-        
-            - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
-        
-    </p>
-    <h1 class="entry-title">
-        <a href="https://shogo82148.github.io/blog/2018/06/09/go-s3-protocol/">GoでHTTPとS3を透過的に扱う</a>
-    </h1>
-</header>
-
-
-        
-          <p>Goの http.Transport には RegisterProtocol というメソッドが生えていて これを使うと、 HTTP以外のプロトコルを透過的に扱うことができます。 代表的なのは http.NewFileTransport で、これを使うと、file://path/to/file.txt みたいなURLでファイルにアクセスすることができます。 (Goオフィシャルの例) この仕組を使って、S3へのアクセスも透過的にできるようにしてみたので、メモ。
-新しいプロトコルを作成するのは非常に簡単です。 http.RoundTripperインターフェースを実装し、リクエストに応答するレスポンスを作ってあげればいいだけです。 S3の場合以下のようになります。(エラー時の扱いが雑だけど・・・)
-package main import ( &#34;net/http&#34; &#34;github.com/aws/aws-sdk-go/aws&#34; &#34;github.com/aws/aws-sdk-go/aws/session&#34; &#34;github.com/aws/aws-sdk-go/service/s3&#34; ) type s3RoundTripper struct { s3 *s3.S3 } func newS3RoundTripper(session *session.Session) http.RoundTripper { return &amp;s3RoundTripper{ s3: s3.New(session), } } func (rt *s3RoundTripper) RoundTrip(req *http.Request) (*http.Response, error) { host := req.Host if host == &#34;&#34; { host = req.URL.Host } path := req.URL.Path ctx := req.Context() out, err := rt.</p>
-
-          
-              <footer>
-                  <a href="https://shogo82148.github.io/blog/2018/06/09/go-s3-protocol/" rel="full-article">Read On &rarr;</a>
-              </footer>
-          
-
-        
-
-    </article>
-    
     
     
 
@@ -662,6 +666,12 @@ package main import ( &#34;net/http&#34; &#34;github.com/aws/aws-sdk-go/aws&#34;
           
             
               <li class="post">
+                <a href="/blog/2019/07/22/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
                 <a href="/blog/2019/07/16/aws-lambda-paws-layer/">AWS SDK for Perl Lambda Layerを公開しました</a>
               </li>
             
@@ -705,12 +715,6 @@ package main import ( &#34;net/http&#34; &#34;github.com/aws/aws-sdk-go/aws&#34;
             
               <li class="post">
                 <a href="/blog/2019/01/31/mackerel-cloudwatch-transfer/">サーバーレスでCloudWatchメトリクスをMackerelに転送する</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2019/01/30/drain-ecs-task-with-cloudformation/">CloudFormationでECSタスクのドレインをやる</a>
               </li>
             
           

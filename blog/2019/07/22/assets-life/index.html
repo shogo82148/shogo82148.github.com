@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <link href="http://gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+  
+  <link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  <link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  
+
+  
+  <title>Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css">
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+  
+
+  
+
+  <meta name="description" content="">
+  <meta name="keywords" content="">
+
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.38.1" />
+
+  
+  
+
+</head>
+<body>
+
+
+<header role="banner"><hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+    <h2></h2>
+</hgroup></header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+
+<ul class="subscription">
+  
+
+</ul>
+
+
+<form action="https://www.google.com/search" method="get" target="_blank">
+  <fieldset role="search">
+  	<input class="search" type="text" name="q" results="0" placeholder="Search"/>
+    <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+  </fieldset>
+</form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+    <p class="meta">Jul 22, 2019
+         - 2 minute read 
+         - <a href="https://shogo82148.github.io/blog/2019/07/22/assets-life/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
+        
+    </p>
+    <h1 class="entry-title">
+         Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた 
+    </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          
+
+<p>日本語の Go コミュニティだと go-bindata (<a href="https://github.com/jteeuwen/go-bindata/issues/5">なんか乗っ取り騒動とか色々あって</a>メンテナンスされてない), go-assets (最近メンテナンス滞りがち) が有名(要出典)なやつです。
+これらのライブラリに関してたくさん日本語記事が書かれて、今もたくさん検索に引っかかるのですが、残念ながら最近はメンテナンスが滞っています。</p>
+
+<p>最近は <a href="https://github.com/rakyll/statik">statik</a> の名前もよく見るようになりました。
+その他は <a href="https://awesome-go.com/#resource-embedding">Resource Embedding - Awesome Go</a> からどうぞ。</p>
+
+<p>で、まあ、今回も完全に車輪の再発明なんですが、他の実装には色々と思うところがあり書いてみました。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/assets-life">shogo82148/assets-life</a></li>
+</ul>
+
+<h2 id="usage">USAGE</h2>
+
+<p>なにはともあれ、まずは <code>go get</code> してきます。</p>
+
+<pre><code>$ go get github.com/shogo82148/assets-life
+</code></pre>
+
+<p><code>assets-life</code> というコマンドがインストールされるので、
+バイナリに組み込みたいディレクトリと出力先を指定します。</p>
+
+<pre><code>$ assets-life /path/to/your/project/public public
+</code></pre>
+
+<p>出力先のディレクトリは Go のパッケージとしてインポートできるようになってます。
+<code>Root</code> という変数のなかにファイルが埋め込まれており、<code>http.FileSystem</code> インターフェースを介してアクセスできます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">import</span> <span class="p">(</span>
+    <span class="s">&#34;net/http&#34;</span>
+    <span class="s">&#34;example.com/your/project/public&#34;</span>
+<span class="p">)</span>
+
+<span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="nx">http</span><span class="p">.</span><span class="nx">Handle</span><span class="p">(</span><span class="s">&#34;/&#34;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nx">FileServer</span><span class="p">(</span><span class="nx">public</span><span class="p">.</span><span class="nx">Root</span><span class="p">))</span>
+    <span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">&#34;:8080&#34;</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
+<span class="p">}</span></code></pre></div>
+<h2 id="特長">特長</h2>
+
+<h3 id="コードの再生成にコマンドのインストールが不要">コードの再生成にコマンドのインストールが不要</h3>
+
+<p>これが一番の特長です。
+バイナリにファイルを埋め込む都合上、静的ファイルを修正した場合にコードの再生成が必要です。
+<code>assets-life</code> は <code>go:generate</code> ディレクティブを埋め込んだコードを出力するので、コードの再生成は <code>go generate</code> でできます。</p>
+
+<pre><code># /path/to/your/project/public に修正を加える
+
+# コードの再生を行う
+$ go generate example.com/your/project/public
+</code></pre>
+
+<p>面白いのは、このとき <strong>「<code>assets-life</code> コマンドは必要ない」</strong> ということです。
+<code>assets-life</code> はコード生成時に <strong>自分自身のソースコードをパッケージに埋め込みます</strong> 。
+<code>go:generate</code> ディレクティブには、埋め込んだ <code>assets-life</code> のソースコードを <code>go run</code> で実行するよう定義してあります。
+別途コマンドをインストールする必要はありません。</p>
+<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="c1">// 生成されたコードの一部
+</span><span class="c1"></span>
+<span class="kn">package</span> <span class="nx">public</span>
+
+<span class="c1">//go:generate go run assets-life.go ../path/to/your/project/public . public
+</span><span class="c1"></span>
+<span class="o">//</span> <span class="nx">以下略</span></code></pre></div>
+<p>これのおかげで、 <code>go generate</code> を実行して <code>assets-life: command not found</code> となる悲劇や、
+実行する人によって微妙にバージョンが違っていて <code>git diff</code> がたいへんなことになる悲劇から開放されます。</p>
+
+<hr />
+
+<p><code>assets-life</code> は <a href="https://www.amazon.co.jp/dp/4774176435">あなたの知らない超絶技巧プログラミングの世界</a> ではおなじみ
+<a href="https://ja.wikipedia.org/wiki/%E3%82%AF%E3%83%AF%E3%82%A4%E3%83%B3_(%E3%83%97%E3%83%AD%E3%82%B0%E3%83%A9%E3%83%9F%E3%83%B3%E3%82%B0)">クワイン</a> として実装されています。
+クワインとして実装すること自体は <a href="https://shogo82148.github.io/blog/2016/04/06/ployglot-quine-of-golang-and-perl/">PerlでもGoでも実行できるQuine書いた</a> で一度やっているので難しくはなかったのですが、
+文字列リテラルとして埋め込んだ <code>go:generate</code> ディレクティブや build constraint が誤って Go に検出されてしまい、
+それを回避するために難読化する必要があって少しハマりました。</p>
+
+<h3 id="ファイルの更新日時をあえて返さない">ファイルの更新日時をあえて返さない</h3>
+
+<p><code>http.FileSystem</code> インターフェースはファイルの更新日時を取得できるようになっていますが、
+<code>assets-life</code> は更新日時に <code>time.Time</code> の Zero Value を返します。</p>
+
+<p>このように実装してある理由は、 <code>go generate</code> を実行する環境によらず同じコードが生成されて欲しい、というのがひとつ。
+それに加えて、HTTPクライアントに余計なキャッシュをしてほしくないという理由でこのようにしてあります。</p>
+
+<p>Go の <a href="https://golang.org/pkg/net/http/#FileServer"><code>http.FileServer</code></a> は
+ファイルの更新日時が設定されていると <code>Last-Modified</code> ヘッダーをつけてレスポンスを返します。
+<code>Last-Modified</code> ヘッダーを見つけたHTTPクライアントは、<code>Date</code> ヘッダーの情報と合わせて最終更新日時からの経過時間を計算します。
+そして他に妥当な判断材料がない場合は <strong>その10%をキャッシュの寿命として設定します</strong> 。
+具体例をあげると以下のようなヘッダーが返ってきた場合</p>
+
+<pre><code>Date: Wed, 24 Jul 2019 08:08:47 GMT
+Last-Modified: Sat, 01 Jan 2000 00:00:00 GMT
+</code></pre>
+
+<p>ファイルの最終更新日時から約19年経っているので、キャッシュの寿命として約1.9年が設定されます。
+この間クライアントはキャッシュを利用するので、 <strong>ファイルに更新あったとしても最悪1.9年の間は更新が反映されません・・・！</strong>
+このことを知ったときは「そんなことするクライアントいるの？」と疑問だったのですが、
+このキャッシュアルゴリズムはRFCやMDNにも記述があり、実際そのような挙動をするクライアントがあるようです。</p>
+
+<ul>
+<li><a href="https://tools.ietf.org/html/rfc7234#section-4.2.2">RFC 7234 4.2.2. Calculating Heuristic Freshness</a></li>
+<li><a href="https://developer.mozilla.org/ja/docs/Web/HTTP/Caching#Freshness">鮮度 - HTTP キャッシュ MDN web docs</a></li>
+<li><a href="http://fushiroyama.hatenablog.com/entry/2017/11/28/164104">Date, Last-ModifiedヘッダがありCache-Controlが不適切な場合OkHttpが思いもよらないCacheをするので注意</a></li>
+</ul>
+
+<p>変なヒューリスティックでキャッシュの有効期限を決められると困るので、<code>assets-life</code> では <code>Last-Modified</code> を削除しています。
+しかし、これでキャッシュしなくなるという保証はどこにもないので、HTTPでのファイル配信に使うときはキャッシュ関連のヘッダーを設定しましょう。</p>
+
+<h3 id="ファイル検索にバイナリサーチを使用">ファイル検索にバイナリサーチを使用</h3>
+
+<p>他の実装はファイルの管理に <code>map</code> を使っているものが多いですが、 <code>assets-life</code> はすべてスライスに入れています。
+ファイルを開くときは、コード生成の時点でソートしておいて、バイナリサーチです。
+Nをファイルの数としたとき <code>map</code> の検索コストは O(1)、バイナリサーチの検索コストは O(log N) です。</p>
+
+<p>一見 <code>map</code> のほうが速そうですが、定数倍のオーバーヘッドがあるので、N が小さいときはバイナリサーチのほうが速くなります。
+雑に測定した感じだと1000個くらいまではバイナリサーチのほうが速そうです(要出典)。
+また、ファイルへの参照をスライスのインデックスで表せるので、 <code>Readdir</code> もまだまだ高速化できそうです。
+ちょっと詳しくベンチマークを取りながらチューニングしていきたいと思います。</p>
+
+<h3 id="ファイルの中身は未圧縮-stringで保持">ファイルの中身は未圧縮・stringで保持</h3>
+
+<p><code>assets-life</code> はzipやzlibでの圧縮には対応していません。
+圧縮はバイナリサイズと実行時の展開コストのトレードオフになるわけですが、<code>assets-life</code> は実行時のコスト最小化に寄せてあります。
+Goのランタイムだけで数MBあるので、これを大きく超えるようなファイルを扱わない限り、バイナリサイズへの影響はほとんどありません。
+そんあ用途はそうそう無いだろうという勝手な思い込みにより、このような実装になっています。</p>
+
+<h2 id="まとめ">まとめ</h2>
+
+<p>go-bindata, go-assets, statik の類似品を作りました。
+便利だなと思った人はぜひ使ってみてください。</p>
+
+<p>そうでもないな、と思った人も <strong>「最終更新日時からの経過時間の10%を、キャッシュの寿命に設定する」</strong> HTTPクライアントが存在するっていうことだけは覚えて帰ってね。</p>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>Jul 22, 2019</time>
+    
+    </span>
+  </p>
+
+  
+  
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2019/07/16/aws-lambda-paws-layer/" title="AWS SDK for Perl Lambda Layerを公開しました">AWS SDK for Perl Lambda Layerを公開しました</a>
+    
+
+    
+      <a class="basic-alignment right" href="https://shogo82148.github.io/blog/2019/07/22/go-retry/" title="Goで指数的バックオフをやってくれるgo-retryを書いた">Goで指数的バックオフをやってくれるgo-retryを書いた</a>
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+
+(function() {
+    
+    
+    
+    if (window.location.hostname == "localhost")
+        return;
+
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    var disqus_shortname = 'shogosblog';
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+       
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2019/07/22/go-retry/">Goで指数的バックオフをやってくれるgo-retryを書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/07/22/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/07/16/aws-lambda-paws-layer/">AWS SDK for Perl Lambda Layerを公開しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/07/02/go-build-polyglot/">GoのバイナリをRubyスクリプトとしても扱う</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/05/27/time-over-https/">サーバーの時刻を伝える time wellknown uri を実装してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/04/17/cfn-mackerel-macro/">CloudFormationのMackerel用インテグレーションを作ってる話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/02/28/leak-gengo/">新元号の候補約4510万件が漏洩！！</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/02/12/ssm-sign-proxy/">外部サービスでもIAM Roleで認証がしたい！</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/02/07/acme-cert-updater/">Let&#39;s Encrypt の証明書取得を AWS Lambda でやってみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/01/31/mackerel-cloudwatch-transfer/">サーバーレスでCloudWatchメトリクスをMackerelに転送する</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2019 Shogo Ichinose - <a href="https://shogo82148.github.io/license/">License</a> -
+  <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank" href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+</p>
+
+</footer>
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    displayMath: [['$$','$$'], ['\\[','\\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all.length) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+</script>
+
+
+<script>
+  var _gaq=[['_setAccount','UA-4526627-4'],['_trackPageview']];
+  (function(d,t){var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+  g.src=('https:'==location.protocol?'//ssl':'//www')+'.google-analytics.com/ga.js';
+  s.parentNode.insertBefore(g,s)}(document,'script'));
+</script>
+
+</body>
+</html>
+
