@@ -2,7 +2,7 @@
 layout: post
 title: "Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた"
 slug: assets-life
-date: 2019-07-22 07:33:00 +0900
+date: 2019-07-24 20:54:00 +0900
 comments: true
 categories: [go, golang]
 ---
