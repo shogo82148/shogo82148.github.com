@@ -2,7 +2,7 @@
 layout: post
 title: "AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました"
 slug: aws-xray-with-perl-lambda-runtime
-date: 2019-08-21 20:54:00 +0900
+date: 2019-08-21 19:53:00 +0900
 comments: true
 categories: [perl, lambda]
 ---
@@ -62,7 +62,7 @@ Layer に X-Rayに対応した最新の Perl Runtime `arn:aws:lambda:ap-northeas
 Perl で書いたコードを AWS Lambda 上で動かし、さらに分散トレーシングができるようになりました。
 以前紹介した [AWS SDK for Perl Lambda Layer](https://shogo82148.github.io/blog/2019/07/16/aws-lambda-paws-layer/) と合わせて、
 ぜひ Perl を活用してみてください。
- 
+
 
 ## 参考文献
 
