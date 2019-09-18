@@ -2,7 +2,7 @@
 layout: post
 title: "Setup Perl GitHub Action を公開しました"
 slug: actions-setup-perl
-date: 2019-08-21 19:53:00 +0900
+date: 2019-09-18 23:14:00 +0900
 comments: true
 categories: [perl, github]
 ---
