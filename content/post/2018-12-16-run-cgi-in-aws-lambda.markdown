@@ -235,9 +235,9 @@ sub handle {
 
 ### ビルド済みの zip アーカイブを使う
 
-以下のURLにビルドしたzipアーカイブを置きました。`${REGION}` に使用しているリージョンを入れてご使用ください。
+以下のURLにビルドしたzipアーカイブを置きました。`REGION` に使用しているリージョンを入れてご使用ください。
 
-- `https://s3-${REGION}.amazonaws.com/shogo82148-lambda-perl-runtime-${REGION}/perl-5-28-runtime.zip`
+- `https://s3-REGION.amazonaws.com/shogo82148-lambda-perl-runtime-REGION/perl-5-28-runtime.zip`
 
 東京リージョンの場合は以下のようになります。
 
