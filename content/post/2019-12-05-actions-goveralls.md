@@ -139,7 +139,7 @@ DockerはLinuxでしか動かないので、クロスプラットフォームで
 ところが [mattn/goveralls](https://github.com/mattn/goveralls) の実装言語はGoです。
 
 その連携をどうやっているかというと、[各プラットフォームのバイナリをレポジトリにコミット](https://github.com/shogo82148/actions-goveralls/tree/v1.0.0/bin)して、
-実行時に[Actionが動いているプラットフォームの情報を参照]https://github.com/shogo82148/actions-goveralls/blob/5e3c8e6f7ec292a898719fb5d8e0762de47cb526/src/runner.ts#L111-L117)し、
+実行時に[Actionが動いているプラットフォームの情報を参照](https://github.com/shogo82148/actions-goveralls/blob/5e3c8e6f7ec292a898719fb5d8e0762de47cb526/src/runner.ts#L111-L117)し、
 適切なバイナリを実行しています。
 
 クロスコンパイルが簡単でシングルバイナリなGoだからできる技・・・！
