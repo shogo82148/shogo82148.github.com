@@ -1,8 +1,8 @@
 ---
 layout: post
 title: "CloudFormationのテンプレートのLiner actions-cfn-lint のご紹介"
-slug: actions-goveralls
-date: 2019-12-05 00:00:00 +0900
+slug: actions-cfn-lint
+date: 2019-12-06 00:00:00 +0900
 comments: true
 categories: [go, github]
 ---

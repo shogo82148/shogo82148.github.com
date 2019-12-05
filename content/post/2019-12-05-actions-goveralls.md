@@ -156,4 +156,4 @@ DockerはLinuxでしか動かないので、クロスプラットフォームで
 
 -----
 
-[フラーAdvent Calendar 2019](https://adventar.org/calendars/4155) 6日目の担当は [@shogo82148](https://twitter.com/shogo82148) さんで「[CloudFormationのテンプレートのLiner actions-cfn-lint のご紹介](https://shogo82148.github.io/blog/2019/12/05/actions-cfn-lint/)」です。
+[フラーAdvent Calendar 2019](https://adventar.org/calendars/4155) 6日目の担当は [@shogo82148](https://twitter.com/shogo82148) さんで「[CloudFormationのテンプレートのLiner actions-cfn-lint のご紹介](https://shogo82148.github.io/blog/2019/12/06/actions-cfn-lint/)」です。
