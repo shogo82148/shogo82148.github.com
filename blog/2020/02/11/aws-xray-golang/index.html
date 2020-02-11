@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <link href="http://gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+  
+  <link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  <link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  
+
+  
+  <title>AWS X-Ray Go SDK の地雷処理をしている話</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css">
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+  
+
+  
+
+  <meta name="description" content="">
+  <meta name="keywords" content="">
+
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.38.1" />
+
+  
+  
+
+</head>
+<body>
+
+
+<header role="banner"><hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+    <h2></h2>
+</hgroup></header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+
+<ul class="subscription">
+  
+
+</ul>
+
+
+<form action="https://www.google.com/search" method="get" target="_blank">
+  <fieldset role="search">
+  	<input class="search" type="text" name="q" results="0" placeholder="Search"/>
+    <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+  </fieldset>
+</form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+    <p class="meta">Feb 11, 2020
+         - 3 minute read 
+         - <a href="https://shogo82148.github.io/blog/2020/02/11/aws-xray-golang/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/aws/">aws </a>
+        
+    </p>
+    <h1 class="entry-title">
+         AWS X-Ray Go SDK の地雷処理をしている話 
+    </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          
+
+<p><a href="https://shogo82148.github.io/blog/2019/08/21/aws-xray-with-perl-lambda-runtime/">AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました</a> で紹介した
+AWSの分散アプリケーションの分析サービス <a href="https://aws.amazon.com/jp/xray/">AWS X-Ray</a>。
+Perl から使えるようにしたももの、自分自身は最近 Perl をあまり使っていないことに気がついた！！ので、AWSが提供しているGo実装である <a href="https://github.com/aws/aws-xray-sdk-go">aws/aws-xray-sdk-go</a>に
+手を出してみることにしました。</p>
+
+<p>結果、X-Rayのサービスマップやトーレスが見れるようになって便利！・・・にはなったんですが、そこまでの道のりが長かった。
+「 <a href="https://twitter.com/fujiwara">@fujiwara</a> さんの<a href="https://speakerdeck.com/fujiwara3/yapc-tokyo-2019">YAPC::Tokyo 2019での発表</a> から1年近く経ってるしそろそろ安定してきているでしょ！」と
+軽い気持ちで始めたのが良くない。
+色々と地雷(？)を踏んだので、記録として残しておきます。</p>
+
+<h2 id="依存ライブラリのcontext対応が地味に辛い">依存ライブラリのcontext対応が地味に辛い</h2>
+
+<p>X-Ray で実行をトレースするには、「今実行している関数がどこから呼ばれたのか？」という情報をうまいこと伝える必要があります。
+<a href="https://perldoc.jp/func/local">Perlで使われているような黒魔術</a>はGoでは使えないので、
+<code>context.Context</code> を地道に引数に渡していくことになります。</p>
+
+<p>まあ、こんなこともあろうかと、<code>context.Context</code> にはバッチリ対応してあるからサクッと行けるでしょ！</p>
+
+<p>と思ってたんですが、現実はそうは甘くなかった。
+X-Rayを入れようとしたプロジェクトではWebフレームワークとして<a href="https://github.com/goadesign/goa">goadesign/goa</a>を使っています。
+GoaのHTTPハンドラーには <code>context.Context</code> が渡ってくるので油断していたのですが、
+contextの親をたどっていくと行き着く先は <code>context.Background()</code> (HTTPハンドラーなので <code>request.Context()</code> であってほしい)。
+なんとなく <code>context.Context</code> 対応詐欺にあった気分です。</p>
+
+<p>Goaは現在 v2, v3 の開発がメインで現在使っているのは v1 です。
+v1からv3へのアップグレードには大幅な書き換えが必要なこと、アップグレードしたとしても直っている保証がないこと、
+最近 Goa v1 のリリースが滞りがちなこと、などなどの理由から結局フォークしてくることにしました。</p>
+
+<ul>
+<li><a href="https://github.com/shogo82148/goa-v1">shogo82148/goa-v1</a></li>
+</ul>
+
+<p>AWS X-Ray Go SDK 自体の問題ではないのですが、
+Contextってタイムアウトをうまく処理するための仕組みなので、実装漏れがちですよね。
+皆さん実装するときやライブラリの選定には気をつけましょう。</p>
+
+<h2 id="sqlクエリを実行する関数のシグネチャーが微妙に違う">SQLクエリを実行する関数のシグネチャーが微妙に違う</h2>
+
+<p>これに関しては <a href="https://twitter.com/acidlemon">@acidlemon</a> 先生の kamakura.go の資料を見るのが手っ取り早いです。</p>
+
+<ul>
+<li><a href="https://speakerdeck.com/acidlemon/introduce-context-dot-context-into-long-term-project">開発期間数年のサービスの完成間際にcontext対応をぶち込む / introduce context.Context into long term project kamakura.go #5 @ 鎌倉</a></li>
+</ul>
+
+<script async class="speakerdeck-embed" data-id="f092fbf8da174846979790d8691709ed" data-ratio="1.77777777777778" src="//speakerdeck.com/assets/embed.js"></script>
+
+<p><code>*sql.DB</code> のクエリ実行関数のシグネチャーは <code>func QueryContext(ctx context.Context, query string, args ...interface{}) (*Rows, error)</code> なのに対して、
+<code>*xray.DB</code> のシグネチャーは <code>func Query(ctx context.Context, query string, args ...interface{}) (*Rows, error)</code>。
+せめてシグネチャーだけ合わせておいてくれればインターフェースで回避できたものの名前が微妙に違う。
+最初から X-Ray 前提でコードを書くか、インターフェースを適合させるためのアダプターが必要になります。</p>
+
+<p>これに関しては一旦トレースを諦めて、SDKにプルリクエストを送って対応してもらうのを待つことにしました。</p>
+
+<ul>
+<li><a href="https://github.com/aws/aws-xray-sdk-go/pull/169">proposal: implement custom driver for xray instead of xray.DB #169</a></li>
+</ul>
+
+<p><a href="https://shogo82148.github.io/blog/2017/02/16/go-sql-proxy-in-go18/">go-sql-proxyがcontextに対応しました</a> と同じアプローチでトレースコードを差し込む実装です。
+まだマージされていないですが、「方針は良さそう！」みたいなコメントをもらえたので、マージされるといいな。
+これが入るとSQLドライバーを変更するだけでOKなので、既存のコードの変更はほとんどなくなります。</p>
+
+<h2 id="デフォルトで落ちてくるバージョンが古い">デフォルトで落ちてくるバージョンが古い</h2>
+
+<p>ここまでの地雷は目に見えてわかる(ドキュメントに書いてあるし、なにか問題があればコンパイルエラーになる)ので簡単でしたね。
+<em>ここからは目に見えなくて地味につらいやつです。</em></p>
+
+<p>READMEに書いてあるとおりに <code>go get github.com/aws/aws-xray-sdk-go</code> してくると落ちてくるバージョンは
+<a href="https://github.com/aws/aws-xray-sdk-go/releases/tag/v0.9.4">v0.9.4</a> です。
+しかしこのリリースは <strong>2017年9月</strong> のもの。2年も前のバージョンです。</p>
+
+<p>最新リリースは <a href="https://github.com/aws/aws-xray-sdk-go/releases/tag/v1.0.0-rc.14">v1.0.0-rc.14</a> (2019年9月)です。
+しかし、 <code>go get</code> はデフォルトではRC版をとってきてくれません。
+明示的に <code>go get github.com/aws/aws-xray-sdk-go@v1.0.0-rc.14</code> を指定する必要があります。
+バグフィックスが多めなのと、カジュアルに新機能とかが入ってくるので、RC版の使用を強く推奨します。</p>
+
+<h2 id="contextを正しく扱ってないときはデフォルトpanic">contextを正しく扱ってないときはデフォルトpanic</h2>
+
+<p>X-Ray はアプリケーションの処理の単位をセグメントをいう概念で表します。</p>
+
+<ul>
+<li><a href="https://docs.aws.amazon.com/ja_jp/xray/latest/devguide/xray-concepts.html">AWS X-Ray の概念</a></li>
+</ul>
+
+<p>処理が複数に分割できる場合、セグメントが複数のサブセグメント含む場合があります。
+ここで注意が必要なのは、セグメントの作成とサブセグメントの作成との挙動の違いです。</p>
+
+<p>サブセグメントを作るときは <strong>親になるセグメントが必須</strong> です。</p>
+<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="c1">// 親セグメントが見つからないので panic
+</span><span class="c1"></span><span class="nx">ctx</span><span class="p">,</span> <span class="nx">seg</span> <span class="o">:=</span> <span class="nx">xray</span><span class="p">.</span><span class="nx">BeginSubsegment</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nx">Background</span><span class="p">(),</span> <span class="s">&#34;subsegment-name&#34;</span><span class="p">)</span>
+
+<span class="c1">// サブセグメントを作るにはセグメントが必要
+</span><span class="c1"></span><span class="nx">ctx</span><span class="p">,</span> <span class="nx">seg</span> <span class="o">:=</span> <span class="nx">xray</span><span class="p">.</span><span class="nx">BeginSegment</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nx">Background</span><span class="p">(),</span> <span class="s">&#34;service-name&#34;</span><span class="p">)</span>
+<span class="nx">ctx</span><span class="p">,</span> <span class="nx">subseg</span> <span class="o">:=</span> <span class="nx">xray</span><span class="p">.</span><span class="nx">BeginSubsegment</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span> <span class="s">&#34;subsegment-name&#34;</span><span class="p">)</span></code></pre></div>
+<p>セグメント同士には親子関係を設定できません。例えば以下のコードで <code>seg1</code> と <code>seg2</code> は無関係な別のセグメントです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="c1">// seg1 と seg2 は関連のない別のセグメントとして扱われる
+</span><span class="c1"></span><span class="nx">ctx</span><span class="p">,</span> <span class="nx">seg1</span> <span class="o">:=</span> <span class="nx">xray</span><span class="p">.</span><span class="nx">BeginSegment</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nx">Background</span><span class="p">(),</span> <span class="s">&#34;service-name&#34;</span><span class="p">)</span>
+<span class="nx">ctx</span><span class="p">,</span> <span class="nx">seg2</span> <span class="o">:=</span> <span class="nx">xray</span><span class="p">.</span><span class="nx">BeginSegment</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span> <span class="s">&#34;subsegment-name&#34;</span><span class="p">)</span></code></pre></div>
+<p>SDKにはいくつかユーティリティ関数が用意されていますが、こういった理由から作成するのがセグメントなのかサブセグメントなのかが重要です。
+<code>xray.Handler</code> はセグメントを、 <code>xray.Capture</code>, <code>xray.AWS</code>, <code>xray.Client</code>, <code>xray.SQL</code> はサブセグメントを作成します。
+サブセグメントを作るユーティリティ関数を使うときは、必ず親セグメントが存在しなければなりません。</p>
+
+<p>ここで問題になってくるのが <strong>親セグメントが設定されていない場合はデフォルトでpanicする</strong> ということです。
+もちろん、この動作は変更可能で、 <code>AWS_XRAY_CONTEXT_MISSING</code> 環境変数でログを吐くだけにできます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash"><span class="nb">export</span> <span class="nv">AWS_XRAY_CONTEXT_MISSING</span><span class="o">=</span>LOG_ERROR
+# default: RUNTIME_ERROR</code></pre></div>
+<p>うっかり <code>context.Background()</code> なんかを使って AWS API を叩く箇所があると、容赦なく <code>panic</code> します。
+<code>panic</code> するとスタックトレースが表示されるのでデバッグには便利ですが、未設定のまま本番環境にあげないようにしましょう。</p>
+
+<p>うっかりをよくやってしまうのでデフォルト <code>LOG_ERROR</code> が良かった・・・。</p>
+
+<p>(ちなみに、この <code>AWS_XRAY_CONTEXT_MISSING</code> 環境変数は、2020-02-11現在の<a href="https://docs.aws.amazon.com/xray/latest/devguide/xray-sdk-go-configuration.html#xray-sdk-go-configuration-envvars">公式ドキュメント</a> には存在しないという地味な落とし穴もあります)</p>
+
+<h2 id="aws-lambda-では-log-error-がデフォルト">AWS Lambda では LOG_ERROR がデフォルト</h2>
+
+<p>さて、前節で出てきた <code>AWS_XRAY_CONTEXT_MISSING</code> ですが、AWS Lambda ではデフォルト値が違います。</p>
+
+<blockquote>
+<p><a href="https://docs.aws.amazon.com/ja_jp/lambda/latest/dg/lambda-x-ray.html#lambda-x-ray-env-variables">環境変数を使用した AWS X-Ray との通信</a></p>
+
+<p><code>AWS_XRAY_CONTEXT_MISSING</code>: X-Ray SDK はこの変数を使用して、関数が X-Ray データを記録しようとしたがトレーシングヘッダーを使用できない場合の動作を決定します。Lambda はデフォルトでこの値を <code>LOG_ERROR</code> に設定します</p>
+</blockquote>
+
+<p>親切ですね。</p>
+
+<p>最初から <code>LOG_ERROR</code> をデフォルトにしてくれると、とてもありがたい・・・。</p>
+
+<h2 id="s3-で大きなファイルをあげようとするとpanicする">S3 で大きなファイルをあげようとするとpanicする</h2>
+
+<ul>
+<li><a href="https://github.com/aws/aws-xray-sdk-go/issues/175">Large files cause panic with S3 #175</a></li>
+</ul>
+
+<p><code>s3manager</code> を使うと、大きなファイルのアップロード時は自動的に分割してくれます。
+しかし、分割時に親セグメントの情報を失ってしまうようです。
+結果、親セグメントが見つからず <code>panic</code></p>
+
+<p>今の所 <code>panic</code> を避けるには、 <code>AWS_XRAY_CONTEXT_MISSING</code> でログに吐くようにするしか無いようです。</p>
+
+<h2 id="環境変数の設定が常に最優先">環境変数の設定が常に最優先</h2>
+
+<p><code>AWS_XRAY_CONTEXT_MISSING</code> はアプリケーションからも変更可能です。</p>
+<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="nx">xray</span><span class="p">.</span><span class="nx">Configure</span><span class="p">(</span><span class="nx">xray</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span>
+    <span class="nx">ContextMissingStrategy</span><span class="p">:</span> <span class="nx">ctxmissing</span><span class="p">.</span><span class="nx">LogErrorStrategy</span><span class="p">,</span>
+<span class="p">})</span></code></pre></div>
+<p>しかし、 <strong>環境変数が設定されている場合、この設定は無視されます</strong> 。
+有効になるのは <code>AWS_XRAY_CONTEXT_MISSING</code> が設定されていない場合のみです。</p>
+
+<p>・・・ AWS SDK と真逆ですね？
+(例えば <code>AWS_REGION</code> 環境変数よりも、アプリケーション内の <code>config.Region</code> が優先される)
+なぜ、こんなユーザーを混乱させるような設定になっているんでしょうね？
+単なる実装ミスかと思い、他言語の X-Ray SDK (Ruby, Python, C#, Java) も確認してみたのですが、
+Goと同様に環境変数が最優先でした。</p>
+
+<h2 id="最新リリースだと環境変数からの設定読み込みがバグっている">最新リリースだと環境変数からの設定読み込みがバグっている</h2>
+
+<p><code>AWS_XRAY_CONTEXT_MISSING</code> ですが、万が一ミスがあると <code>panic</code> するので <strong>非常に重要な設定</strong> です。
+さっきから何度も出ていることからも分かりますね。</p>
+
+<p>・・・にも関わらず、2020-02-11時点での最新版 v1.0.0-rc14 には、 <strong>ContextMissingStrategyを環境変数から読んでくれない</strong> という致命的なバグがあります。</p>
+
+<ul>
+<li><a href="https://github.com/aws/aws-xray-sdk-go/pull/161">context missing environment varibale fix #161</a></li>
+</ul>
+
+<p>AWS Lambda では <code>LOG_ERROR</code> がデフォルトだと書きました。
+しかし、v1.0.0-rc14 以前の X-Ray SDK を使っている場合は忘れてください。
+親セグメントが見つからなかった場合、AWS Lambda 上で実行していたとしても <code>panic</code> します。</p>
+
+<p>アプリケーション内で明示的に <code>LOG_ERROR</code> を指定しましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="nx">xray</span><span class="p">.</span><span class="nx">Configure</span><span class="p">(</span><span class="nx">xray</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span>
+    <span class="nx">ContextMissingStrategy</span><span class="p">:</span> <span class="nx">ctxmissing</span><span class="p">.</span><span class="nx">LogErrorStrategy</span><span class="p">,</span>
+<span class="p">})</span></code></pre></div>
+<p>ややこしいのは <code>xray.Configure</code> を呼び出したときは「環境変数の設定が常に最優先」のルールが発動するという点です。
+どうしてこうなった。</p>
+
+<p><a href="https://github.com/aws/aws-xray-sdk-go/pull/161">#161</a> は master ブランチに取り込まれているので、
+次のリリースには取り込まれる、はず。</p>
+
+<h2 id="まとめ">まとめ</h2>
+
+<p>AWS X-Ray SDK Go のインストールは以下のコマンドで。</p>
+<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash">$ go get github.com/aws/aws-xray-sdk-go@v1.0.0-rc.14
+$ <span class="nb">export</span> <span class="nv">AWS_XRAY_CONTEXT_MISSING</span><span class="o">=</span>LOG_ERROR</code></pre></div>
+<p>main関数の最初の方で、以下の設定をいれること。</p>
+<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="nx">xray</span><span class="p">.</span><span class="nx">Configure</span><span class="p">(</span><span class="nx">xray</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span>
+    <span class="nx">ContextMissingStrategy</span><span class="p">:</span> <span class="nx">ctxmissing</span><span class="p">.</span><span class="nx">LogErrorStrategy</span><span class="p">,</span>
+<span class="p">})</span></code></pre></div>
+<p>プルリクエスト送るためにザッとSDK全体をみたのですが、 <code>gofmt</code> すらかかっていない状態だったり、グローバル変数を多用していたり、
+Goに慣れていない人が別言語の実装を移植した雰囲気があるので、他にも罠がありそうです。</p>
+
+<p>・・・もう書き直して、「俺の考えた最強の AWS X-Ray SDK」を作ったほうが早いんじゃないか？という気もしなくはないですが、これもこみゅにてぃーへの還元・・・もうちょっとだけ頑張って地雷処理してみます・・・。</p>
+
+<hr />
+
+<p>以下チラシの裏</p>
+
+<p><a href="https://github.com/aws/aws-xray-sdk-go/blob/16d917bfd8d13242ae4f03807a10773a5e9cd468/xray/default_streaming_strategy.go#L59-L83">この辺</a> とか意図がわからなくて困ってる。</p>
+<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go">	<span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="p">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="nx">seg</span><span class="p">.</span><span class="nx">rawSubsegments</span><span class="p">);</span> <span class="nx">i</span><span class="o">++</span> <span class="p">{</span>
+		<span class="nx">child</span> <span class="o">:=</span> <span class="nx">seg</span><span class="p">.</span><span class="nx">rawSubsegments</span><span class="p">[</span><span class="nx">i</span><span class="p">]</span>
+		<span class="nx">seg</span><span class="p">.</span><span class="nx">rawSubsegments</span><span class="p">[</span><span class="nx">i</span><span class="p">]</span> <span class="p">=</span> <span class="nx">seg</span><span class="p">.</span><span class="nx">rawSubsegments</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="nx">seg</span><span class="p">.</span><span class="nx">rawSubsegments</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+		<span class="nx">seg</span><span class="p">.</span><span class="nx">rawSubsegments</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="nx">seg</span><span class="p">.</span><span class="nx">rawSubsegments</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="p">=</span> <span class="kc">nil</span>
+		<span class="nx">seg</span><span class="p">.</span><span class="nx">rawSubsegments</span> <span class="p">=</span> <span class="nx">seg</span><span class="p">.</span><span class="nx">rawSubsegments</span><span class="p">[:</span><span class="nb">len</span><span class="p">(</span><span class="nx">seg</span><span class="p">.</span><span class="nx">rawSubsegments</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+		<span class="nx">seg</span><span class="p">.</span><span class="nx">Subsegments</span><span class="p">[</span><span class="nx">i</span><span class="p">]</span> <span class="p">=</span> <span class="nx">seg</span><span class="p">.</span><span class="nx">Subsegments</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="nx">seg</span><span class="p">.</span><span class="nx">Subsegments</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+		<span class="nx">seg</span><span class="p">.</span><span class="nx">Subsegments</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="nx">seg</span><span class="p">.</span><span class="nx">Subsegments</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="p">=</span> <span class="kc">nil</span>
+		<span class="nx">seg</span><span class="p">.</span><span class="nx">Subsegments</span> <span class="p">=</span> <span class="nx">seg</span><span class="p">.</span><span class="nx">Subsegments</span><span class="p">[:</span><span class="nb">len</span><span class="p">(</span><span class="nx">seg</span><span class="p">.</span><span class="nx">Subsegments</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+		<span class="nx">atomic</span><span class="p">.</span><span class="nx">AddUint32</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">seg</span><span class="p">.</span><span class="nx">ParentSegment</span><span class="p">.</span><span class="nx">totalSubSegments</span><span class="p">,</span> <span class="p">^</span><span class="nb">uint32</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>
+
+		<span class="c1">// Add extra information into child subsegment
+</span><span class="c1"></span>		<span class="nx">child</span><span class="p">.</span><span class="nx">Lock</span><span class="p">()</span>
+		<span class="nx">child</span><span class="p">.</span><span class="nx">beforeEmitSubsegment</span><span class="p">(</span><span class="nx">seg</span><span class="p">)</span>
+		<span class="nx">cb</span><span class="p">,</span> <span class="nx">err</span><span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nx">Marshal</span><span class="p">(</span><span class="nx">child</span><span class="p">)</span>
+		<span class="k">if</span> <span class="nx">err</span><span class="o">!=</span> <span class="kc">nil</span><span class="p">{</span>
+			<span class="nx">logger</span><span class="p">.</span><span class="nx">Errorf</span><span class="p">(</span><span class="s">&#34;JSON error while marshalling subsegment: %v&#34;</span><span class="p">,</span><span class="nx">err</span><span class="p">)</span>
+		<span class="p">}</span>
+		<span class="nx">outSegments</span> <span class="p">=</span> <span class="nb">append</span><span class="p">(</span><span class="nx">outSegments</span><span class="p">,</span> <span class="nx">cb</span><span class="p">)</span>
+		<span class="nx">logger</span><span class="p">.</span><span class="nx">Debugf</span><span class="p">(</span><span class="s">&#34;Streaming subsegment named &#39;%s&#39; from segment tree.&#34;</span><span class="p">,</span> <span class="nx">child</span><span class="p">.</span><span class="nx">Name</span><span class="p">)</span>
+		<span class="nx">child</span><span class="p">.</span><span class="nx">Unlock</span><span class="p">()</span>
+
+		<span class="k">break</span>
+	<span class="p">}</span></code></pre></div>
+<p><del>Go初心者どころか、プログラミング初心者が書いたんじゃないか・・・？</del></p>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>Feb 11, 2020</time>
+    
+    </span>
+  </p>
+
+  
+  
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2020/02/01/goodbye-geocities/" title="元Yahoo!ジオシティーズ利用者のかたへ、GitHub Pagesのすゝめ">元Yahoo!ジオシティーズ利用者のかたへ、GitHub Pagesのすゝめ</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+
+(function() {
+    
+    
+    
+    if (window.location.hostname == "localhost")
+        return;
+
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    var disqus_shortname = 'shogosblog';
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+       
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2020/02/11/aws-xray-golang/">AWS X-Ray Go SDK の地雷処理をしている話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/02/01/goodbye-geocities/">元Yahoo!ジオシティーズ利用者のかたへ、GitHub Pagesのすゝめ</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/12/06/actions-cfn-lint/">CloudFormationのテンプレートのLiner actions-cfn-lint のご紹介</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/12/05/actions-goveralls/">GitHub Goveralls Action を公開しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/09/18/actions-setup-perl/">Setup Perl GitHub Action を公開しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/08/21/aws-xray-with-perl-lambda-runtime/">AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/07/24/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/07/22/go-retry/">Goで指数的バックオフをやってくれるgo-retryを書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/07/16/aws-lambda-paws-layer/">AWS SDK for Perl Lambda Layerを公開しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/07/02/go-build-polyglot/">GoのバイナリをRubyスクリプトとしても扱う</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2020 Shogo Ichinose - <a href="https://shogo82148.github.io/license/">License</a> -
+  <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank" href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+</p>
+
+</footer>
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['\\(','\\)']],
+    displayMath: [['\\[','\\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all.length) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+</script>
+
+
+<script>
+  var _gaq=[['_setAccount','UA-4526627-4'],['_trackPageview']];
+  (function(d,t){var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+  g.src=('https:'==location.protocol?'//ssl':'//www')+'.google-analytics.com/ga.js';
+  s.parentNode.insertBefore(g,s)}(document,'script'));
+</script>
+
+</body>
+</html>
+
