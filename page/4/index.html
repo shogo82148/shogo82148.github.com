@@ -105,6 +105,48 @@
         
 
 <header>
+    <p class="meta">Jan 2, 2018
+         - 1 minute read 
+         - <a href="https://shogo82148.github.io/blog/2018/01/02/cloudformation-template-for-mackerel-integration/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/mackerel/">mackerel </a>
+        
+    </p>
+    <h1 class="entry-title">
+        <a href="https://shogo82148.github.io/blog/2018/01/02/cloudformation-template-for-mackerel-integration/">Mackerel AWS Integration 用の CloudFormation テンプレートを書いた</a>
+    </h1>
+</header>
+
+
+        
+          <p> 昨年の年末から Mackerel の本格導入を始めました。 それに当たって AWS Integration 用の CloudFormation テンプレートを書いたので、 他のプロジェクトでも導入が簡単になるよう公開しました。
+ shogo82148/cf_mackerel  使い方 GitHub Pages でテンプレートを公開しているので、 template-body にテンプレートのURLを指定して、 新しいスタックを作成するだけです。
+aws cloudformation create-stack --stack-name &quot;MackerelIntegrationIamUser&quot; \ --template-body https://shogo82148.github.io/cf_mackerel/mackerel.yaml \ --capabilities CAPABILITY_NAMED_IAM  新しい名前付きIAMロールを作成するので CAPABILITY_NAMED_IAM が必要です。
+作成がうまくいくとOutputに以下のようなARNが出力されるので、 MackerelのAWS Integrationの設定画面へ入力しましょう。
+arn:aws:iam::xxxxxxxxxxxx:role/MackerelAWSIntegrationRole-ap-northeast-1  ロール名について ロール名が意図せずに変わってしまって連携が切れてしまうのを防ぐため、 ロール名は決め打ちです。
+ MackerelAWSIntegrationRole-ap-northeast-1
+ ロール名にリージョン名(この場合は ap-northeast-1)が含まれていますが、 作成されたロールはグローバルなリソースなので、他のリージョンでも使用可能です。 わざわざリージョン名含めているのは CloudFormation の警告にしたがったためです。
+ 警告
+IAM リソースに名前を付けると、複数のリージョンで同じテンプレートを再利用した場合に、回復不能なエラーが発生する場合があります。 これを防止するために、Fn::Join と AWS::Region を使用して、次の例のように地域固有の名前を作成することをお勧めします RoleName
+ 回復不能なエラー！！
+コワイので実際に何が起こるかは試してませんが、警告には素直に従っておくことにします。
+参考  AWS::IAM::Role - AWS CloudFormation - mackerelのAWSインテグレーション用IAM Userをcloudformationで作る Tomohiro/tf_mackerel 同じことをするTerraformのモジュール  </p>
+
+          
+
+        
+
+    </article>
+    
+    <article>
+
+        
+        
+
+<header>
     <p class="meta">Dec 6, 2017
          - 2 minute read 
          - <a href="https://shogo82148.github.io/blog/2017/12/06/mecab-in-lambda/#disqus_thread">Comments</a>
@@ -484,48 +526,6 @@ CREATE TABLE schedule ( schedule_id SERIAL PRIMARY KEY NOT NULL, room_name TEXT 
 
     </article>
     
-    <article>
-
-        
-        
-
-<header>
-    <p class="meta">Apr 13, 2017
-         - 2 minute read 
-         - <a href="https://shogo82148.github.io/blog/2017/04/13/perl-int64/#disqus_thread">Comments</a>
-
-        
-        
-        
-            - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a>
-        
-    </p>
-    <h1 class="entry-title">
-        <a href="https://shogo82148.github.io/blog/2017/04/13/perl-int64/">Perl&#43;List::Utilの64bit整数の罠にはまった話</a>
-    </h1>
-</header>
-
-
-        
-          <p>先日 Google Code Jam Qualification Round 2017 が開催されました (って何？というひとはAboutのページを確認。本題では無いので説明略)。
-僕もこれに参加して、D以外の問題A,B,Cを解いて、無事Round1へ進むことができました。 しかしPerlで解いたC-largeだけ何故か間違いの判定。 原因を探ってみたところ、PerlおよびList::Utilの64bit整数の罠にはまっていたことに気が付いたので、その備忘録として残しておきます。
-問題が発生したコード 問題が発生するのは以下の計算をするコードです。
- max: 250000000000000000と249999999999999999で大きい方を返す div: 249999999999999999を2で割った商を求める  この計算をそれぞれ二通りの計算方法で実装してみます。
-use 5.24.0; use List::Util qw(max); say &#34;max:&#34;; say max(250000000000000000, 249999999999999999); say max(249999999999999999, 250000000000000000); say &#34;div:&#34;; say int(249999999999999999/2); say 249999999999999999 &gt;&gt; 1;  max: 順番を変えただけなので、同じ結果をになるはず div: 割り算と等価なビットシフトに置き換えたので、同じ結果になるはず  僕は「同じ結果になるはず」と期待していました。 しかし、これを実行してみると以下のようになります。
- [Wandbox]三へ( へ՞ਊ ՞)へ ﾊｯﾊｯ https://wandbox.org/permlink/5fUBzLmBCRKUo4xZ  max: 249999999999999999 250000000000000000 div: 125000000000000000 124999999999999999 原因 250000000000000000は大体2^57.8なので、64bitの整数で十分表現できます。 しかし倍精度浮動小数点数として扱われると、精度が53bit分しかないので正確に表現できないのです。
-例えば以下のコードは&rdquo;true&rdquo;を出力します(ここだけ何故かGo)。
-package main import ( &#34;fmt&#34; ) func main() { fmt.</p>
-
-          
-              <footer>
-                  <a href="https://shogo82148.github.io/blog/2017/04/13/perl-int64/" rel="full-article">Read On &rarr;</a>
-              </footer>
-          
-
-        
-
-    </article>
-    
     
     
 
@@ -651,6 +651,12 @@ package main import ( &#34;fmt&#34; ) func main() { fmt.</p>
           
             
               <li class="post">
+                <a href="/blog/2020/03/30/aws-xray-yasdk-go/">Yet Another AWS X-Ray Go SDK を作った</a>
+              </li>
+            
+          
+            
+              <li class="post">
                 <a href="/blog/2020/02/11/aws-xray-golang/">AWS X-Ray Go SDK の地雷処理をしている話</a>
               </li>
             
@@ -700,12 +706,6 @@ package main import ( &#34;fmt&#34; ) func main() { fmt.</p>
             
               <li class="post">
                 <a href="/blog/2019/07/16/aws-lambda-paws-layer/">AWS SDK for Perl Lambda Layerを公開しました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2019/07/02/go-build-polyglot/">GoのバイナリをRubyスクリプトとしても扱う</a>
               </li>
             
           
