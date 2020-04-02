@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <link href="http://gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+  
+  <link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  <link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  
+
+  
+  <title>RE: Pull Request Title Injection とその対策</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css">
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+  
+
+  
+
+  <meta name="description" content="">
+  <meta name="keywords" content="">
+
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.38.1" />
+
+  
+  
+
+</head>
+<body>
+
+
+<header role="banner"><hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+    <h2></h2>
+</hgroup></header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+
+<ul class="subscription">
+  
+
+</ul>
+
+
+<form action="https://www.google.com/search" method="get" target="_blank">
+  <fieldset role="search">
+  	<input class="search" type="text" name="q" results="0" placeholder="Search"/>
+    <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+  </fieldset>
+</form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+    <p class="meta">Apr 2, 2020
+         - 3 minute read 
+         - <a href="https://shogo82148.github.io/blog/2020/04/02/re-pull-request-title-injection/#disqus_thread">Comments</a>
+
+        
+        
+        
+            - <a class="label" href="https://shogo82148.github.io/categories/github/">github </a>
+        
+    </p>
+    <h1 class="entry-title">
+         RE: Pull Request Title Injection とその対策 
+    </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          
+
+<p><a href="https://twitter.com/furusax">@furusax</a> が書いてくれた GitHub Action からの Slack 通知機能について以下のようにコメントしたところ、
+対策案を考えてくれました。</p>
+
+<blockquote>
+<p>そういえばこれって Pull Request Title Injection できないですかね？ まあ、タイトル書くの社員なのでいいんですが。</p>
+</blockquote>
+
+<p><blockquote class="twitter-tweet"><p lang="ja" dir="ltr">対策してみました <a href="https://twitter.com/hashtag/%E3%81%AF%E3%81%A6%E3%81%AA%E3%83%96%E3%83%AD%E3%82%B0?src=hash&amp;ref_src=twsrc%5Etfw">#はてなブログ</a><br>Pull Request Title Injection とその対策 - なまえは まだ ない<a href="https://t.co/hIkMykFUr8">https://t.co/hIkMykFUr8</a></p>&mdash; ふるさっくす (@furusax) <a href="https://twitter.com/furusax/status/1244973005484118023?ref_src=twsrc%5Etfw">March 31, 2020</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script></p>
+
+<ul>
+<li><a href="https://furusax0621.hatenablog.com/entry/2020/03/31/220042">Pull Request Title Injection とその対策</a></li>
+</ul>
+
+<p>なるほど、こう来ましたか。しかし、まだまだ甘いですね・・・。</p>
+
+<h2 id="pull-request-title-injection-について">Pull Request Title Injection について</h2>
+
+<p>まずはこの記事に出てくる「Pull Request Title Injection」についておさらいです。
+以下のような Slack への通知を行う GitHub Actions があります。
+<code>github.event.pull_request.title</code> はプルリクエストを送った本人が自由に設定できるので、
+ここにうまいこと細工をすれば Slack への投稿内容を自由に改変できてしまうのでは？という問いかけでした。</p>
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml">jobs<span class="p">:</span><span class="w">
+</span><span class="w">  </span>notify<span class="p">:</span><span class="w">
+</span><span class="w">    </span>name<span class="p">:</span><span class="w"> </span>Slack<span class="w"> </span>Notification<span class="w">
+</span><span class="w">    </span>runs-on<span class="p">:</span><span class="w"> </span>ubuntu-latest<span class="w">
+</span><span class="w">    </span>steps<span class="p">:</span><span class="w">
+</span><span class="w">      </span>-<span class="w"> </span>name<span class="p">:</span><span class="w"> </span><span class="s1">&#39;Send Notification&#39;</span><span class="w">
+</span><span class="w">        </span>run<span class="p">:</span><span class="w"> </span><span class="sd">|
+</span><span class="sd">          jq -n &#39;{
+</span><span class="sd">            attachments: [{
+</span><span class="sd">              pretext: &#34;Swagger が更新されたよ！&#34;,
+</span><span class="sd">              color: &#34;good&#34;,
+</span><span class="sd">              title: &#34;${{ github.event.pull_request.title }}&#34;,
+</span><span class="sd">              title_link: &#34;${{ github.event.pull_request.html_url }}&#34;
+</span><span class="sd">            }]
+</span><span class="sd">          }&#39; | curl -H &#39;Content-Type: application/json&#39; -d @- ${{ secrets.SLACK_WEBHOOK }}</span></code></pre></div>
+<p>より正確には <strong>「Pull Request Title を用いた Injection 攻撃」</strong> と呼ぶべきでしょうか。</p>
+
+<p>例えば、</p>
+
+<blockquote>
+<p>Test Pull Request Title Injection&rdquo;, footer: &ldquo;:male-police-officer: Injection!! :male-police-officer:</p>
+</blockquote>
+
+<p>のようなプルリクエストを送ると、以下のように展開され実行されてしまいます。
+タイトルだけ設定したいのにフッターまで書き換わってしまいました。
+もっと工夫をすれば通知内容を任意に設定したり、任意のコマンド実行することもできるでしょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml">jobs<span class="p">:</span><span class="w">
+</span><span class="w">  </span>notify<span class="p">:</span><span class="w">
+</span><span class="w">    </span>name<span class="p">:</span><span class="w"> </span>Slack<span class="w"> </span>Notification<span class="w">
+</span><span class="w">    </span>runs-on<span class="p">:</span><span class="w"> </span>ubuntu-latest<span class="w">
+</span><span class="w">    </span>steps<span class="p">:</span><span class="w">
+</span><span class="w">      </span>-<span class="w"> </span>name<span class="p">:</span><span class="w"> </span><span class="s1">&#39;Send Notification&#39;</span><span class="w">
+</span><span class="w">        </span>run<span class="p">:</span><span class="w"> </span><span class="sd">|
+</span><span class="sd">          jq -n &#39;{
+</span><span class="sd">            attachments: [{
+</span><span class="sd">              pretext: &#34;Swagger が更新されたよ！&#34;,
+</span><span class="sd">              color: &#34;good&#34;,
+</span><span class="sd">              title: &#34;Test Pull Request Title Injection&#34;, footer: &#34;:male-police-officer: Injection!! :male-police-officer:&#34;,
+</span><span class="sd">              title_link: &#34;https://example.com/&#34;
+</span><span class="sd">            }]
+</span><span class="sd">          }&#39; | curl -H &#39;Content-Type: application/json&#39; -d @- http://example.com/</span></code></pre></div>
+<p>Injection攻撃とはいったものの、これ自体の危険度はあまり高くありません。
+なぜなら <code>secrets.SLACK_WEBHOOK</code> にアクセスできる権限を持っている人は、
+このワークフロー自体を書き換えることができる権限も持っているので、
+ワークフローを書き換えたほうが手っ取り早いからです。</p>
+
+<p>とはいえ、通常の Injection 攻撃と同様の構造をしているので、頭の体操にはぴったりですね。
+ちょっと対策を考えてみましょう。</p>
+
+<h2 id="tojson関数を用いた対策の問題点">toJSON関数を用いた対策の問題点</h2>
+
+<p>Injection対策の基本はサニタイズです。
+プルリクエストのタイトルをサニタイズして、単なる文字列として扱われるようにしましょう。</p>
+
+<p><a href="https://furusax0621.hatenablog.com/entry/2020/03/31/220042">Pull Request Title Injection とその対策</a>では、
+<code>toJSON</code> を用いて以下のように書き換えています。</p>
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml">jobs<span class="p">:</span><span class="w">
+</span><span class="w">  </span>notify<span class="p">:</span><span class="w">
+</span><span class="w">    </span>name<span class="p">:</span><span class="w"> </span>Slack<span class="w"> </span>Notification<span class="w">
+</span><span class="w">    </span>runs-on<span class="p">:</span><span class="w"> </span>ubuntu-latest<span class="w">
+</span><span class="w">    </span>steps<span class="p">:</span><span class="w">
+</span><span class="w">      </span>-<span class="w"> </span>name<span class="p">:</span><span class="w"> </span><span class="s1">&#39;Send Notification&#39;</span><span class="w">
+</span><span class="w">        </span>run<span class="p">:</span><span class="w"> </span><span class="sd">|
+</span><span class="sd">          jq -n &#39;{
+</span><span class="sd">            attachments: [{
+</span><span class="sd">              pretext: &#34;Swagger が更新されたよ！&#34;,
+</span><span class="sd">              color: &#34;good&#34;,
+</span><span class="sd">              title: ${{ toJSON(github.event.pull_request.title) }},
+</span><span class="sd">              title_link: &#34;${{ github.event.pull_request.html_url }}&#34;
+</span><span class="sd">            }]
+</span><span class="sd">          }&#39; | curl -H &#39;Content-Type: application/json&#39; -d @- ${{ secrets.SLACK_WEBHOOK }}</span></code></pre></div>
+<p>ここにさっきのプルリクエストタイトルを入れてみましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml">jobs<span class="p">:</span><span class="w">
+</span><span class="w">  </span>notify<span class="p">:</span><span class="w">
+</span><span class="w">    </span>name<span class="p">:</span><span class="w"> </span>Slack<span class="w"> </span>Notification<span class="w">
+</span><span class="w">    </span>runs-on<span class="p">:</span><span class="w"> </span>ubuntu-latest<span class="w">
+</span><span class="w">    </span>steps<span class="p">:</span><span class="w">
+</span><span class="w">      </span>-<span class="w"> </span>name<span class="p">:</span><span class="w"> </span><span class="s1">&#39;Send Notification&#39;</span><span class="w">
+</span><span class="w">        </span>run<span class="p">:</span><span class="w"> </span><span class="sd">|
+</span><span class="sd">          jq -n &#39;{
+</span><span class="sd">            attachments: [{
+</span><span class="sd">              pretext: &#34;Swagger が更新されたよ！&#34;,
+</span><span class="sd">              color: &#34;good&#34;,
+</span><span class="sd">              title: &#34;Test Pull Request Title Injection\&#34;, footer: \&#34;:male-police-officer: Injection!! :male-police-officer:&#34;,
+</span><span class="sd">              title_link: &#34;https://example.com/&#34;
+</span><span class="sd">            }]
+</span><span class="sd">          }&#39; | curl -H &#39;Content-Type: application/json&#39; -d @- http://example.com/</span></code></pre></div>
+<p>ダブルクオーテーションがエスケープされて <code>jq</code> の文字列として解釈されるようになりました。
+これならプルリクエストのタイトルが正しく title に設定されます。</p>
+
+<hr />
+
+<p>しかし、ここに重要な見落としがありますね。
+プルリクエストのタイトルは <code>jq</code> の式としてだけでなく、 <strong>bashのコマンドの一部としても解釈</strong> されるということを見落としています。</p>
+
+<p>例えば以下のプルリクエストタイトルはどうでしょう？</p>
+
+<blockquote>
+<p>Test Pull Request Title Injection&rsquo;&ldquo;,footer:&ldquo;&rsquo;:male-police-officer: Injection!! :male-police-officer:</p>
+</blockquote>
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml">jobs<span class="p">:</span><span class="w">
+</span><span class="w">  </span>notify<span class="p">:</span><span class="w">
+</span><span class="w">    </span>name<span class="p">:</span><span class="w"> </span>Slack<span class="w"> </span>Notification<span class="w">
+</span><span class="w">    </span>runs-on<span class="p">:</span><span class="w"> </span>ubuntu-latest<span class="w">
+</span><span class="w">    </span>steps<span class="p">:</span><span class="w">
+</span><span class="w">      </span>-<span class="w"> </span>name<span class="p">:</span><span class="w"> </span><span class="s1">&#39;Send Notification&#39;</span><span class="w">
+</span><span class="w">        </span>run<span class="p">:</span><span class="w"> </span><span class="sd">|
+</span><span class="sd">          jq -n &#39;{
+</span><span class="sd">            attachments: [{
+</span><span class="sd">              pretext: &#34;Swagger が更新されたよ！&#34;,
+</span><span class="sd">              color: &#34;good&#34;,
+</span><span class="sd">              title: &#34;Test Pull Request Title Injection&#39;\&#34;,footer:\&#34;&#39;:male-police-officer: Injection!! :male-police-officer:&#34;,
+</span><span class="sd">              title_link: &#34;https://example.com/&#34;
+</span><span class="sd">            }]
+</span><span class="sd">          }&#39; | curl -H &#39;Content-Type: application/json&#39; -d @- http://example.com/</span></code></pre></div>
+<p>ちょっと分かりづらいですが、 <code>\&quot;</code> は <code>bash</code> によってエスケープが解除されてしまい、 Injection が成功してしまいます。
+これではだめですね・・・。</p>
+
+<h2 id="もうちょっとちゃんとした対策">もうちょっとちゃんとした対策</h2>
+
+<p>間に <code>bash</code> が登場するとややこしいので、ワークフローから <code>jq</code> へ直接プルリクエストタイトルを渡す方法を考えましょう。</p>
+
+<h3 id="環境変数を使う">環境変数を使う</h3>
+
+<p>jq 1.6 から <code>env</code> を使って環境変数に直接アクセスできるようになりました。
+これを使うと以下のようにシンプルに書けます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml">jobs<span class="p">:</span><span class="w">
+</span><span class="w">  </span>notify<span class="p">:</span><span class="w">
+</span><span class="w">    </span>name<span class="p">:</span><span class="w"> </span>Slack<span class="w"> </span>Notification<span class="w">
+</span><span class="w">    </span>runs-on<span class="p">:</span><span class="w"> </span>ubuntu-latest<span class="w">
+</span><span class="w">    </span>steps<span class="p">:</span><span class="w">
+</span><span class="w">      </span>-<span class="w"> </span>name<span class="p">:</span><span class="w"> </span><span class="s1">&#39;Send Notification&#39;</span><span class="w">
+</span><span class="w">        </span>run<span class="p">:</span><span class="w"> </span><span class="sd">|
+</span><span class="sd">          jq -n &#39;{
+</span><span class="sd">            attachments: [{
+</span><span class="sd">              pretext: &#34;Swagger が更新されたよ！&#34;,
+</span><span class="sd">              color: &#34;good&#34;,
+</span><span class="sd">              title: env.TITLE,
+</span><span class="sd">              title_link: env.LINK
+</span><span class="sd">            }]
+</span><span class="sd">          }&#39; | curl -H &#39;Content-Type: application/json&#39; -d @- ${{ secrets.SLACK_WEBHOOK }}</span><span class="w">
+</span><span class="w">        </span>env<span class="p">:</span><span class="w">
+</span><span class="w">          </span>TITLE<span class="p">:</span><span class="w"> </span>${{<span class="w"> </span>github.event.pull_request.title<span class="w"> </span>}}<span class="w">
+</span><span class="w">          </span>LINK<span class="p">:</span><span class="w"> </span>${{<span class="w"> </span>github.event.pull_request.html_url<span class="w"> </span>}}</code></pre></div>
+<p>・・・と思ったんですが、 GitHub Actions にインストールされている jq は 1.5・・・
+<code>env</code> は未実装です。</p>
+
+<p>ちょっと冗長になりますが、 <code>--arg</code> オプションを使って同様のことができます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml">jobs<span class="p">:</span><span class="w">
+</span><span class="w">  </span>notify<span class="p">:</span><span class="w">
+</span><span class="w">    </span>name<span class="p">:</span><span class="w"> </span>Slack<span class="w"> </span>Notification<span class="w">
+</span><span class="w">    </span>runs-on<span class="p">:</span><span class="w"> </span>ubuntu-latest<span class="w">
+</span><span class="w">    </span>steps<span class="p">:</span><span class="w">
+</span><span class="w">      </span>-<span class="w"> </span>name<span class="p">:</span><span class="w"> </span><span class="s1">&#39;Send Notification&#39;</span><span class="w">
+</span><span class="w">        </span>run<span class="p">:</span><span class="w"> </span><span class="sd">|
+</span><span class="sd">          jq -n --arg title &#34;$TITLE&#34; --arg link &#34;$LINK&#34; &#39;{
+</span><span class="sd">            attachments: [{
+</span><span class="sd">              pretext: &#34;Swagger が更新されたよ！&#34;,
+</span><span class="sd">              color: &#34;good&#34;,
+</span><span class="sd">              title: $title,
+</span><span class="sd">              title_link: $title
+</span><span class="sd">            }]
+</span><span class="sd">          }&#39; | curl -H &#39;Content-Type: application/json&#39; -d @- ${{ secrets.SLACK_WEBHOOK }}</span><span class="w">
+</span><span class="w">        </span>env<span class="p">:</span><span class="w">
+</span><span class="w">          </span>TITLE<span class="p">:</span><span class="w"> </span>${{<span class="w"> </span>github.event.pull_request.title<span class="w"> </span>}}<span class="w">
+</span><span class="w">          </span>LINK<span class="p">:</span><span class="w"> </span>${{<span class="w"> </span>github.event.pull_request.html_url<span class="w"> </span>}}</code></pre></div>
+<p>(早くデフォルトjq1.6にならないかな)</p>
+
+<h3 id="webhook-payload-を使う方法">webhook payload を使う方法</h3>
+
+<p>次はJSONのまま扱う方法。</p>
+
+<p>GitHub Actionを実行するサーバー上には、ワークフローを起動したイベントに関する情報が入ったJSONファイルが置かれています。
+場所は <code>GITHUB_EVENT_PATH</code> 環境変数に設定されているので、簡単にアクセスできます。
+JSONの加工は <code>jq</code> の得意分野ですね。</p>
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml">jobs<span class="p">:</span><span class="w">
+</span><span class="w">  </span>notify<span class="p">:</span><span class="w">
+</span><span class="w">    </span>name<span class="p">:</span><span class="w"> </span>Slack<span class="w"> </span>Notification<span class="w">
+</span><span class="w">    </span>runs-on<span class="p">:</span><span class="w"> </span>ubuntu-latest<span class="w">
+</span><span class="w">    </span>steps<span class="p">:</span><span class="w">
+</span><span class="w">      </span>-<span class="w"> </span>name<span class="p">:</span><span class="w"> </span><span class="s1">&#39;Send Notification&#39;</span><span class="w">
+</span><span class="w">        </span>run<span class="p">:</span><span class="w"> </span><span class="sd">|
+</span><span class="sd">          cat &#34;$GITHUB_EVENT_PATH&#34; | jq &#39;{
+</span><span class="sd">            attachments: [{
+</span><span class="sd">              pretext: &#34;Swagger が更新されたよ！&#34;,
+</span><span class="sd">              color: &#34;good&#34;,
+</span><span class="sd">              title: .pull_request.title,
+</span><span class="sd">              title_link: .pull_request.html_url
+</span><span class="sd">            }]
+</span><span class="sd">          }&#39; | curl -H &#39;Content-Type: application/json&#39; -d @- ${{ secrets.SLACK_WEBHOOK }}</span></code></pre></div>
+<h2 id="まとめ">まとめ</h2>
+
+<p>やはり頼れるのは jq と curl</p>
+
+<h2 id="参考">参考</h2>
+
+<ul>
+<li><a href="https://stedolan.github.io/jq/manual/v1.6/">jq 1.6 Manual</a></li>
+<li><a href="https://furusax0621.hatenablog.com/entry/2020/03/31/220042">Pull Request Title Injection とその対策</a></li>
+<li><a href="https://help.github.com/en/actions/configuring-and-managing-workflows/using-environment-variables">Using environment variables</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>Apr 2, 2020</time>
+    
+    </span>
+  </p>
+
+  
+  
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2020/03/30/aws-xray-yasdk-go/" title="Yet Another AWS X-Ray Go SDK を作った">Yet Another AWS X-Ray Go SDK を作った</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+
+(function() {
+    
+    
+    
+    if (window.location.hostname == "localhost")
+        return;
+
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    var disqus_shortname = 'shogosblog';
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+       
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2020/04/02/re-pull-request-title-injection/">RE: Pull Request Title Injection とその対策</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/03/30/aws-xray-yasdk-go/">Yet Another AWS X-Ray Go SDK を作った</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/02/11/aws-xray-golang/">AWS X-Ray Go SDK の地雷処理をしている話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/02/01/goodbye-geocities/">元Yahoo!ジオシティーズ利用者のかたへ、GitHub Pagesのすゝめ</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/12/06/actions-cfn-lint/">CloudFormationのテンプレートのLiner actions-cfn-lint のご紹介</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/12/05/actions-goveralls/">GitHub Goveralls Action を公開しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/09/18/actions-setup-perl/">Setup Perl GitHub Action を公開しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/08/21/aws-xray-with-perl-lambda-runtime/">AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/07/24/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/07/22/go-retry/">Goで指数的バックオフをやってくれるgo-retryを書いた</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2020 Shogo Ichinose - <a href="https://shogo82148.github.io/license/">License</a> -
+  <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank" href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+</p>
+
+</footer>
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['\\(','\\)']],
+    displayMath: [['\\[','\\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all.length) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+</script>
+
+
+<script>
+  var _gaq=[['_setAccount','UA-4526627-4'],['_trackPageview']];
+  (function(d,t){var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+  g.src=('https:'==location.protocol?'//ssl':'//www')+'.google-analytics.com/ga.js';
+  s.parentNode.insertBefore(g,s)}(document,'script'));
+</script>
+
+</body>
+</html>
+
