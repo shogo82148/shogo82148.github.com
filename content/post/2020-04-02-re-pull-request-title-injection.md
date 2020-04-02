@@ -207,7 +207,7 @@ jobs:
               pretext: "Swagger が更新されたよ！",
               color: "good",
               title: $title,
-              title_link: $title
+              title_link: $link
             }]
           }' | curl -H 'Content-Type: application/json' -d @- ${{ secrets.SLACK_WEBHOOK }}
         env:
