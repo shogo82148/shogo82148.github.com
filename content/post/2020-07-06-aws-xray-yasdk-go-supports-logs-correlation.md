@@ -2,7 +2,7 @@
 layout: post
 title: "Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした"
 slug: aws-xray-yasdk-go-supports-logs-correlation
-date: 2020-03-30 06:37:00 +0900
+date: 2020-07-06 22:49:00 +0900
 comments: true
 categories: [aws, go, golang]
 ---
