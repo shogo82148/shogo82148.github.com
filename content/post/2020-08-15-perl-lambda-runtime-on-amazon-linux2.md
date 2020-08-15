@@ -2,7 +2,7 @@
 layout: post
 title: "AWS Lambda Perl Runtime on Amazon Linux 2 を公開しました"
 slug: perl-lambda-runtime-on-amazon-linux2
-date: 2020-08-15 22:49:00 +0900
+date: 2020-08-15 20:44:00 +0900
 comments: true
 categories: [aws, perl, lambda]
 ---
