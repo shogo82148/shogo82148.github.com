@@ -45,7 +45,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.38.1" />
+  <meta name="generator" content="Hugo 0.74.3" />
 
   
   
@@ -124,33 +124,25 @@
           
           
           
-          
-
-<p><a href="http://konboi.hatenablog.com/entry/2016/04/12/121105">net/httpで静的ファイルを返す</a>で、
+          <p><a href="http://konboi.hatenablog.com/entry/2016/04/12/121105">net/httpで静的ファイルを返す</a>で、
 <code>http.ServeFile</code>を使っていてアレ？と思ったのでちょっと詳しく調べてみました。
 (<code>http.FileServer</code>を使うものだと思ってたため)</p>
-
 <p>結論だけ先に書いておくと</p>
-
 <ul>
 <li>やはり、特に理由がなければ<code>http.FileServer</code>を使ったほうが良さそう</li>
 <li>どうしても<code>http.ServeFile</code>を使う場合は定数でパス指定をする</li>
 <li>「自作パスルータを使っている」かつ「Go 1.6.1 未満を使っている」場合はとくに要注意</li>
 </ul>
-
-<!-- More -->
-
+<!-- raw HTML omitted -->
 <h2 id="ディレクトリトラバーサル脆弱性">ディレクトリトラバーサル脆弱性</h2>
-
 <p>紹介されているのは以下のコードです。</p>
-<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="nx">http</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">&#34;/static/&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
-  <span class="nx">http</span><span class="p">.</span><span class="nx">ServeFile</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">,</span> <span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
-<span class="p">})</span></code></pre></div>
-<p>しかし、参照先の「<a href="http://stackoverflow.com/questions/25945538/go-golang-to-serve-a-specific-html-file">Go Golang to serve a specific html file</a>」には
+<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="nx">http</span><span class="p">.</span><span class="nf">HandleFunc</span><span class="p">(</span><span class="s">&#34;/static/&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+  <span class="nx">http</span><span class="p">.</span><span class="nf">ServeFile</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">,</span> <span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
+<span class="p">})</span>
+</code></pre></div><p>しかし、参照先の「<a href="http://stackoverflow.com/questions/25945538/go-golang-to-serve-a-specific-html-file">Go Golang to serve a specific html file</a>」には
 <strong>Actually, do not do that.</strong> (やっちゃいけない)とコメントされています。
 <a href="https://ja.wikipedia.org/wiki/%E3%83%87%E3%82%A3%E3%83%AC%E3%82%AF%E3%83%88%E3%83%AA%E3%83%88%E3%83%A9%E3%83%90%E3%83%BC%E3%82%B5%E3%83%AB">ディレクトリトラバーサル</a>により
 脆弱性の原因となってしまう可能性があるためです。</p>
-
 <p>脆弱性再現のために、以下の様なコードを書いてGo1.5でコンパイルして実行してみました。</p>
 <div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
 
@@ -159,16 +151,16 @@
 	<span class="s">&#34;strings&#34;</span>
 <span class="p">)</span>
 
-<span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-	<span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">&#34;:3000&#34;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nx">HandlerFunc</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
-		<span class="k">if</span> <span class="nx">strings</span><span class="p">.</span><span class="nx">HasPrefix</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">,</span> <span class="s">&#34;/static/&#34;</span><span class="p">)</span> <span class="p">{</span>
-			<span class="nx">http</span><span class="p">.</span><span class="nx">ServeFile</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">,</span> <span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
+<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+	<span class="nx">http</span><span class="p">.</span><span class="nf">ListenAndServe</span><span class="p">(</span><span class="s">&#34;:3000&#34;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nf">HandlerFunc</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+		<span class="k">if</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">HasPrefix</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">,</span> <span class="s">&#34;/static/&#34;</span><span class="p">)</span> <span class="p">{</span>
+			<span class="nx">http</span><span class="p">.</span><span class="nf">ServeFile</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">,</span> <span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
 		<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-			<span class="nx">http</span><span class="p">.</span><span class="nx">NotFound</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">)</span>
+			<span class="nx">http</span><span class="p">.</span><span class="nf">NotFound</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">)</span>
 		<span class="p">}</span>
 	<span class="p">}))</span>
-<span class="p">}</span></code></pre></div>
-<p><code>..</code>を含んだパスをリクエストしてみます。(実行した場所によって<code>..</code>の数は変わるので適宜調整してみてください)</p>
+<span class="p">}</span>
+</code></pre></div><p><code>..</code>を含んだパスをリクエストしてみます。(実行した場所によって<code>..</code>の数は変わるので適宜調整してみてください)</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
 * About to connect() to localhost port 3000 (#0)
 *   Trying ::1... connected
@@ -189,8 +181,8 @@
 (中略)
 -----END RSA PRIVATE KEY-----
 * Connection #0 to host localhost left intact
-* Closing connection #0</code></pre></div>
-<p>macのcurlで試したらクライアント側で相対パスを解決した状態でリクエストが飛んでしまって上手く行きませんでした。
+* Closing connection #0
+</code></pre></div><p>macのcurlで試したらクライアント側で相対パスを解決した状態でリクエストが飛んでしまって上手く行きませんでした。
 オプションで外す方法がよくわかなかったので、<code>telnet</code>で叩いてみた例も載せておきます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">$ telnet localhost 3000
 Trying ::1...
@@ -208,13 +200,10 @@ Date: Tue, 12 Apr 2016 18:02:56 GMT
 -----BEGIN RSA PRIVATE KEY-----
 (中略)
 -----END RSA PRIVATE KEY-----
-Connection closed by foreign host.</code></pre></div>
-<p>ああ、僕の秘密鍵が・・・。</p>
-
+Connection closed by foreign host.
+</code></pre></div><p>ああ、僕の秘密鍵が・・・。</p>
 <h2 id="脆弱性を回避する">脆弱性を回避する</h2>
-
-<h3 id="go1-6以降を使う">Go1.6以降を使う</h3>
-
+<h3 id="go16以降を使う">Go1.6以降を使う</h3>
 <p>Go1.6以降では修正されており、
 同じコードをGo1.6でコンパイルしてcurlで叩くと400が帰ってきます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
@@ -234,9 +223,8 @@ Connection closed by foreign host.</code></pre></div>
 &lt; 
 invalid URL path
 * Connection #0 to host localhost left intact
-* Closing connection #0</code></pre></div>
-<h3 id="http-servemux-を使う"><code>http.ServeMux</code>を使う</h3>
-
+* Closing connection #0
+</code></pre></div><h3 id="httpservemuxを使う"><code>http.ServeMux</code>を使う</h3>
 <p><code>http.ServeMux</code>にはパスの正規化機能が組み込まれており、
 正規化されていないURLにアクセスが来た場合は自動的リダイレクトしてくれるようです。
 HTTPハンドラに渡ってくるときには、必ず相対パスが含まれていない状態になっています。
@@ -245,15 +233,15 @@ HTTPハンドラに渡ってくるときには、必ず相対パスが含まれ�
 
 <span class="kn">import</span> <span class="s">&#34;net/http&#34;</span>
 
-<span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
   <span class="c1">// 内部でhttp.ServeMuxを使ってくれる
-</span><span class="c1"></span>  <span class="nx">http</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">&#34;/static/&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+</span><span class="c1"></span>  <span class="nx">http</span><span class="p">.</span><span class="nf">HandleFunc</span><span class="p">(</span><span class="s">&#34;/static/&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
     <span class="c1">// r.URLには相対パスが含まれない形で渡ってくる
-</span><span class="c1"></span>    <span class="nx">http</span><span class="p">.</span><span class="nx">ServeFile</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">,</span> <span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
+</span><span class="c1"></span>    <span class="nx">http</span><span class="p">.</span><span class="nf">ServeFile</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">,</span> <span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
   <span class="p">})</span>
-  <span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">&#34;:3000&#34;</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
-<span class="p">}</span></code></pre></div>
-<p>相対パスを含んだリクエストを投げてもアクセスはできません。</p>
+  <span class="nx">http</span><span class="p">.</span><span class="nf">ListenAndServe</span><span class="p">(</span><span class="s">&#34;:3000&#34;</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
+<span class="p">}</span>
+</code></pre></div><p>相対パスを含んだリクエストを投げてもアクセスはできません。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
 * About to connect() to localhost port 3000 (#0)
 *   Trying ::1... connected
@@ -272,9 +260,8 @@ HTTPハンドラに渡ってくるときには、必ず相対パスが含まれ�
 &lt;a href=&#34;/.ssh/id_rsa&#34;&gt;Moved Permanently&lt;/a&gt;.
 
 * Connection #0 to host localhost left intact
-* Closing connection #0</code></pre></div>
-<h3 id="http-fileserver-を使う"><code>http.FileServer</code>を使う</h3>
-
+* Closing connection #0
+</code></pre></div><h3 id="httpfileserverを使う"><code>http.FileServer</code>を使う</h3>
 <p><code>http.Dir</code>と<code>http.FileServer</code>を使うとルートディレクトリを指定でき、
 その外へはアクセスできなくなるので想定外のファイルが見えてしまうことはありません。</p>
 <div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
@@ -284,17 +271,17 @@ HTTPハンドラに渡ってくるときには、必ず相対パスが含まれ�
   <span class="s">&#34;strings&#34;</span>
 <span class="p">)</span>
 
-<span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-  <span class="nx">fileServer</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">StripPrefix</span><span class="p">(</span><span class="s">&#34;/static/&#34;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nx">FileServer</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">Dir</span><span class="p">(</span><span class="s">&#34;static&#34;</span><span class="p">)))</span>
-  <span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">&#34;:3000&#34;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nx">HandlerFunc</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
-    <span class="k">if</span> <span class="nx">strings</span><span class="p">.</span><span class="nx">HasPrefix</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">,</span> <span class="s">&#34;/static/&#34;</span><span class="p">)</span> <span class="p">{</span>
-      <span class="nx">fileServer</span><span class="p">.</span><span class="nx">ServeHTTP</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">)</span>
+<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+  <span class="nx">fileServer</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nf">StripPrefix</span><span class="p">(</span><span class="s">&#34;/static/&#34;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nf">FileServer</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nf">Dir</span><span class="p">(</span><span class="s">&#34;static&#34;</span><span class="p">)))</span>
+  <span class="nx">http</span><span class="p">.</span><span class="nf">ListenAndServe</span><span class="p">(</span><span class="s">&#34;:3000&#34;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nf">HandlerFunc</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">if</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">HasPrefix</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">,</span> <span class="s">&#34;/static/&#34;</span><span class="p">)</span> <span class="p">{</span>
+      <span class="nx">fileServer</span><span class="p">.</span><span class="nf">ServeHTTP</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">)</span>
     <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-      <span class="nx">http</span><span class="p">.</span><span class="nx">NotFound</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">)</span>
+      <span class="nx">http</span><span class="p">.</span><span class="nf">NotFound</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">)</span>
 	<span class="p">}</span>
   <span class="p">}))</span>
-<span class="p">}</span></code></pre></div>
-<p>相対パスを含んだURLにアクセスしても404になって見れません。</p>
+<span class="p">}</span>
+</code></pre></div><p>相対パスを含んだURLにアクセスしても404になって見れません。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
 * About to connect() to localhost port 3000 (#0)
 *   Trying ::1... connected
@@ -312,60 +299,50 @@ HTTPハンドラに渡ってくるときには、必ず相対パスが含まれ�
 &lt; 
 404 page not found
 * Connection #0 to host localhost left intact
-* Closing connection #0</code></pre></div>
-<h3 id="http-servefile-に定数を渡す"><code>http.ServeFile</code>に定数を渡す</h3>
-
+* Closing connection #0
+</code></pre></div><h3 id="httpservefileに定数を渡す"><code>http.ServeFile</code>に定数を渡す</h3>
 <p>どうしても特定のファイルを指定したい場合は、<code>http.ServeFile</code>に渡すファイルパスを定数で指定するべきです。
 例えば、「<a href="http://stackoverflow.com/questions/25945538/go-golang-to-serve-a-specific-html-file">Go Golang to serve a specific html file</a>」の質問者が上げている例を
 正しく書きなおすと以下のようになると思います。</p>
-
 <blockquote>
 <p><code>http.Handle(&quot;/&quot;, http.FileServer(http.Dir(&quot;static&quot;)))</code>
 Serves the html file in static directory.</p>
-
 <p>Is there any way in Go that we can specify the html file to serve?</p>
-
 <p>Something like render_template in Flask</p>
-
 <p>I want to do something like:</p>
-
 <p><code>http.Handle(&quot;/hello&quot;, http.FileServer(http.Dir(&quot;static/hello.html&quot;)))</code></p>
 </blockquote>
 <div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
 
 <span class="kn">import</span> <span class="s">&#34;net/http&#34;</span>
 
-<span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-  <span class="nx">http</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">&#34;/hello&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
-    <span class="nx">http</span><span class="p">.</span><span class="nx">ServeFile</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">,</span> <span class="s">&#34;static/hello.html&#34;</span><span class="p">)</span>
+<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+  <span class="nx">http</span><span class="p">.</span><span class="nf">HandleFunc</span><span class="p">(</span><span class="s">&#34;/hello&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+    <span class="nx">http</span><span class="p">.</span><span class="nf">ServeFile</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">,</span> <span class="s">&#34;static/hello.html&#34;</span><span class="p">)</span>
   <span class="p">})</span>
-  <span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">&#34;:3000&#34;</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
-<span class="p">}</span></code></pre></div>
-<p>回答者がActually, do not do thatとコメントしているのは<code>http.ServeFile</code>に<code>r.URL.Path[1:]</code>を渡すことで、
+  <span class="nx">http</span><span class="p">.</span><span class="nf">ListenAndServe</span><span class="p">(</span><span class="s">&#34;:3000&#34;</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
+<span class="p">}</span>
+</code></pre></div><p>回答者がActually, do not do thatとコメントしているのは<code>http.ServeFile</code>に<code>r.URL.Path[1:]</code>を渡すことで、
 <code>http.ServeFile</code>自体が悪いわけではありません。
 正しく安全に使いましょう。</p>
-
 <h2 id="まとめ">まとめ</h2>
-
 <p>まとめ再掲。</p>
-
 <ul>
 <li>やはり、特に理由がなければ<code>http.FileServer</code>を使ったほうが良さそう</li>
 <li>どうしても<code>http.ServeFile</code>を使う場合は定数でパス指定をする</li>
 <li>「自作パスルータを使っている」かつ「Go 1.6.1 未満を使っている」場合はとくに要注意</li>
 </ul>
-
 <h2 id="まとめのまとめ">まとめのまとめ</h2>
-
 <p><a href="https://golang.org/pkg/net/http/#example_FileServer">godocのexample</a>どおりにやるのが一番。</p>
 <div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
 
 <span class="kn">import</span> <span class="s">&#34;net/http&#34;</span>
 
-<span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-  <span class="nx">http</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">&#34;/static/&#34;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nx">StripPrefix</span><span class="p">(</span><span class="s">&#34;/static/&#34;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nx">FileServer</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">Dir</span><span class="p">(</span><span class="s">&#34;static&#34;</span><span class="p">))))</span>
-  <span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">&#34;:3000&#34;</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
-<span class="p">}</span></code></pre></div>
+<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+  <span class="nx">http</span><span class="p">.</span><span class="nf">HandleFunc</span><span class="p">(</span><span class="s">&#34;/static/&#34;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nf">StripPrefix</span><span class="p">(</span><span class="s">&#34;/static/&#34;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nf">FileServer</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nf">Dir</span><span class="p">(</span><span class="s">&#34;static&#34;</span><span class="p">))))</span>
+  <span class="nx">http</span><span class="p">.</span><span class="nf">ListenAndServe</span><span class="p">(</span><span class="s">&#34;:3000&#34;</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
+<span class="p">}</span>
+</code></pre></div>
         </div>
         
 
@@ -467,6 +444,8 @@ Serves the html file in static directory.</p>
           
           
             
+          
+            
               <li class="post">
                 <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
               </li>
@@ -517,12 +496,6 @@ Serves the html file in static directory.</p>
             
               <li class="post">
                 <a href="/blog/2019/08/21/aws-xray-with-perl-lambda-runtime/">AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2019/07/24/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
               </li>
             
           

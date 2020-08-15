@@ -45,7 +45,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.38.1" />
+  <meta name="generator" content="Hugo 0.74.3" />
 
   
   
@@ -124,129 +124,87 @@
           
           
           
-          
-
-<p>ExcelやGoogle Spreadsheetを使って作ったデータをプログラムに取り込むのにcsv形式が便利でよく使っているんですが、
+          <p>ExcelやGoogle Spreadsheetを使って作ったデータをプログラムに取り込むのにcsv形式が便利でよく使っているんですが、
 gitで履歴管理をしてもdiffが見づらい・・・。
 gitのdiffがかなり自由にカスタマイズできることを知ったので、いろいろいじってみたメモ。</p>
-
-<!-- More -->
-
+<!-- raw HTML omitted -->
 <p>例として、以下のようなcsvファイルを編集することを考えます。</p>
-
-<p>``` plain hogehoge.csv
-id,name,param_a,param_b,param_c,param_d,param_e
+<div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">id,name,param_a,param_b,param_c,param_d,param_e
 101,hoge,314,159,265,358,979
-102,fuga,271,828,182,845,904</p>
-
-<pre><code>
-一行目は列の見出しになっていて、プログラムからは列番号ではなく`param_d`の様に指定する、
+102,fuga,271,828,182,845,904
+</code></pre></div><p>一行目は列の見出しになっていて、プログラムからは列番号ではなく<code>param_d</code>の様に指定する、
 という作りになってます。
-`id: 101`の行の`param_d`の数値に変更が入った場合、普通のgitだと以下のようになります。
-
-``` diff git-diff
-diff --git a/hogehoge.csv b/hogehoge.csv
-index c8dbd17..37f4ff5 100644
---- a/hogehoge.csv
-+++ b/hogehoge.csv
-@@ -1,3 +1,3 @@
-id,name,param_a,param_b,param_c,param_d,param_e
--101,hoge,314,159,265,358,979
-+101,hoge,314,159,265,359,979
- 102,fuga,271,828,182,845,904
-</code></pre>
-
-<p>二行目に何か変更があったことはわかりますが、
+<code>id: 101</code>の行の<code>param_d</code>の数値に変更が入った場合、普通のgitだと以下のようになります。</p>
+<div class="highlight"><pre class="chroma"><code class="language-diff" data-lang="diff"><span class="gh">diff --git a/hogehoge.csv b/hogehoge.csv
+</span><span class="gh">index c8dbd17..37f4ff5 100644
+</span><span class="gh"></span><span class="gd">--- a/hogehoge.csv
+</span><span class="gd"></span><span class="gi">+++ b/hogehoge.csv
+</span><span class="gi"></span><span class="gu">@@ -1,3 +1,3 @@
+</span><span class="gu"></span>id,name,param_a,param_b,param_c,param_d,param_e
+<span class="gd">-101,hoge,314,159,265,358,979
+</span><span class="gd"></span><span class="gi">+101,hoge,314,159,265,359,979
+</span><span class="gi"></span> 102,fuga,271,828,182,845,904
+</code></pre></div><p>二行目に何か変更があったことはわかりますが、
 <code>param_d</code> だとはすぐにはわかりませんね・・・</p>
-
 <h2 id="yamlに変換して比較する">YAMLに変換して比較する</h2>
-
 <p>バイナリファイルであっても差分が確認できるよう、
 git-diffを実行する前に変換ツールを実行する機能があります。
 拡張子がcsvのファイルに対してこの機能が働くように<code>.gitattributes</code>に以下の行を足します。</p>
-
-<p>``` plain .gitattributes
-*.csv diff=csv</p>
-
-<pre><code>
-`.git/config` に変換ツールの設定を追加します。
-`key: value`の形式になっていると見やすそうなので、変換先の形式にはyamlを選びました。
-
-``` plain .git/config
-[diff &quot;csv&quot;]
+<div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">*.csv diff=csv
+</code></pre></div><p><code>.git/config</code> に変換ツールの設定を追加します。
+<code>key: value</code>の形式になっていると見やすそうなので、変換先の形式にはyamlを選びました。</p>
+<div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">[diff &#34;csv&#34;]
     textconv = csv2yaml
-</code></pre>
-
-<p>ここで指定している<code>csv2yaml</code>は自前で用意する必要があります。
+</code></pre></div><p>ここで指定している<code>csv2yaml</code>は自前で用意する必要があります。
 インターネット上をさまよえば同名のツールはいくらでもありそうですが、今回は自分でgoを使って書きました。
 <a href="https://gist.github.com/shogo82148/8f19cb771dc6f91308a7">csv2yaml.go</a>をコンパイルしてパスの通る場所においておきましょう。
 csv2yamlは自分のよく使うcsvのフォーマットにあわせて以下のようなカスタマイズをしてあります。</p>
-
 <ul>
 <li><code>id</code>という名前のキーを必ず最初にする</li>
 <li>それ以外のキーはアルファベット順にソートする</li>
 </ul>
-
 <p>この状態で<code>git diff</code>を実行すると以下のようになります。</p>
-
-<p>``` diff git-diff
-diff &ndash;git a/hogehoge.csv b/hogehoge.csv
-index c8dbd17..37f4ff5 100644
-&mdash; a/hogehoge.csv
-+++ b/hogehoge.csv
-@@ -3,7 +3,7 @@
-   param_a: &ldquo;314&rdquo;
-   param_b: &ldquo;159&rdquo;
-   param_c: &ldquo;265&rdquo;
--  param_d: &ldquo;358&rdquo;
-+  param_d: &ldquo;359&rdquo;
-   param_e: &ldquo;979&rdquo;
- - id: &ldquo;102&rdquo;
-   name: fuga</p>
-
-<pre><code>
-これなら `param_d` が変更されたとすぐに分かりますね。
-
-## hunk-headerを設定する
-
-めでたく`param_d`が変更されていることがわかるようになったのですが、
-今度はどの行が変更されたのかがわからなくなってしまいました。
-
-差分の `@@ -3,7 +3,7 @@` となっている部分はhunk-headerといって、自由にカスタマイズすることができます。
-`.git/config` に表示したい文字列のパターンを入力しましょう。
-
-``` plain .git/config
-[diff &quot;csv&quot;]
-    textconv = csv2yaml
-    xfuncname = &quot;^- .*$&quot;
-</code></pre>
-
-<p>この状態で差分を確認すると「<code>id: 101</code>の<code>param_d</code>をいうパラメータ」が更新されたことが一目瞭然ですね！</p>
-
-<p><code>diff git-diff
-diff --git a/hogehoge.csv b/hogehoge.csv
-index c8dbd17..37f4ff5 100644
---- a/hogehoge.csv
-+++ b/hogehoge.csv
-@@ -3,7 +3,7 @@ - id: &quot;101&quot;
-   param_a: &quot;314&quot;
-   param_b: &quot;159&quot;
-   param_c: &quot;265&quot;
--  param_d: &quot;358&quot;
-+  param_d: &quot;359&quot;
-   param_e: &quot;979&quot;
- - id: &quot;102&quot;
+<div class="highlight"><pre class="chroma"><code class="language-diff" data-lang="diff"><span class="gh">diff --git a/hogehoge.csv b/hogehoge.csv
+</span><span class="gh">index c8dbd17..37f4ff5 100644
+</span><span class="gh"></span><span class="gd">--- a/hogehoge.csv
+</span><span class="gd"></span><span class="gi">+++ b/hogehoge.csv
+</span><span class="gi"></span><span class="gu">@@ -3,7 +3,7 @@
+</span><span class="gu"></span>   param_a: &#34;314&#34;
+   param_b: &#34;159&#34;
+   param_c: &#34;265&#34;
+<span class="gd">-  param_d: &#34;358&#34;
+</span><span class="gd"></span><span class="gi">+  param_d: &#34;359&#34;
+</span><span class="gi"></span>   param_e: &#34;979&#34;
+ - id: &#34;102&#34;
    name: fuga
-</code></p>
-
-<p><code>csv2yaml</code>を作るときに「<code>id</code>という名前のキーを必ず最初にする」としたのはこの機能を使うためです。
+</code></pre></div><p>これなら <code>param_d</code> が変更されたとすぐに分かりますね。</p>
+<h2 id="hunk-headerを設定する">hunk-headerを設定する</h2>
+<p>めでたく<code>param_d</code>が変更されていることがわかるようになったのですが、
+今度はどの行が変更されたのかがわからなくなってしまいました。</p>
+<p>差分の <code>@@ -3,7 +3,7 @@</code> となっている部分はhunk-headerといって、自由にカスタマイズすることができます。
+<code>.git/config</code> に表示したい文字列のパターンを入力しましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">[diff &#34;csv&#34;]
+    textconv = csv2yaml
+    xfuncname = &#34;^- .*$&#34;
+</code></pre></div><p>この状態で差分を確認すると「<code>id: 101</code>の<code>param_d</code>をいうパラメータ」が更新されたことが一目瞭然ですね！</p>
+<div class="highlight"><pre class="chroma"><code class="language-diff" data-lang="diff"><span class="gh">diff --git a/hogehoge.csv b/hogehoge.csv
+</span><span class="gh">index c8dbd17..37f4ff5 100644
+</span><span class="gh"></span><span class="gd">--- a/hogehoge.csv
+</span><span class="gd"></span><span class="gi">+++ b/hogehoge.csv
+</span><span class="gi"></span><span class="gu">@@ -3,7 +3,7 @@ - id: &#34;101&#34;
+</span><span class="gu"></span>   param_a: &#34;314&#34;
+   param_b: &#34;159&#34;
+   param_c: &#34;265&#34;
+<span class="gd">-  param_d: &#34;358&#34;
+</span><span class="gd"></span><span class="gi">+  param_d: &#34;359&#34;
+</span><span class="gi"></span>   param_e: &#34;979&#34;
+ - id: &#34;102&#34;
+   name: fuga
+</code></pre></div><p><code>csv2yaml</code>を作るときに「<code>id</code>という名前のキーを必ず最初にする」としたのはこの機能を使うためです。
 僕のユースケースでは<code>id</code>がわかれば十分なことがほとんどですが、
 場合によってはもっと別の情報の方がいいかもしれませんね。</p>
-
 <p>まだ設定したばっかりなので本当に有用かはよくわかってないですが、しばらくこの設定で試してみようと思います。</p>
-
 <h2 id="参考">参考</h2>
-
 <ul>
 <li><a href="http://qiita.com/YasuOza/items/c472f803dab51b7d4f51">gitのdiffを見やすく表示する</a></li>
 <li><a href="http://git-scm.com/docs/gitattributes">gitattributes</a></li>
@@ -353,6 +311,8 @@ index c8dbd17..37f4ff5 100644
           
           
             
+          
+            
               <li class="post">
                 <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
               </li>
@@ -403,12 +363,6 @@ index c8dbd17..37f4ff5 100644
             
               <li class="post">
                 <a href="/blog/2019/08/21/aws-xray-with-perl-lambda-runtime/">AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2019/07/24/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
               </li>
             
           

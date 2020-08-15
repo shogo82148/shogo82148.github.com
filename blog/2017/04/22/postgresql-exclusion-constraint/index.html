@@ -45,7 +45,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.38.1" />
+  <meta name="generator" content="Hugo 0.74.3" />
 
   
   
@@ -124,19 +124,14 @@
           
           
           
-          
-
-<p><a href="http://soudai.hatenablog.com/entry/2017/04/16/152905">PostgreSQLで排他制約がめっちゃ便利！！</a>を拝見したのですが、
+          <p><a href="http://soudai.hatenablog.com/entry/2017/04/16/152905">PostgreSQLで排他制約がめっちゃ便利！！</a>を拝見したのですが、
 とても些細なミスがあるのに気がついてしまいました。
 本題とは関係ない重箱の隅をつつくような話なので、わざわざコメントするほどのことでもないかと考えていたのですが、
 どうしても試してみたいクエリを思いつき、
 偶然にも<a href="http://shogo82148.github.io/blog/2017/03/28/database-gis/">Redis、PostgreSQL、MySQLで近傍検索</a>したときに
 セットアップしたPostgreSQL環境が残っていたのでやってみました。</p>
-
-<!-- More -->
-
+<!-- raw HTML omitted -->
 <h2 id="試したかったこと">試したかったこと</h2>
-
 <p>そーだいさんの記事からSQLの実行結果を一部引用します。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">demo=# SELECT * FROM schedule;
 
@@ -146,18 +141,14 @@
            4 | soudai_room | [&#34;2017-04-16 12:00:00&#34;,&#34;2017-04-16 12:30:00&#34;)
            5 | soudai_room | (&#34;2017-04-16 12:30:00&#34;,&#34;2017-04-16 12:40:00&#34;)
            8 | soudai_room | [&#34;2017-04-16 14:30:00&#34;,&#34;2017-04-16 16:00:00&#34;)
-(4 行)</code></pre></div>
-<p><code>schedule_id</code>の<strong>5</strong>をよく見て下さい。
+(4 行)
+</code></pre></div><p><code>schedule_id</code>の<strong>5</strong>をよく見て下さい。
 他のスケジュールは<strong>半開区間</strong><code>[)</code>(開始時刻は期間に<strong>含む</strong>が、終了時刻は期間に<strong>含まない</strong>)になっているのですが、
 <code>schedule_id</code>の5だけ<strong>開区間</strong><code>()</code>(開始時刻も終了時刻も期間に<strong>含まない</strong>)になっています。
 つまり 2017-04-16 12:30:00 ジャストに空き時間があるのです。</p>
-
 <p><strong>ここに予約を入れてみたい！！！</strong></p>
-
 <h2 id="試してみた">試してみた</h2>
-
 <h3 id="環境再現">環境再現</h3>
-
 <p>以下のSQLを実行して、そーだいさんの記事と同じ内容を含んだテーブルを作成します。</p>
 <div class="highlight"><pre class="chroma"><code class="language-sql" data-lang="sql"><span class="k">CREATE</span> <span class="k">TABLE</span> <span class="n">schedule</span>
 <span class="p">(</span>
@@ -173,8 +164,8 @@
     <span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="s1">&#39;soudai_room&#39;</span><span class="p">,</span> <span class="s1">&#39;[&#34;2017-04-16 14:30:00&#34;,&#34;2017-04-16 16:00:00&#34;)&#39;</span><span class="p">);</span>
 
 <span class="c1">-- schedule_idが1から始まってしまい、INSERTした内容と重複してしまうので調整
-</span><span class="c1"></span><span class="k">SELECT</span> <span class="n">setval</span> <span class="p">(</span><span class="s1">&#39;schedule_schedule_id_seq&#39;</span><span class="p">,</span> <span class="mi">8</span><span class="p">);</span></code></pre></div>
-<p>SELECTを実行すると同じ内容になっていることを確認できます。</p>
+</span><span class="c1"></span><span class="k">SELECT</span> <span class="n">setval</span> <span class="p">(</span><span class="s1">&#39;schedule_schedule_id_seq&#39;</span><span class="p">,</span> <span class="mi">8</span><span class="p">);</span>
+</code></pre></div><p>SELECTを実行すると同じ内容になっていることを確認できます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">demo=# SELECT * FROM schedule;
  schedule_id |  room_name  |               reservation_time
 -------------+-------------+-----------------------------------------------
@@ -182,15 +173,15 @@
            4 | soudai_room | [&#34;2017-04-16 12:00:00&#34;,&#34;2017-04-16 12:30:00&#34;)
            5 | soudai_room | (&#34;2017-04-16 12:30:00&#34;,&#34;2017-04-16 12:40:00&#34;)
            8 | soudai_room | [&#34;2017-04-16 14:30:00&#34;,&#34;2017-04-16 16:00:00&#34;)
-(4 rows)</code></pre></div>
-<p>さて、ちょうど 2017-04-16 12:30:00 は空き時間になっているので、
+(4 rows)
+</code></pre></div><p>さて、ちょうど 2017-04-16 12:30:00 は空き時間になっているので、
 以下のクエリは0件になるはずです。</p>
 <div class="highlight"><pre class="chroma"><code class="language-sql" data-lang="sql"><span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">schedule</span> 
-          <span class="k">WHERE</span> <span class="n">reservation_time</span> <span class="o">@&gt;</span> <span class="s1">&#39;2017-04-16 12:30:00&#39;</span><span class="p">::</span><span class="k">timestamp</span><span class="p">;</span></code></pre></div><div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain"> schedule_id | room_name | reservation_time
+          <span class="k">WHERE</span> <span class="n">reservation_time</span> <span class="o">@&gt;</span> <span class="s1">&#39;2017-04-16 12:30:00&#39;</span><span class="p">::</span><span class="k">timestamp</span><span class="p">;</span>
+</code></pre></div><div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain"> schedule_id | room_name | reservation_time
 -------------+-----------+------------------
-(0 rows)</code></pre></div>
-<p>予想通り検索結果は0件になりましたね。</p>
-
+(0 rows)
+</code></pre></div><p>予想通り検索結果は0件になりましたね。</p>
 <p>そして、2017-04-16 12:30:00の直前と直後はスケジュールが埋まっています。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">demo=# SELECT * FROM schedule
           WHERE reservation_time @&gt; &#39;2017-04-16 12:29:59.999999&#39;::timestamp;
@@ -204,36 +195,36 @@ demo=# SELECT * FROM schedule
  schedule_id |  room_name  |               reservation_time
 -------------+-------------+-----------------------------------------------
            5 | soudai_room | (&#34;2017-04-16 12:30:00&#34;,&#34;2017-04-16 12:40:00&#34;)
-(1 row)</code></pre></div>
-<h3 id="排他制約を有効にする">排他制約を有効にする</h3>
-
+(1 row)
+</code></pre></div><h3 id="排他制約を有効にする">排他制約を有効にする</h3>
 <p>予約を入れるまえに排他制約を有効にしておきましょう。
 すでにテーブルを作成しているので、<code>ALTER TABLE</code>文でテーブルの定義を変更します。</p>
-<div class="highlight"><pre class="chroma"><code class="language-sql" data-lang="sql"><span class="k">ALTER</span> <span class="k">TABLE</span> <span class="n">schedule</span> <span class="k">ADD</span> <span class="n">EXCLUDE</span> <span class="k">USING</span> <span class="n">GIST</span> <span class="p">(</span><span class="n">reservation_time</span> <span class="k">WITH</span> <span class="o">&amp;&amp;</span><span class="p">);</span></code></pre></div>
-<p>排他制約が有効になっているか、そーだいさんの記事と同じクエリを実行してみましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-sql" data-lang="sql"><span class="k">ALTER</span> <span class="k">TABLE</span> <span class="n">schedule</span> <span class="k">ADD</span> <span class="n">EXCLUDE</span> <span class="k">USING</span> <span class="n">GIST</span> <span class="p">(</span><span class="n">reservation_time</span> <span class="k">WITH</span> <span class="o">&amp;&amp;</span><span class="p">);</span>
+</code></pre></div><p>排他制約が有効になっているか、そーだいさんの記事と同じクエリを実行してみましょう。</p>
 <div class="highlight"><pre class="chroma"><code class="language-sql" data-lang="sql"><span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">schedule</span>
   <span class="p">(</span><span class="n">room_name</span><span class="p">,</span> <span class="n">reservation_time</span><span class="p">)</span>
      <span class="k">VALUES</span>
-  <span class="p">(</span><span class="s1">&#39;soudai_room&#39;</span><span class="p">,</span> <span class="s1">&#39;[2017-04-16 15:30, 2017-04-16 17:00)&#39;</span><span class="p">);</span></code></pre></div><div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">demo=# INSERT INTO schedule
+  <span class="p">(</span><span class="s1">&#39;soudai_room&#39;</span><span class="p">,</span> <span class="s1">&#39;[2017-04-16 15:30, 2017-04-16 17:00)&#39;</span><span class="p">);</span>
+</code></pre></div><div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">demo=# INSERT INTO schedule
 demo-#   (room_name, reservation_time)
 demo-#      VALUES
 demo-#   (&#39;soudai_room&#39;, &#39;[2017-04-16 15:30, 2017-04-16 17:00)&#39;);
 ERROR:  conflicting key value violates exclusion constraint &#34;schedule_reservation_time_excl&#34;
-DETAIL:  Key (reservation_time)=([&#34;2017-04-16 15:30:00&#34;,&#34;2017-04-16 17:00:00&#34;)) conflicts with existing key (reservation_time)=([&#34;2017-04-16 14:30:00&#34;,&#34;2017-04-16 16:00:00&#34;)).</code></pre></div>
-<p>期待通り排他制約により実行に失敗してくれました。</p>
-
+DETAIL:  Key (reservation_time)=([&#34;2017-04-16 15:30:00&#34;,&#34;2017-04-16 17:00:00&#34;)) conflicts with existing key (reservation_time)=([&#34;2017-04-16 14:30:00&#34;,&#34;2017-04-16 16:00:00&#34;)).
+</code></pre></div><p>期待通り排他制約により実行に失敗してくれました。</p>
 <h3 id="予約を入れてみる">予約を入れてみる</h3>
-
 <p>さあ、ここからが本題です。
 ちょうど 2017-04-16 12:30:00 の時間に予約を入れてみましょう。</p>
 <div class="highlight"><pre class="chroma"><code class="language-sql" data-lang="sql"><span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">schedule</span>
   <span class="p">(</span><span class="n">room_name</span><span class="p">,</span> <span class="n">reservation_time</span><span class="p">)</span>
      <span class="k">VALUES</span>
-  <span class="p">(</span><span class="s1">&#39;soudai_room&#39;</span><span class="p">,</span> <span class="s1">&#39;[2017-04-16 12:30:00, 2017-04-16 12:30:00]&#39;</span><span class="p">);</span></code></pre></div><div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">demo=# INSERT INTO schedule
+  <span class="p">(</span><span class="s1">&#39;soudai_room&#39;</span><span class="p">,</span> <span class="s1">&#39;[2017-04-16 12:30:00, 2017-04-16 12:30:00]&#39;</span><span class="p">);</span>
+</code></pre></div><div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">demo=# INSERT INTO schedule
 demo-#   (room_name, reservation_time)
 demo-#      VALUES
 demo-#   (&#39;soudai_room&#39;, &#39;[2017-04-16 12:30:00, 2017-04-16 12:30:00]&#39;);
-INSERT 0 1</code></pre></div><div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">demo=# SELECT * FROM schedule;
+INSERT 0 1
+</code></pre></div><div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">demo=# SELECT * FROM schedule;
  schedule_id |  room_name  |               reservation_time
 -------------+-------------+-----------------------------------------------
            1 | soudai_room | [&#34;2017-04-16 11:30:00&#34;,&#34;2017-04-16 12:00:00&#34;)
@@ -241,19 +232,15 @@ INSERT 0 1</code></pre></div><div class="highlight"><pre class="chroma"><code cl
            5 | soudai_room | (&#34;2017-04-16 12:30:00&#34;,&#34;2017-04-16 12:40:00&#34;)
            8 | soudai_room | [&#34;2017-04-16 14:30:00&#34;,&#34;2017-04-16 16:00:00&#34;)
           10 | soudai_room | [&#34;2017-04-16 12:30:00&#34;,&#34;2017-04-16 12:30:00&#34;]
-(5 rows)</code></pre></div>
-<p><strong>やった予約成功！</strong></p>
-
+(5 rows)
+</code></pre></div><p><strong>やった予約成功！</strong></p>
 <p>PostreSQLのドキュメントによるとtimestamp型の精度は1マイクロ秒らしいので、
 部屋を利用できるのは1マイクロ秒だけですが・・・。</p>
-
 <h2 id="インデックスの使われ方について">インデックスの使われ方について</h2>
-
 <p>インデックスの使われ方について気になったので、少し検証を続行してみます。
 僕自身はMySQLを扱う事が多いのですが、MySQLではユニーク制約を設定すると、設定したカラムに自動的にインデックスが張られて、
 それが検索時にも使用されます。
 PostreSQLの排他制約でもそうなのかな？と疑問に思ったので、実行計画を確認してみました。</p>
-
 <p>今回用意したテーブルだと行数が少なすぎて、
 インデックスが利用可能な場合でもフルスキャンが選択されてしまいます。
 データを大量に用意するのも面倒ですし、どうやらフルスキャンを無効化するオプション(厳密には、フルスキャン以外に選択肢がない場合があるので、なるべく使わない)があるらしいので、
@@ -266,12 +253,12 @@ demo=# EXPLAIN SELECT * FROM schedule
 ------------------------------------------------------------------------------------------------
  Index Scan using schedule_reservation_time_excl on schedule  (cost=0.13..8.15 rows=1 width=68)
    Index Cond: (reservation_time @&gt; &#39;2017-04-16 12:30:00&#39;::timestamp without time zone)
-(2 rows)</code></pre></div>
-<p>(読み方よくわかってないけど)Index Scanとあるので、きっとインデックスを使ってくれているのでしょう。</p>
-
+(2 rows)
+</code></pre></div><p>(読み方よくわかってないけど)Index Scanとあるので、きっとインデックスを使ってくれているのでしょう。</p>
 <p>排他制約に<code>room_name</code>を入れた場合も試してみました。</p>
 <div class="highlight"><pre class="chroma"><code class="language-sql" data-lang="sql"><span class="k">CREATE</span> <span class="n">EXTENSION</span> <span class="n">btree_gist</span><span class="p">;</span>
-<span class="k">ALTER</span> <span class="k">TABLE</span> <span class="n">schedule</span> <span class="k">ADD</span> <span class="n">EXCLUDE</span> <span class="k">USING</span> <span class="n">GIST</span> <span class="p">(</span><span class="n">room_name</span> <span class="k">WITH</span> <span class="o">=</span><span class="p">,</span> <span class="n">reservation_time</span> <span class="k">WITH</span> <span class="o">&amp;&amp;</span><span class="p">);</span></code></pre></div><div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">demo=# SET enable_seqscan = OFF;
+<span class="k">ALTER</span> <span class="k">TABLE</span> <span class="n">schedule</span> <span class="k">ADD</span> <span class="n">EXCLUDE</span> <span class="k">USING</span> <span class="n">GIST</span> <span class="p">(</span><span class="n">room_name</span> <span class="k">WITH</span> <span class="o">=</span><span class="p">,</span> <span class="n">reservation_time</span> <span class="k">WITH</span> <span class="o">&amp;&amp;</span><span class="p">);</span>
+</code></pre></div><div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">demo=# SET enable_seqscan = OFF;
 SET
 demo=# EXPLAIN SELECT * FROM schedule
           WHERE room_name = &#39;soudai_room&#39; AND reservation_time @&gt; &#39;2017-04-16 12:30:00&#39;::timestamp;
@@ -279,13 +266,10 @@ demo=# EXPLAIN SELECT * FROM schedule
 --------------------------------------------------------------------------------------------------------------------------------
  Index Scan using schedule_room_name_reservation_time_excl on schedule  (cost=0.14..8.16 rows=1 width=68)
    Index Cond: ((room_name = &#39;soudai_room&#39;::text) AND (reservation_time @&gt; &#39;2017-04-16 12:30:00&#39;::timestamp without time zone))
-(2 rows)</code></pre></div>
-<p>(やっぱり読み方よくわかってないけど)Index Scanとあるので、きっとインデックスを使ってくれているのでしょう。</p>
-
+(2 rows)
+</code></pre></div><p>(やっぱり読み方よくわかってないけど)Index Scanとあるので、きっとインデックスを使ってくれているのでしょう。</p>
 <p>今回はフルスキャンを手動で無効化しましたが、大量にデータがあれば自動的にインデックスを使ってくれそうです。</p>
-
 <h2 id="再発防止策を考えてみる">再発防止策を考えてみる</h2>
-
 <p>試したいことを試せたのでここで終わりでもいいんですが、
 エンジニアとしてはやはり再発防止策を入れておきたいところです。
 色々な範囲関数があるので、それを使えばCHECK制約をかけられるのでは、と書いてみたのがこちら。</p>
@@ -298,28 +282,24 @@ demo=# EXPLAIN SELECT * FROM schedule
     <span class="k">CHECK</span> <span class="p">(</span>    <span class="n">lower_inc</span><span class="p">(</span><span class="n">reservation_time</span><span class="p">)),</span>
     <span class="k">CHECK</span> <span class="p">(</span><span class="k">NOT</span> <span class="n">upper_inc</span><span class="p">(</span><span class="n">reservation_time</span><span class="p">)),</span>
     <span class="n">EXCLUDE</span> <span class="k">USING</span> <span class="n">GIST</span> <span class="p">(</span><span class="n">room_name</span> <span class="k">WITH</span> <span class="o">=</span><span class="p">,</span> <span class="n">reservation_time</span> <span class="k">WITH</span> <span class="o">&amp;&amp;</span><span class="p">)</span>
-<span class="p">);</span></code></pre></div>
-<p>さあ、データを投入してみましょう。</p>
+<span class="p">);</span>
+</code></pre></div><p>さあ、データを投入してみましょう。</p>
 <div class="highlight"><pre class="chroma"><code class="language-sql" data-lang="sql"><span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">schedule</span> <span class="p">(</span><span class="n">room_name</span><span class="p">,</span> <span class="n">reservation_time</span><span class="p">)</span> <span class="k">VALUES</span>
     <span class="p">(</span><span class="s1">&#39;soudai_room&#39;</span><span class="p">,</span> <span class="s1">&#39;[&#34;2017-04-16 11:30:00&#34;,&#34;2017-04-16 12:00:00&#34;)&#39;</span><span class="p">);</span>
 <span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">schedule</span> <span class="p">(</span><span class="n">room_name</span><span class="p">,</span> <span class="n">reservation_time</span><span class="p">)</span> <span class="k">VALUES</span>
-    <span class="p">(</span><span class="s1">&#39;soudai_room&#39;</span><span class="p">,</span> <span class="s1">&#39;(&#34;2017-04-16 12:30:00&#34;,&#34;2017-04-16 12:40:00&#34;)&#39;</span><span class="p">);</span></code></pre></div>
-<p>期間が半区間<code>[)</code>になっている最初のクエリは成功しますが、
+    <span class="p">(</span><span class="s1">&#39;soudai_room&#39;</span><span class="p">,</span> <span class="s1">&#39;(&#34;2017-04-16 12:30:00&#34;,&#34;2017-04-16 12:40:00&#34;)&#39;</span><span class="p">);</span>
+</code></pre></div><p>期間が半区間<code>[)</code>になっている最初のクエリは成功しますが、
 開区間<code>()</code>になっている二番目のクエリは以下のようなエラーを吐いて挿入に失敗します。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">demo=# INSERT INTO schedule (room_name, reservation_time) VALUES
 demo-#     (&#39;soudai_room&#39;, &#39;(&#34;2017-04-16 12:30:00&#34;,&#34;2017-04-16 12:40:00&#34;)&#39;);
 ERROR:  new row for relation &#34;schedule&#34; violates check constraint &#34;schedule_reservation_time_check&#34;
-DETAIL:  Failing row contains (2, soudai_room, (&#34;2017-04-16 12:30:00&#34;,&#34;2017-04-16 12:40:00&#34;)).</code></pre></div>
-<h2 id="まとめ">まとめ</h2>
-
+DETAIL:  Failing row contains (2, soudai_room, (&#34;2017-04-16 12:30:00&#34;,&#34;2017-04-16 12:40:00&#34;)).
+</code></pre></div><h2 id="まとめ">まとめ</h2>
 <p>制約はユニーク制約くらいしか使ったことがないのですが、いろんな制約があって便利ですね。
 (と書いたところで外部キー制約を使った経験を思い出したけど、<a href="http://songmu.github.io/slides/fk-night/#0">MySQLユーザにはいろいろ事情があってね・・・</a>)</p>
-
 <p>特に、時間指定が半区間<code>[)</code>か閉区間<code>[]</code>かで苦しめられた身からすると、これを制約に入れられるのは非常に魅力的です(ちなみに僕は半区間<code>[)</code>推進派です)。
 PostgreSQLを利用することがあれば使っていきたい機能ですね(使う機会あるかな・・・)。</p>
-
 <h2 id="参考文献">参考文献</h2>
-
 <ul>
 <li><a href="http://soudai.hatenablog.com/entry/2017/04/16/152905">PostgreSQLで排他制約がめっちゃ便利！！</a></li>
 <li><a href="https://www.postgresql.jp/document/9.6/html/datatype-datetime.html">8.5. 日付/時刻データ型  - PostgreSQL 9.6.2文書</a></li>
@@ -432,6 +412,8 @@ PostgreSQLを利用することがあれば使っていきたい機能ですね(
           
           
             
+          
+            
               <li class="post">
                 <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
               </li>
@@ -482,12 +464,6 @@ PostgreSQLを利用することがあれば使っていきたい機能ですね(
             
               <li class="post">
                 <a href="/blog/2019/08/21/aws-xray-with-perl-lambda-runtime/">AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2019/07/24/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
               </li>
             
           

@@ -45,7 +45,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.38.1" />
+  <meta name="generator" content="Hugo 0.74.3" />
 
   
   
@@ -124,85 +124,60 @@
           
           
           
-          
-
-<p>この記事は<a href="https://adventar.org/calendars/4155">フラーAdvent Calendar 2019</a>の6日目の記事です。
+          <p>この記事は<a href="https://adventar.org/calendars/4155">フラーAdvent Calendar 2019</a>の6日目の記事です。
 5日目は<a href="https://twitter.com/shogo82148">@shogo82148</a> さんで「<a href="https://shogo82148.github.io/blog/2019/12/05/actions-goveralls/">GitHub Goveralls Action を公開しました</a>」でした。</p>
-
-<hr />
-
+<hr>
 <p>さて、最近 GitHub Actions を作るのにハマっているので、今日も GitHub Actions の紹介です。</p>
-
 <ul>
 <li><a href="https://github.com/marketplace/actions/actions-cfn-lint">GitHub Action for CloudFormation Linter with reviewdog</a></li>
 <li><a href="https://github.com/shogo82148/actions-cfn-lint">shogo82148/actions-cfn-lint</a></li>
 </ul>
-
 <h2 id="amazon-cloudformation">Amazon CloudFormation</h2>
-
 <p>Infrastructure as Code の盛り上がりも一段落し、今では当たり前のように使っている人も多いと思います。
 <a href="https://www.kyoso-studios.com/">フラー共創スタジオ</a>はAWSがメインなので、<a href="https://aws.amazon.com/jp/cloudformation/">CloudFormation</a>をメインに使っています。
 色々とクセは強いですが、<a href="https://techblog.kayac.com/2019/12/02/123151">少なくともtfstateが行方不明</a>になったりはしないので、まあまあ仲良くやっています。</p>
-
 <h2 id="cloudformation-linter">CloudFormation Linter</h2>
-
 <p>テンプレートを書いている上で地味にややこしいのが、プロパティーの名前や型の統一感が微妙にない、ということです。</p>
-
 <p>例を挙げると、<a href="https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/aws-resource-applicationautoscaling-scalabletarget.html#cfn-applicationautoscaling-scalabletarget-maxcapacity"><code>AWS::ApplicationAutoScaling::ScalableTarget</code> の <code>MaxCapacity</code></a> は整数型です。
 これはまあ、納得できますね。</p>
-
 <p>ところが <a href="https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/aws-properties-as-group.html#cfn-as-group-maxsize"><code>AWS::AutoScaling::AutoScalingGroup</code> の <code>MaxSize</code></a> は
 <strong>文字列型</strong> なんです。説明文には「Auto Scaling グループの Amazon EC2 インスタンスの最大数」とあるのに！
 オートスケールという似たような機能を持っていて、どちらもスケーリンググループの最大数を表しているの、名前も違えば型が全く違う。</p>
-
 <p>この手のミスは aws cli に付属している テンプレートの validation 機能では見つけられす、実際に反映してみるしかありません。
 すぐに失敗してくれればいいんですが、失敗するまでにも十数分かかったりしてかなり面倒です。</p>
-
-<hr />
-
+<hr>
 <p>そこでおすすめなのが <a href="https://github.com/aws-cloudformation/cfn-python-lint">CloudFormation Linter</a>。
 この手の名前のミスや型のミスを指摘してくれるコマンドラインツールです。
 各種エディタ用の拡張もあり、<a href="https://marketplace.visualstudio.com/items?itemName=kddejong.vscode-cfn-lint">VSCodeでも使える</a> ので、ぼくはいつもこれを使っています。</p>
-
 <p>CloudFormation Linter については Classmethod さんの紹介記事もどうぞ。</p>
-
 <ul>
 <li><a href="https://dev.classmethod.jp/cloud/aws/use-linter-to-notice-mistakes-of-cloudformation/">Linterを使ってCloudFormationの間違いに爆速で気づく</a></li>
 </ul>
-
 <h2 id="github-action-for-cloudformation-linter-with-reviewdog">GitHub Action for CloudFormation Linter with reviewdog</h2>
-
 <p>この機能を GitHub Action にしたのが、 「<a href="https://github.com/marketplace/actions/actions-cfn-lint">GitHub Action for CloudFormation Linter with reviewdog</a>」です。
 多人数で開発していると、チーム内に <code>cfn-lint</code> を入れてない人も出てきてしまいます。
 GitHub上でLintを実行することで誰でもすぐにLintの結果を得られるようにするための GitHub Actions です。</p>
-
 <p>似たような GitHub Actionに <a href="https://github.com/marketplace/actions/cfn-lint-action">GitHub Action for CloudFormation Linter</a> があるのですが、
 それとの違いは <a href="https://github.com/reviewdog/reviewdog">reviewdog</a> と連携しているところです。
 テンプレートに問題があるとプルリクエストのdiffにこんなふうにコメントを残してくれます。</p>
-
-<p><img src="/images/2019-12-05-actions-cfn-lint.png" alt="reviewdogのコメント" /></p>
-
+<p><img src="/images/2019-12-05-actions-cfn-lint.png" alt="reviewdogのコメント"></p>
 <p>設定もとくに難しくなくて、これを <code>.github/workflows/reviewdog.yml</code> に置くだけ。
 簡単ですね！</p>
-<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml">name<span class="p">:</span><span class="w"> </span>reviewdog<span class="w">
-</span><span class="w"></span>on<span class="p">:</span><span class="w"> </span><span class="p">[</span>pull_request<span class="p">]</span><span class="w">
-</span><span class="w"></span>jobs<span class="p">:</span><span class="w">
-</span><span class="w">  </span>shellcheck<span class="p">:</span><span class="w">
-</span><span class="w">    </span>runs-on<span class="p">:</span><span class="w"> </span>ubuntu-latest<span class="w">
-</span><span class="w">    </span>steps<span class="p">:</span><span class="w">
-</span><span class="w">      </span>-<span class="w"> </span>uses<span class="p">:</span><span class="w"> </span>actions/checkout@v1<span class="w">
-</span><span class="w">      </span>-<span class="w"> </span>uses<span class="p">:</span><span class="w"> </span>reviewdog/action-shellcheck@v1<span class="w">
-</span><span class="w">        </span>with<span class="p">:</span><span class="w">
-</span><span class="w">          </span>github_token<span class="p">:</span><span class="w"> </span>${{<span class="w"> </span>secrets.GITHUB_TOKEN<span class="w"> </span>}}</code></pre></div>
-<p>※実際にはCloudFormationのテンプレートとは無関係のYAMLやjsonも解析してしまい、エラーを吐くことがあるので、調整が必要な場合もあります。</p>
-
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml"><span class="k">name</span><span class="p">:</span><span class="w"> </span>reviewdog<span class="w">
+</span><span class="w"></span><span class="k">on</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>pull_request<span class="p">]</span><span class="w">
+</span><span class="w"></span><span class="k">jobs</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span><span class="k">shellcheck</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="k">runs-on</span><span class="p">:</span><span class="w"> </span>ubuntu-latest<span class="w">
+</span><span class="w">    </span><span class="k">steps</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span>- <span class="k">uses</span><span class="p">:</span><span class="w"> </span>actions/checkout@v1<span class="w">
+</span><span class="w">      </span>- <span class="k">uses</span><span class="p">:</span><span class="w"> </span>reviewdog/action-shellcheck@v1<span class="w">
+</span><span class="w">        </span><span class="k">with</span><span class="p">:</span><span class="w">
+</span><span class="w">          </span><span class="k">github_token</span><span class="p">:</span><span class="w"> </span>${{<span class="w"> </span>secrets.GITHUB_TOKEN<span class="w"> </span>}}<span class="w">
+</span></code></pre></div><p>※実際にはCloudFormationのテンプレートとは無関係のYAMLやjsonも解析してしまい、エラーを吐くことがあるので、調整が必要な場合もあります。</p>
 <h2 id="まとめ">まとめ</h2>
-
 <p>以上、<a href="https://github.com/aws-cloudformation/cfn-python-lint">CloudFormation Linter</a> と <a href="https://github.com/reviewdog/reviewdog">reviewdog</a> を組み合わせた GitHub Action
 <a href="https://github.com/marketplace/actions/actions-cfn-lint">GitHub Action for CloudFormation Linter with reviewdog</a> の紹介でした。</p>
-
-<hr />
-
+<hr>
 <p><a href="https://adventar.org/calendars/4155">フラーAdvent Calendar 2019</a> 7日目の担当は <a href="https://twitter.com/ujikawa1026">すまんな、氏川氏&hellip;</a> さんで「Androidで何か書く」です。</p>
 
         </div>
@@ -306,6 +281,8 @@ GitHub上でLintを実行することで誰でもすぐにLintの結果を得ら
           
           
             
+          
+            
               <li class="post">
                 <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
               </li>
@@ -356,12 +333,6 @@ GitHub上でLintを実行することで誰でもすぐにLintの結果を得ら
             
               <li class="post">
                 <a href="/blog/2019/08/21/aws-xray-with-perl-lambda-runtime/">AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2019/07/24/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
               </li>
             
           

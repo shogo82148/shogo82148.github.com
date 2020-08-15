@@ -45,7 +45,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.38.1" />
+  <meta name="generator" content="Hugo 0.74.3" />
 
   
   
@@ -124,53 +124,36 @@
           
           
           
-          
-
-<p>始まりは一件のメールから。</p>
-
+          <p>始まりは一件のメールから。</p>
 <blockquote>
 <p>Title: Action Required - Your certificate renewal</p>
-
 <p>Greetings from Amazon Web Services,</p>
-
 <p>You have an AWS Certificate Manager (ACM) provided SSL/TLS certificate in your AWS account that expires on Nov 04, 2017 at 12:00:00 UTC. That certificate has the following domains:
 example.com, *.example.com</p>
-
 <p>AWS account ID: xxxxxx
 AWS Region name: us-east-1
 Certificate identifier: arn:aws:acm:us-east-1:xxxxxx:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx</p>
-
 <p>Therefore, ACM has initiated the process to renew this certificate. You must take the action below before Nov 04, 2017 at 12:00:00 UTC to avoid certificate expiration, which might cause your website to become unreachable.
 To complete the renewal of this certificate, the domain owners must use the approval link that was sent in separate validation request emails. Those emails were last sent on Sep 20, 2017 at 12:11:48 UTC.
 以下略</p>
 </blockquote>
-
 <p>要約すると、AWS Certificate Manager (以下ACM)で管理している証明書の自動更新に失敗したので、
 手動更新をしてくれとのこと。</p>
-
 <p>このメールの対応方法についてのメモと、次回から自動更新に成功するようおこなった設定について書きます。
 ついでに確認用のツールも作ったので、その紹介も。</p>
-
 <ul>
 <li><a href="https://github.com/shogo82148/go-acm-checker">shogo82148/go-acm-checker</a></li>
 </ul>
-
-<!-- More -->
-
+<!-- raw HTML omitted -->
 <h2 id="手動での対応方法">手動での対応方法</h2>
-
 <p>メール以下のページへのリンクが貼られているので、これに従えば基本的にはOK。</p>
-
 <ul>
 <li><a href="https://aws.amazon.com/jp/premiumsupport/knowledge-center/resend-email-ssl/">I didn&rsquo;t receive a validation email for the SSL certificate I requested through AWS Certificate Manager</a></li>
 </ul>
-
 <p>日本語だと Developers.IO さんの記事が詳しいです。</p>
-
 <ul>
 <li><a href="https://dev.classmethod.jp/etc/acm-expire-cation/">ACMで管理されているSSL/TLS証明書の自動更新失敗について</a></li>
 </ul>
-
 <blockquote>
 <ol>
 <li>AWSマネジメントコンソールにログイン</li>
@@ -183,33 +166,25 @@ To complete the renewal of this certificate, the domain owners must use the appr
 <li>Certificate Managerに戻って頂き、証明書の更新ステータスが「成功」になっていることを確認</li>
 </ol>
 </blockquote>
-
 <h2 id="頑張って自動更新を有効にする">頑張って自動更新を有効にする</h2>
-
 <p>しかしまあ、更新作業が面倒でACMを使っているというのに、
 13ヶ月ごとに更新作業をするのは面倒です。</p>
-
 <p>以下のドキュメントを参考に、自動更新が有効になるよう設定しましょう。</p>
-
 <ul>
 <li><a href="http://docs.aws.amazon.com/ja_jp/acm/latest/userguide/configure-domain-for-automatic-validation.html">自動検証のためにドメインを設定する</a></li>
 </ul>
-
 <blockquote>
 <ul>
 <li>ACM によって証明書の各ドメインと HTTPS 接続を確立できる必要があります。</li>
 <li>各接続では、返される証明書が ACM が更新している証明書と一致する必要があります。</li>
 </ul>
 </blockquote>
-
 <h2 id="証明書のシリアル番号チェッカーを書いてみた">証明書のシリアル番号チェッカーを書いてみた</h2>
-
 <p>HTTPS接続の確立は <code>curl</code> を使って一発ですが、
 「返される証明書が ACM が更新している証明書と一致する」のを確認するのはなかなか骨です。
 一応、Chromeのデベロッパーコンソール→Securityタブ→View Certificate→詳細な情報→シリアル番号と辿っていけば、
 ACMに表示されているシリアル番号との一致を確認できます。
 コンソールから確認できないものかと少しググったのですが、見つけられませんでした。</p>
-
 <p>ということで、Go言語でシリアル番号を表示するツールをサクッと書いてみました。
 <code>go run main.go https://example.com</code> で実行できます。
 こういうのがすぐに書けるのがGoのいいところですね。</p>
@@ -222,61 +197,49 @@ ACMに表示されているシリアル番号との一致を確認できます�
 	<span class="s">&#34;strings&#34;</span>
 <span class="p">)</span>
 
-<span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
 	<span class="nx">http</span><span class="p">.</span><span class="nx">DefaultClient</span><span class="p">.</span><span class="nx">CheckRedirect</span> <span class="p">=</span> <span class="kd">func</span><span class="p">(</span><span class="nx">req</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">,</span> <span class="nx">via</span> <span class="p">[]</span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
 		<span class="k">return</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ErrUseLastResponse</span>
 	<span class="p">}</span>
 
-	<span class="nx">resp</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">Get</span><span class="p">(</span><span class="nx">os</span><span class="p">.</span><span class="nx">Args</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+	<span class="nx">resp</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="nx">os</span><span class="p">.</span><span class="nx">Args</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
 	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
 		<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
 	<span class="p">}</span>
-	<span class="k">defer</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+	<span class="k">defer</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
 
-	<span class="nx">serial</span> <span class="o">:=</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">TLS</span><span class="p">.</span><span class="nx">PeerCertificates</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">SerialNumber</span><span class="p">.</span><span class="nx">Bytes</span><span class="p">()</span>
+	<span class="nx">serial</span> <span class="o">:=</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">TLS</span><span class="p">.</span><span class="nx">PeerCertificates</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">SerialNumber</span><span class="p">.</span><span class="nf">Bytes</span><span class="p">()</span>
 	<span class="nx">s</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">([]</span><span class="kt">string</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="nx">serial</span><span class="p">))</span>
 	<span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">b</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">serial</span> <span class="p">{</span>
-		<span class="nx">s</span> <span class="p">=</span> <span class="nb">append</span><span class="p">(</span><span class="nx">s</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nx">Sprintf</span><span class="p">(</span><span class="s">&#34;%02x&#34;</span><span class="p">,</span> <span class="nx">b</span><span class="p">))</span>
+		<span class="nx">s</span> <span class="p">=</span> <span class="nb">append</span><span class="p">(</span><span class="nx">s</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Sprintf</span><span class="p">(</span><span class="s">&#34;%02x&#34;</span><span class="p">,</span> <span class="nx">b</span><span class="p">))</span>
 	<span class="p">}</span>
-	<span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="nx">strings</span><span class="p">.</span><span class="nx">Join</span><span class="p">(</span><span class="nx">s</span><span class="p">,</span> <span class="s">&#34;:&#34;</span><span class="p">))</span>
-<span class="p">}</span></code></pre></div>
-<h2 id="自動検証シミュレーター">自動検証シミュレーター</h2>
-
+	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">strings</span><span class="p">.</span><span class="nf">Join</span><span class="p">(</span><span class="nx">s</span><span class="p">,</span> <span class="s">&#34;:&#34;</span><span class="p">))</span>
+<span class="p">}</span>
+</code></pre></div><h2 id="自動検証シミュレーター">自動検証シミュレーター</h2>
 <p>複数のドメインを管理しているとシリアル番号の確認をするのも面倒になってきたので、
 ACMに登録されている証明書を検証するシミュレーターを書いてみました。</p>
-
 <ul>
 <li><a href="https://github.com/shogo82148/go-acm-checker">shogo82148/go-acm-checker</a></li>
 </ul>
-
 <p>Go製のツールなので、おなじみの<code>go get</code>でインストールできます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">go get -u github.com/shogo82148/go-acm-checker</code></pre></div>
-<p>実行するとACMで管理されている証明書の情報を全リージョンから取ってきて、
+<div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">go get -u github.com/shogo82148/go-acm-checker
+</code></pre></div><p>実行するとACMで管理されている証明書の情報を全リージョンから取ってきて、
 検証を試みます。
 検証に成功すると以下のようなメッセージが表示されます。</p>
-
 <pre><code>$ go-acm-checker
 2017/10/21 14:30:04 success to validate example.com(arn:aws:acm:us-east-1:1234567890:certificate/00000000-0000-0000-0000-000000000000)
-</code></pre>
-
-<p>検証に失敗すると、どのドメインの検証に失敗したかを教えてくれます。</p>
-
+</code></pre><p>検証に失敗すると、どのドメインの検証に失敗したかを教えてくれます。</p>
 <pre><code>$ go-acm-checker
 2017/10/21 14:30:05 failed to validate example.com
 2017/10/21 14:30:05 failed to validate *.example.com
 2017/10/21 14:30:05 failed to validate example.com(arn:aws:acm:us-east-1:1234567890:certificate/00000000-0000-0000-0000-000000000000)
-</code></pre>
-
-<p>検証に失敗した場合、「<a href="http://docs.aws.amazon.com/ja_jp/acm/latest/userguide/configure-domain-for-automatic-validation.html">自動検証のためにドメインを設定する</a>」を参考に、
+</code></pre><p>検証に失敗した場合、「<a href="http://docs.aws.amazon.com/ja_jp/acm/latest/userguide/configure-domain-for-automatic-validation.html">自動検証のためにドメインを設定する</a>」を参考に、
 <code>https://example.com/</code> や <code>https://www.example.com/</code> に正常にアクセスできる状態にしてください。</p>
-
 <h2 id="まとめ">まとめ</h2>
-
 <p>AMCの手動更新の方法と、自動更新を有効化するための方法を簡単にまとめてみました。
 なお、 <a href="https://github.com/shogo82148/go-acm-checker">shogo82148/go-acm-checker</a> で検証成功したからといって、
 ACMの検証が必ず成功するとは限りません。
 自動更新だからと油断せずに、こまめにメールはチェックしましょうね。</p>
-
 <p>(ちなみに今回メールが来たドメインは自動更新できるように設定し直したけど、自動更新のタイミングがよくわからないので、いつ手動更新をやるかチキンレースの真っ最中です・・・)</p>
 
         </div>
@@ -380,6 +343,8 @@ ACMの検証が必ず成功するとは限りません。
           
           
             
+          
+            
               <li class="post">
                 <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
               </li>
@@ -430,12 +395,6 @@ ACMの検証が必ず成功するとは限りません。
             
               <li class="post">
                 <a href="/blog/2019/08/21/aws-xray-with-perl-lambda-runtime/">AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2019/07/24/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
               </li>
             
           

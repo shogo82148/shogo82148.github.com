@@ -45,7 +45,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.38.1" />
+  <meta name="generator" content="Hugo 0.74.3" />
 
   
   
@@ -124,83 +124,61 @@
           
           
           
-          
-
-<p>Go1.8beta1が出た時に、Go1.8で追加される予定のGraceful Shutdownについて書く！
+          <p>Go1.8beta1が出た時に、Go1.8で追加される予定のGraceful Shutdownについて書く！
 とTwitterに書き込んで早1ヶ月。
 この前の金曜日に<a href="https://twitter.com/golang/status/822201571928731648">Go1.8rc2がリリースされ</a>、正式リリースも間近になってきて、
 さすがに書かねばという気持ちになって来たので、がんばって検証してみます。</p>
-
-<!-- More -->
-
+<!-- raw HTML omitted -->
 <h2 id="公式サポートで増える予定の機能">公式サポートで増える予定の機能</h2>
-
 <p>以前<a href="https://shogo82148.github.io/blog/2015/11/23/golang-graceful-restart-2nd/">Go言語でGraceful Restartをするときに取りこぼしを少なくする</a>で
 紹介したように<a href="https://github.com/shogo82148/go-gracedown">shogo82148/go-gracedown</a>というものを書きました。
 あれから時は経ち、ついにGo1.8からは<a href="https://github.com/golang/go/issues/4674">Graceful Shudownがbuild-inの機能として提供</a>される予定です。
 公式サポートが入ることによって、以下のような機能を使えるようになります。</p>
-
-<h3 id="http-2のgraceful-shutdownができる">HTTP/2のGraceful Shutdownができる</h3>
-
+<h3 id="http2のgraceful-shutdownができる">HTTP/2のGraceful Shutdownができる</h3>
 <p>HTTP/2ではGOAWAYフレームという接続を切ることを通知する機能があります。
 Go1.8からはシャットダウン時にこのGOAWAYフレームを送ってくれるようになります。
 GOAWAYフレームはサーバ側から任意のタイミングで送ることができ、
 どこまで正常に処理できたかをクライアントに伝えられるという利点があります。</p>
-
 <p>余談ですが、この機能は<a href="https://github.com/golang/go/issues/18471">x/net/http2を利用している場合は動かない</a>らしいです。
 <a href="https://github.com/golang/net/blob/8fd7f25955530b92e73e9e1932a41b522b22ccd9/http2/server.go#L2716-L2736">importしたときには動かないけどbundleしたときにだけ動く黒魔術</a>が使われているためです。
 覚えておいても今後絶対使うことはなさそう。というか使いたくない・・・。</p>
-
 <h3 id="contextが使える">contextが使える</h3>
-
 <p>go-gracedownを作った頃は、contextはまだ標準パッケージに取り込まれていなかったので対応していませんでした。
 (1.7のリリース時に対応を怠っていただけとも言える)
 net/httpのシャットダウンはもちろんcontextに対応しています。
 これにより、Graceful Shutdownを中断して強制終了する、
 ということが簡単にできるようになります。</p>
-
 <h2 id="公式サポートで変更になる予定の挙動">公式サポートで変更になる予定の挙動</h2>
-
 <p>Keep-Aliveでのリクエストの挙動が少し変わります。
 1.7以前のgo-gracedownでは、クライアントにKeep-Aliveが無効になったのを伝え、
 クライアント側から接続を切るのを待つように実装してしました。
 多少接続時間が延びたとしてもクライアント側でよくわからないエラーになるよりはマシだろ、との考えからです。</p>
-
 <p>1.8からはシャットダウン時にIdle状態(TCP接続は有効だけど、リクエストは処理していない状態)な接続は切断されます。
 内部で使っている<a href="https://golang.org/pkg/net/http/#Server.SetKeepAlivesEnabled">Server.SetKeepAlivesEnabled</a>の
 挙動が<a href="https://github.com/golang/go/issues/9478">変更になった</a>ためです。</p>
-
 <p>Goの中の人的には「この挙動が原因で万が一トラブルになっても、クライアントがリトライしてくれるから大丈夫でしょ」とのことのようです。
 サーバシャットダウン以外にもネットワークトラブル等でも接続は切れるので、
 クライアント側で頑張ってというのは正論ですが、
 どの程度エラーが増えるのかは気になるところです。</p>
-
 <h3 id="go-gracedownの対応">go-gracedownの対応</h3>
-
 <p>go-gracedownはGo1.8でコンパイルされたときはbuild-inの機能を直接使うようになります。
 中身はほとんどがインターフェースの互換性を保つためのコードなので、
 機能的なメリットは完全になくなってしまいました・・・。
 HTTP/2サポートも問題なく動くはずです。
 逆にパッケージの依存が増えること以外はデメリットはないともいえます。</p>
-
 <p>Go1.7以下では今までの方法にフォールバックしてくれます。
 というわけで、以下のような人には有用です。</p>
-
 <ul>
 <li>深淵な理由でGo1.7以下しか使えない人</li>
 <li>Go1.8とGo1.7以下のサポートがどうしても必要な人</li>
 <li>Go1.8にアップグレードしたけど、graceful shutdownの処理を書き換えるのがめんどくさい人</li>
 </ul>
-
 <p>ところで、環境が悪いときに性能を落としたり機能を制限することをフォールバック(fall back)というわけですが、
 逆に環境が良いときに性能を上げたり機能を拡張することはなんていうんですかね？
 モデムでは通信環境が良いときに高速な通信方式に切り変えることを「フォールフォワード(fall forward)」というらしいです。
 「Go1.8ではbild-inのGraceful Shutdownにフォールフォワードする」で使い方あってます？</p>
-
 <h2 id="使い方">使い方</h2>
-
-<h3 id="server-shutdownを使う">Server.Shutdownを使う</h3>
-
+<h3 id="servershutdownを使う">Server.Shutdownを使う</h3>
 <p><a href="http://qiita.com/advent-calendar/2016/go3">Go(その3) Advent Calendar</a>の
 <a href="http://qiita.com/najeira/items/806cacb9bba96ff06ec4">最終日の記事</a>でも扱ってますが改めて。</p>
 <div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
@@ -218,17 +196,17 @@ HTTP/2サポートも問題なく動くはずです。
 	<span class="s">&#34;github.com/lestrrat/go-server-starter/listener&#34;</span>
 <span class="p">)</span>
 
-<span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-	<span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&#34;start pid %d\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Getpid</span><span class="p">())</span>
+<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+	<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;start pid %d\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getpid</span><span class="p">())</span>
 
-	<span class="nx">listeners</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ListenAll</span><span class="p">()</span>
+	<span class="nx">listeners</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">listener</span><span class="p">.</span><span class="nf">ListenAll</span><span class="p">()</span>
 	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="o">&amp;&amp;</span> <span class="nx">err</span> <span class="o">!=</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ErrNoListeningTarget</span> <span class="p">{</span>
 		<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
 	<span class="p">}</span>
 	<span class="kd">var</span> <span class="nx">l</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Listener</span>
 	<span class="k">if</span> <span class="nx">err</span> <span class="o">==</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ErrNoListeningTarget</span> <span class="p">{</span>
 		<span class="c1">// Fallback if not running under Server::Starter
-</span><span class="c1"></span>		<span class="nx">l</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Listen</span><span class="p">(</span><span class="s">&#34;tcp&#34;</span><span class="p">,</span> <span class="s">&#34;:8080&#34;</span><span class="p">)</span>
+</span><span class="c1"></span>		<span class="nx">l</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">net</span><span class="p">.</span><span class="nf">Listen</span><span class="p">(</span><span class="s">&#34;tcp&#34;</span><span class="p">,</span> <span class="s">&#34;:8080&#34;</span><span class="p">)</span>
 		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
 			<span class="nb">panic</span><span class="p">(</span><span class="s">&#34;Failed to listen to port 8080&#34;</span><span class="p">)</span>
 		<span class="p">}</span>
@@ -237,41 +215,38 @@ HTTP/2サポートも問題なく動くはずです。
 	<span class="p">}</span>
 
     <span class="c1">// 別goroutineでServeしていることに注意！
-</span><span class="c1"></span>	<span class="nx">srv</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Server</span><span class="p">{</span><span class="nx">Handler</span><span class="p">:</span> <span class="nx">newHandler</span><span class="p">()}</span>
+</span><span class="c1"></span>	<span class="nx">srv</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Server</span><span class="p">{</span><span class="nx">Handler</span><span class="p">:</span> <span class="nf">newHandler</span><span class="p">()}</span>
 	<span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
-		<span class="nx">srv</span><span class="p">.</span><span class="nx">Serve</span><span class="p">(</span><span class="nx">l</span><span class="p">)</span>
+		<span class="nx">srv</span><span class="p">.</span><span class="nf">Serve</span><span class="p">(</span><span class="nx">l</span><span class="p">)</span>
 	<span class="p">}()</span>
 
     <span class="c1">// mainの中でシグナルの待受をしていることに注意！
 </span><span class="c1"></span>	<span class="nx">signal_chan</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Signal</span><span class="p">)</span>
-	<span class="nx">signal</span><span class="p">.</span><span class="nx">Notify</span><span class="p">(</span><span class="nx">signal_chan</span><span class="p">,</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span><span class="p">)</span>
+	<span class="nx">signal</span><span class="p">.</span><span class="nf">Notify</span><span class="p">(</span><span class="nx">signal_chan</span><span class="p">,</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span><span class="p">)</span>
 	<span class="k">for</span> <span class="p">{</span>
 		<span class="nx">s</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">signal_chan</span>
 		<span class="k">if</span> <span class="nx">s</span> <span class="o">==</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span> <span class="p">{</span>
-			<span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&#34;SIGTERM!!!!\n&#34;</span><span class="p">)</span>
-			<span class="nx">srv</span><span class="p">.</span><span class="nx">Shutdown</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nx">Background</span><span class="p">())</span>
+			<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;SIGTERM!!!!\n&#34;</span><span class="p">)</span>
+			<span class="nx">srv</span><span class="p">.</span><span class="nf">Shutdown</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nf">Background</span><span class="p">())</span>
 			<span class="k">return</span>
 		<span class="p">}</span>
 	<span class="p">}</span>
 <span class="p">}</span>
 
-<span class="kd">func</span> <span class="nx">newHandler</span><span class="p">()</span> <span class="nx">http</span><span class="p">.</span><span class="nx">Handler</span> <span class="p">{</span>
-	<span class="nx">mux</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">NewServeMux</span><span class="p">()</span>
-	<span class="nx">mux</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">&#34;/&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
-		<span class="nx">fmt</span><span class="p">.</span><span class="nx">Fprintf</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="s">&#34;from pid %d.\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Getpid</span><span class="p">())</span>
+<span class="kd">func</span> <span class="nf">newHandler</span><span class="p">()</span> <span class="nx">http</span><span class="p">.</span><span class="nx">Handler</span> <span class="p">{</span>
+	<span class="nx">mux</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nf">NewServeMux</span><span class="p">()</span>
+	<span class="nx">mux</span><span class="p">.</span><span class="nf">HandleFunc</span><span class="p">(</span><span class="s">&#34;/&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+		<span class="nx">fmt</span><span class="p">.</span><span class="nf">Fprintf</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="s">&#34;from pid %d.\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getpid</span><span class="p">())</span>
 	<span class="p">})</span>
 	<span class="k">return</span> <span class="nx">mux</span>
-<span class="p">}</span></code></pre></div>
-<p>go-gracedownからの移行するさいの注意点は以下の通りです。</p>
-
+<span class="p">}</span>
+</code></pre></div><p>go-gracedownからの移行するさいの注意点は以下の通りです。</p>
 <ul>
 <li><code>Server.Shutdown</code>を使う(<code>Serer.Close</code>もあるけど、そっちはGracefulではない)</li>
 <li><code>Server.Serve</code>は<strong>シャットダウンが始まる</strong>とすぐに制御を返す(<strong>シャットダウンが終わる</strong>とではない)</li>
 <li><code>Server.Shutdown</code>は<strong>シャットダウンが終わる</strong>と制御を返す(<strong>シャットダウンが始まる</strong>とではない)</li>
 </ul>
-
 <h3 id="go-gracedownを使う">go-gracedownを使う</h3>
-
 <p>go-gracedownの使い方も再掲しておきます。
 Go1.6から利用方法は一切変更はないですが、
 Go1.8でコンパイルすると<code>Server.Shutdown</code>を利用してくれます。</p>
@@ -290,29 +265,29 @@ Go1.8でコンパイルすると<code>Server.Shutdown</code>を利用してく�
 	<span class="s">&#34;github.com/shogo82148/go-gracedown&#34;</span>
 <span class="p">)</span>
 
-<span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-	<span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&#34;start pid %d\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Getpid</span><span class="p">())</span>
+<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+	<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;start pid %d\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getpid</span><span class="p">())</span>
 
 	<span class="nx">signal_chan</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Signal</span><span class="p">)</span>
-	<span class="nx">signal</span><span class="p">.</span><span class="nx">Notify</span><span class="p">(</span><span class="nx">signal_chan</span><span class="p">,</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span><span class="p">)</span>
+	<span class="nx">signal</span><span class="p">.</span><span class="nf">Notify</span><span class="p">(</span><span class="nx">signal_chan</span><span class="p">,</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span><span class="p">)</span>
 	<span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
 		<span class="k">for</span> <span class="p">{</span>
 			<span class="nx">s</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">signal_chan</span>
 			<span class="k">if</span> <span class="nx">s</span> <span class="o">==</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span> <span class="p">{</span>
-				<span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&#34;SIGTERM!!!!\n&#34;</span><span class="p">)</span>
-				<span class="nx">gracedown</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+				<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;SIGTERM!!!!\n&#34;</span><span class="p">)</span>
+				<span class="nx">gracedown</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
 			<span class="p">}</span>
 		<span class="p">}</span>
 	<span class="p">}()</span>
 
-	<span class="nx">listeners</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ListenAll</span><span class="p">()</span>
+	<span class="nx">listeners</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">listener</span><span class="p">.</span><span class="nf">ListenAll</span><span class="p">()</span>
 	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="o">&amp;&amp;</span> <span class="nx">err</span> <span class="o">!=</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ErrNoListeningTarget</span> <span class="p">{</span>
 		<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
 	<span class="p">}</span>
 	<span class="kd">var</span> <span class="nx">l</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Listener</span>
 	<span class="k">if</span> <span class="nx">err</span> <span class="o">==</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ErrNoListeningTarget</span> <span class="p">{</span>
 		<span class="c1">// Fallback if not running under Server::Starter
-</span><span class="c1"></span>		<span class="nx">l</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Listen</span><span class="p">(</span><span class="s">&#34;tcp&#34;</span><span class="p">,</span> <span class="s">&#34;:8080&#34;</span><span class="p">)</span>
+</span><span class="c1"></span>		<span class="nx">l</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">net</span><span class="p">.</span><span class="nf">Listen</span><span class="p">(</span><span class="s">&#34;tcp&#34;</span><span class="p">,</span> <span class="s">&#34;:8080&#34;</span><span class="p">)</span>
 		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
 			<span class="nb">panic</span><span class="p">(</span><span class="s">&#34;Failed to listen to port 8080&#34;</span><span class="p">)</span>
 		<span class="p">}</span>
@@ -320,18 +295,17 @@ Go1.8でコンパイルすると<code>Server.Shutdown</code>を利用してく�
 		<span class="nx">l</span> <span class="p">=</span> <span class="nx">listeners</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
 	<span class="p">}</span>
 
-	<span class="nx">gracedown</span><span class="p">.</span><span class="nx">Serve</span><span class="p">(</span><span class="nx">l</span><span class="p">,</span> <span class="nx">newHandler</span><span class="p">())</span>
+	<span class="nx">gracedown</span><span class="p">.</span><span class="nf">Serve</span><span class="p">(</span><span class="nx">l</span><span class="p">,</span> <span class="nf">newHandler</span><span class="p">())</span>
 <span class="p">}</span>
 
-<span class="kd">func</span> <span class="nx">newHandler</span><span class="p">()</span> <span class="nx">http</span><span class="p">.</span><span class="nx">Handler</span> <span class="p">{</span>
-	<span class="nx">mux</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">NewServeMux</span><span class="p">()</span>
-	<span class="nx">mux</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">&#34;/&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
-		<span class="nx">fmt</span><span class="p">.</span><span class="nx">Fprintf</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="s">&#34;from pid %d.\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Getpid</span><span class="p">())</span>
+<span class="kd">func</span> <span class="nf">newHandler</span><span class="p">()</span> <span class="nx">http</span><span class="p">.</span><span class="nx">Handler</span> <span class="p">{</span>
+	<span class="nx">mux</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nf">NewServeMux</span><span class="p">()</span>
+	<span class="nx">mux</span><span class="p">.</span><span class="nf">HandleFunc</span><span class="p">(</span><span class="s">&#34;/&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+		<span class="nx">fmt</span><span class="p">.</span><span class="nf">Fprintf</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="s">&#34;from pid %d.\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getpid</span><span class="p">())</span>
 	<span class="p">})</span>
 	<span class="k">return</span> <span class="nx">mux</span>
-<span class="p">}</span></code></pre></div>
-<h3 id="http-2を使う">HTTP/2を使う</h3>
-
+<span class="p">}</span>
+</code></pre></div><h3 id="http2を使う">HTTP/2を使う</h3>
 <p>せっかくHTTP/2にも対応したことなので、
 Server::Starterを使ってHTTP/2サーバのGraceful Restartをする例も書いてみました。</p>
 <div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
@@ -382,24 +356,24 @@ Server::Starterを使ってHTTP/2サーバのGraceful Restartをする例も書�
 </span><span class="s">f9Oeos0UUothgiDktdQHxdNEwLjQf7lJJBzV+5OtwswCWA==
 </span><span class="s">-----END RSA PRIVATE KEY-----`</span><span class="p">)</span>
 
-<span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-	<span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&#34;start pid %d\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Getpid</span><span class="p">())</span>
+<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+	<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;start pid %d\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getpid</span><span class="p">())</span>
 
-	<span class="nx">listeners</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ListenAll</span><span class="p">()</span>
+	<span class="nx">listeners</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">listener</span><span class="p">.</span><span class="nf">ListenAll</span><span class="p">()</span>
 	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="o">&amp;&amp;</span> <span class="nx">err</span> <span class="o">!=</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ErrNoListeningTarget</span> <span class="p">{</span>
 		<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
 	<span class="p">}</span>
 	<span class="kd">var</span> <span class="nx">l</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Listener</span>
 	<span class="k">if</span> <span class="nx">err</span> <span class="o">==</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ErrNoListeningTarget</span> <span class="p">{</span>
 		<span class="c1">// Fallback if not running under Server::Starter
-</span><span class="c1"></span>		<span class="nx">l</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Listen</span><span class="p">(</span><span class="s">&#34;tcp&#34;</span><span class="p">,</span> <span class="s">&#34;:8080&#34;</span><span class="p">)</span>
+</span><span class="c1"></span>		<span class="nx">l</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">net</span><span class="p">.</span><span class="nf">Listen</span><span class="p">(</span><span class="s">&#34;tcp&#34;</span><span class="p">,</span> <span class="s">&#34;:8080&#34;</span><span class="p">)</span>
 		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
 			<span class="nb">panic</span><span class="p">(</span><span class="s">&#34;Failed to listen to port 8080&#34;</span><span class="p">)</span>
 		<span class="p">}</span>
 	<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
 		<span class="nx">l</span> <span class="p">=</span> <span class="nx">listeners</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
 	<span class="p">}</span>
-	<span class="nx">cert</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">tls</span><span class="p">.</span><span class="nx">X509KeyPair</span><span class="p">(</span><span class="nx">localhostCert</span><span class="p">,</span> <span class="nx">localhostKey</span><span class="p">)</span>
+	<span class="nx">cert</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">tls</span><span class="p">.</span><span class="nf">X509KeyPair</span><span class="p">(</span><span class="nx">localhostCert</span><span class="p">,</span> <span class="nx">localhostKey</span><span class="p">)</span>
 	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
 		<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
 	<span class="p">}</span>
@@ -409,39 +383,37 @@ Server::Starterを使ってHTTP/2サーバのGraceful Restartをする例も書�
 	<span class="p">}</span>
 
 	<span class="nx">srv</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Server</span><span class="p">{</span>
-		<span class="nx">Handler</span><span class="p">:</span>   <span class="nx">newHandler</span><span class="p">(),</span>
+		<span class="nx">Handler</span><span class="p">:</span>   <span class="nf">newHandler</span><span class="p">(),</span>
 		<span class="nx">TLSConfig</span><span class="p">:</span> <span class="nx">tlsConfig</span><span class="p">,</span>
 	<span class="p">}</span>
-	<span class="nx">l</span> <span class="p">=</span> <span class="nx">tls</span><span class="p">.</span><span class="nx">NewListener</span><span class="p">(</span><span class="nx">l</span><span class="p">,</span> <span class="nx">tlsConfig</span><span class="p">)</span>
+	<span class="nx">l</span> <span class="p">=</span> <span class="nx">tls</span><span class="p">.</span><span class="nf">NewListener</span><span class="p">(</span><span class="nx">l</span><span class="p">,</span> <span class="nx">tlsConfig</span><span class="p">)</span>
 	<span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
-		<span class="nx">srv</span><span class="p">.</span><span class="nx">Serve</span><span class="p">(</span><span class="nx">l</span><span class="p">)</span>
+		<span class="nx">srv</span><span class="p">.</span><span class="nf">Serve</span><span class="p">(</span><span class="nx">l</span><span class="p">)</span>
 	<span class="p">}()</span>
 
 	<span class="nx">signal_chan</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Signal</span><span class="p">)</span>
-	<span class="nx">signal</span><span class="p">.</span><span class="nx">Notify</span><span class="p">(</span><span class="nx">signal_chan</span><span class="p">,</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span><span class="p">)</span>
+	<span class="nx">signal</span><span class="p">.</span><span class="nf">Notify</span><span class="p">(</span><span class="nx">signal_chan</span><span class="p">,</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span><span class="p">)</span>
 	<span class="k">for</span> <span class="p">{</span>
 		<span class="nx">s</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">signal_chan</span>
 		<span class="k">if</span> <span class="nx">s</span> <span class="o">==</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span> <span class="p">{</span>
-			<span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&#34;SIGTERM!!!!\n&#34;</span><span class="p">)</span>
-			<span class="nx">srv</span><span class="p">.</span><span class="nx">Shutdown</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nx">Background</span><span class="p">())</span>
+			<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;SIGTERM!!!!\n&#34;</span><span class="p">)</span>
+			<span class="nx">srv</span><span class="p">.</span><span class="nf">Shutdown</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nf">Background</span><span class="p">())</span>
 			<span class="k">return</span>
 		<span class="p">}</span>
 	<span class="p">}</span>
 <span class="p">}</span>
 
-<span class="kd">func</span> <span class="nx">newHandler</span><span class="p">()</span> <span class="nx">http</span><span class="p">.</span><span class="nx">Handler</span> <span class="p">{</span>
-	<span class="nx">mux</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">NewServeMux</span><span class="p">()</span>
-	<span class="nx">mux</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">&#34;/&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
-		<span class="nx">fmt</span><span class="p">.</span><span class="nx">Fprintf</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="s">&#34;from pid %d.\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Getpid</span><span class="p">())</span>
+<span class="kd">func</span> <span class="nf">newHandler</span><span class="p">()</span> <span class="nx">http</span><span class="p">.</span><span class="nx">Handler</span> <span class="p">{</span>
+	<span class="nx">mux</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nf">NewServeMux</span><span class="p">()</span>
+	<span class="nx">mux</span><span class="p">.</span><span class="nf">HandleFunc</span><span class="p">(</span><span class="s">&#34;/&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+		<span class="nx">fmt</span><span class="p">.</span><span class="nf">Fprintf</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="s">&#34;from pid %d.\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getpid</span><span class="p">())</span>
 	<span class="p">})</span>
 	<span class="k">return</span> <span class="nx">mux</span>
-<span class="p">}</span></code></pre></div>
-<p><code>NextProtos</code>へ明示的に<code>h2</code>を指定する必要があるのがポイントです。
+<span class="p">}</span>
+</code></pre></div><p><code>NextProtos</code>へ明示的に<code>h2</code>を指定する必要があるのがポイントです。
 net/httpはデフォルトでHTTP/2を有効にしてくれますが、
 <code>TLSConfig</code>が指定されているときは自前でやる必要があります。</p>
-
 <h2 id="実験">実験</h2>
-
 <p>HTTP/2に対応していて証明書の検証もスキップできて・・・という条件で
 ベンチマークソフトを探すのが面倒だったので、Goで自作です。
 あまり詳しい統計情報は要らないので、負荷をかけるのにリソースを割きたかったというのもあります。</p>
@@ -467,7 +439,7 @@ net/httpはデフォルトでHTTP/2を有効にしてくれますが、
 	<span class="nx">buf</span>    <span class="p">[]</span><span class="kt">byte</span>
 <span class="p">}</span>
 
-<span class="kd">func</span> <span class="p">(</span><span class="nx">w</span> <span class="o">*</span><span class="nx">myWorker</span><span class="p">)</span> <span class="nx">Setup</span><span class="p">()</span> <span class="p">{</span>
+<span class="kd">func</span> <span class="p">(</span><span class="nx">w</span> <span class="o">*</span><span class="nx">myWorker</span><span class="p">)</span> <span class="nf">Setup</span><span class="p">()</span> <span class="p">{</span>
 	<span class="nx">tr</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Transport</span><span class="p">{</span>
 		<span class="nx">Proxy</span><span class="p">:</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ProxyFromEnvironment</span><span class="p">,</span>
 		<span class="nx">DialContext</span><span class="p">:</span> <span class="p">(</span><span class="o">&amp;</span><span class="nx">net</span><span class="p">.</span><span class="nx">Dialer</span><span class="p">{</span>
@@ -484,7 +456,7 @@ net/httpはデフォルトでHTTP/2を有効にしてくれますが、
 		<span class="p">},</span>
 		<span class="nx">ExpectContinueTimeout</span><span class="p">:</span> <span class="mi">1</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span>
 	<span class="p">}</span>
-	<span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">http2</span><span class="p">.</span><span class="nx">ConfigureTransport</span><span class="p">(</span><span class="nx">tr</span><span class="p">);</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">http2</span><span class="p">.</span><span class="nf">ConfigureTransport</span><span class="p">(</span><span class="nx">tr</span><span class="p">);</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
 		<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
 	<span class="p">}</span>
 	<span class="nx">w</span><span class="p">.</span><span class="nx">client</span> <span class="p">=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Client</span><span class="p">{</span>
@@ -493,95 +465,84 @@ net/httpはデフォルトでHTTP/2を有効にしてくれますが、
 	<span class="nx">w</span><span class="p">.</span><span class="nx">buf</span> <span class="p">=</span> <span class="nb">make</span><span class="p">([]</span><span class="kt">byte</span><span class="p">,</span> <span class="mi">1024</span><span class="p">)</span>
 <span class="p">}</span>
 
-<span class="kd">func</span> <span class="p">(</span><span class="nx">w</span> <span class="o">*</span><span class="nx">myWorker</span><span class="p">)</span> <span class="nx">Teardown</span><span class="p">()</span> <span class="p">{</span>
+<span class="kd">func</span> <span class="p">(</span><span class="nx">w</span> <span class="o">*</span><span class="nx">myWorker</span><span class="p">)</span> <span class="nf">Teardown</span><span class="p">()</span> <span class="p">{</span>
 <span class="p">}</span>
 
-<span class="kd">func</span> <span class="p">(</span><span class="nx">w</span> <span class="o">*</span><span class="nx">myWorker</span><span class="p">)</span> <span class="nx">Process</span><span class="p">()</span> <span class="p">(</span><span class="nx">subscore</span> <span class="kt">int</span><span class="p">)</span> <span class="p">{</span>
-	<span class="nx">resp</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">w</span><span class="p">.</span><span class="nx">client</span><span class="p">.</span><span class="nx">Get</span><span class="p">(</span><span class="nx">w</span><span class="p">.</span><span class="nx">URL</span><span class="p">)</span>
+<span class="kd">func</span> <span class="p">(</span><span class="nx">w</span> <span class="o">*</span><span class="nx">myWorker</span><span class="p">)</span> <span class="nf">Process</span><span class="p">()</span> <span class="p">(</span><span class="nx">subscore</span> <span class="kt">int</span><span class="p">)</span> <span class="p">{</span>
+	<span class="nx">resp</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">w</span><span class="p">.</span><span class="nx">client</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="nx">w</span><span class="p">.</span><span class="nx">URL</span><span class="p">)</span>
 	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-		<span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&#34;ERROR: %v&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;ERROR: %v&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
 		<span class="k">return</span> <span class="mi">0</span>
 	<span class="p">}</span>
-	<span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">io</span><span class="p">.</span><span class="nx">CopyBuffer</span><span class="p">(</span><span class="nx">ioutil</span><span class="p">.</span><span class="nx">Discard</span><span class="p">,</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">,</span> <span class="nx">w</span><span class="p">.</span><span class="nx">buf</span><span class="p">)</span>
-	<span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+	<span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">io</span><span class="p">.</span><span class="nf">CopyBuffer</span><span class="p">(</span><span class="nx">ioutil</span><span class="p">.</span><span class="nx">Discard</span><span class="p">,</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">,</span> <span class="nx">w</span><span class="p">.</span><span class="nx">buf</span><span class="p">)</span>
+	<span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
 	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="o">&amp;&amp;</span> <span class="nx">err</span> <span class="o">!=</span> <span class="nx">io</span><span class="p">.</span><span class="nx">EOF</span> <span class="p">{</span>
-		<span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&#34;ERROR: %v&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;ERROR: %v&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
 		<span class="k">return</span> <span class="mi">0</span>
 	<span class="p">}</span>
 	<span class="k">if</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">StatusCode</span> <span class="o">!=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">StatusOK</span> <span class="p">{</span>
-		<span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&#34;Invalid Status: %d&#34;</span><span class="p">,</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">StatusCode</span><span class="p">)</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;Invalid Status: %d&#34;</span><span class="p">,</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">StatusCode</span><span class="p">)</span>
 		<span class="k">return</span> <span class="mi">0</span>
 	<span class="p">}</span>
 	<span class="k">return</span> <span class="mi">1</span>
 <span class="p">}</span>
 
-<span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
 	<span class="kd">var</span> <span class="p">(</span>
 		<span class="nx">conn</span>     <span class="kt">int</span>
 		<span class="nx">duration</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Duration</span>
 	<span class="p">)</span>
-	<span class="nx">flag</span><span class="p">.</span><span class="nx">IntVar</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">conn</span><span class="p">,</span> <span class="s">&#34;c&#34;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="s">&#34;connections to keep open&#34;</span><span class="p">)</span>
-	<span class="nx">flag</span><span class="p">.</span><span class="nx">DurationVar</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">duration</span><span class="p">,</span> <span class="s">&#34;d&#34;</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span> <span class="s">&#34;duration of benchmark&#34;</span><span class="p">)</span>
-	<span class="nx">flag</span><span class="p">.</span><span class="nx">Parse</span><span class="p">()</span>
-	<span class="nx">url</span> <span class="o">:=</span> <span class="nx">flag</span><span class="p">.</span><span class="nx">Args</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+	<span class="nx">flag</span><span class="p">.</span><span class="nf">IntVar</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">conn</span><span class="p">,</span> <span class="s">&#34;c&#34;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="s">&#34;connections to keep open&#34;</span><span class="p">)</span>
+	<span class="nx">flag</span><span class="p">.</span><span class="nf">DurationVar</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">duration</span><span class="p">,</span> <span class="s">&#34;d&#34;</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span> <span class="s">&#34;duration of benchmark&#34;</span><span class="p">)</span>
+	<span class="nx">flag</span><span class="p">.</span><span class="nf">Parse</span><span class="p">()</span>
+	<span class="nx">url</span> <span class="o">:=</span> <span class="nx">flag</span><span class="p">.</span><span class="nf">Args</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
 	<span class="nx">workers</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">([]</span><span class="nx">benchmark</span><span class="p">.</span><span class="nx">Worker</span><span class="p">,</span> <span class="nx">conn</span><span class="p">)</span>
 	<span class="k">for</span> <span class="nx">i</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">workers</span> <span class="p">{</span>
 		<span class="nx">workers</span><span class="p">[</span><span class="nx">i</span><span class="p">]</span> <span class="p">=</span> <span class="o">&amp;</span><span class="nx">myWorker</span><span class="p">{</span><span class="nx">URL</span><span class="p">:</span> <span class="nx">url</span><span class="p">}</span>
 	<span class="p">}</span>
-	<span class="nx">benchmark</span><span class="p">.</span><span class="nx">Run</span><span class="p">(</span><span class="nx">workers</span><span class="p">,</span> <span class="nx">duration</span><span class="p">)</span>
-<span class="p">}</span></code></pre></div>
-<p>前回記事同様、Server::Starterを使って1秒毎に再起動を繰り返しながらベンチを回します。
+	<span class="nx">benchmark</span><span class="p">.</span><span class="nf">Run</span><span class="p">(</span><span class="nx">workers</span><span class="p">,</span> <span class="nx">duration</span><span class="p">)</span>
+<span class="p">}</span>
+</code></pre></div><p>前回記事同様、Server::Starterを使って1秒毎に再起動を繰り返しながらベンチを回します。
 AWSのc4.largeインスタンス上で実行しました。</p>
 <div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash">$ start_server --port <span class="m">8080</span> --pid-file app.pid -- ./main
-$ <span class="k">while</span> true<span class="p">;</span> <span class="k">do</span> <span class="nb">kill</span> -HUP <span class="sb">`</span>cat app.pid<span class="sb">`</span><span class="p">;</span> sleep <span class="m">1</span><span class="p">;</span> <span class="k">done</span>
-$ ./bin/bench -c <span class="m">10</span> -d<span class="o">=</span>1m http://localhost:8080/</code></pre></div>
-<h2 id="結果">結果</h2>
-
-<h3 id="server-shutdownを使った場合">Server.Shutdownを使った場合</h3>
-
+$ <span class="k">while</span> true<span class="p">;</span> <span class="k">do</span> <span class="nb">kill</span> -HUP <span class="sb">`</span>cat app.pid<span class="sb">`</span><span class="p">;</span> sleep 1<span class="p">;</span> <span class="k">done</span>
+$ ./bin/bench -c <span class="m">10</span> -d<span class="o">=</span>1m http://localhost:8080/
+</code></pre></div><h2 id="結果">結果</h2>
+<h3 id="servershutdownを使った場合">Server.Shutdownを使った場合</h3>
 <p>Server.Shutdownを使った場合の結果です。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">$ ./bin/bench -c 10 -d=1m http://localhost:8080/
 2017/01/22 12:20:51 starting benchmark: concurrency: 10, time: 1m0s, GOMAXPROCS: 2
-2017/01/22 12:21:51 done benchmark: score 1174412, elapsed 1m0.002557914s = 19572.698912 / sec</code></pre></div>
-<p>先程紹介したKeepAliveの挙動変更の影響で多少はエラーがでるのでは？と予想していたものの、
+2017/01/22 12:21:51 done benchmark: score 1174412, elapsed 1m0.002557914s = 19572.698912 / sec
+</code></pre></div><p>先程紹介したKeepAliveの挙動変更の影響で多少はエラーがでるのでは？と予想していたものの、
 まったく影響はありませんでした。</p>
-
 <h3 id="go-gracedownを使った場合">go-gracedownを使った場合</h3>
-
 <p>go-gracedownを使った場合の結果です。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">$ ./bin/bench -c 10 -d=1m http://localhost:8080/
 2017/01/22 12:22:26 starting benchmark: concurrency: 10, time: 1m0s, GOMAXPROCS: 2
-2017/01/22 12:23:26 done benchmark: score 1160878, elapsed 1m0.009764419s = 19344.818485 / sec</code></pre></div>
-<p>中身は<code>Server.Shutdown</code>なので、当然ながら同じ結果です。</p>
-
-<h3 id="http-2でアクセスした場合">HTTP/2でアクセスした場合</h3>
-
+2017/01/22 12:23:26 done benchmark: score 1160878, elapsed 1m0.009764419s = 19344.818485 / sec
+</code></pre></div><p>中身は<code>Server.Shutdown</code>なので、当然ながら同じ結果です。</p>
+<h3 id="http2でアクセスした場合">HTTP/2でアクセスした場合</h3>
 <p>HTTP/2でアクセスした場合の結果です。
 GoのHTTP/2サポートはHTTPSで通信したときにしか有効にならないので、他のベンチとURLが違うことに注意。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">$ ./bin/bench -c 10 -d=1m https://localhost:8080/
 2017/01/22 12:30:04 starting benchmark: concurrency: 10, time: 1m0s, GOMAXPROCS: 2
-2017/01/22 12:31:04 done benchmark: score 666801, elapsed 1m0.001842465s = 11113.008745 / sec</code></pre></div>
-<p>特にエラーもなく、全く問題ありませんでした。</p>
-
+2017/01/22 12:31:04 done benchmark: score 666801, elapsed 1m0.001842465s = 11113.008745 / sec
+</code></pre></div><p>特にエラーもなく、全く問題ありませんでした。</p>
 <h2 id="まとめ">まとめ</h2>
-
 <ul>
 <li>Go1.8からサポートされる予定のHTTPサーバのGraceful Shutdownについて検証しました
-
 <ul>
 <li>HTTP/1.1とHTTP/2で検証しましたが、特に問題は見つかりませんでした</li>
-</ul></li>
+</ul>
+</li>
 <li>go-gracedownはGo1.8でコンパイルされたときはbuild-inの機能を使うようになります
-
 <ul>
 <li>機能的にはbuild-inの機能を直接使う場合とまったく変わりありません</li>
-</ul></li>
 </ul>
-
+</li>
+</ul>
 <p>Go1.8の正式リリース楽しみですね！</p>
-
 <h2 id="参考">参考</h2>
-
 <ul>
 <li><a href="https://shogo82148.github.io/blog/2015/05/03/golang-graceful-restart/">Go言語でGraceful Restartをする</a></li>
 <li><a href="https://shogo82148.github.io/blog/2015/11/23/golang-graceful-restart-2nd/">Go言語でGraceful Restartをするときに取りこぼしを少なくする</a></li>
@@ -691,6 +652,8 @@ GoのHTTP/2サポートはHTTPSで通信したときにしか有効にならな�
           
           
             
+          
+            
               <li class="post">
                 <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
               </li>
@@ -741,12 +704,6 @@ GoのHTTP/2サポートはHTTPSで通信したときにしか有効にならな�
             
               <li class="post">
                 <a href="/blog/2019/08/21/aws-xray-with-perl-lambda-runtime/">AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2019/07/24/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
               </li>
             
           

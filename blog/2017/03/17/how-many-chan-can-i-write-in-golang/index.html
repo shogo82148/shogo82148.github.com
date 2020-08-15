@@ -45,7 +45,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.38.1" />
+  <meta name="generator" content="Hugo 0.74.3" />
 
   
   
@@ -124,18 +124,12 @@
           
           
           
-          
-
-<p>pecoに入った修正をみて、果たして<code>chan</code>はいくつまで付けられるのか気になったので、
+          <p>pecoに入った修正をみて、果たして<code>chan</code>はいくつまで付けられるのか気になったので、
 雑に試してみました。
 先に断っておきますが、全く有用ではないですよ。</p>
-
-<!-- More -->
-
+<!-- raw HTML omitted -->
 <h2 id="背景">背景</h2>
-
 <p>pecoに入った修正はこちら(一部抜粋)。</p>
-
 <ul>
 <li><a href="https://github.com/peco/peco/pull/411">Make Resume a blocking operation #411</a></li>
 </ul>
@@ -166,73 +160,48 @@
 </span><span class="gd"></span><span class="gi">+		resumeCh:  make(chan chan struct{}),
 </span><span class="gi"></span> 	}
  }
-</code></pre></div>
-<p>channelを使ってchannelをやり取りすることができるので、
+</code></pre></div><p>channelを使ってchannelをやり取りすることができるので、
 <code>chan struct{}</code>をやり取りする<code>chan chan struct{}</code>という型が使えます。
 同じ要領で、channelをやり取りするchannelをやり取りするchannelをやり取り&hellip;するchannelが
 無限に作れるはずです(少なくとも構文上は)。
 ということで、実際にやってみました。</p>
-
 <h2 id="実験">実験</h2>
-
 <p>雑なPerlスクリプトを準備して、大量の<code>chan</code>を付けたGoのコードを自動生成します。</p>
-<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">print</span> <span class="o">&lt;&lt;</span><span class="n">EOF</span><span class="p">;</span>
-<span class="k">package</span> <span class="nn">main</span>
-
-<span class="nb">import</span> <span class="p">(</span>
-    <span class="s">&#34;fmt&#34;</span>
-<span class="p">)</span>
-
-<span class="n">type</span> <span class="n">Foo</span> <span class="nv">@</span><span class="p">{[</span><span class="s">&#39;chan &#39;</span> <span class="n">x</span> <span class="mi">4096</span><span class="p">]}</span> <span class="n">struct</span><span class="p">{}</span>
-
-<span class="n">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
-    <span class="n">fmt</span><span class="o">.</span><span class="n">Printf</span><span class="p">(</span><span class="s">&#34;Hello, %#v\\n&#34;</span><span class="p">,</span> <span class="n">make</span><span class="p">(</span><span class="n">Foo</span><span class="p">))</span>
-<span class="p">}</span>
-<span class="n">EOF</span></code></pre></div>
-<p><code>chan</code>の個数を変えて何度かビルドを繰り返します。</p>
-<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash"><span class="nb">time</span> go build -o main main.go</code></pre></div>
-<h2 id="結果">結果</h2>
-
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">print</span> <span class="s">&lt;&lt;</span><span class="dl">EOF</span><span class="s">;
+</span><span class="s">package main
+</span><span class="s">
+</span><span class="s">import (
+</span><span class="s">    &#34;fmt&#34;
+</span><span class="s">)
+</span><span class="s">
+</span><span class="s">type Foo @{[&#39;chan &#39; x 4096]} struct{}
+</span><span class="s">
+</span><span class="s">func main() {
+</span><span class="s">    fmt.Printf(&#34;Hello, %#v\\n&#34;, make(Foo))
+</span><span class="s">}
+</span><span class="s"></span><span class="dl">EOF</span>
+</code></pre></div><p><code>chan</code>の個数を変えて何度かビルドを繰り返します。</p>
+<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash"><span class="nb">time</span> go build -o main main.go
+</code></pre></div><h2 id="結果">結果</h2>
 <p>chanの個数とビルドにかかった時間をまとめてみました。</p>
-
-<table>
-    <tr><th>chanの個数</th><th>ビルド時間</th></tr>
-    <tr><td>1</td><td>0.236s</td></tr>
-    <tr><td>2</td><td>0.240s</td></tr>
-    <tr><td>4</td><td>0.226s</td></tr>
-    <tr><td>8</td><td>0.234s</td></tr>
-    <tr><td>16</td><td>0.240s</td></tr>
-    <tr><td>32</td><td>0.250s</td></tr>
-    <tr><td>64</td><td>0.281s</td></tr>
-    <tr><td>128</td><td>0.258s</td></tr>
-    <tr><td>256</td><td>0.360s</td></tr>
-    <tr><td>512</td><td>0.775s</td></tr>
-    <tr><td>1024</td><td>3.228s</td></tr>
-    <tr><td>2048</td><td>18.605s</td></tr>
-    <tr><td>4096</td><td>1m53.614s</td></tr>
-    <tr><td>8192</td><td>13m46.018s(ビルド失敗したので参考記録)</td></tr>
-</table>
-
+<!-- raw HTML omitted -->
 <p>8192個付けたら以下のようなエラーを吐いてビルドが失敗してしまったので、
 8192個の時の記録は参考記録です。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain"># command-line-arguments
-too much data in section SDWARFINFO (over 2000000000 bytes)</code></pre></div>
-<p>何かビルドの設定をいじればもっと行けるかもしれませんが、
+too much data in section SDWARFINFO (over 2000000000 bytes)
+</code></pre></div><p>何かビルドの設定をいじればもっと行けるかもしれませんが、
 デフォルトの設定では4096から8192の間に限界があるようです。
 4096個<code>chan</code>を付けたときのソースコードは20KB程度なのにバイナリサイズは524MBまで膨らんでいました。</p>
-
 <p>256個当たりからビルド時間に影響が出ているので、
 ビルド時間を考える256個以下に抑えるのがよさそうです。
 それ以上だと {% m %}O(n^{2.6}){% em %} 程度のオーダーでビルド時間が延びます。
 とはいえ、256個も<code>chan</code>を付いたコードを人間が読めるとは思えないので、
 2個が限度でしょうね・・・。
 3個以上必要になるケースは余りないと思います。</p>
-
 <h2 id="型定義を再帰的にして無限chanを実現する">型定義を再帰的にして無限chanを実現する</h2>
-
 <p>そもそも、<code>chan</code>を大量に並べなくとも、
 型定義を再帰的に行えば無限の<code>chan</code>を付けたときと同等のことができます。
-例えば以下のコードで&rdquo;Goroutine 1&rdquo;と&rdquo;Goroutine 2&rdquo;を交互に表示することが可能です。</p>
+例えば以下のコードで&quot;Goroutine 1&quot;と&quot;Goroutine 2&quot;を交互に表示することが可能です。</p>
 <div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
 
 <span class="kn">import</span> <span class="p">(</span>
@@ -241,26 +210,26 @@ too much data in section SDWARFINFO (over 2000000000 bytes)</code></pre></div>
 
 <span class="kd">type</span> <span class="nx">Foo</span> <span class="kd">chan</span> <span class="nx">Foo</span>
 
-<span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
 	<span class="nx">ch</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="nx">Foo</span><span class="p">)</span>
 	<span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
 		<span class="nx">ch</span> <span class="o">:=</span> <span class="nx">ch</span>
 		<span class="k">for</span> <span class="p">{</span>
 			<span class="nx">done</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">ch</span>
-			<span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&#34;Goroutine 2&#34;</span><span class="p">)</span>
+			<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;Goroutine 2&#34;</span><span class="p">)</span>
 			<span class="nx">done</span> <span class="o">&lt;-</span> <span class="nx">ch</span>
 		<span class="p">}</span>
 	<span class="p">}()</span>
 	
 	<span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="p">&lt;</span> <span class="mi">100</span><span class="p">;</span> <span class="nx">i</span><span class="o">++</span> <span class="p">{</span>
-		<span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&#34;Goroutine 1&#34;</span><span class="p">)</span>
+		<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;Goroutine 1&#34;</span><span class="p">)</span>
 		<span class="nx">done</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="nx">Foo</span><span class="p">)</span>
 		<span class="nx">ch</span> <span class="o">&lt;-</span> <span class="nx">done</span>
 		<span class="nx">ch</span> <span class="p">=</span> <span class="o">&lt;-</span><span class="nx">done</span>
 	<span class="p">}</span>
-	<span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&#34;Hello, playground&#34;</span><span class="p">)</span>
-<span class="p">}</span></code></pre></div>
-<p>channelでのやり取りが複雑になるので実用性があるかは不明ですが・・・。
+	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;Hello, playground&#34;</span><span class="p">)</span>
+<span class="p">}</span>
+</code></pre></div><p>channelでのやり取りが複雑になるので実用性があるかは不明ですが・・・。
 例えば先程の例だと、普通にループを書いたほうが圧倒的にシンプルです。</p>
 <div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
 
@@ -268,28 +237,25 @@ too much data in section SDWARFINFO (over 2000000000 bytes)</code></pre></div>
 	<span class="s">&#34;fmt&#34;</span>
 <span class="p">)</span>
 
-<span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
 	<span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="p">&lt;</span> <span class="mi">100</span><span class="p">;</span> <span class="nx">i</span><span class="o">++</span> <span class="p">{</span>
-		<span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&#34;Goroutine 1&#34;</span><span class="p">)</span>
-		<span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&#34;Goroutine 2&#34;</span><span class="p">)</span>
+		<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;Goroutine 1&#34;</span><span class="p">)</span>
+		<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;Goroutine 2&#34;</span><span class="p">)</span>
 	<span class="p">}</span>
-	<span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&#34;Hello, playground&#34;</span><span class="p">)</span>
-<span class="p">}</span></code></pre></div>
-<p>無限<code>chan</code>が必要になる多くのケースは、このような書き換えができるような気がします。
+	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;Hello, playground&#34;</span><span class="p">)</span>
+<span class="p">}</span>
+</code></pre></div><p>無限<code>chan</code>が必要になる多くのケースは、このような書き換えができるような気がします。
 (そもそも必要になったことがない)</p>
-
 <h2 id="まとめ">まとめ</h2>
-
 <ul>
 <li><code>chan</code>の個数の上限は4096から8192の間のどこか</li>
 <li>256個あたりからビルド時間に影響が出始める
-
 <ul>
 <li>プログラムを読む人の精神力に多大な影響を与えるので、実際は2個までに留めるべきだと思う</li>
-</ul></li>
+</ul>
+</li>
 <li>再帰的に型を定義することで、無限に<code>chan</code>を付けた時と同等のことが可能</li>
 </ul>
-
 <p><code>chan</code>を大量に付けたいケースには今までに僕自身は遭遇したことがないです。
 有用な例を見つけた人は教えてください。</p>
 
@@ -394,6 +360,8 @@ too much data in section SDWARFINFO (over 2000000000 bytes)</code></pre></div>
           
           
             
+          
+            
               <li class="post">
                 <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
               </li>
@@ -444,12 +412,6 @@ too much data in section SDWARFINFO (over 2000000000 bytes)</code></pre></div>
             
               <li class="post">
                 <a href="/blog/2019/08/21/aws-xray-with-perl-lambda-runtime/">AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2019/07/24/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
               </li>
             
           

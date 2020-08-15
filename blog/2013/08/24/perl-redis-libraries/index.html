@@ -45,7 +45,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.38.1" />
+  <meta name="generator" content="Hugo 0.74.3" />
 
   
   
@@ -124,197 +124,140 @@
           
           
           
-          
-
-<p>最近<a href="http://redis.io/">Redis</a> を使ったコードを書くようになったのですが、
+          <p>最近<a href="http://redis.io/">Redis</a> を使ったコードを書くようになったのですが、
 キー名を毎回指定するのがだるいです。
 Ruby には <a href="https://github.com/nateware/redis-objects">redis-objects</a> というのがあって、
 Redisのキーをオブジェクトとして扱うことができるようです。
 きっと、Perl にも似たようなのあるだろ、って思って調べてみました。</p>
-
-<!-- More -->
-
+<!-- raw HTML omitted -->
 <h2 id="ほしいもの">ほしいもの</h2>
-
 <p>低レベルなRedisのライブラリはたいていメソッドとRedisのコマンドが一対一対応していて、
 次のようなコードになると思います。</p>
-
-<p>``` perl hogehoge.pl
-$redis-&gt;set(&lsquo;key-name&rsquo;, &lsquo;piyopiyo&rsquo;);
-$redis-&gt;get(&lsquo;key_name&rsquo;);</p>
-
-<pre><code>
-でも、Redisに何か操作をしたいわけじゃなくて、
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;key-name&#39;</span><span class="p">,</span> <span class="s">&#39;piyopiyo&#39;</span><span class="p">);</span>
+<span class="nv">$redis</span><span class="o">-&gt;</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;key_name&#39;</span><span class="p">);</span>
+</code></pre></div><p>でも、Redisに何か操作をしたいわけじゃなくて、
 Redisのキーに対して操作をしたいので、
-次のように書けるべきだと思うんです。
-
-``` perl expected.pl
-my $key = key($redis, 'key-name');
-$key-&gt;set('piyopiyo');
-$key-&gt;get();
-</code></pre>
-
-<h2 id="redis-hash-redis-list">Redis::Hash, Redis::List</h2>
-
+次のように書けるべきだと思うんです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">my</span> <span class="nv">$key</span> <span class="o">=</span> <span class="n">key</span><span class="p">(</span><span class="nv">$redis</span><span class="p">,</span> <span class="s">&#39;key-name&#39;</span><span class="p">);</span>
+<span class="nv">$key</span><span class="o">-&gt;</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;piyopiyo&#39;</span><span class="p">);</span>
+<span class="nv">$key</span><span class="o">-&gt;</span><span class="n">get</span><span class="p">();</span>
+</code></pre></div><h2 id="redishash-redislist">Redis::Hash, Redis::List</h2>
 <p><a href="http://search.cpan.org/~melo/Redis/lib/Redis/Hash.pm">Redis::Hash</a>と
 <a href="http://search.cpan.org/~melo/Redis/lib/Redis/List.pm">Redis::List</a>は
 Perlのハッシュや配列と同じ操作で Redis にアクセスできるようにするライブラリ。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">utf8</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">warnings</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">strict</span><span class="p">;</span>
+<span class="k">use</span> <span class="mf">5.014</span><span class="p">;</span>
 
-<p>``` perl Redis::Hash
-use utf8;
-use warnings;
-use strict;
-use 5.014;</p>
+<span class="k">use</span> <span class="nn">Redis::Hash</span><span class="p">;</span>
 
-<p>use Redis::Hash;</p>
+<span class="nb">tie</span> <span class="k">my</span> <span class="nv">%my_hash</span><span class="p">,</span> <span class="s">&#39;Redis::Hash&#39;</span><span class="p">,</span> <span class="s">&#39;hash_prefix&#39;</span><span class="p">,</span> <span class="p">(</span><span class="n">server</span> <span class="o">=&gt;</span> <span class="s">&#39;localhost:6379&#39;</span><span class="p">);</span>
 
-<p>tie my %my_hash, &lsquo;Redis::Hash&rsquo;, &lsquo;hash_prefix&rsquo;, (server =&gt; &lsquo;localhost:6379&rsquo;);</p>
+<span class="c1"># set hash_prefix:hogehoge piyopiyo</span>
+<span class="c1"># set hash_prefix:fugafuga fugufugu</span>
+<span class="nv">$my_hash</span><span class="p">{</span><span class="n">hogehoge</span><span class="p">}</span> <span class="o">=</span> <span class="s">&#39;piyopiyo&#39;</span><span class="p">;</span>
+<span class="nv">$my_hash</span><span class="p">{</span><span class="n">fugafuga</span><span class="p">}</span> <span class="o">=</span> <span class="s">&#39;fugufugu&#39;</span><span class="p">;</span>
 
-<h1 id="set-hash-prefix-hogehoge-piyopiyo">set hash_prefix:hogehoge piyopiyo</h1>
+<span class="c1"># get hash_prefix:hogehoge piyopiyo</span>
+<span class="n">say</span> <span class="nv">$my_hash</span><span class="p">{</span><span class="n">hogehoge</span><span class="p">};</span> <span class="c1"># piyopiyo</span>
 
-<h1 id="set-hash-prefix-fugafuga-fugufugu">set hash_prefix:fugafuga fugufugu</h1>
+<span class="c1"># keys hash_prefix:*</span>
+<span class="n">say</span> <span class="nb">join</span> <span class="s">&#39;,&#39;</span><span class="p">,</span> <span class="nb">keys</span> <span class="nv">%my_hash</span><span class="p">;</span> <span class="c1">#fugafuga,hogehoge</span>
 
-<p>$my_hash{hogehoge} = &lsquo;piyopiyo&rsquo;;
-$my_hash{fugafuga} = &lsquo;fugufugu&rsquo;;</p>
+<span class="c1"># keys hash_prefix:*</span>
+<span class="c1"># get hash_prefix:fugafuga</span>
+<span class="c1"># get hash_prefix:hogehoge</span>
+<span class="n">say</span> <span class="nb">join</span> <span class="s">&#39;,&#39;</span><span class="p">,</span> <span class="nb">values</span> <span class="nv">%my_hash</span><span class="p">;</span> <span class="c1">#fugufugu,piyopiyo</span>
 
-<h1 id="get-hash-prefix-hogehoge-piyopiyo">get hash_prefix:hogehoge piyopiyo</h1>
-
-<p>say $my_hash{hogehoge}; # piyopiyo</p>
-
-<h1 id="keys-hash-prefix">keys hash_prefix:*</h1>
-
-<p>say join &lsquo;,&rsquo;, keys %my_hash; #fugafuga,hogehoge</p>
-
-<h1 id="keys-hash-prefix-1">keys hash_prefix:*</h1>
-
-<h1 id="get-hash-prefix-fugafuga">get hash_prefix:fugafuga</h1>
-
-<h1 id="get-hash-prefix-hogehoge">get hash_prefix:hogehoge</h1>
-
-<p>say join &lsquo;,&rsquo;, values %my_hash; #fugufugu,piyopiyo</p>
-
-<h1 id="del-hash-prefix-hogehoge">del hash_prefix:hogehoge</h1>
-
-<p>delete $my_hash{hogehoge};</p>
-
-<pre><code>
-tie とかよくわかない。
-Perl の黒魔術を見た気がしました。
-
-普通のハッシュや配列に見えるのは面白いけど、
+<span class="c1"># del hash_prefix:hogehoge</span>
+<span class="nb">delete</span> <span class="nv">$my_hash</span><span class="p">{</span><span class="n">hogehoge</span><span class="p">};</span>
+</code></pre></div><p>tie とかよくわかない。
+Perl の黒魔術を見た気がしました。</p>
+<p>普通のハッシュや配列に見えるのは面白いけど、
 Redisっぽい機能がまったく使えないのはつらい。
-`tied(%my_hash)-&gt;cmd` って書けばコマンド発行できるけど、
-それなら最初から直接 [Redis.pm](http://search.cpan.org/~melo/Redis/lib/Redis.pm) を
-使えよって話になります。
+<code>tied(%my_hash)-&gt;cmd</code> って書けばコマンド発行できるけど、
+それなら最初から直接 <a href="http://search.cpan.org/~melo/Redis/lib/Redis.pm">Redis.pm</a> を
+使えよって話になります。</p>
+<p>あと、tie するごとにコネクションを張り直しているようなので、
+たくさんのハッシュやリストを作ると大変なことになりそうです。</p>
+<h2 id="redisclient">Redis::Client</h2>
+<p>これも tie すると、Redis上のデータをハッシュや配列として扱うことができます。
+tie できるのは <a href="http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/String.pm">String</a>,
+<a href="http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/List.pm">List</a>,
+<a href="http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/Hash.pm">Hash</a>,
+<a href="http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/Set.pm">Set</a>,
+<a href="http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/Zset.pm">Zset</a>。
+それぞれがRedisで使えるデータ型に対応している。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">utf8</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">warnings</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">strict</span><span class="p">;</span>
+<span class="k">use</span> <span class="mf">5.014</span><span class="p">;</span>
 
-あと、tie するごとにコネクションを張り直しているようなので、
-たくさんのハッシュやリストを作ると大変なことになりそうです。
+<span class="k">use</span> <span class="nn">Redis::Client</span><span class="p">;</span>
 
+<span class="k">my</span> <span class="nv">$client</span> <span class="o">=</span> <span class="nn">Redis::Client</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">;</span>
+<span class="nb">tie</span> <span class="k">my</span> <span class="nv">$str</span><span class="p">,</span> <span class="s">&#39;Redis::Client::String&#39;</span><span class="p">,</span> <span class="n">key</span> <span class="o">=&gt;</span> <span class="s">&#39;my_string&#39;</span><span class="p">,</span> <span class="n">client</span> <span class="o">=&gt;</span> <span class="nv">$client</span><span class="p">;</span>
 
-## Redis::Client
-
-これも tie すると、Redis上のデータをハッシュや配列として扱うことができます。
-tie できるのは [String](http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/String.pm),
-[List](http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/List.pm),
-[Hash](http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/Hash.pm),
-[Set](http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/Set.pm),
-[Zset](http://search.cpan.org/~friedo/Redis-Client/lib/Redis/Client/Zset.pm)。
-それぞれがRedisで使えるデータ型に対応している。
-
-``` perl Redis::Client::String
-use utf8;
-use warnings;
-use strict;
-use 5.014;
-
-use Redis::Client;
-
-my $client = Redis::Client-&gt;new;
-tie my $str, 'Redis::Client::String', key =&gt; 'my_string', client =&gt; $client;
-
-$str = 'foo';
-say $str;
-</code></pre>
-
-<p>ひとつのキーに対してひとつのオブジェクトを割り当てるのは良さげ。
+<span class="nv">$str</span> <span class="o">=</span> <span class="s">&#39;foo&#39;</span><span class="p">;</span>
+<span class="n">say</span> <span class="nv">$str</span><span class="p">;</span>
+</code></pre></div><p>ひとつのキーに対してひとつのオブジェクトを割り当てるのは良さげ。
 また、ハッシュ型、セット型、ソート済みセット型といった、Redis特有のデータ型に対応しているのもGood。
 でも、ただストアするだけならこれで十分だけど、もう少し高度な機能も使いたい・・・。</p>
-
-<h2 id="tie-redis">Tie::Redis</h2>
-
+<h2 id="tieredis">Tie::Redis</h2>
 <p><a href="http://search.cpan.org/~dgl/Tie-Redis/lib/Tie/Redis/Hash.pm">Tie::Redis</a> も
 tie を使ってPerlのデータ構造っぽく扱えるようにするライブラリ。</p>
-
 <p>Redis全体を一つのハッシュとして扱ったり、
 Redisの文字列型、ハッシュ型、リスト型を扱えるみたい。</p>
-
-<h2 id="redis-object">Redis::Object</h2>
-
+<h2 id="redisobject">Redis::Object</h2>
 <p><a href="http://search.cpan.org/~ukautz/Redis-Object/README.pod">Redis::Oject</a>は
 ORM風なRedis用ライブラリ。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">package</span> <span class="nn">MyRedisDatabase</span><span class="p">;</span>
 
-<p>``` perl RedisDatabase.pm
-package MyRedisDatabase;</p>
+<span class="k">use</span> <span class="nn">Moose</span><span class="p">;</span>
+<span class="n">extends</span> <span class="sx">qw/ Redis::Object /</span><span class="p">;</span>
 
-<p>use Moose;
-extends qw/ Redis::Object /;</p>
+<span class="n">has</span> <span class="n">tables</span> <span class="o">=&gt;</span> <span class="p">(</span>
+    <span class="n">isa</span>     <span class="o">=&gt;</span> <span class="s">&#39;ArrayRef[Str]&#39;</span><span class="p">,</span>
+    <span class="n">is</span>      <span class="o">=&gt;</span> <span class="s">&#39;ro&#39;</span><span class="p">,</span>
+    <span class="n">default</span> <span class="o">=&gt;</span> <span class="k">sub</span> <span class="p">{</span> <span class="p">[</span> <span class="sx">qw/SomeTable/</span> <span class="p">]</span> <span class="p">},</span>
+<span class="p">);</span>
 
-<p>has tables =&gt; (
-    isa     =&gt; &lsquo;ArrayRef[Str]&lsquo;,
-    is      =&gt; &lsquo;ro&rsquo;,
-    default =&gt; sub { [ qw/SomeTable/ ] },
-);</p>
+<span class="nn">__PACKAGE__</span><span class="o">-&gt;</span><span class="nn">meta</span><span class="o">-&gt;</span><span class="n">make_immutable</span><span class="p">;</span>
+</code></pre></div><div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">package</span> <span class="nn">MyRedisDatabase::SomeTable</span><span class="p">;</span>
 
-<p><strong>PACKAGE</strong>-&gt;meta-&gt;make_immutable;</p>
+<span class="k">use</span> <span class="nn">Moose</span><span class="p">;</span>
+<span class="n">with</span> <span class="sx">qw/ Redis::Object::Table /</span><span class="p">;</span>
 
-<pre><code>
-``` perl RedisDatabase/SomeTable.pm
-package MyRedisDatabase::SomeTable;
+<span class="n">has</span> <span class="n">hoge</span> <span class="o">=&gt;</span> <span class="p">(</span> <span class="n">isa</span> <span class="o">=&gt;</span> <span class="s">&#39;Str&#39;</span><span class="p">,</span> <span class="n">is</span> <span class="o">=&gt;</span> <span class="s">&#39;rw&#39;</span><span class="p">,</span> <span class="n">default</span> <span class="o">=&gt;</span> <span class="s">&#39;Something&#39;</span> <span class="p">);</span>
 
-use Moose;
-with qw/ Redis::Object::Table /;
+<span class="nn">__PACKAGE__</span><span class="o">-&gt;</span><span class="nn">meta</span><span class="o">-&gt;</span><span class="n">make_immutable</span><span class="p">;</span>
+</code></pre></div><div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">utf8</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">strict</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">warnings</span><span class="p">;</span>
+<span class="k">use</span> <span class="mf">5.014</span><span class="p">;</span>
 
-has hoge =&gt; ( isa =&gt; 'Str', is =&gt; 'rw', default =&gt; 'Something' );
+<span class="k">use</span> <span class="nn">MyRedisDatabase</span><span class="p">;</span>
 
-__PACKAGE__-&gt;meta-&gt;make_immutable;
-</code></pre>
+<span class="c1"># init database</span>
+<span class="k">my</span> <span class="nv">$db</span> <span class="o">=</span> <span class="nn">MyRedisDatabase</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span>
+    <span class="n">server</span> <span class="o">=&gt;</span> <span class="s">&#39;localhost:6379&#39;</span>
+<span class="p">);</span>
 
-<p>``` perl redis-object.pl
-use utf8;
-use strict;
-use warnings;
-use 5.014;</p>
+<span class="c1"># create item</span>
+<span class="k">my</span> <span class="nv">$item</span> <span class="o">=</span> <span class="nv">$db</span><span class="o">-&gt;</span><span class="n">create</span><span class="p">(</span> <span class="n">SomeTable</span> <span class="o">=&gt;</span> <span class="p">{</span>
+    <span class="n">hoge</span> <span class="o">=&gt;</span> <span class="s">&#34;Hello&#34;</span><span class="p">,</span>
+<span class="p">}</span> <span class="p">);</span>
 
-<p>use MyRedisDatabase;</p>
+<span class="c1"># fetch item by id</span>
+<span class="nv">$item</span> <span class="o">=</span> <span class="nv">$db</span><span class="o">-&gt;</span><span class="n">find</span><span class="p">(</span> <span class="n">SomeTable</span> <span class="o">=&gt;</span> <span class="nv">$item</span><span class="o">-&gt;</span><span class="n">id</span> <span class="p">);</span>
 
-<h1 id="init-database">init database</h1>
-
-<p>my $db = MyRedisDatabase-&gt;new(
-    server =&gt; &lsquo;localhost:6379&rsquo;
-);</p>
-
-<h1 id="create-item">create item</h1>
-
-<p>my $item = $db-&gt;create( SomeTable =&gt; {
-    hoge =&gt; &ldquo;Hello&rdquo;,
-} );</p>
-
-<h1 id="fetch-item-by-id">fetch item by id</h1>
-
-<p>$item = $db-&gt;find( SomeTable =&gt; $item-&gt;id );</p>
-
-<h1 id="update-item">update item</h1>
-
-<p>$item-&gt;hoge( &ldquo;piyo&rdquo; );
-```</p>
-
-<p>ORMっぽいけど、あんまり複雑な検索はできないらしい。
+<span class="c1"># update item</span>
+<span class="nv">$item</span><span class="o">-&gt;</span><span class="n">hoge</span><span class="p">(</span> <span class="s">&#34;piyo&#34;</span> <span class="p">);</span>
+</code></pre></div><p>ORMっぽいけど、あんまり複雑な検索はできないらしい。
 ここまでするなら普通にMySQLとORMつかったほうが良さそう。</p>
-
 <h2 id="まとめ">まとめ</h2>
-
 <p>みんな tie が大好き。</p>
-
 <p>tie しないのがほしいな・・・。</p>
 
         </div>
@@ -418,6 +361,8 @@ use 5.014;</p>
           
           
             
+          
+            
               <li class="post">
                 <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
               </li>
@@ -468,12 +413,6 @@ use 5.014;</p>
             
               <li class="post">
                 <a href="/blog/2019/08/21/aws-xray-with-perl-lambda-runtime/">AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2019/07/24/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
               </li>
             
           

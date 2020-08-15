@@ -45,7 +45,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.38.1" />
+  <meta name="generator" content="Hugo 0.74.3" />
 
   
   
@@ -124,72 +124,56 @@
           
           
           
-          
-
-<p>先日Go1.9beta1がリリースされました。</p>
-
-<p><blockquote class="twitter-tweet" data-lang="ja"><p lang="en" dir="ltr">Go 1.9 Beta 1 is released!<br><br>Announcement:<a href="https://t.co/lV5nvXwOoR">https://t.co/lV5nvXwOoR</a><br><br>Get it!<a href="https://t.co/2LhlOo2EtX">https://t.co/2LhlOo2EtX</a><a href="https://twitter.com/hashtag/golang?src=hash&amp;ref_src=twsrc%5Etfw">#golang</a> <a href="https://t.co/zm09DwX93q">pic.twitter.com/zm09DwX93q</a></p>&mdash; Go (@golang) <a href="https://twitter.com/golang/status/875117556595515392?ref_src=twsrc%5Etfw">2017年6月14日</a></blockquote>
-<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script></p>
-
+          <p>先日Go1.9beta1がリリースされました。</p>
+<!-- raw HTML omitted -->
 <ul>
 <li><a href="https://tip.golang.org/doc/go1.9">Go 1.9 Release Notes</a></li>
 </ul>
-
 <p>型エイリアスのサポート、<a href="https://tip.golang.org/pkg/math/bits/">math/bits</a>パッケージ、
 <a href="https://tip.golang.org/pkg/sync/#Map">sync.Map</a>型など、
 今回のアップデートでも便利そうな機能が追加されます。
 詳しくは<a href="https://twitter.com/tenntenn">tenntenn</a>さんの<a href="https://www.slideshare.net/takuyaueda967/gopher-fest-2017">Gopher Fest 2017参加レポート</a>をどうぞ。</p>
-
 <p>今回のリリースノートを見て、個人的に注目しているのは<strong>Monotonic Clocksのサポート</strong>です。
 他の機能追加はTwitterとかで見かけるけど、
 Monotonic Clocksはなぜかあまり見ない・・・。
 beta1がでて手軽に試せるようになったので、試してみました。</p>
-
 <h2 id="monotonic-clocks">Monotonic Clocks</h2>
-
 <p>Go1.8以前で取得していた時刻は「wall clock」といい、<strong>現在の正しい時刻</strong>を知るために使います。
 一方「monotonic clock」は、<strong>時間を計る</strong>ために使うものです。
 Go1.9からは<code>time.Now</code>で取得できる時刻に「wall clock」と「monotonic clock」が含まれるようになります。</p>
-
 <p><a href="https://tip.golang.org/pkg/time/#hdr-Monotonic_Clocks">timeパッケージのドキュメント</a>から
 コード片を引用します。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">t := time.Now()
 ... operation that takes 20 milliseconds ...
 u := time.Now()
-elapsed := t.Sub(u)</code></pre></div>
-<p>上のコードで <code>elapsed</code> は 20ms となるはずですが、
+elapsed := t.Sub(u)
+</code></pre></div><p>上のコードで <code>elapsed</code> は 20ms となるはずですが、
 実際はそうはならないケースがあります。
 具体的には以下のようなケースです。</p>
-
 <ul>
 <li>ntpdなどによってOSの時刻が変更された場合</li>
 <li>うるう秒が挿入・削除された場合</li>
 </ul>
-
 <p>Go1.9からはこのようなケースでも正しく時間を計ることができます。</p>
-
 <h2 id="うるう秒を入れてみた">うるう秒を入れてみた</h2>
-
 <p>うるう秒が入ったときの挙動が気になったので実際にやってみました。
 セットアップが簡単になるよう<a href="http://jjy.nict.go.jp/tsp/link/leap.html">NICTのPerl版SNTP</a>のGolangポートを作ったので、
 それを使って偽物のうるう秒を挿入してみます。</p>
-
 <ul>
 <li><a href="https://github.com/shogo82148/fakentpd">shogo82148/fakentpd</a></li>
 </ul>
-
 <p>インストールはいつものように<code>go get</code>です。
 <code>-p</code>オプションで正のうるう秒挿入、<code>-n</code>オプションで負のうるう秒削除です(ほんとうは月末だけだけど、雑な実装のため毎日その日の終わりに挿入・削除されます)。
 引数にRFC3339形式で日時を指定すると、その日時を起動時の日時として扱います。</p>
-
 <p>たとえば今月末に正のうるう秒を挿入するには以下のように指定します。</p>
-<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash"><span class="c1"># 上位ntpd側
-</span><span class="c1"></span>$ go get github.com/shogo82148/fakentpd
-$ sudo fakentpd -p <span class="m">2017</span>-06-30T23:00:00Z # well known portを使うのでroot権限が必要</code></pre></div>
-<p>このSNTPサーバーを上位ntpdとして参照したクライアントを用意し、<code>date</code>コマンドで様子を確認してみましょう。
+<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash"><span class="c1"># 上位ntpd側</span>
+$ go get github.com/shogo82148/fakentpd
+$ sudo fakentpd -p 2017-06-30T23:00:00Z <span class="c1"># well known portを使うのでroot権限が必要</span>
+</code></pre></div><p>このSNTPサーバーを上位ntpdとして参照したクライアントを用意し、<code>date</code>コマンドで様子を確認してみましょう。
 (ntpdの設定などの詳細は<a href="http://tkuchiki.hatenablog.com/entry/2015/06/19/083025">tkuchikiさんのうるう秒検証記事</a> を参照)</p>
-<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash"><span class="c1"># 下位ntpd側
-</span><span class="c1"></span>$ <span class="k">while</span> :<span class="p">;</span> <span class="k">do</span> date +<span class="s1">&#39;%Y-%m-%d %H:%M:%S.%3N&#39;</span><span class="p">;</span> usleep <span class="m">100000</span><span class="p">;</span> <span class="k">done</span></code></pre></div><div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">(前略)
+<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash"><span class="c1"># 下位ntpd側</span>
+$ <span class="k">while</span> :<span class="p">;</span> <span class="k">do</span> date +<span class="s1">&#39;%Y-%m-%d %H:%M:%S.%3N&#39;</span><span class="p">;</span> usleep 100000<span class="p">;</span> <span class="k">done</span>
+</code></pre></div><div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">(前略)
 2017-06-30 23:59:59.040
 2017-06-30 23:59:59.141
 2017-06-30 23:59:59.243
@@ -210,9 +194,8 @@ $ sudo fakentpd -p <span class="m">2017</span>-06-30T23:00:00Z # well known port
 2017-06-30 23:59:59.762
 2017-06-30 23:59:59.863
 2017-06-30 23:59:59.964
-2017-07-01 00:00:00.066</code></pre></div>
-<p>うるう秒が挿入されたため、59.952から59.053へ時間が巻き戻っていることが確認できます。</p>
-
+2017-07-01 00:00:00.066
+</code></pre></div><p>うるう秒が挿入されたため、59.952から59.053へ時間が巻き戻っていることが確認できます。</p>
 <p>これと同等のプログラムをGoで書いて挙動を確認します。
 monotonic clockの確認をするために、一緒に起動時からの経過時間も表示するようにしました。</p>
 <div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
@@ -222,15 +205,15 @@ monotonic clockの確認をするために、一緒に起動時からの経過�
 	<span class="s">&#34;time&#34;</span>
 <span class="p">)</span>
 
-<span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-	<span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
+<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+	<span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
 	<span class="k">for</span> <span class="p">{</span>
-		<span class="nx">now</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
-		<span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="nx">now</span><span class="p">,</span> <span class="nx">now</span><span class="p">.</span><span class="nx">Sub</span><span class="p">(</span><span class="nx">start</span><span class="p">))</span>
-		<span class="nx">time</span><span class="p">.</span><span class="nx">Sleep</span><span class="p">(</span><span class="mi">100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+		<span class="nx">now</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+		<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">now</span><span class="p">,</span> <span class="nx">now</span><span class="p">.</span><span class="nf">Sub</span><span class="p">(</span><span class="nx">start</span><span class="p">))</span>
+		<span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
 	<span class="p">}</span>
-<span class="p">}</span></code></pre></div>
-<p><code>date</code>コマンドで検証したときと同様の条件で、
+<span class="p">}</span>
+</code></pre></div><p><code>date</code>コマンドで検証したときと同様の条件で、
 このプログラムを<strong>Go1.8で実行</strong>すると以下のような結果になりました。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">(前略)
 2017-06-30 23:59:59.038281905 +0000 UTC 32m42.970735711s
@@ -253,10 +236,9 @@ monotonic clockの確認をするために、一緒に起動時からの経過�
 2017-06-30 23:59:59.745050732 +0000 UTC 32m43.677504538s
 2017-06-30 23:59:59.845230425 +0000 UTC 32m43.777684231s
 2017-06-30 23:59:59.945421532 +0000 UTC 32m43.877875338s
-2017-07-01 00:00:00.045595155 +0000 UTC 32m43.978048961s</code></pre></div>
-<p>うるう秒が挿入されたため、59.9から59.0に時刻が巻き戻っていることが確認できます。
+2017-07-01 00:00:00.045595155 +0000 UTC 32m43.978048961s
+</code></pre></div><p>うるう秒が挿入されたため、59.9から59.0に時刻が巻き戻っていることが確認できます。
 それと同時に経過時刻も32m43.87sから32m42.97sと巻き戻ってしまいました。</p>
-
 <p>おなじプログラムをGo1.9で実行してみます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">(前略)
 2017-06-30 23:59:59.038322917 +0000 UTC m=+1962.019889237 32m42.01969158s
@@ -279,20 +261,16 @@ monotonic clockの確認をするために、一緒に起動時からの経過�
 2017-06-30 23:59:59.745084175 +0000 UTC m=+1963.726650464 32m43.726452807s
 2017-06-30 23:59:59.845264185 +0000 UTC m=+1963.826830509 32m43.826632852s
 2017-06-30 23:59:59.94546352 +0000 UTC m=+1963.927029829 32m43.926832172s
-2017-07-01 00:00:00.04563023 +0000 UTC m=+1964.027196518 32m44.026998861s</code></pre></div>
-<p>うるう秒が挿入されるとwall clockは59.9から59.0に時刻が巻き戻っています。
+2017-07-01 00:00:00.04563023 +0000 UTC m=+1964.027196518 32m44.026998861s
+</code></pre></div><p>うるう秒が挿入されるとwall clockは59.9から59.0に時刻が巻き戻っています。
 しかし経過時刻は32m42.9から32m43.0と巻き戻りは発生していません。</p>
-
 <p>Go1.9から<code>t.String()</code>がmonotonic clockの情報を返すようになるので、今回の検証ログにも表示されています。
 monotonic clockも m=+1962.921596780 から m=+1963.025425981 と巻き戻りは発生していません。
 (mの意味はよくわかってないけどプロセスの起動時間？)</p>
-
 <h2 id="時刻を変えてみた">時刻を変えてみた</h2>
-
 <p>検証用のfakentpdを止めて本物の上位ntpdを復活させると、
 時刻の差が大きいため元の時刻に一気に修正されます。
 この場合についても試してみました。</p>
-
 <p>Go1.8で実行した場合。
 時刻が戻ると同時に経過時間が-144hとおかしな値になってしまいました。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">(前略)
@@ -301,8 +279,8 @@ monotonic clockも m=+1962.921596780 から m=+1963.025425981 と巻き戻りは
 2017-07-01 00:30:21.002404752 +0000 UTC 4m52.694188873s #
 2017-06-24 23:41:17.694698679 +0000 UTC -144h44m10.6135172s # 正しい時刻に戻った
 2017-06-24 23:41:17.794881161 +0000 UTC -144h44m10.513334718s
-2017-06-24 23:41:17.895024223 +0000 UTC -144h44m10.413191656s</code></pre></div>
-<p>Go1.9で実行した場合です。
+2017-06-24 23:41:17.895024223 +0000 UTC -144h44m10.413191656s
+</code></pre></div><p>Go1.9で実行した場合です。
 wall clockは正しい時刻に戻りましたが、monotonic clockはその影響を受けず、
 経過時間も正しく計算できています。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">2017-07-01 00:30:20.802071152 +0000 UTC m=+289.102414299 4m49.102265199s
@@ -310,18 +288,15 @@ wall clockは正しい時刻に戻りましたが、monotonic clockはその影�
 2017-07-01 00:30:21.00238566 +0000 UTC m=+289.302728596 4m49.302579496s #
 2017-06-24 23:41:17.694655753 +0000 UTC m=+289.402903206 4m49.402754106s # 正しい時刻に戻った
 2017-06-24 23:41:17.794841932 +0000 UTC m=+289.503089435 4m49.502940335s
-2017-06-24 23:41:17.895004891 +0000 UTC m=+289.603252211 4m49.603103111s</code></pre></div>
-<h2 id="ドリフトしてみた">ドリフトしてみた</h2>
-
+2017-06-24 23:41:17.895004891 +0000 UTC m=+289.603252211 4m49.603103111s
+</code></pre></div><h2 id="ドリフトしてみた">ドリフトしてみた</h2>
 <p>monotonic time は ntpd の干渉を全く受けないわけではなく、
 ドリフトの補正は受けます。
 せっかくなのでこれも確認してみました。</p>
-
 <p>以下のコマンドで500PPM(Parts-per-Million)早く時刻が進むntpdとして動作します。
 1PPMは100万分の1の誤差なので、500PPMでは2000秒(約33分)で1秒ズレます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash">$ sudo fakentpd -d <span class="m">500</span></code></pre></div>
-<p>(ほんとうは2倍速！とかやってみたかったけど、さすがに偽ntpdだとバレて同期対象から外された)</p>
-
+<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash">$ sudo fakentpd -d <span class="m">500</span>
+</code></pre></div><p>(ほんとうは2倍速！とかやってみたかったけど、さすがに偽ntpdだとバレて同期対象から外された)</p>
 <p>起動からの経過時間を返すサーバーと、
 サーバーとの時刻を比較するクライアントを用意します。</p>
 <div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
@@ -333,15 +308,16 @@ wall clockは正しい時刻に戻りましたが、monotonic clockはその影�
 	<span class="s">&#34;time&#34;</span>
 <span class="p">)</span>
 
-<span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-	<span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
-	<span class="nx">http</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">&#34;/&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">req</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+	<span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+	<span class="nx">http</span><span class="p">.</span><span class="nf">HandleFunc</span><span class="p">(</span><span class="s">&#34;/&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">req</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
 		<span class="c1">// 起動からの経過時間を返す
-</span><span class="c1"></span>		<span class="nx">fmt</span><span class="p">.</span><span class="nx">Fprintf</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="s">&#34;%.6f&#34;</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Since</span><span class="p">(</span><span class="nx">start</span><span class="p">).</span><span class="nx">Seconds</span><span class="p">())</span>
-		<span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&#34;%.6f&#34;</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Since</span><span class="p">(</span><span class="nx">start</span><span class="p">).</span><span class="nx">Seconds</span><span class="p">())</span>
+</span><span class="c1"></span>		<span class="nx">fmt</span><span class="p">.</span><span class="nf">Fprintf</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="s">&#34;%.6f&#34;</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Since</span><span class="p">(</span><span class="nx">start</span><span class="p">).</span><span class="nf">Seconds</span><span class="p">())</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;%.6f&#34;</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Since</span><span class="p">(</span><span class="nx">start</span><span class="p">).</span><span class="nf">Seconds</span><span class="p">())</span>
 	<span class="p">})</span>
-	<span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">&#34;:8080&#34;</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
-<span class="p">}</span></code></pre></div><div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
+	<span class="nx">http</span><span class="p">.</span><span class="nf">ListenAndServe</span><span class="p">(</span><span class="s">&#34;:8080&#34;</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
+<span class="p">}</span>
+</code></pre></div><div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
 
 <span class="kn">import</span> <span class="p">(</span>
 	<span class="s">&#34;io/ioutil&#34;</span>
@@ -353,26 +329,26 @@ wall clockは正しい時刻に戻りましたが、monotonic clockはその影�
 <span class="p">)</span>
 
 <span class="c1">// サーバー側の経過時間を取得する
-</span><span class="c1"></span><span class="kd">func</span> <span class="nx">get</span><span class="p">(</span><span class="nx">u</span> <span class="kt">string</span><span class="p">)</span> <span class="kt">float64</span> <span class="p">{</span>
-	<span class="nx">resp</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">Get</span><span class="p">(</span><span class="nx">u</span><span class="p">)</span>
-	<span class="k">defer</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
-	<span class="nx">data</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">ioutil</span><span class="p">.</span><span class="nx">ReadAll</span><span class="p">(</span><span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">)</span>
-	<span class="nx">t</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">strconv</span><span class="p">.</span><span class="nx">ParseFloat</span><span class="p">(</span><span class="nb">string</span><span class="p">(</span><span class="nx">data</span><span class="p">),</span> <span class="mi">64</span><span class="p">)</span>
+</span><span class="c1"></span><span class="kd">func</span> <span class="nf">get</span><span class="p">(</span><span class="nx">u</span> <span class="kt">string</span><span class="p">)</span> <span class="kt">float64</span> <span class="p">{</span>
+	<span class="nx">resp</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="nx">u</span><span class="p">)</span>
+	<span class="k">defer</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
+	<span class="nx">data</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">ioutil</span><span class="p">.</span><span class="nf">ReadAll</span><span class="p">(</span><span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">)</span>
+	<span class="nx">t</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">strconv</span><span class="p">.</span><span class="nf">ParseFloat</span><span class="p">(</span><span class="nb">string</span><span class="p">(</span><span class="nx">data</span><span class="p">),</span> <span class="mi">64</span><span class="p">)</span>
 	<span class="k">return</span> <span class="nx">t</span>
 <span class="p">}</span>
 
-<span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-	<span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
-	<span class="nx">startRemote</span> <span class="o">:=</span> <span class="nx">get</span><span class="p">(</span><span class="nx">os</span><span class="p">.</span><span class="nx">Args</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+	<span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+	<span class="nx">startRemote</span> <span class="o">:=</span> <span class="nf">get</span><span class="p">(</span><span class="nx">os</span><span class="p">.</span><span class="nx">Args</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
 	<span class="k">for</span> <span class="p">{</span>
-		<span class="nx">time</span><span class="p">.</span><span class="nx">Sleep</span><span class="p">(</span><span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">)</span>
-		<span class="nx">end</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
-		<span class="nx">endRemote</span> <span class="o">:=</span> <span class="nx">get</span><span class="p">(</span><span class="nx">os</span><span class="p">.</span><span class="nx">Args</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
-		<span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&#34;local:  %.6f&#34;</span><span class="p">,</span> <span class="nx">end</span><span class="p">.</span><span class="nx">Sub</span><span class="p">(</span><span class="nx">start</span><span class="p">).</span><span class="nx">Seconds</span><span class="p">())</span>
-		<span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&#34;remote: %.6f&#34;</span><span class="p">,</span> <span class="nx">endRemote</span><span class="o">-</span><span class="nx">startRemote</span><span class="p">)</span>
+		<span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">)</span>
+		<span class="nx">end</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+		<span class="nx">endRemote</span> <span class="o">:=</span> <span class="nf">get</span><span class="p">(</span><span class="nx">os</span><span class="p">.</span><span class="nx">Args</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;local:  %.6f&#34;</span><span class="p">,</span> <span class="nx">end</span><span class="p">.</span><span class="nf">Sub</span><span class="p">(</span><span class="nx">start</span><span class="p">).</span><span class="nf">Seconds</span><span class="p">())</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;remote: %.6f&#34;</span><span class="p">,</span> <span class="nx">endRemote</span><span class="o">-</span><span class="nx">startRemote</span><span class="p">)</span>
 	<span class="p">}</span>
-<span class="p">}</span></code></pre></div>
-<p>ドリフト補正が反映されるよう数時間同期状態を保ったあと、
+<span class="p">}</span>
+</code></pre></div><p>ドリフト補正が反映されるよう数時間同期状態を保ったあと、
 検証用プログラムを走らせると以下のような結果になりました。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">(前略)
 2017/06/25 08:34:27 local:  1997.178992
@@ -382,37 +358,28 @@ wall clockは正しい時刻に戻りましたが、monotonic clockはその影�
 2017/06/25 08:34:29 local:  1999.180993
 2017/06/25 08:34:29 remote: 2000.179569
 2017/06/25 08:34:30 local:  2000.182062
-2017/06/25 08:34:30 remote: 2001.181200</code></pre></div>
-<p>起動から2000秒で1秒のズレ＝500PPMのドリフトがかかっていることが確認できました。</p>
-
+2017/06/25 08:34:30 remote: 2001.181200
+</code></pre></div><p>起動から2000秒で1秒のズレ＝500PPMのドリフトがかかっていることが確認できました。</p>
 <h2 id="まとめ">まとめ</h2>
-
 <p>Go1.9からサポートされるmonotonic clockについて検証を行いました。
 うるう秒や時刻変更の影響を受けず、正しく経過時間を測定できることが確認できました。
 また、ドリフトの調整は受けることも確認できました。</p>
-
 <p>monotonic clockになると、methaneさんが紹介している<a href="http://dsas.blog.klab.org/archives/2016-09-20/isucon5q.html">zero time cache</a>の
 実用性があがって利用しやすくなりますね。
 さらに<a href="https://blog.cloudflare.com/how-and-why-the-leap-second-affected-cloudflare-dns/">Cloudflare DNSがうるう秒にやられる</a>
 こともなくなるので安心です。</p>
-
 <p>注意点としては<code>t.String()</code>がmonotonic clockの情報を返すので、
 時刻の出力を雑に<code>fmt.Println(t)</code>とかしていると出力が変わってしまうことくらいでしょうか。
 (皆さんちゃんとFormatしてますよね？)</p>
-
 <p>もうすぐ来年1月1日のうるう秒の有無が発表される時期です。
 それまでにはGo1.9の正式版がリリースされているはずなので、
 変な罠に引っかからないよう皆さんアップデートしましょう！</p>
-
 <h2 id="参考">参考</h2>
-
 <ul>
 <li><a href="http://tech.mercari.com/entry/gopherfest2017_report">Gopher Fest 2017参加レポート</a></li>
 <li><a href="https://www.slideshare.net/takuyaueda967/gopher-fest-2017">Gopher Fest 2017参加レポート(スライド)</a></li>
 </ul>
-
-<p><iframe src="//www.slideshare.net/slideshow/embed_code/key/ebzs4FaAdpQVst" width="595" height="485" frameborder="0" marginwidth="0" marginheight="0" scrolling="no" style="border:1px solid #CCC; border-width:1px; margin-bottom:5px; max-width: 100%;" allowfullscreen> </iframe> <div style="margin-bottom:5px"> <strong> <a href="//www.slideshare.net/takuyaueda967/gopher-fest-2017" title="Gopher Fest 2017参加レポート" target="_blank">Gopher Fest 2017参加レポート</a> </strong> from <strong><a href="https://www.slideshare.net/takuyaueda967" target="_blank">Takuya Ueda</a></strong> </div></p>
-
+<!-- raw HTML omitted -->
 <ul>
 <li><a href="http://jjy.nict.go.jp/tsp/link/leap.html">うるう秒とコンピュータクロック | NICT</a></li>
 <li><a href="http://d.hatena.ne.jp/incarose86/20110505/1312522379">NTP設定</a></li>
@@ -421,10 +388,10 @@ wall clockは正しい時刻に戻りましたが、monotonic clockはその影�
 <li><a href="http://www.geocities.co.jp/SiliconValley/6876/rfc2030j.htm">RFC2030 参考訳 IPv4・IPv6・OSI用簡易ネットワーク時刻プロトコル（SNTP）Version 4</a></li>
 <li><a href="https://tools.ietf.org/html/rfc2030">RFC2030  Simple Network Time Protocol (SNTP) Version 4 for IPv4, IPv6 and OSI</a></li>
 <li><a href="http://dsas.blog.klab.org/archives/2016-09-20/isucon5q.html">ISUCON6予選をトップ通過しました</a>
-
 <ul>
 <li>zero time cache について紹介されています</li>
-</ul></li>
+</ul>
+</li>
 <li><a href="https://blog.cloudflare.com/how-and-why-the-leap-second-affected-cloudflare-dns/">How and why the leap second affected Cloudflare DNS</a></li>
 </ul>
 
@@ -529,6 +496,8 @@ wall clockは正しい時刻に戻りましたが、monotonic clockはその影�
           
           
             
+          
+            
               <li class="post">
                 <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
               </li>
@@ -579,12 +548,6 @@ wall clockは正しい時刻に戻りましたが、monotonic clockはその影�
             
               <li class="post">
                 <a href="/blog/2019/08/21/aws-xray-with-perl-lambda-runtime/">AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2019/07/24/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
               </li>
             
           

@@ -45,7 +45,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.38.1" />
+  <meta name="generator" content="Hugo 0.74.3" />
 
   
   
@@ -124,55 +124,45 @@
           
           
           
-          
-
-<p>AWS RDS には IAM 認証を使って接続する機能があります。</p>
-
+          <p>AWS RDS には IAM 認証を使って接続する機能があります。</p>
 <ul>
 <li><a href="https://docs.aws.amazon.com/ja_jp/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.html">MySQL および PostgreSQL に対する IAM データベース認証</a></li>
 <li><a href="https://aws.amazon.com/jp/premiumsupport/knowledge-center/users-connect-rds-iam/">IAM 認証情報を使用して Amazon RDS への接続をユーザーに許可する方法を教えてください。</a></li>
 </ul>
-
 <p>これを使って接続するGo言語のSQLドライバを書いてみました。</p>
-
 <ul>
 <li><a href="https://github.com/shogo82148/rdsmysql">https://github.com/shogo82148/rdsmysql</a></li>
 </ul>
-
 <h2 id="使い方">使い方</h2>
-
 <p>IAMデータベース認証はデフォルトで無効になっているので、まずはこれを有効化します。
 次に <code>AWSAuthenticationPlugin</code> を認証方式に指定して、新しいユーザーを作りましょう。</p>
-
 <ul>
 <li><a href="https://docs.aws.amazon.com/ja_jp/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.Enabling.html">IAM データベース認証の有効化と無効化</a></li>
 <li><a href="https://docs.aws.amazon.com/ja_jp/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.DBAccounts.html">データベースアカウントの作成</a></li>
 </ul>
-<div class="highlight"><pre class="chroma"><code class="language-sql" data-lang="sql"><span class="k">CREATE</span> <span class="k">USER</span> <span class="n">jane_doe</span> <span class="n">IDENTIFIED</span> <span class="k">WITH</span> <span class="n">AWSAuthenticationPlugin</span> <span class="k">AS</span> <span class="s1">&#39;RDS&#39;</span><span class="p">;</span></code></pre></div>
-<p>他のSQLドライバはimportするだけで使えるのですが、
+<div class="highlight"><pre class="chroma"><code class="language-sql" data-lang="sql"><span class="k">CREATE</span> <span class="k">USER</span> <span class="n">jane_doe</span> <span class="n">IDENTIFIED</span> <span class="k">WITH</span> <span class="n">AWSAuthenticationPlugin</span> <span class="k">AS</span> <span class="s1">&#39;RDS&#39;</span><span class="p">;</span>
+</code></pre></div><p>他のSQLドライバはimportするだけで使えるのですが、
 rdsmysqlではAWSへの権限情報を設定しなければならない都合上、 <code>sql.Register</code> を自前で呼び出す必要があります。
 とは言っても、AWS SDKがいい感じに設定ファイルとか環境変数とか読んでくれるので、
 <a href="https://godoc.org/github.com/shogo82148/rdsmysql#Driver"><code>rdsmysql.Driver</code></a> にAWSセッションを渡すだけです。</p>
-<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="nx">c</span> <span class="o">:=</span> <span class="nx">aws</span><span class="p">.</span><span class="nx">NewConfig</span><span class="p">().</span><span class="nx">WithRegion</span><span class="p">(</span><span class="s">&#34;ap-northeast-1&#34;</span><span class="p">)</span>
-<span class="nx">s</span> <span class="o">:=</span> <span class="nx">session</span><span class="p">.</span><span class="nx">Must</span><span class="p">(</span><span class="nx">session</span><span class="p">.</span><span class="nx">NewSession</span><span class="p">(</span><span class="nx">c</span><span class="p">))</span>
+<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="nx">c</span> <span class="o">:=</span> <span class="nx">aws</span><span class="p">.</span><span class="nf">NewConfig</span><span class="p">().</span><span class="nf">WithRegion</span><span class="p">(</span><span class="s">&#34;ap-northeast-1&#34;</span><span class="p">)</span>
+<span class="nx">s</span> <span class="o">:=</span> <span class="nx">session</span><span class="p">.</span><span class="nf">Must</span><span class="p">(</span><span class="nx">session</span><span class="p">.</span><span class="nf">NewSession</span><span class="p">(</span><span class="nx">c</span><span class="p">))</span>
 <span class="nx">d</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">Driver</span><span class="p">{</span>
     <span class="nx">Session</span><span class="p">:</span> <span class="nx">s</span><span class="p">,</span>
 <span class="p">}</span>
-<span class="nx">sql</span><span class="p">.</span><span class="nx">Register</span><span class="p">(</span><span class="s">&#34;rdsmysql&#34;</span><span class="p">,</span> <span class="nx">d</span><span class="p">)</span>
+<span class="nx">sql</span><span class="p">.</span><span class="nf">Register</span><span class="p">(</span><span class="s">&#34;rdsmysql&#34;</span><span class="p">,</span> <span class="nx">d</span><span class="p">)</span>
 
-<span class="nx">db</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">sql</span><span class="p">.</span><span class="nx">Open</span><span class="p">(</span><span class="s">&#34;rdsmysql&#34;</span><span class="p">,</span> <span class="s">&#34;jane_doe:@tcp(db-foobar.ap-northeast-1.rds.amazonaws.com:3306)/&#34;</span><span class="p">)</span>
+<span class="nx">db</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">sql</span><span class="p">.</span><span class="nf">Open</span><span class="p">(</span><span class="s">&#34;rdsmysql&#34;</span><span class="p">,</span> <span class="s">&#34;jane_doe:@tcp(db-foobar.ap-northeast-1.rds.amazonaws.com:3306)/&#34;</span><span class="p">)</span>
 <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-    <span class="nx">log</span><span class="p">.</span><span class="nx">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+    <span class="nx">log</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
 <span class="p">}</span>
-<span class="k">defer</span> <span class="nx">db</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span></code></pre></div>
-<p>あとは通常のMySQLドライバとして呼び出すだけです。
+<span class="k">defer</span> <span class="nx">db</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
+</code></pre></div><p>あとは通常のMySQLドライバとして呼び出すだけです。
 <a href="https://godoc.org/github.com/go-sql-driver/mysql">go-sql-driver/mysql</a> のラッパーになっているので、
 DNS等の書き方はこれに準じます。
 認証部分は rdsmysql がやってくれるので、パスワードは空でOKです。
 パスワードの管理から開放されて楽ですね！</p>
-
 <p>なお、接続に使用するIAMユーザーもしくはロールには以下の権限が必要です。</p>
-
 <ul>
 <li><a href="https://docs.aws.amazon.com/ja_jp/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.IAMPolicy.html">IAM データベースアクセス用の IAM ポリシーの作成と使用</a></li>
 </ul>
@@ -189,48 +179,35 @@ DNS等の書き方はこれに準じます。
          <span class="p">]</span>
       <span class="p">}</span>
    <span class="p">]</span>
-<span class="p">}</span></code></pre></div>
-<h2 id="コマンドライン-インターフェイス">コマンドライン・インターフェイス</h2>
-
+<span class="p">}</span>
+</code></pre></div><h2 id="コマンドラインインターフェイス">コマンドライン・インターフェイス</h2>
 <p>この方法、一応CLIからも行けるんですが、 <code>aws rds generate-db-auth-token</code> コマンドを叩いて、
 数百の文字のトークンを頑張って <code>mysql</code> コマンドにわたす必要があって、かなり面倒くさい。</p>
-
 <ul>
 <li><a href="https://docs.aws.amazon.com/ja_jp/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.Connecting.AWSCLI.html">コマンドライン: AWS CLI および mysql クライアントからの DB インスタンス への接続</a></li>
 </ul>
-
 <p>そこで、 <code>mysql</code> コマンドのラッパーも一緒に作りました。
 いつもどおり <code>go get</code> でインストール可能です。</p>
 <div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash">go get github.com/shogo82148/rdsmysql/cmd/rdsmysql
-go get github.com/shogo82148/rdsmysql/cmd/rdsmysqldump</code></pre></div>
-<p>ユーザー名とホスト名を指定するだけでお手軽に接続できます。</p>
-
+go get github.com/shogo82148/rdsmysql/cmd/rdsmysqldump
+</code></pre></div><p>ユーザー名とホスト名を指定するだけでお手軽に接続できます。</p>
 <pre><code>rdsmysql -u jane_doe -h db-foobar.ap-northeast-1.rds.amazonaws.com
-</code></pre>
-
-<p>なお、 <code>rdsmysql</code> は <code>mysql</code> のラッパーなので、 <code>mysql</code> の事前インストールが必要です。</p>
-
+</code></pre><p>なお、 <code>rdsmysql</code> は <code>mysql</code> のラッパーなので、 <code>mysql</code> の事前インストールが必要です。</p>
 <p>RDSクラスターに Public IP を割り振っておけば、踏み台サーバー等を経由せずとも、ローカルのPCから安全にアクセスが可能です。</p>
-
 <ul>
 <li><a href="https://dev.classmethod.jp/cloud/aws/iam-auth-rds/">IAM認証によるRDS接続を試してみた</a></li>
 </ul>
-
 <h2 id="まとめ">まとめ</h2>
-
 <ul>
 <li>AWS RDS の IAM 認証を行うドライバを作った</li>
 <li>IAM 認証用のCLIラッパーを作った</li>
 </ul>
-
 <p>なおプロダクションへの投入はまだしてないです。
 ちょっとしたユーティリティツールを書いただけで、バックエンドのリクエストをさばいたことはありません。</p>
-
 <blockquote>
 <p><a href="https://docs.aws.amazon.com/ja_jp/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.html#UsingWithRDS.IAMDBAuth.ConnectionsPerSecond">https://docs.aws.amazon.com/ja_jp/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.html#UsingWithRDS.IAMDBAuth.ConnectionsPerSecond</a>
 MySQL で IAM データベース認証を使用する場合、1 秒あたりの新しい接続数は 20 までに制限されます。db.t2.micro インスタンスクラスを使用している場合、この制限は 1 秒あたり 10 接続に制限されます。</p>
 </blockquote>
-
 <p>さて・・・Goの場合コネクションプールがあるので、たぶん問題ないとは思ってるんですが・・・・
 この制限に引っかかった状況をまだ検証できてません。
 人柱募集中。</p>
@@ -336,6 +313,8 @@ MySQL で IAM データベース認証を使用する場合、1 秒あたりの�
           
           
             
+          
+            
               <li class="post">
                 <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
               </li>
@@ -386,12 +365,6 @@ MySQL で IAM データベース認証を使用する場合、1 秒あたりの�
             
               <li class="post">
                 <a href="/blog/2019/08/21/aws-xray-with-perl-lambda-runtime/">AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2019/07/24/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
               </li>
             
           

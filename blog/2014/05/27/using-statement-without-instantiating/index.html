@@ -45,7 +45,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.38.1" />
+  <meta name="generator" content="Hugo 0.74.3" />
 
   
   
@@ -124,33 +124,24 @@
           
           
           
-          
-
-<p>C# の using ステートメント、普通は変数の初期化とか new とかをまとめてやるものだと思ってたんですが、
+          <p>C# の using ステートメント、普通は変数の初期化とか new とかをまとめてやるものだと思ってたんですが、
 某プロジェクトでusing文をこんな感じで使っているのを見かけました。</p>
 <div class="highlight"><pre class="chroma"><code class="language-csharp" data-lang="csharp"><span class="kt">var</span> <span class="n">hoge</span> <span class="p">=</span> <span class="k">new</span> <span class="n">Hoge</span><span class="p">();</span>
 <span class="n">using</span><span class="p">(</span><span class="n">hoge</span><span class="p">)</span> <span class="p">{</span> <span class="c1">// using( var hoge = new Hoge() ) { ならよく見る
 </span><span class="c1"></span>    <span class="p">...</span>
-<span class="p">}</span></code></pre></div>
-<p>見慣れない書き方だったので、本当にリソース解放が行われているのか不安・・・。
+<span class="p">}</span>
+</code></pre></div><p>見慣れない書き方だったので、本当にリソース解放が行われているのか不安・・・。
 リソース解放が行われているのか調べてみました。</p>
-
-<!-- More -->
-
+<!-- raw HTML omitted -->
 <h2 id="まずは結論">まずは結論</h2>
-
 <ul>
 <li>リソース解放自体は行われているので、ちゃんと書いてあれば問題なし</li>
 <li>しかしエラーをコンパイル時に見つけられない場合があるので非推奨</li>
 </ul>
-
 <h2 id="逆アセンブルして調べてみた">逆アセンブルして調べてみた</h2>
-
 <p>コンパイル結果見ればちゃんとリソース解放されているかわかるよね！
 ってことでバイナリを逆アセンブルして調べてみました。</p>
-
 <h3 id="サンプルコード">サンプルコード</h3>
-
 <p>検証に使ったのはこんなコード。</p>
 <div class="highlight"><pre class="chroma"><code class="language-csharp" data-lang="csharp"><span class="k">using</span> <span class="nn">System</span><span class="p">;</span>
 <span class="k">using</span> <span class="nn">System.IO</span><span class="p">;</span>
@@ -159,19 +150,19 @@
 <span class="p">{</span>
     <span class="k">class</span> <span class="nc">MainClass</span>
     <span class="p">{</span>
-        <span class="k">public</span> <span class="k">static</span> <span class="k">void</span> <span class="n">Main</span> <span class="p">(</span><span class="kt">string</span><span class="na">[]</span> <span class="n">args</span><span class="p">)</span>
+        <span class="k">public</span> <span class="k">static</span> <span class="k">void</span> <span class="n">Main</span> <span class="p">(</span><span class="kt">string</span><span class="p">[]</span> <span class="n">args</span><span class="p">)</span>
         <span class="p">{</span>
             <span class="kt">var</span> <span class="n">sr</span> <span class="p">=</span> <span class="k">new</span> <span class="n">StreamReader</span> <span class="p">(</span><span class="s">&#34;hoge.txt&#34;</span><span class="p">);</span>
             <span class="n">Console</span><span class="p">.</span><span class="n">WriteLine</span> <span class="p">(</span><span class="s">&#34;Hoge: {0}&#34;</span><span class="p">,</span> <span class="n">sr</span><span class="p">.</span><span class="n">ReadLine</span> <span class="p">());</span>
         <span class="p">}</span>
     <span class="p">}</span>
-<span class="p">}</span></code></pre></div>
-<p>僕はMac使いに転向したので、Monoを使います。
+<span class="p">}</span>
+</code></pre></div><p>僕はMac使いに転向したので、Monoを使います。
 <code>mcs</code>を使ってコンパイル、<code>monodis</code> ってのを使うとILを見れるらしいです。
 Windowsだったら .NET Framework SDK に <code>ildasm</code> ってのが付属してるので、それで見れるはず。</p>
 <div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash">mcs UsingTest.cs
-monodis UsingTest.exe</code></pre></div>
-<p>標準出力にILが吐かれます。</p>
+monodis UsingTest.exe
+</code></pre></div><p>標準出力にILが吐かれます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">.assembly extern mscorlib
 // ... 中略 ...
 .namespace UsingTest
@@ -214,16 +205,15 @@ monodis UsingTest.exe</code></pre></div>
     } // end of method MainClass::Main
 
   } // end of class UsingTest.MainClass
-}</code></pre></div>
-<p>Disposeが呼ばれてない！
+}
+</code></pre></div><p>Disposeが呼ばれてない！
 リソース解放されてないぞ！！</p>
-
 <h3 id="usingと一緒に初期化してみる">usingと一緒に初期化してみる</h3>
-
 <p>usingステートメントを使って解放処理をしてみます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-csharp" data-lang="csharp"><span class="k">using</span> <span class="p">(</span><span class="kt">var</span> <span class="n">sr</span> <span class="p">=</span> <span class="k">new</span> <span class="n">StreamReader</span> <span class="p">(</span><span class="s">&#34;hoge.txt&#34;</span><span class="p">))</span> <span class="p">{</span>
     <span class="n">Console</span><span class="p">.</span><span class="n">WriteLine</span> <span class="p">(</span><span class="s">&#34;Hoge: {0}&#34;</span><span class="p">,</span> <span class="n">sr</span><span class="p">.</span><span class="n">ReadLine</span> <span class="p">());</span>
-<span class="p">}</span></code></pre></div><div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">// Code size 49 (0x31)
+<span class="p">}</span>
+</code></pre></div><div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">// Code size 49 (0x31)
 .maxstack 2
 .locals init (
     class [mscorlib]System.IO.StreamReader	V_0)
@@ -250,16 +240,15 @@ finally { // 0
   IL_002f:  endfinally
 } // end handler 0
 IL_0030:  ret
-} // end of method MainClass::Main</code></pre></div>
-<p>自動的に try-finall節が作られ、その中でDisposeが呼ばれています。(たぶん。ILよくわかんないけど)</p>
-
+} // end of method MainClass::Main
+</code></pre></div><p>自動的に try-finall節が作られ、その中でDisposeが呼ばれています。(たぶん。ILよくわかんないけど)</p>
 <h3 id="usingでは初期化しない">usingでは初期化しない</h3>
-
 <p>次にusingの外で初期化</p>
 <div class="highlight"><pre class="chroma"><code class="language-csharp" data-lang="csharp"><span class="kt">var</span> <span class="n">sr</span> <span class="p">=</span> <span class="k">new</span> <span class="n">StreamReader</span> <span class="p">(</span><span class="s">&#34;hoge.txt&#34;</span><span class="p">);</span>
 <span class="k">using</span> <span class="p">(</span><span class="n">sr</span><span class="p">)</span> <span class="p">{</span>
     <span class="n">Console</span><span class="p">.</span><span class="n">WriteLine</span> <span class="p">(</span><span class="s">&#34;Hoge: {0}&#34;</span><span class="p">,</span> <span class="n">sr</span><span class="p">.</span><span class="n">ReadLine</span> <span class="p">());</span>
-<span class="p">}</span></code></pre></div><div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">// Code size 51 (0x33)
+<span class="p">}</span>
+</code></pre></div><div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">// Code size 51 (0x33)
 .locals init (
     class [mscorlib]System.IO.StreamReader V_0,
     class [mscorlib]System.IO.StreamReader V_1)
@@ -287,39 +276,30 @@ finally  { // 0
   IL_002c:  callvirt instance void class [mscorlib]System.IDisposable::Dispose()
   IL_0031:  endfinally
 } // end handler 0
-IL_0032:  ret</code></pre></div>
-<p>お、ちゃんとDispose呼ばれてるみたい！
+IL_0032:  ret
+</code></pre></div><p>お、ちゃんとDispose呼ばれてるみたい！
 リソース解放はされてますね。</p>
-
 <p>上のILをよく見ると、ローカル変数が２つ定義されています。
 どうやらusingの中と外では同じ<code>sr</code>を指定しても別変数として扱われているようです。
 そのためにコピーするコードが追加されているので、コードサイズが2byteほど増えてます。</p>
-
 <h3 id="ブロックの外でインタンスを使う">ブロックの外でインタンスを使う</h3>
-
 <p><code>sr</code> のスコープは<code>Main</code>メソッドの中全体なので、usingのあとに<code>sr</code> をいじってもコンパイルは通ります。</p>
 <div class="highlight"><pre class="chroma"><code class="language-csharp" data-lang="csharp"><span class="kt">var</span> <span class="n">sr</span> <span class="p">=</span> <span class="k">new</span> <span class="n">StreamReader</span> <span class="p">(</span><span class="s">&#34;hoge.txt&#34;</span><span class="p">);</span>
 <span class="k">using</span> <span class="p">(</span><span class="n">sr</span><span class="p">)</span> <span class="p">{</span>
     <span class="n">Console</span><span class="p">.</span><span class="n">WriteLine</span> <span class="p">(</span><span class="s">&#34;Hoge: {0}&#34;</span><span class="p">,</span> <span class="n">sr</span><span class="p">.</span><span class="n">ReadLine</span> <span class="p">());</span>
 <span class="p">}</span>
-<span class="n">Console</span><span class="p">.</span><span class="n">WriteLine</span> <span class="p">(</span><span class="s">&#34;Hoge: {0}&#34;</span><span class="p">,</span> <span class="n">sr</span><span class="p">.</span><span class="n">ReadLine</span> <span class="p">());</span> <span class="p">//</span> <span class="err">例外を吐いて死ぬ</span></code></pre></div>
-<p>しかし、最後の行で例外を吐いて死にます。
+<span class="n">Console</span><span class="p">.</span><span class="n">WriteLine</span> <span class="p">(</span><span class="s">&#34;Hoge: {0}&#34;</span><span class="p">,</span> <span class="n">sr</span><span class="p">.</span><span class="n">ReadLine</span> <span class="p">());</span> <span class="c1">// 例外を吐いて死ぬ
+</span></code></pre></div><p>しかし、最後の行で例外を吐いて死にます。
 使えるけど使うと死ぬインスタンスが残ってるの気持ち悪いですね・・・。</p>
-
 <h2 id="再び結論">再び結論</h2>
-
 <p>ちゃんと Dispose は呼ばれるので、usingを抜けたところでリソース解放は行われます。
 (たった2byteだけど)意味の無いILが生成されたり、コンパイル時のチェックがされなかったり、
 あんまりいいことが無いので積極的に使う理由はないですね。</p>
-
 <h2 id="see-also">SEE ALSO</h2>
-
 <p>ちゃんとドキュメントに書いてあった。</p>
-
 <ul>
 <li><a href="http://msdn.microsoft.com/ja-jp/library/yh598w02.aspx">using ステートメント (C# リファレンス)</a></li>
 </ul>
-
 <blockquote>
 <p>リソース オブジェクトをインスタンス化して、変数を using ステートメントに渡すことは可能ですが、これはベスト プラクティスではありません。
 You can instantiate the resource object and then pass the variable to the using statement, but this is not a best practice.</p>
@@ -426,6 +406,8 @@ You can instantiate the resource object and then pass the variable to the using 
           
           
             
+          
+            
               <li class="post">
                 <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
               </li>
@@ -476,12 +458,6 @@ You can instantiate the resource object and then pass the variable to the using 
             
               <li class="post">
                 <a href="/blog/2019/08/21/aws-xray-with-perl-lambda-runtime/">AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2019/07/24/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
               </li>
             
           

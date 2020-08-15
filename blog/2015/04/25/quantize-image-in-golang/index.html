@@ -45,7 +45,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.38.1" />
+  <meta name="generator" content="Hugo 0.74.3" />
 
   
   
@@ -124,138 +124,111 @@
           
           
           
-          
-
-<p>ちょっとGIFアニメを作りたくなって、最近Go触ってるしGoでやってみよう！とやってみたメモ。
+          <p>ちょっとGIFアニメを作りたくなって、最近Go触ってるしGoでやってみよう！とやってみたメモ。
 ImageMagikでいいじゃん説もあるけど、最終的にツールとして配布したいなってことでGoです。</p>
-
 <p>主に減色まわりについて。</p>
-
-<!-- More -->
-
+<!-- raw HTML omitted -->
 <h2 id="何はともあれ実装してみる">何はともあれ実装してみる</h2>
-
 <p>以前、「<a href="http://d.hatena.ne.jp/sugyan/20140719/1405729672">ターミナル操作の記録(ttyrec)からGIFアニメを生成するツールを作った</a>」という記事を見たので、
 これを参考に実装してみる。</p>
+<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
 
-<p>``` go naive.go
-package main</p>
+<span class="kn">import</span> <span class="p">(</span>
+	<span class="s">&#34;image&#34;</span>
+	<span class="s">&#34;image/color/palette&#34;</span>
+	<span class="s">&#34;image/gif&#34;</span>
+	<span class="nx">_</span> <span class="s">&#34;image/png&#34;</span>
+	<span class="s">&#34;os&#34;</span>
+<span class="p">)</span>
 
-<p>import (
-    &ldquo;image&rdquo;
-    &ldquo;image/color/palette&rdquo;
-    &ldquo;image/gif&rdquo;
-    _ &ldquo;image/png&rdquo;
-    &ldquo;os&rdquo;
-)</p>
+<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+	<span class="nx">reader</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Open</span><span class="p">(</span><span class="s">&#34;Lenna.png&#34;</span><span class="p">)</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="k">return</span>
+	<span class="p">}</span>
+	<span class="k">defer</span> <span class="nx">reader</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
 
-<p>func main() {
-    reader, err := os.Open(&ldquo;Lenna.png&rdquo;)
-    if err != nil {
-        return
-    }
-    defer reader.Close()</p>
+	<span class="nx">img</span><span class="p">,</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nf">Decode</span><span class="p">(</span><span class="nx">reader</span><span class="p">)</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="k">return</span>
+	<span class="p">}</span>
 
-<pre><code>img, _, err := image.Decode(reader)
-if err != nil {
-    return
-}
+	<span class="nx">paletted</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nf">NewPaletted</span><span class="p">(</span><span class="nx">img</span><span class="p">.</span><span class="nf">Bounds</span><span class="p">(),</span> <span class="nx">palette</span><span class="p">.</span><span class="nx">WebSafe</span><span class="p">)</span>
+	<span class="k">for</span> <span class="nx">y</span> <span class="o">:=</span> <span class="nx">img</span><span class="p">.</span><span class="nf">Bounds</span><span class="p">().</span><span class="nx">Min</span><span class="p">.</span><span class="nx">Y</span><span class="p">;</span> <span class="nx">y</span> <span class="p">&lt;</span> <span class="nx">img</span><span class="p">.</span><span class="nf">Bounds</span><span class="p">().</span><span class="nx">Max</span><span class="p">.</span><span class="nx">Y</span><span class="p">;</span> <span class="nx">y</span><span class="o">++</span> <span class="p">{</span>
+		<span class="k">for</span> <span class="nx">x</span> <span class="o">:=</span> <span class="nx">img</span><span class="p">.</span><span class="nf">Bounds</span><span class="p">().</span><span class="nx">Min</span><span class="p">.</span><span class="nx">X</span><span class="p">;</span> <span class="nx">x</span> <span class="p">&lt;</span> <span class="nx">img</span><span class="p">.</span><span class="nf">Bounds</span><span class="p">().</span><span class="nx">Max</span><span class="p">.</span><span class="nx">X</span><span class="p">;</span> <span class="nx">x</span><span class="o">++</span> <span class="p">{</span>
+			<span class="nx">paletted</span><span class="p">.</span><span class="nf">Set</span><span class="p">(</span><span class="nx">x</span><span class="p">,</span> <span class="nx">y</span><span class="p">,</span> <span class="nx">img</span><span class="p">.</span><span class="nf">At</span><span class="p">(</span><span class="nx">x</span><span class="p">,</span> <span class="nx">y</span><span class="p">))</span>
+		<span class="p">}</span>
+	<span class="p">}</span>
 
-paletted := image.NewPaletted(img.Bounds(), palette.WebSafe)
-for y := img.Bounds().Min.Y; y &lt; img.Bounds().Max.Y; y++ {
-    for x := img.Bounds().Min.X; x &lt; img.Bounds().Max.X; x++ {
-        paletted.Set(x, y, img.At(x, y))
-    }
-}
+	<span class="nx">f</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Create</span><span class="p">(</span><span class="s">&#34;naive.gif&#34;</span><span class="p">)</span>
+	<span class="k">defer</span> <span class="nx">f</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
 
-f, _ := os.Create(&quot;naive.gif&quot;)
-defer f.Close()
-
-opts := &amp;gif.GIF{
-    Image:     []*image.Paletted{paletted},
-    Delay:     []int{0},
-    LoopCount: 0,
-}
-gif.EncodeAll(f, opts)
-</code></pre>
-
-<p>}</p>
-
-<pre><code>
-画像用意するの面倒だったので静止画になちゃったけど、
-`gif.GIF.Image` に複数枚画像を渡すとアニメーションGIFになります。
-みんなだいすきLenaさんをGIFに変換してみます。
-
-元画像:
-![Lena](http://upload.wikimedia.org/wikipedia/en/2/24/Lenna.png)
-
-変換後:
-![naive.gif](/images/2015-04-25-naive.gif)
-
-あれ、なんか肌の色とか全然違う・・・
-
-
-## 誤差拡散法でディザリングする
-
-皆さんご存知の通りGIFはインデックスカラー方式で色を指定するので、一枚の画像で256色までしか扱えません。
+	<span class="nx">opts</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">gif</span><span class="p">.</span><span class="nx">GIF</span><span class="p">{</span>
+		<span class="nx">Image</span><span class="p">:</span>     <span class="p">[]</span><span class="o">*</span><span class="nx">image</span><span class="p">.</span><span class="nx">Paletted</span><span class="p">{</span><span class="nx">paletted</span><span class="p">},</span>
+		<span class="nx">Delay</span><span class="p">:</span>     <span class="p">[]</span><span class="kt">int</span><span class="p">{</span><span class="mi">0</span><span class="p">},</span>
+		<span class="nx">LoopCount</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+	<span class="p">}</span>
+	<span class="nx">gif</span><span class="p">.</span><span class="nf">EncodeAll</span><span class="p">(</span><span class="nx">f</span><span class="p">,</span> <span class="nx">opts</span><span class="p">)</span>
+<span class="p">}</span>
+</code></pre></div><p>画像用意するの面倒だったので静止画になちゃったけど、
+<code>gif.GIF.Image</code> に複数枚画像を渡すとアニメーションGIFになります。
+みんなだいすきLenaさんをGIFに変換してみます。</p>
+<p>元画像:
+<img src="http://upload.wikimedia.org/wikipedia/en/2/24/Lenna.png" alt="Lena"></p>
+<p>変換後:
+<img src="/images/2015-04-25-naive.gif" alt="naive.gif"></p>
+<p>あれ、なんか肌の色とか全然違う・・・</p>
+<h2 id="誤差拡散法でディザリングする">誤差拡散法でディザリングする</h2>
+<p>皆さんご存知の通りGIFはインデックスカラー方式で色を指定するので、一枚の画像で256色までしか扱えません。
 少ない色数でより多い色数を表現するためにディザリングがよく行われます。
-Goの標準ライブラリのimage/drawに[フロイド-スタインバーグ・ディザリング](http://ja.wikipedia.org/wiki/%E3%83%95%E3%83%AD%E3%82%A4%E3%83%89-%E3%82%B9%E3%82%BF%E3%82%A4%E3%83%B3%E3%83%90%E3%83%BC%E3%82%B0%E3%83%BB%E3%83%87%E3%82%A3%E3%82%B6%E3%83%AA%E3%83%B3%E3%82%B0)を実装してものがあるので、
-それを使ってみます。
+Goの標準ライブラリのimage/drawに<a href="http://ja.wikipedia.org/wiki/%E3%83%95%E3%83%AD%E3%82%A4%E3%83%89-%E3%82%B9%E3%82%BF%E3%82%A4%E3%83%B3%E3%83%90%E3%83%BC%E3%82%B0%E3%83%BB%E3%83%87%E3%82%A3%E3%82%B6%E3%83%AA%E3%83%B3%E3%82%B0">フロイド-スタインバーグ・ディザリング</a>を実装してものがあるので、
+それを使ってみます。</p>
+<p><code>gif.Encode</code> を使って静止画GIFを作るときにデフォルトでこの方法が使われるみたいですが、
+アニメーションGIFを作るときにはディザリング処理の呼び出しを自分でやらないといけないようです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
 
-`gif.Encode` を使って静止画GIFを作るときにデフォルトでこの方法が使われるみたいですが、
-アニメーションGIFを作るときにはディザリング処理の呼び出しを自分でやらないといけないようです。
+<span class="kn">import</span> <span class="p">(</span>
+	<span class="s">&#34;image&#34;</span>
+	<span class="s">&#34;image/color/palette&#34;</span>
+	<span class="s">&#34;image/draw&#34;</span>
+	<span class="s">&#34;image/gif&#34;</span>
+	<span class="nx">_</span> <span class="s">&#34;image/png&#34;</span>
+	<span class="s">&#34;os&#34;</span>
+<span class="p">)</span>
 
-``` go
-package main
+<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+	<span class="nx">reader</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Open</span><span class="p">(</span><span class="s">&#34;Lenna.png&#34;</span><span class="p">)</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="k">return</span>
+	<span class="p">}</span>
+	<span class="k">defer</span> <span class="nx">reader</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
 
-import (
-	&quot;image&quot;
-	&quot;image/color/palette&quot;
-	&quot;image/draw&quot;
-	&quot;image/gif&quot;
-	_ &quot;image/png&quot;
-	&quot;os&quot;
-)
+	<span class="nx">img</span><span class="p">,</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nf">Decode</span><span class="p">(</span><span class="nx">reader</span><span class="p">)</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="k">return</span>
+	<span class="p">}</span>
 
-func main() {
-	reader, err := os.Open(&quot;Lenna.png&quot;)
-	if err != nil {
-		return
-	}
-	defer reader.Close()
+	<span class="nx">paletted</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nf">NewPaletted</span><span class="p">(</span><span class="nx">img</span><span class="p">.</span><span class="nf">Bounds</span><span class="p">(),</span> <span class="nx">palette</span><span class="p">.</span><span class="nx">WebSafe</span><span class="p">)</span>
+	<span class="nx">draw</span><span class="p">.</span><span class="nx">FloydSteinberg</span><span class="p">.</span><span class="nf">Draw</span><span class="p">(</span><span class="nx">paletted</span><span class="p">,</span> <span class="nx">img</span><span class="p">.</span><span class="nf">Bounds</span><span class="p">(),</span> <span class="nx">img</span><span class="p">,</span> <span class="nx">image</span><span class="p">.</span><span class="nx">ZP</span><span class="p">)</span>
 
-	img, _, err := image.Decode(reader)
-	if err != nil {
-		return
-	}
+	<span class="nx">f</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Create</span><span class="p">(</span><span class="s">&#34;floyd_steinberg.gif&#34;</span><span class="p">)</span>
+	<span class="k">defer</span> <span class="nx">f</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
 
-	paletted := image.NewPaletted(img.Bounds(), palette.WebSafe)
-	draw.FloydSteinberg.Draw(paletted, img.Bounds(), img, image.ZP)
-
-	f, _ := os.Create(&quot;floyd_steinberg.gif&quot;)
-	defer f.Close()
-
-	opts := &amp;gif.GIF{
-		Image:     []*image.Paletted{paletted},
-		Delay:     []int{0},
-		LoopCount: 0,
-	}
-	gif.EncodeAll(f, opts)
-}
-</code></pre>
-
-<p>結果:
-<img src="/images/2015-04-25-floyd_steinberg.gif" alt="floyd_steinberg.gif" /></p>
-
+	<span class="nx">opts</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">gif</span><span class="p">.</span><span class="nx">GIF</span><span class="p">{</span>
+		<span class="nx">Image</span><span class="p">:</span>     <span class="p">[]</span><span class="o">*</span><span class="nx">image</span><span class="p">.</span><span class="nx">Paletted</span><span class="p">{</span><span class="nx">paletted</span><span class="p">},</span>
+		<span class="nx">Delay</span><span class="p">:</span>     <span class="p">[]</span><span class="kt">int</span><span class="p">{</span><span class="mi">0</span><span class="p">},</span>
+		<span class="nx">LoopCount</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+	<span class="p">}</span>
+	<span class="nx">gif</span><span class="p">.</span><span class="nf">EncodeAll</span><span class="p">(</span><span class="nx">f</span><span class="p">,</span> <span class="nx">opts</span><span class="p">)</span>
+<span class="p">}</span>
+</code></pre></div><p>結果:
+<img src="/images/2015-04-25-floyd_steinberg.gif" alt="floyd_steinberg.gif"></p>
 <p>最初よりはかなり良くなったものの、なんだかざらついた感じがします。
 昔はこんな感じの画像よく見ましたね・・・すごく20世紀な感じがします。</p>
-
 <h2 id="メディアンカットで減色してみる">メディアンカットで減色してみる</h2>
-
 <p>20世紀感の原因は<a href="http://www.htmq.com/color/websafe216.shtml">Webセーフカラー</a>(この言葉ってもはや死語なのでは)を使ってるからです。
 21世紀の現在においてはWebセーフカラーでない色を使っても、色が変わることはほとんど無いので、
 24bitカラーで表現可能な1677万色の中から自由に256色を選択できます。</p>
-
 <p>で、問題はその256色をどうやって選択するかなんですが、
 Goの標準ライブラリにはインターフェースは定義されているものの実装が存在しない(？)みたいです。
 いろいろ探しまわって<a href="https://github.com/soniakeys/quant">soniakeys/quant</a>というパッケージを見つけたのでこれを使ってみます。</p>
@@ -269,39 +242,36 @@ Goの標準ライブラリにはインターフェースは定義されている
 	<span class="s">&#34;os&#34;</span>
 <span class="p">)</span>
 
-<span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-	<span class="nx">reader</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Open</span><span class="p">(</span><span class="s">&#34;Lenna.png&#34;</span><span class="p">)</span>
+<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+	<span class="nx">reader</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Open</span><span class="p">(</span><span class="s">&#34;Lenna.png&#34;</span><span class="p">)</span>
 	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
 		<span class="k">return</span>
 	<span class="p">}</span>
-	<span class="k">defer</span> <span class="nx">reader</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+	<span class="k">defer</span> <span class="nx">reader</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
 
-	<span class="nx">img</span><span class="p">,</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nx">Decode</span><span class="p">(</span><span class="nx">reader</span><span class="p">)</span>
+	<span class="nx">img</span><span class="p">,</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nf">Decode</span><span class="p">(</span><span class="nx">reader</span><span class="p">)</span>
 	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
 		<span class="k">return</span>
 	<span class="p">}</span>
 
-	<span class="nx">q</span> <span class="o">:=</span> <span class="nx">median</span><span class="p">.</span><span class="nx">Quantizer</span><span class="p">(</span><span class="mi">256</span><span class="p">)</span>
-	<span class="nx">paletted</span> <span class="o">:=</span> <span class="nx">q</span><span class="p">.</span><span class="nx">Image</span><span class="p">(</span><span class="nx">img</span><span class="p">)</span>
+	<span class="nx">q</span> <span class="o">:=</span> <span class="nx">median</span><span class="p">.</span><span class="nf">Quantizer</span><span class="p">(</span><span class="mi">256</span><span class="p">)</span>
+	<span class="nx">paletted</span> <span class="o">:=</span> <span class="nx">q</span><span class="p">.</span><span class="nf">Image</span><span class="p">(</span><span class="nx">img</span><span class="p">)</span>
 
-	<span class="nx">f</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Create</span><span class="p">(</span><span class="s">&#34;median.gif&#34;</span><span class="p">)</span>
-	<span class="k">defer</span> <span class="nx">f</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+	<span class="nx">f</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Create</span><span class="p">(</span><span class="s">&#34;median.gif&#34;</span><span class="p">)</span>
+	<span class="k">defer</span> <span class="nx">f</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
 
 	<span class="nx">opts</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">gif</span><span class="p">.</span><span class="nx">GIF</span><span class="p">{</span>
 		<span class="nx">Image</span><span class="p">:</span>     <span class="p">[]</span><span class="o">*</span><span class="nx">image</span><span class="p">.</span><span class="nx">Paletted</span><span class="p">{</span><span class="nx">paletted</span><span class="p">},</span>
 		<span class="nx">Delay</span><span class="p">:</span>     <span class="p">[]</span><span class="kt">int</span><span class="p">{</span><span class="mi">0</span><span class="p">},</span>
 		<span class="nx">LoopCount</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
 	<span class="p">}</span>
-	<span class="nx">gif</span><span class="p">.</span><span class="nx">EncodeAll</span><span class="p">(</span><span class="nx">f</span><span class="p">,</span> <span class="nx">opts</span><span class="p">)</span>
-<span class="p">}</span></code></pre></div>
-<p><img src="/images/2015-04-25-median.gif" alt="median.gif" /></p>
-
+	<span class="nx">gif</span><span class="p">.</span><span class="nf">EncodeAll</span><span class="p">(</span><span class="nx">f</span><span class="p">,</span> <span class="nx">opts</span><span class="p">)</span>
+<span class="p">}</span>
+</code></pre></div><p><img src="/images/2015-04-25-median.gif" alt="median.gif"></p>
 <h2 id="メディアンカットで減色してディザリングもやってみる">メディアンカットで減色してディザリングもやってみる</h2>
-
 <p>減色前の画像を渡すと減色したあとの画像を返してくれる<a href="https://github.com/soniakeys/quant">soniakeys/quant</a>の便利メソッドを
 使って実装してみましたが、
 ディザリングをしてくれないのでグラデーション部分があまりキレイではありません。</p>
-
 <p><a href="https://github.com/soniakeys/quant">soniakeys/quant</a>を使うのはパレットの作成だけにして、
 draw.FloydSteinbergでディザリングを行ってみます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
@@ -316,35 +286,35 @@ draw.FloydSteinbergでディザリングを行ってみます。</p>
 	<span class="s">&#34;os&#34;</span>
 <span class="p">)</span>
 
-<span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-	<span class="nx">reader</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Open</span><span class="p">(</span><span class="s">&#34;Lenna.png&#34;</span><span class="p">)</span>
+<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+	<span class="nx">reader</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Open</span><span class="p">(</span><span class="s">&#34;Lenna.png&#34;</span><span class="p">)</span>
 	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
 		<span class="k">return</span>
 	<span class="p">}</span>
-	<span class="k">defer</span> <span class="nx">reader</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+	<span class="k">defer</span> <span class="nx">reader</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
 
-	<span class="nx">img</span><span class="p">,</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nx">Decode</span><span class="p">(</span><span class="nx">reader</span><span class="p">)</span>
+	<span class="nx">img</span><span class="p">,</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nf">Decode</span><span class="p">(</span><span class="nx">reader</span><span class="p">)</span>
 	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
 		<span class="k">return</span>
 	<span class="p">}</span>
 
-	<span class="nx">q</span> <span class="o">:=</span> <span class="nx">median</span><span class="p">.</span><span class="nx">Quantizer</span><span class="p">(</span><span class="mi">256</span><span class="p">)</span>
-	<span class="nx">p</span> <span class="o">:=</span> <span class="nx">q</span><span class="p">.</span><span class="nx">Quantize</span><span class="p">(</span><span class="nb">make</span><span class="p">(</span><span class="nx">color</span><span class="p">.</span><span class="nx">Palette</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">256</span><span class="p">),</span> <span class="nx">img</span><span class="p">)</span>
-	<span class="nx">paletted</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nx">NewPaletted</span><span class="p">(</span><span class="nx">img</span><span class="p">.</span><span class="nx">Bounds</span><span class="p">(),</span> <span class="nx">p</span><span class="p">)</span>
-	<span class="nx">draw</span><span class="p">.</span><span class="nx">FloydSteinberg</span><span class="p">.</span><span class="nx">Draw</span><span class="p">(</span><span class="nx">paletted</span><span class="p">,</span> <span class="nx">img</span><span class="p">.</span><span class="nx">Bounds</span><span class="p">(),</span> <span class="nx">img</span><span class="p">,</span> <span class="nx">image</span><span class="p">.</span><span class="nx">ZP</span><span class="p">)</span>
+	<span class="nx">q</span> <span class="o">:=</span> <span class="nx">median</span><span class="p">.</span><span class="nf">Quantizer</span><span class="p">(</span><span class="mi">256</span><span class="p">)</span>
+	<span class="nx">p</span> <span class="o">:=</span> <span class="nx">q</span><span class="p">.</span><span class="nf">Quantize</span><span class="p">(</span><span class="nb">make</span><span class="p">(</span><span class="nx">color</span><span class="p">.</span><span class="nx">Palette</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">256</span><span class="p">),</span> <span class="nx">img</span><span class="p">)</span>
+	<span class="nx">paletted</span> <span class="o">:=</span> <span class="nx">image</span><span class="p">.</span><span class="nf">NewPaletted</span><span class="p">(</span><span class="nx">img</span><span class="p">.</span><span class="nf">Bounds</span><span class="p">(),</span> <span class="nx">p</span><span class="p">)</span>
+	<span class="nx">draw</span><span class="p">.</span><span class="nx">FloydSteinberg</span><span class="p">.</span><span class="nf">Draw</span><span class="p">(</span><span class="nx">paletted</span><span class="p">,</span> <span class="nx">img</span><span class="p">.</span><span class="nf">Bounds</span><span class="p">(),</span> <span class="nx">img</span><span class="p">,</span> <span class="nx">image</span><span class="p">.</span><span class="nx">ZP</span><span class="p">)</span>
 
-	<span class="nx">f</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Create</span><span class="p">(</span><span class="s">&#34;median-floyd-steinberg.gif&#34;</span><span class="p">)</span>
-	<span class="k">defer</span> <span class="nx">f</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+	<span class="nx">f</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Create</span><span class="p">(</span><span class="s">&#34;median-floyd-steinberg.gif&#34;</span><span class="p">)</span>
+	<span class="k">defer</span> <span class="nx">f</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
 
 	<span class="nx">opts</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">gif</span><span class="p">.</span><span class="nx">GIF</span><span class="p">{</span>
 		<span class="nx">Image</span><span class="p">:</span>     <span class="p">[]</span><span class="o">*</span><span class="nx">image</span><span class="p">.</span><span class="nx">Paletted</span><span class="p">{</span><span class="nx">paletted</span><span class="p">},</span>
 		<span class="nx">Delay</span><span class="p">:</span>     <span class="p">[]</span><span class="kt">int</span><span class="p">{</span><span class="mi">0</span><span class="p">},</span>
 		<span class="nx">LoopCount</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
 	<span class="p">}</span>
-	<span class="nx">gif</span><span class="p">.</span><span class="nx">EncodeAll</span><span class="p">(</span><span class="nx">f</span><span class="p">,</span> <span class="nx">opts</span><span class="p">)</span>
-<span class="p">}</span></code></pre></div>
-<p>結果:
-<img src="/images/2015-04-25-median-floyd-steinberg.gif" alt="median-floyd-steinberg.gif" /></p>
+	<span class="nx">gif</span><span class="p">.</span><span class="nf">EncodeAll</span><span class="p">(</span><span class="nx">f</span><span class="p">,</span> <span class="nx">opts</span><span class="p">)</span>
+<span class="p">}</span>
+</code></pre></div><p>結果:
+<img src="/images/2015-04-25-median-floyd-steinberg.gif" alt="median-floyd-steinberg.gif"></p>
 
         </div>
         
@@ -447,6 +417,8 @@ draw.FloydSteinbergでディザリングを行ってみます。</p>
           
           
             
+          
+            
               <li class="post">
                 <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
               </li>
@@ -497,12 +469,6 @@ draw.FloydSteinbergでディザリングを行ってみます。</p>
             
               <li class="post">
                 <a href="/blog/2019/08/21/aws-xray-with-perl-lambda-runtime/">AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2019/07/24/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
               </li>
             
           

@@ -45,7 +45,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.38.1" />
+  <meta name="generator" content="Hugo 0.74.3" />
 
   
   
@@ -124,128 +124,93 @@
           
           
           
-          
-
-<h2 id="背景">背景</h2>
-
+          <h2 id="背景">背景</h2>
 <p>サーバーの監視に<a href="https://mackerel.io/ja/">Mackerel</a>を使っているのですが、
 用意されているメトリクスでは足りずカスタムメトリクスを追加することが多々あります。
 <a href="https://github.com/mackerelio/mackerel-agent-plugins">Mackerel Agent Plugins</a>を利用すればメトリクスを増やすこと自体は簡単なのですが、
 Agentを設置するインスタンスが増えるので、サーバー保守の手間が増えてしまいます。</p>
-
 <p>僕のユースケースでは監視対象はたいていAWSのマネージド・サービスなので、
 AWS CloudWatch に投稿されたメトリクスが Mackerel で見れれば十分なことが多いです。</p>
-
 <p>そこで、以下の記事を参考に AWS Lambda と CloudWatch Events を組み合わせて、Mackerelへメトリクスを転送するスクリプトを書いてみました。</p>
-
 <ul>
 <li><a href="https://blog.jicoman.info/2016/11/cloudwatch_mackerel/">Amazon LambdaでCloudWatchのメトリクスをMackerelに監視させる</a></li>
 </ul>
-
 <h2 id="デプロイしてみる">デプロイしてみる</h2>
-
 <p>今回はなんと！皆さんの AWSマネジメントコンソールから、クリックひとつでデプロイできるようにしてみました！</p>
-
 <ul>
 <li><a href="https://serverlessrepo.aws.amazon.com/applications/arn:aws:serverlessrepo:us-east-1:445285296882:applications~mackerel-cloudwatch-forwarder">mackerel-cloudwatch-forwarder</a></li>
 </ul>
-
 <p>・・・と、その前に下準備が必要です。
 MackerelのダッシュボードからAPIキーをコピーしてきて、
 <a href="https://docs.aws.amazon.com/ja_jp/systems-manager/latest/userguide/systems-manager-paramstore.html">AWS Systems Manager パラメータストア</a>に
 Secure String として登録しておきます。
 スクショでは Mackerel のものだと分かりやすいよう <code>/development/api.mackerelio.com/headers/X-Api-Key</code> という名前をつけました。
 この名前を後で使うので覚えておきましょう。</p>
-
-<p><img src="/images/2019-01-31-parameter-store.png" alt="パラメーターストア" /></p>
-
+<p><img src="/images/2019-01-31-parameter-store.png" alt="パラメーターストア"></p>
 <p>次に AWS Lambda の画面を開き、「関数の作成」をクリックします。</p>
-
-<p><img src="/images/2019-01-31-create-new-function.png" alt="関数の作成" /></p>
-
+<p><img src="/images/2019-01-31-create-new-function.png" alt="関数の作成"></p>
 <p>「一から作る」「設計図」「AWS Serverless Application Repository」の3つの選択肢が表れるので、
 <strong>「AWS Serverless Application Repository」</strong> を選択します。
 検索BOXに「Mackerel」と入れると、<a href="https://serverlessrepo.aws.amazon.com/applications/arn:aws:serverlessrepo:us-east-1:445285296882:applications~mackerel-cloudwatch-forwarder">mackerel-cloudwatch-forwarder</a>が
 出てくるので、それを選択します。
 なお、この選択肢はデフォルトでは表示ないので、「<strong>Show apps that create custom IAM roles or resource policies</strong>」にチェックを入れましょう。</p>
-
-<p><img src="/images/2019-01-31-search-application.png" alt="アプリケーションの検索" /></p>
-
+<p><img src="/images/2019-01-31-search-application.png" alt="アプリケーションの検索"></p>
 <p>アプリケーションの内容とパラメーターの設定画面に移ります。
 「ParameterName」にパラメーターストアに登録したパラメーター名を入れましょう。
 スクショの例では「<code>/development/api.mackerelio.com/headers/X-Api-Key</code>」を入力します。</p>
-
-<p><img src="/images/2019-01-31-deploy.png" alt="内容を確認してデプロイ" /></p>
-
+<p><img src="/images/2019-01-31-deploy.png" alt="内容を確認してデプロイ"></p>
 <p>「カスタムIAMロールを作成することに同意」のチェックボックスを選択したあと、デプロイ！</p>
-
 <p>しばらく待っていると CloudFormation を利用して <a href="https://serverlessrepo.aws.amazon.com/applications/arn:aws:serverlessrepo:us-east-1:445285296882:applications~mackerel-cloudwatch-forwarder">mackerel-cloudwatch-forwarder</a> がデプロイされます。</p>
-
-<p><img src="/images/2019-01-31-deployed.png" alt="アプリケーションがデプロイされました" /></p>
-
+<p><img src="/images/2019-01-31-deployed.png" alt="アプリケーションがデプロイされました"></p>
 <h2 id="実装">実装</h2>
-
 <p>元記事では Python を利用していましたが、今回の実装には Go を利用しました。
 APIのレスポンスを待つ時間がほとんどで、並行処理が得意な言語のほうが金銭的にお得になるからです。</p>
-
 <ul>
 <li><a href="https://github.com/shogo82148/mackerel-cloudwatch-forwarder">shogo82148/mackerel-cloudwatch-forwarder</a></li>
 </ul>
-
 <p>「<a href="https://shogo82148.github.io/blog/2018/06/20/s3cli-mini/">S3からファイルを落とすだけのツールを作った</a>」に続き、
 今回も aws-sdk-v2 を使ってみました。</p>
-
 <p>MackerelのAPIを叩く部分は net/http を素で使っています。
 というのも、公式提供の <a href="https://github.com/mackerelio/mackerel-client-go">mackerelio/mackerel-client-go</a> は context に未対応で、
 Exponential Back Off のようなリトライ機能が無いためです。
 使うAPIは2つだけなので、直接 http を喋ったほうが早いということで、実装しました。
 もうちょっと汎用化できるような工夫ができたら、本家クライアントにも入れてもらいたいですね。</p>
-
 <p>こういう外部のAPIを叩くときに、何かと頭を悩ませるのがシークレットの管理です。
 他の人の記事を読むと、「KMSで暗号化して環境変数に埋め込み」というのをよく見るのですが、
 Lambda関数を追加するたびに環境変数の設定をやるのは大変です。
 そこで mackerel-cloudwatch-forwarder では <a href="https://docs.aws.amazon.com/ja_jp/systems-manager/latest/userguide/systems-manager-paramstore.html">AWS Systems Manager パラメータストア</a> にシークレットを保存、
 環境変数にはパラメーター名だけを渡すようにしました。</p>
-
 <h2 id="アプリケーションを公開する">アプリケーションを公開する</h2>
-
 <p>Lambda関数の記述にGoを採用したのはいいものの、Goはビルドが必要なので、実際に利用するのは少し面倒です。
 なんとかできないものかと調べてみると、去年(2018年)2月に <a href="https://aws.amazon.com/jp/serverless/serverlessrepo/">AWS Serverless Application Repository</a> が一般公開された記事を見つけました。</p>
-
 <ul>
 <li><a href="https://aws.amazon.com/jp/about-aws/whats-new/2018/02/aws-serverless-application-repository-now-generally-available/">AWS Serverless Application Repository が一般公開されました</a></li>
 </ul>
-
 <p>リリースからの時期が浅いこともあって、<a href="https://aws.amazon.com/jp/serverless/serverlessrepo/">AWS Serverless Application Repository</a> に登録されているのは
 AWSやアメリカの企業が目立ちますが、AWSのアカウントさえ持っていれば、企業に限らず個人もアプリケーションを公開することができます。</p>
-
 <h3 id="sam-cli">SAM CLI</h3>
-
 <p><a href="https://docs.aws.amazon.com/ja_jp/serverlessrepo/latest/devguide/serverless-app-publishing-applications.html">公式のドキュメント</a>には
 AWS マネジメントコンソールやawscliから公開する方法がかいてありますが、
 アプリケーションのメタデータを別途管理する必要があるので、AWS SAM(Serverless Application Model) CLIを使うのが簡単です。</p>
-
 <ul>
 <li><a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-template-publishing-applications.html">Publishing Applications Using AWS SAM CLI</a></li>
 </ul>
-
 <p>通常のSAMのテンプレートに、以下のような10行程度のメタデータをつければ、SAM CLI がこれを読み取ってくれます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml">Metadata<span class="p">:</span><span class="w">
-</span><span class="w">  </span>AWS<span class="p">::</span>ServerlessRepo<span class="p">::</span>Application<span class="p">:</span><span class="w">
-</span><span class="w">    </span>Name<span class="p">:</span><span class="w"> </span>mackerel-cloudwatch-forwarder<span class="w">
-</span><span class="w">    </span>Description<span class="p">:</span><span class="w"> </span>Forward<span class="w"> </span>the<span class="w"> </span>metrics<span class="w"> </span>in<span class="w"> </span>AWS<span class="w"> </span>CloudWatch<span class="w"> </span>to<span class="w"> </span>the<span class="w"> </span>Mackerel.<span class="w">
-</span><span class="w">    </span>Author<span class="p">:</span><span class="w"> </span>Shogo<span class="w"> </span>Ichinose<span class="w">
-</span><span class="w">    </span>SpdxLicenseId<span class="p">:</span><span class="w"> </span>MIT<span class="w">
-</span><span class="w">    </span>LicenseUrl<span class="p">:</span><span class="w"> </span>LICENSE<span class="w">
-</span><span class="w">    </span>ReadmeUrl<span class="p">:</span><span class="w"> </span>README.md<span class="w">
-</span><span class="w">    </span>Labels<span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s1">&#39;tests&#39;</span><span class="p">]</span><span class="w">
-</span><span class="w">    </span>HomePageUrl<span class="p">:</span><span class="w"> </span>https<span class="p">:</span>//github.com/shogo82148/mackerel-cloudwatch-forwarder<span class="w">
-</span><span class="w">    </span>SemanticVersion<span class="p">:</span><span class="w"> </span><span class="m">0.0</span>.<span class="m">4</span><span class="w">
-</span><span class="w">    </span>SourceCodeUrl<span class="p">:</span><span class="w"> </span>https<span class="p">:</span>//github.com/shogo82148/mackerel-cloudwatch-forwarder<span class="w">
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml"><span class="k">Metadata</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span><span class="k">AWS::ServerlessRepo::Application</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="k">Name</span><span class="p">:</span><span class="w"> </span>mackerel-cloudwatch-forwarder<span class="w">
+</span><span class="w">    </span><span class="k">Description</span><span class="p">:</span><span class="w"> </span>Forward<span class="w"> </span>the<span class="w"> </span>metrics<span class="w"> </span>in<span class="w"> </span>AWS<span class="w"> </span>CloudWatch<span class="w"> </span>to<span class="w"> </span>the<span class="w"> </span>Mackerel.<span class="w">
+</span><span class="w">    </span><span class="k">Author</span><span class="p">:</span><span class="w"> </span>Shogo<span class="w"> </span>Ichinose<span class="w">
+</span><span class="w">    </span><span class="k">SpdxLicenseId</span><span class="p">:</span><span class="w"> </span>MIT<span class="w">
+</span><span class="w">    </span><span class="k">LicenseUrl</span><span class="p">:</span><span class="w"> </span>LICENSE<span class="w">
+</span><span class="w">    </span><span class="k">ReadmeUrl</span><span class="p">:</span><span class="w"> </span>README.md<span class="w">
+</span><span class="w">    </span><span class="k">Labels</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s1">&#39;tests&#39;</span><span class="p">]</span><span class="w">
+</span><span class="w">    </span><span class="k">HomePageUrl</span><span class="p">:</span><span class="w"> </span>https<span class="p">:</span>//github.com/shogo82148/mackerel-cloudwatch-forwarder<span class="w">
+</span><span class="w">    </span><span class="k">SemanticVersion</span><span class="p">:</span><span class="w"> </span><span class="m">0.0.4</span><span class="w">
+</span><span class="w">    </span><span class="k">SourceCodeUrl</span><span class="p">:</span><span class="w"> </span>https<span class="p">:</span>//github.com/shogo82148/mackerel-cloudwatch-forwarder<span class="w">
 </span><span class="w">
-</span><span class="w"></span><span class="c"># 以下、SAMの定義</span></code></pre></div>
-<h3 id="s3へのアップロード">S3へのアップロード</h3>
-
+</span><span class="w"></span><span class="c"># 以下、SAMの定義</span><span class="w">
+</span></code></pre></div><h3 id="s3へのアップロード">S3へのアップロード</h3>
 <p>SAMアプリケーションの本体はS3にアップロードしますが、
 AWS Serverless Application Repository へ公開するには S3 へのアクセス権限付与が必要です。
 ドキュメントを参考にして、アップロード先のS3バケットにAWS Serverless Application Repositoryからのアクセスを許可する
@@ -262,63 +227,49 @@ AWS Serverless Application Repository へ公開するには S3 へのアクセ�
             <span class="nt">&#34;Resource&#34;</span><span class="p">:</span> <span class="s2">&#34;arn:aws:s3:::&lt;your-bucket-name&gt;/*&#34;</span>
         <span class="p">}</span>
     <span class="p">]</span>
-<span class="p">}</span></code></pre></div>
-<p>アップロードの手順は通常のSAMアプリケーションと同様、 <code>sam package</code> コマンドを使用します。</p>
-
+<span class="p">}</span>
+</code></pre></div><p>アップロードの手順は通常のSAMアプリケーションと同様、 <code>sam package</code> コマンドを使用します。</p>
 <pre><code>sam package \
     --template-file template.yaml \
     --output-template-file packaged.yaml \
     --s3-bucket &lt;your-bucket-name&gt;
-</code></pre>
-
-<h3 id="公開">公開</h3>
-
+</code></pre><h3 id="公開">公開</h3>
 <p>公開には <code>sam publish</code> コマンドを使用します。</p>
-
 <pre><code>sam publish \
     --template packaged.yaml \
     --region us-east-1
-</code></pre>
-
-<p>アップロード自体は東京リージョンでも可能ですが、一般公開はできません。
+</code></pre><p>アップロード自体は東京リージョンでも可能ですが、一般公開はできません。
 2019年1月現在 us-east-1, us-east-2 のどちらかのリージョンで公開する必要があります。</p>
-
 <blockquote>
 <p><a href="https://aws.amazon.com/jp/blogs/aws/now-available-aws-serverless-application-repository/">https://aws.amazon.com/jp/blogs/aws/now-available-aws-serverless-application-repository/</a>
 You can publish from the US East (N. Virginia) or US East (Ohio) Regions for global availability.</p>
 </blockquote>
-
 <p>ちゃんと計測はしていませんが、公開ボタンを押してから別リージョンでアクセス可能になるまで30分くらいかかりました。
 進捗もわからないし、公開処理が完了するまでは404ページになって、かなり不安になったのですが、まあ、そういうものです。</p>
-
 <h2 id="cloudformationから利用する">CloudFormationから利用する</h2>
-
 <p>公開したアプリケーションはSAMの <a href="https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessapplication">AWS::Serverless::Application</a> タイプとして利用可能です。</p>
-<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml"><span class="w">  </span>MetricsForwarder<span class="p">:</span><span class="w">
-</span><span class="w">    </span>Type<span class="p">:</span><span class="w"> </span>AWS<span class="p">::</span>Serverless<span class="p">::</span>Application<span class="w">
-</span><span class="w">    </span>Properties<span class="p">:</span><span class="w">
-</span><span class="w">      </span>Location<span class="p">:</span><span class="w">
-</span><span class="w">        </span>ApplicationId<span class="p">:</span><span class="w"> </span>arn<span class="p">:</span>aws<span class="p">:</span>serverlessrepo<span class="p">:</span>us-east-<span class="m">1</span><span class="p">:</span><span class="m">445285296882</span><span class="p">:</span>applications/mackerel-cloudwatch-forwarder<span class="w">
-</span><span class="w">        </span>SemanticVersion<span class="p">:</span><span class="w"> </span><span class="m">0.0</span>.<span class="m">4</span><span class="w">
-</span><span class="w">      </span>Parameters<span class="p">:</span><span class="w">
-</span><span class="w">        </span>ParameterName<span class="p">:</span><span class="w"> </span><span class="s2">&#34;/api-keys/api.mackerelio.com/headers/X-Api-Key&#34;</span><span class="w">
-</span><span class="w">        </span>ForwardSettings<span class="p">:</span><span class="w"> </span><span class="sd">|
-</span><span class="sd">            {
-</span><span class="sd">              &#34;service_metrics&#34;: [
-</span><span class="sd">                {
-</span><span class="sd">                  &#34;service&#34;: &#34;your service name&#34;,
-</span><span class="sd">                  &#34;name&#34;: &#34;metric name&#34;,
-</span><span class="sd">                  &#34;metric&#34;: [ &#34;namespace&#34;, &#34;metrics name&#34; ],
-</span><span class="sd">                  &#34;stat&#34;: &#34;Sum&#34;
-</span><span class="sd">                }
-</span><span class="sd">              ]
-</span><span class="sd">            }</span></code></pre></div>
-<p>JSON string in YAML になって大変気持ち悪いですが、JSON string in JSON よりはマシだと言い聞かせて・・・</p>
-
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml"><span class="w">  </span><span class="k">MetricsForwarder</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="k">Type</span><span class="p">:</span><span class="w"> </span>AWS<span class="p">::</span>Serverless<span class="p">::</span>Application<span class="w">
+</span><span class="w">    </span><span class="k">Properties</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span><span class="k">Location</span><span class="p">:</span><span class="w">
+</span><span class="w">        </span><span class="k">ApplicationId</span><span class="p">:</span><span class="w"> </span>arn<span class="p">:</span>aws<span class="p">:</span>serverlessrepo<span class="p">:</span>us-east<span class="m">-1</span><span class="p">:</span><span class="m">445285296882</span><span class="p">:</span>applications/mackerel-cloudwatch-forwarder<span class="w">
+</span><span class="w">        </span><span class="k">SemanticVersion</span><span class="p">:</span><span class="w"> </span><span class="m">0.0.4</span><span class="w">
+</span><span class="w">      </span><span class="k">Parameters</span><span class="p">:</span><span class="w">
+</span><span class="w">        </span><span class="k">ParameterName</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;/api-keys/api.mackerelio.com/headers/X-Api-Key&#34;</span><span class="w">
+</span><span class="w">        </span><span class="k">ForwardSettings</span><span class="p">:</span><span class="w"> </span><span class="sd">|
+</span><span class="sd">            {</span><span class="w">
+</span><span class="w">              </span><span class="k">&#34;service_metrics&#34;: </span><span class="p">[</span><span class="w">
+</span><span class="w">                </span>{<span class="w">
+</span><span class="w">                  </span><span class="k">&#34;service&#34;: </span><span class="s2">&#34;your service name&#34;</span><span class="p">,</span><span class="w">
+</span><span class="w">                  </span><span class="k">&#34;name&#34;: </span><span class="s2">&#34;metric name&#34;</span><span class="p">,</span><span class="w">
+</span><span class="w">                  </span><span class="k">&#34;metric&#34;: </span><span class="p">[</span><span class="w"> </span><span class="s2">&#34;namespace&#34;</span><span class="p">,</span><span class="w"> </span><span class="s2">&#34;metrics name&#34;</span><span class="w"> </span><span class="p">],</span><span class="w">
+</span><span class="w">                  </span><span class="k">&#34;stat&#34;: </span><span class="s2">&#34;Sum&#34;</span><span class="w">
+</span><span class="w">                </span>}<span class="w">
+</span><span class="w">              </span><span class="p">]</span><span class="w">
+</span><span class="w">            </span>}<span class="w">
+</span></code></pre></div><p>JSON string in YAML になって大変気持ち悪いですが、JSON string in JSON よりはマシだと言い聞かせて・・・</p>
 <p>こうして埋め込んだアプリケーションは CloudFormation上は Nested Stack として表現されるようです。</p>
-
 <h2 id="forwardsettingsの指定方法">ForwardSettingsの指定方法</h2>
-
 <p>CloudWatchメトリクスからMackerelメトリクスへの変換方法は、以下のようなJSONで指定します。</p>
 <div class="highlight"><pre class="chroma"><code class="language-json" data-lang="json"><span class="p">{</span>
     <span class="nt">&#34;service_metrics&#34;</span><span class="p">:</span> <span class="p">[</span>
@@ -349,32 +300,23 @@ You can publish from the US East (N. Virginia) or US East (Ohio) Regions for glo
             <span class="nt">&#34;stat&#34;</span><span class="p">:</span> <span class="s2">&#34;Sum&#34;</span>
         <span class="p">}</span>
     <span class="p">]</span>
-<span class="p">}</span></code></pre></div>
-<p><code>metric</code> の指定方法は CloudWatch のダッシュボードを参考にしました。</p>
-
-<p><img src="/images/2019-01-31-cloudwatch.png" alt="CloudWatch" /></p>
-
+<span class="p">}</span>
+</code></pre></div><p><code>metric</code> の指定方法は CloudWatch のダッシュボードを参考にしました。</p>
+<p><img src="/images/2019-01-31-cloudwatch.png" alt="CloudWatch"></p>
 <p>CloudWatchのコンソールからメトリクスを確認するときに、「ソース」タブをクリックするとグラフの定義が現れます。
 ここでプレビューを確認して、ソースの <code>metrics</code> 部分をそのままコピペすれば動くという寸法です。
 なお、最後の <code>{ &quot;stat&quot;: &quot;Sum&quot;, &quot;period&quot;: 60 }</code> となっている部分は無視されます。</p>
-
 <h2 id="まとめ">まとめ</h2>
-
 <ul>
 <li>CloudWatchメトリクスをMackerelに転送する <a href="https://serverlessrepo.aws.amazon.com/applications/arn:aws:serverlessrepo:us-east-1:445285296882:applications~mackerel-cloudwatch-forwarder">mackerel-cloudwatch-forwarder</a> を作った</li>
 <li>はじめての AWS SAM アプリケーションを作ってみた</li>
 <li><a href="https://aws.amazon.com/jp/serverless/serverlessrepo/">AWS Serverless Application Repository</a> デビュー</li>
 </ul>
-
 <p>こう・・・グラフ定義が CloudFormation でできるようになったので、監視設定も CloudFormation でやりたくなってきますね・・・
 (CloudFormationに侵食されてきた)</p>
-
 <p>AWS の中で完結すると楽なんですが、監視に関してはやっぱり Mackerel 便利なんですよね・・・世の中うまくいかない。</p>
-
 <p>mackerel-cloudwatch-forwarder は、米国東部 (オハイオ)、米国東部 (バージニア北部)、米国西部(北カリフォルニア)、米国西部 (オレゴン)、アジアパシフィック (東京)、アジアパシフィック (ソウル)、アジアパシフィック (ムンバイ)、アジアパシフィック (シンガポール)、アジアパシフィック(シドニー)、カナダ (中部)、欧州 (フランクフルト)、欧州 (アイルランド)、欧州 (ロンドン)、および南米 (サンパウロ) のリージョンでご利用いただけます。</p>
-
 <h2 id="参考">参考</h2>
-
 <ul>
 <li><a href="https://blog.jicoman.info/2016/11/cloudwatch_mackerel/">Amazon LambdaでCloudWatchのメトリクスをMackerelに監視させる</a></li>
 <li><a href="https://aws.amazon.com/jp/serverless/serverlessrepo/">AWS Serverless Application Repository</a></li>
@@ -491,6 +433,8 @@ You can publish from the US East (N. Virginia) or US East (Ohio) Regions for glo
           
           
             
+          
+            
               <li class="post">
                 <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
               </li>
@@ -541,12 +485,6 @@ You can publish from the US East (N. Virginia) or US East (Ohio) Regions for glo
             
               <li class="post">
                 <a href="/blog/2019/08/21/aws-xray-with-perl-lambda-runtime/">AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2019/07/24/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
               </li>
             
           

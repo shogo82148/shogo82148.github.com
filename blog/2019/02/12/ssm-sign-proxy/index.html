@@ -45,7 +45,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.38.1" />
+  <meta name="generator" content="Hugo 0.74.3" />
 
   
   
@@ -124,132 +124,89 @@
           
           
           
-          
-
-<h2 id="背景">背景</h2>
-
+          <h2 id="背景">背景</h2>
 <p>外部サービスのAPIやWebHookを叩くときには、多くの場合 API トークンが必要になります。
 もちろん API トークン無しでも叩けるサービスはありますが、<a href="https://developer.github.com/v3/#rate-limiting">GitHub APIのようにトークン無しではリクエスト数が大きく制限</a>されたり、
 一部機能が制限されてしまう場合があります。</p>
-
 <p>外部連携サービスが増えてくると、このAPIトークンをどうやって管理するかが問題になってきます。
 プロダクションに投入されているサービスは普通複数のサーバーから構成されており、各サーバーにAPIトークンを配布するのはちょっと面倒です。
 この問題に対して、以下のようなことが行われて来ました。</p>
-
 <ul>
 <li>プライベートネットワークからのアクセスに限定した Proxy を立てる</li>
 <li>APIトークンの管理は Proxy に任せる</li>
 </ul>
-
 <p>DevOpsが注目され、Slackの利用が広まったころに、このような目的で書かれたProxyサーバーがよく登場しました。</p>
-
 <ul>
 <li><a href="https://techblog.kayac.com/ircslack.html">社内IRCをSlackに移行した時にやったこと</a>
-
 <ul>
 <li>この記事で紹介されている <a href="https://github.com/kayac/nopaste">kayac/nopaste</a></li>
-</ul></li>
+</ul>
+</li>
 <li><a href="https://qiita.com/cubicdaiya/items/1f9a8846f55b9d0bcb48">Slackboard〜Slackプロキシサーバ in Go〜</a></li>
 <li><a href="https://tech.mercari.com/entry/2015/07/06/141056">Slackプロキシサーバ〜slackboard〜を利用したメルカリのSlack活用法</a></li>
 <li><a href="http://blog.yappo.jp/yappo/archives/000760.html">App::Ikachan - 様々なサーバのバッチ処理の結果等を IRC のチャンネルに通知するサーバ</a>
-
 <ul>
 <li>(IRCはHTTPで動いているわけではないし、大本の目的もコネクション維持だけど、認証も代理でやってくれる)</li>
-</ul></li>
 </ul>
-
+</li>
+</ul>
 <p>しかし、これらのサーバーはSlack専用だったりIRC専用だったりします。
 Slackだけじゃなくって、GitHubにコメント登録したり、<a href="https://mackerel.io/ja/blog/entry/weekly/20170127">Mackerelのグラフアノテーション</a>を投稿したり、
 他のサービスとも連携したい！</p>
-
 <p>最近はどんなAPIもHTTPで提供されるようになったので(IRCは・・・ウッ・・・そんなのなかった)、もっと汎用的に書けるのではとやってみました。</p>
-
 <h2 id="実装">実装</h2>
-
 <p>APIトークンの保管場所として <a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-paramstore.html">AWS Systems Manager Parameter Store</a> を採用しました。
 Parameter Store からAPIトークンを取り出す部分と、実際にAPIを叩く部分は AWS Lambda を使用します。
 各サーバーに Forward Proxy デーモンを立てておき、APIを使いたいアプリケーションはこのProxyを経由するようにします。</p>
-
-<p><img src="/images/2019-02-12-ssm-sign-proxy.png" alt="概略図" /></p>
-
+<p><img src="/images/2019-02-12-ssm-sign-proxy.png" alt="概略図"></p>
 <p>この図ではEC2インスタンスを例にしていますが、IAM Roleを付与できるAWSのサービスであれば何でも
 (<a href="https://aws.amazon.com/jp/ecs/">ECS</a>, <a href="https://docs.aws.amazon.com/ja_jp/lambda/latest/dg/welcome.html">Lambda</a>, <a href="https://docs.aws.amazon.com/ja_jp/codebuild/latest/userguide/welcome.html">CodeBuild</a>, etc.)
 APIにアクセスすることができます。</p>
-
 <p>外部サービスのAPIを叩くのが Lambda 関数というのもポイントです。
 APIトークンをヘッダーに設定するのか、URLの一部に含めるのか、クエリストリングに含めるのか・・・といった設定方法はサービスによってまちまちです。
 Lambda 関数がこの辺の設定を肩代わりしてくれるので、APIトークンの扱いを気にする必要はありません。
 また、API利用時にうっかりAPIトークンを漏らしてしまう心配もなくなります。</p>
-
 <p><strong>APIトークンの管理をしたいんじゃない！！ただ、APIを叩きたいだけなんだ！！！！</strong> という思いから、Proxy デーモンはシークレットに関しては何も関与しません。</p>
-
-<hr />
-
+<hr>
 <p>ソースコードはこちら。Lambdaの部分は最近お気に入りの AWS Serverless Application Repository に公開してあります。</p>
-
 <ul>
 <li>GitHub: <a href="https://github.com/shogo82148/ssm-sign-proxy">shogo82148/ssm-sign-proxy</a></li>
 <li><a href="https://serverlessrepo.aws.amazon.com/applications/arn:aws:serverlessrepo:us-east-1:445285296882:applications~ssm-sign-proxy">AWS Serverless Application Repository</a></li>
 </ul>
-
 <h2 id="使い方">使い方</h2>
-
 <h3 id="aws-serverless-application-をデプロイする">AWS Serverless Application をデプロイする</h3>
-
 <p><a href="https://serverlessrepo.aws.amazon.com/applications/arn:aws:serverlessrepo:us-east-1:445285296882:applications~ssm-sign-proxy">AWS Serverless Application Repository</a> からLambda関数をデプロイします。</p>
-
 <h3 id="aws-system-manager-parameter-store-にapiトークンを登録する">AWS System Manager Parameter Store にAPIトークンを登録する</h3>
-
 <p>Parameter Store にAPIトークンを登録します。
 URLから使用する使用するパラメーターを指定できるように、
 パラメーター名を <code>/{hostname}/headers/{header-name}</code> のような特殊な形式にする必要があります。
 例えば<a href="https://developer.github.com/v3/">GitHub REST API v3</a>の場合、
 ホスト名は <code>api.github.com</code> で <code>Authorization</code> ヘッダーを設定する必要があるので、
 以下のような設定になります。</p>
-
 <pre><code>aws ssm put-parameter \
     --name &quot;/api.github.com/headers/Authorization&quot; \
     --value &quot;token $YOUR_OAUTH_TOKEN_HERE&quot; \
     --type SecureString
-</code></pre>
-
-<p>これで <code>api.github.com</code> へのアクセス時、自動的にヘッダーが設定されます。
+</code></pre><p>これで <code>api.github.com</code> へのアクセス時、自動的にヘッダーが設定されます。
 ヘッダー追加以外のリクエスト書き換えにも対応しているので、READMEを参照。</p>
-
 <h3 id="proxy-サーバーを実行する">Proxy サーバーを実行する</h3>
-
 <p><a href="https://github.com/shogo82148/ssm-sign-proxy/releases">Releases</a>から実行バイナリをダウンロードするか、
 <code>go get</code> で取得します。</p>
-
 <pre><code>$ go get github.com/shogo82148/ssm-sign-proxy/cmd/ssm-sign-proxy
-</code></pre>
-
-<p><code>ssm-sign-proxy</code> コマンドに Lambda 関数の名前と待受ポートを指定して起動します。</p>
-
+</code></pre><p><code>ssm-sign-proxy</code> コマンドに Lambda 関数の名前と待受ポートを指定して起動します。</p>
 <pre><code>$ ssm-sign-proxy -function-name=ssm-sign-proxy-Proxy-XXXXXXXXXXXXX -addr=localhost:8000
-</code></pre>
-
-<p>以下のようにHTTP Proxyを経由でAPIを叩けるようになります。</p>
-
+</code></pre><p>以下のようにHTTP Proxyを経由でAPIを叩けるようになります。</p>
 <pre><code>$ http_proxy=localhost:8000 curl api.github.com/user/repos
-</code></pre>
-
-<p>MITM(Man In The Middle) みたいな邪悪な機能は実装していないので、ProxyとはPlainなHTTPで通信する必要があります。
+</code></pre><p>MITM(Man In The Middle) みたいな邪悪な機能は実装していないので、ProxyとはPlainなHTTPで通信する必要があります。
 「今どきAPIトークンが必須今どきTLS非対応のAPIなんて無いだろ」という考えで、Lambda側で勝手に https に書き換えます。</p>
-
 <p>Parameter Store からAPIトークンが見つからなかった場合は 407 Proxy Authentication Required を返します。</p>
-
 <h2 id="応用">応用</h2>
-
 <p>ここから先は他にもこんな使い方ができるはずという単なるアイディア。
 検証はしてない。</p>
-
 <h3 id="proxy-を-go-のアプリケーションに組み込む">Proxy を Go のアプリケーションに組み込む</h3>
-
 <p><a href="https://godoc.org/github.com/shogo82148/ssm-sign-proxy#Proxy.RoundTrip">proxy.Proxy</a>は
 <a href="https://golang.org/pkg/net/http/#RoundTripper">http.RoundTripper</a>インターフェースを実装しているので、
 必ずLambdaを経由するHTTPクライアントを実装できます。</p>
-
 <p>例えば <a href="https://github.com/mackerelio/mackerel-client-go">mackerel-client-go</a> に渡すHTTPクライアントをカスタマイズすれば、
 APIトークンを Parameter Store で一元管理できるはず(まだやってない、これから試す)。</p>
 <div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">import</span> <span class="p">(</span>
@@ -260,59 +217,51 @@ APIトークンを Parameter Store で一元管理できるはず(まだやっ�
   <span class="nx">proxy</span>    <span class="s">&#34;github.com/shogo82148/ssm-sign-proxy&#34;</span>
 <span class="p">)</span>
 
-<span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-  <span class="nx">cfg</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">external</span><span class="p">.</span><span class="nx">LoadDefaultAWSConfig</span><span class="p">()</span>
+<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+  <span class="nx">cfg</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">external</span><span class="p">.</span><span class="nf">LoadDefaultAWSConfig</span><span class="p">()</span>
   <span class="nx">p</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">proxy</span><span class="p">.</span><span class="nx">Proxy</span><span class="p">{</span>
     <span class="nx">Config</span><span class="p">:</span> <span class="nx">cfg</span><span class="p">,</span>
     <span class="nx">FunctionName</span><span class="p">:</span> <span class="s">&#34;ssm-sign-proxy-XXXXXXXX&#34;</span><span class="p">,</span>
   <span class="p">}</span>
 
   <span class="c1">// DUMMY-API-KEY は Lambda関数が適切に置き換えてくれる
-</span><span class="c1"></span>  <span class="nx">client</span> <span class="o">:=</span> <span class="nx">mackerel</span><span class="p">.</span><span class="nx">NewClientWithOptions</span><span class="p">(</span><span class="s">&#34;DUMMY-API-KEY&#34;</span><span class="p">,</span> <span class="s">&#34;http://api.mackerelio.com/&#34;</span><span class="p">,</span> <span class="kc">false</span><span class="p">)</span>
+</span><span class="c1"></span>  <span class="nx">client</span> <span class="o">:=</span> <span class="nx">mackerel</span><span class="p">.</span><span class="nf">NewClientWithOptions</span><span class="p">(</span><span class="s">&#34;DUMMY-API-KEY&#34;</span><span class="p">,</span> <span class="s">&#34;http://api.mackerelio.com/&#34;</span><span class="p">,</span> <span class="kc">false</span><span class="p">)</span>
   <span class="nx">client</span><span class="p">.</span><span class="nx">HTTPClient</span> <span class="p">=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Client</span><span class="p">{</span>
     <span class="nx">Transport</span><span class="p">:</span> <span class="nx">p</span><span class="p">,</span>
     <span class="nx">Timeout</span><span class="p">:</span>   <span class="mi">30</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span>
   <span class="p">}</span>
 
   <span class="c1">// use client
-</span><span class="c1"></span><span class="p">}</span></code></pre></div>
-<h3 id="alb-を使う">ALB を使う</h3>
-
+</span><span class="c1"></span><span class="p">}</span>
+</code></pre></div><h3 id="alb-を使う">ALB を使う</h3>
 <p>ssm-sign-proxyとLambda関数のやり取りは、ALB や Lambda Proxy Integrations と互換性がある形式にしているので、
 ssm-sign-proxy をそのまま ALB で置き換えることができるはず。</p>
-
 <pre><code>curl -H 'Host: api.github.com' internal-310-elb-xxxxxxx.ap-northeast-1.elb.amazonaws.com/user/repos
-</code></pre>
-
-<p>ALBってForward Proxyとして動作するのかな？(未確認)</p>
-
+</code></pre><p>ALBってForward Proxyとして動作するのかな？(未確認)</p>
 <h3 id="lambda-proxy-integrations-in-local-として使う">Lambda Proxy Integrations in Local として使う</h3>
-
 <p>逆にLambda関数のほうをオリジナルのアプリケーションと置き換えれば、
 ssm-sign-proxyが簡易 Lambda Proxy Integrations として動作するはず。
 <a href="https://shogo82148.github.io/blog/2018/12/16/run-cgi-in-aws-lambda/">突然CGIを動かしたくなったとき</a>に活躍する・・・かも？</p>
-
 <h2 id="まとめ">まとめ</h2>
-
 <ul>
-<li><p>外部サービスの認証を肩代わりしてくれる AWS Lambda 関数を作った</p>
-
+<li>
+<p>外部サービスの認証を肩代わりしてくれる AWS Lambda 関数を作った</p>
 <ul>
 <li>認証情報は Parameter Store へ</li>
 <li>APIの実行権限をLambda関数の実行権限として表現できるので、権限管理を IAM Role に集中できて楽(きっと)</li>
-</ul></li>
-
-<li><p>GitHub: <a href="https://github.com/shogo82148/ssm-sign-proxy">shogo82148/ssm-sign-proxy</a></p></li>
-
-<li><p><a href="https://serverlessrepo.aws.amazon.com/applications/arn:aws:serverlessrepo:us-east-1:445285296882:applications~ssm-sign-proxy">AWS Serverless Application Repository</a></p></li>
 </ul>
-
+</li>
+<li>
+<p>GitHub: <a href="https://github.com/shogo82148/ssm-sign-proxy">shogo82148/ssm-sign-proxy</a></p>
+</li>
+<li>
+<p><a href="https://serverlessrepo.aws.amazon.com/applications/arn:aws:serverlessrepo:us-east-1:445285296882:applications~ssm-sign-proxy">AWS Serverless Application Repository</a></p>
+</li>
+</ul>
 <p>実は<a href="https://shogo82148.github.io/blog/2019/01/31/mackerel-cloudwatch-transfer/">サーバーレスでCloudWatchメトリクスをMackerelに転送する</a> で、
 Mackerel API Key のパラメーター名を <code>/development/api.mackerelio.com/headers/X-Api-Key</code> にしたのは ssm-sign-proxy を使うためだったりします。
 キーの管理を一元化できて便利！</p>
-
 <h2 id="参考">参考</h2>
-
 <ul>
 <li><a href="https://techblog.kayac.com/ircslack.html">社内IRCをSlackに移行した時にやったこと</a></li>
 <li><a href="https://qiita.com/cubicdaiya/items/1f9a8846f55b9d0bcb48">Slackboard〜Slackプロキシサーバ in Go〜</a></li>
@@ -423,6 +372,8 @@ Mackerel API Key のパラメーター名を <code>/development/api.mackerelio.c
           
           
             
+          
+            
               <li class="post">
                 <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
               </li>
@@ -473,12 +424,6 @@ Mackerel API Key のパラメーター名を <code>/development/api.mackerelio.c
             
               <li class="post">
                 <a href="/blog/2019/08/21/aws-xray-with-perl-lambda-runtime/">AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2019/07/24/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
               </li>
             
           

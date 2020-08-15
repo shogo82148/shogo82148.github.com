@@ -45,7 +45,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.38.1" />
+  <meta name="generator" content="Hugo 0.74.3" />
 
   
   
@@ -124,30 +124,22 @@
           
           
           
-          
-
-<p><a href="https://metacpan.org/pod/Github::Hooks::Receiver">Github::Hooks::Receiver</a>にX-Hub-SignatureをサポートするPull Requestを送ったら、
+          <p><a href="https://metacpan.org/pod/Github::Hooks::Receiver">Github::Hooks::Receiver</a>にX-Hub-SignatureをサポートするPull Requestを送ったら、
 速攻取り込まれ、さらにGithubのコミット権とPAUSEのco-maintパーミッションをもらったというお話。</p>
-
-<!-- More -->
-
+<!-- raw HTML omitted -->
 <h2 id="x-hub-signature">X-Hub-Signature</h2>
-
 <p>GithubのWebhookは大変便利なんですが、特に対策をしないままだと
 他の人にcurlとかで叩かれてしまう可能性があります。
 本来であればIPアドレスで制限をかけるべきなんですが、
 iptablesの設定とかよくわからないし・・・と思ってGithubのドキュメントを読んでいたら、
 もっとお手軽な方法発見。</p>
-
 <ul>
 <li><a href="https://developer.github.com/webhooks/securing/">Securing your webhooks</a></li>
 </ul>
-
 <p>GithubからのリクエストにはX-Hub-Signatureというのがついていて、
 これを使うとPayloadの検証ができるらしい。
 <a href="https://metacpan.org/pod/Github::Hooks::Receiver">Github::Hooks::Receiver</a>は
 このヘッダを全くみていないようだったので<a href="https://github.com/Songmu/Github-Hooks-Receiver/pull/1">Pull Requestを送ってみた</a>。</p>
-
 <p>Github::Hooks::Receiver 0.02以降で、以下のようにsecretの指定ができるようになります。</p>
 <div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">Github::Hooks::Receiver::Declare</span><span class="p">;</span>
 <span class="k">my</span> <span class="nv">$receiver</span> <span class="o">=</span> <span class="n">receiver</span> <span class="p">{</span>
@@ -157,52 +149,37 @@ iptablesの設定とかよくわからないし・・・と思ってGithubのド
     <span class="p">};</span>
 <span class="p">};</span>
 <span class="k">my</span> <span class="nv">$psgi</span> <span class="o">=</span> <span class="nv">$receiver</span><span class="o">-&gt;</span><span class="n">to_app</span><span class="p">;</span>
-<span class="nv">$receiver</span><span class="o">-&gt;</span><span class="n">run</span><span class="p">;</span></code></pre></div>
-<p>これでsecretを知らない人がリクエストを偽装できなくなるので安心です。
+<span class="nv">$receiver</span><span class="o">-&gt;</span><span class="n">run</span><span class="p">;</span>
+</code></pre></div><p>これでsecretを知らない人がリクエストを偽装できなくなるので安心です。
 secretはエントロピーが高いほうがいいので
 <code>ruby -rsecurerandom -e 'puts SecureRandom.hex(20)'</code>
 みたいなコマンド使うといいらしいですよ。</p>
-
-<h2 id="string-compare-constanttime">String::Compare::ConstantTime</h2>
-
+<h2 id="stringcompareconstanttime">String::Compare::ConstantTime</h2>
 <p>Signatureの比較にはRubyの<a href="http://rubydoc.info/github/rack/rack/master/Rack/Utils.secure_compare">secure_compare</a>のような関数を
 使ったほうがいいらしい。
 Github::Hooks::Receiverでは、そのPerl版の<a href="https://metacpan.org/pod/String::Compare::ConstantTime">String::Compare::ConstantTime</a>を使ってみた。
 ちょっと引数のチェックに甘いところがあって、segmentation fault場合があったので、こちらにもPull Requestを送っておきました。
 Github::Hooks::Receiverは使う前にチェックを入れてあるので、現行バージョンでも問題なく動くはず。</p>
-
 <p>String::Compare::ConstantTimeはXSで書かれたモジュールなんですが、
 この手のバグが入り込みやすいのでXS難しいですね。</p>
-
 <h2 id="まとめ">まとめ</h2>
-
 <ul>
 <li>XS怖い</li>
 <li>Github::Hooks::Receiverにsecretを指定できるようになったので、IP制限がかけられない場合でも安心</li>
 <li>でも、可能であればIP制限もしましょうね</li>
 <li>XS怖い</li>
 </ul>
-
 <h2 id="追記">追記</h2>
-
 <h3 id="ip制限について">IP制限について</h3>
-
 <p>Songmu先生よりコメントをいただきました。</p>
-
-<p><blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">これはいい機能。ちなみにIP制限は、Nginxとかでやるのがお手軽で、plackで完結させたいのであれば、Plack::Middlewareで弾いてやればいいと思います。 / “Github::Hooks::ReceiverがX-…” <a href="http://t.co/NM0uQzW1s8">http://t.co/NM0uQzW1s8</a></p>&mdash; songmu (@songmu) <a href="https://twitter.com/songmu/status/514426458190528513?ref_src=twsrc%5Etfw">2014年9月23日</a></blockquote>
-<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script></p>
-
+<!-- raw HTML omitted -->
 <p>確かにPlack::Middlewareとか使えばお手軽に弾けるので、
 X-Hub-SignatureだけでなくIP制限もやっておくと良いですね。</p>
-
-<h3 id="string-compare-constanttime-1">String::Compare::ConstantTime</h3>
-
+<h3 id="stringcompareconstanttime-1">String::Compare::ConstantTime</h3>
 <p>String::Compare::ConstantTime ですが、僕のprが取り込まれた 0.310 がリリースされました。
 <code>undef</code> を渡すとsegmentation fault で落ちるというバグが修正されています。
 XS怖い。</p>
-
 <h2 id="see-also">SEE ALSO</h2>
-
 <ul>
 <li><a href="https://metacpan.org/pod/Github::Hooks::Receiver">Github::Hooks::Receiver</a></li>
 <li><a href="https://metacpan.org/pod/String::Compare::ConstantTime">String::Compare::ConstantTime</a></li>
@@ -311,6 +288,8 @@ XS怖い。</p>
           
           
             
+          
+            
               <li class="post">
                 <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
               </li>
@@ -361,12 +340,6 @@ XS怖い。</p>
             
               <li class="post">
                 <a href="/blog/2019/08/21/aws-xray-with-perl-lambda-runtime/">AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2019/07/24/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
               </li>
             
           

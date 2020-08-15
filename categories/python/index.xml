@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>Python on Shogo&#39;s Blog</title>
@@ -37,9 +37,7 @@ Let&amp;rsquo;s Encrypt で発行できる証明書は期間が90日と短く、
 ビルド方法(2017年版) 結論から言うと Norio Kimura さんのコメント 通りにビルドするのが、2017年12月現在一番楽な方法です。 (お返事すっかり忘れていてスイマセン・・・情報提供ありがとうございます)
  調べてみると、AWS Lambda では環境変数 LD_LIBRARY_PATH が既に設定されていて /var/task/lib を含んでいました。元記事で ./configure &amp;ndash;prefix=$PROJECT_HOME/local ではなく ./configure &amp;ndash;prefix=$PROJECT_HOME とすればライブラリとの動的リンクは何もしなくても実現できます。さらにコードが展開されるディレクトリ /var/task を固定値だと決め打ちして PROJECT_HOME を /var/task にして開発すれば MeCab に渡すパラメーターの設定（-d, -r）も不要になります。undocumented な仕様に２つも依存していて気持ち悪いですが、MeCab を呼ぶ側のコードを Lambda 用に変更する必要がなくなります。
  コメント中の元記事というのは、こちらの記事のことです。
- AWS Lambda で MeCab を動かす  ``` bash install.sh export PROJECT_HOME=/var/task # LAMBDA_TASK_ROOT
-1. プロジェクト用にディレクトリを作成 mkdir -p &amp;ldquo;$PROJECT_HOME&amp;rdquo;
-2. MeCabのダウンロードとインストール googlecodeサービス終了に伴い、ダウンロードURLが元記事と変わっていることに注意 cd &amp;ldquo;$HOME&amp;rdquo; curl -fsSL &amp;ldquo;https://drive.</description>
+ AWS Lambda で MeCab を動かす  export PROJECT_HOME=/var/task # LAMBDA_TASK_ROOT # 1. プロジェクト用にディレクトリを作成 mkdir -p &amp;#34;$PROJECT_HOME&amp;#34; # 2. MeCabのダウンロードとインストール # googlecodeサービス終了に伴い、ダウンロードURLが元記事と変わっていることに注意 cd &amp;#34;$HOME&amp;#34; curl -fsSL &amp;#34;https://drive.</description>
     </item>
     
     <item>
@@ -50,13 +48,13 @@ Let&amp;rsquo;s Encrypt で発行できる証明書は期間が90日と短く、
       <guid>https://shogo82148.github.io/blog/2016/02/10/mecab-in-lambda/</guid>
       <description>MeCabのPythonバインディングをいじってた関係で、MeCabについてインターネットをさまよっていたら、 AWS Lambda で MeCab を動かすという記事を見つけました。 Lambdaの計算リソースで形態素解析できるのは楽しいですねー。 ただ実装にまだまだ改善できそうな部分があったので修正してみました。
 2017/12/06追記 Norio Kimuraさんのコメントを受けて、MeCabをAWS Lambdaで動かす(2017年版)を書きました。 以下の手順でも動きますが、少し簡単に出来るようになっています。
-問題点 第一に「外部プロセスを起動しているので遅い」という点です。 外部プロセスの起動は非常に重くて数百msかかります。 MeCabは非常に高速で数msもあれば解析が終わるのに、もったいないですよね。
-第二に「OSコマンドインジェクションの危険性がある」という点です。 解析対象の文字列をコマンドライン引数として渡しており、この際シェルを経由しています。 そのため、{&amp;quot;sentence&amp;quot;: &amp;quot;$(ls)&amp;quot;}のような文字列を渡すと、シェルがコマンドとして実行してしまいます。 API Gatewayなどで外部に公開した場合、第三者が何でもし放題な状態になってしまいます。
+問題点 第一に**「外部プロセスを起動しているので遅い」**という点です。 外部プロセスの起動は非常に重くて数百msかかります。 MeCabは非常に高速で数msもあれば解析が終わるのに、もったいないですよね。
+第二に**「OSコマンドインジェクションの危険性がある」**という点です。 解析対象の文字列をコマンドライン引数として渡しており、この際シェルを経由しています。 そのため、{&amp;quot;sentence&amp;quot;: &amp;quot;$(ls)&amp;quot;}のような文字列を渡すと、シェルがコマンドとして実行してしまいます。 API Gatewayなどで外部に公開した場合、第三者が何でもし放題な状態になってしまいます。
 頑張ってMeCabをライブラリとして呼ぶ 全ての元凶は外部プロセス起動にあるので、頑張ってMeCabをライブラリとして呼んでみましょう。 そもそもなんで外部プロセス起動をしていたかというと、 LD_LIBRARY_PATHが正しく設定されていないためimport MeCab時にlibmecab.soを発見できないからです。 なんとかならないものかと探したところ、Stack Overflowにそれっぽい記事がありました。
  Setting LD_LIBRARY_PATH from inside Python  「環境変数を設定してから自分自身をexecし直す方法」と「ctypesを使って絶対パス指定で読み込む方法」が紹介されています。 前者の方がvoteは多いですがLambdaでこれをやるのは大変そうなので、後者で試してみます。
-``` python lambda_function.py
-preload libmecab import os import ctypes libdir = os.path.join(os.getcwd(), &amp;lsquo;local&amp;rsquo;, &amp;lsquo;lib&amp;rsquo;) libmecab = ctypes.cdll.LoadLibrary(os.path.join(libdir, &amp;lsquo;libmecab.so&amp;rsquo;))
- 一度読み込んでしまったライブラリは再利用されるため、 `import MeCab`はここで読み込んだライブラリにリンクされます(importの順番が重要なの闇な感じがする)。 `LD_LIBRARY_PATH`が正しく設定されている必要はありません。 さて、これで`lambda_function.py`と`tokenizer.py`が分かれている必要がなくなったので、二つを合体してみましょう。 ``` python lambda_function.py # coding=utf-8 import os import settings import logging logger = logging.</description>
+# preload libmecab import os import ctypes libdir = os.path.join(os.getcwd(), &amp;#39;local&amp;#39;, &amp;#39;lib&amp;#39;) libmecab = ctypes.cdll.LoadLibrary(os.path.join(libdir, &amp;#39;libmecab.so&amp;#39;)) 一度読み込んでしまったライブラリは再利用されるため、 import MeCabはここで読み込んだライブラリにリンクされます(importの順番が重要なの闇な感じがする)。 LD_LIBRARY_PATHが正しく設定されている必要はありません。
+さて、これでlambda_function.pyとtokenizer.pyが分かれている必要がなくなったので、二つを合体してみましょう。
+# coding=utf-8 import os import settings import logging logger = logging.</description>
     </item>
     
     <item>
@@ -79,11 +77,10 @@ import MeCab tagger = MeCab.</description>
       
       <guid>https://shogo82148.github.io/blog/2015/06/02/mecab-in-python3/</guid>
       <description>先日このようなツイートを見かけて、 「Python3になってGCの挙動変わったのかな？」と疑問に思ったので調査してみました。
-MeCabをPythonから使う注意点とか - Shogo&amp;#39;s Blog http://t.co/vJnOqZfUd7 @shogo82148さんから python3だと変数に代入しなくても動くのだけど2.xでは留意しないといけない
-&amp;mdash; NOKUBI Takatsugu野首貴嗣 (@knok) 2015年6月1日 
 Python3へのMeCabインストール 手元のPython3.4.3にMeCab Bindingをインストールします。 MeCabの公式(Google Codeサービス停止にともないgithub pageへ移行している模様)から落とせる Python BindingはPython2.x向けのため、setup.pyがそのままでは動きません。 Python3.xでは非互換な文法の変更が入ったので以下のように書き換える必要があります。
-diff --git a/setup.py.org b/setup.py index 4486cbb..657945a 100644 --- a/setup.py.org +++ b/setup.py @@ -7,7 +7,7 @@ def cmd1(str):  return os.popen(str).readlines()[0][:-1] def cmd2(str): - return string.split (cmd1(str)) + return cmd1(str).split()  setup(name = &amp;#34;mecab-python&amp;#34;, version = cmd1(&amp;#34;mecab-config --version&amp;#34;),  あとは python setup.py install で入ります。
-動かしてみる 以前書いた「MeCabをPythonから使う注意点とか」を見返しながら、 GCされて上手く動かない例 をPython3.</description>
+diff --git a/setup.py.org b/setup.py index 4486cbb..657945a 100644 --- a/setup.py.org +++ b/setup.py @@ -7,7 +7,7 @@ def cmd1(str):  return os.popen(str).readlines()[0][:-1] def cmd2(str): - return string.split (cmd1(str)) + return cmd1(str).split()  setup(name = &amp;#34;mecab-python&amp;#34;, version = cmd1(&amp;#34;mecab-config --version&amp;#34;), あとは python setup.py install で入ります。
+動かしてみる 以前書いた「MeCabをPythonから使う注意点とか」を見返しながら、 GCされて上手く動かない例 をPython3.4.3で動かしてみます。 文字列の扱いが変わったり、print文の扱いが変わったりしているので、その部分だけ書き換えが必要です。
+import MeCab tagger = MeCab.tagger(&amp;#39;&amp;#39;) text = u&amp;#39;MeCabで遊んでみよう！&amp;#39; node = tagger.parseToNode(text) # Python2.</description>
     </item>
     
     <item>
@@ -94,7 +91,7 @@ diff --git a/setup.py.org b/setup.py index 4486cbb..657945a 100644 --- a/setup.p
       <guid>https://shogo82148.github.io/blog/2014/04/27/tweepy-2-dot-3-0-released/</guid>
       <description>Tweepyの2.3.0が出ました。 「Tweepy が Application-only Authentication に対応します」僕のprも取り込まれていて、 Application-only Authentication が標準で使えるようになりました。 というわけで、早速遊んでみます。
 Application-only Authenticationで遊ぶ 使い方は「tweepyでApplication-only Authenticationしてみた」のときとほぼ同じ。 Tweepy本体に取り込んでもらったので、名前空間がちょこっと変わったくらいです。 Consumer Key と Consumer Secretだけ設定すればいいので、簡単に使えます。
-#!/usr/bin/env python # -*- coding: utf-8 -*- import tweepy import codecs import sys sys.stdin = codecs.getreader(&amp;#39;utf-8&amp;#39;)(sys.stdin) sys.stdout = codecs.getwriter(&amp;#39;utf-8&amp;#39;)(sys.stdout) CONSUMER_KEY = &amp;#39;YOUR CONSUMER KEY&amp;#39; CONSUMER_SECRET = &amp;#39;YOUR CONSUMER SECRET&amp;#39; def main(): user_id = &amp;#34;JO_RI&amp;#34; auth = tweepy.AppAuthHandler(CONSUMER_KEY, CONSUMER_SECRET) api = tweepy.API(auth) arg = {&amp;#39;id&amp;#39;: user_id, &amp;#39;include_rts&amp;#39;: 1} user_statuses = tweepy.</description>
+#!/usr/bin/env python # -*- coding: utf-8 -*- import tweepy import codecs import sys sys.stdin = codecs.getreader(&amp;#39;utf-8&amp;#39;)(sys.stdin) sys.stdout = codecs.getwriter(&amp;#39;utf-8&amp;#39;)(sys.stdout) CONSUMER_KEY = &amp;#39;YOUR CONSUMER KEY&amp;#39; CONSUMER_SECRET = &amp;#39;YOUR CONSUMER SECRET&amp;#39; def main(): user_id = &amp;#34;JO_RI&amp;#34; auth = tweepy.AppAuthHandler(CONSUMER_KEY, CONSUMER_SECRET) api = tweepy.API(auth) arg = {&amp;#39;id&amp;#39;: user_id, &amp;#39;include_rts&amp;#39;: 1} user_statuses = tweepy.Cursor(api.user_timeline, **arg).</description>
     </item>
     
     <item>
@@ -132,9 +129,7 @@ import httplib from httplib import HTTPConnection, HTTPS_PORT import ssl class H
 知らなかった・・・。 最近API叩いてなかったからな・・・。
 便利そうなので、Python用のTwitterライブラリであるTweepyから使ってみた。
 AuthHandler Tweepy用のAuthHandler。 認証部分は TwitterのApplication-only authenticationを試してみた のページからほぼコピペ。
-``` python AppAuthHandler.py import tweepy import urllib import urllib2 import base64 import json
-class AppAuthHandler(tweepy.auth.AuthHandler): TOKEN_URL = &amp;lsquo;https://api.twitter.com/oauth2/token&#39;
-def __init__(self, consumer_key, consumer_secret): token_credential = urllib.quote(consumer_key) + &#39;:&#39; + urllib.quote(consumer_secret) credential = base64.b64encode(token_credential) value = {&#39;grant_type&#39;: &#39;client_credentials&#39;} data = urllib.urlencode(value) req = urllib2.Request(self.TOKEN_URL) req.add_header(&#39;Authorization&#39;, &#39;Basic &#39; + credential) req.add_header(&#39;Content-Type&#39;, &#39;application/x-www-form-urlencoded;charset=UTF-8&#39;) response = urllib2.urlopen(req, data) json_response = json.</description>
+import tweepy import urllib import urllib2 import base64 import json class AppAuthHandler(tweepy.auth.AuthHandler): TOKEN_URL = &amp;#39;https://api.twitter.com/oauth2/token&amp;#39; def __init__(self, consumer_key, consumer_secret): token_credential = urllib.quote(consumer_key) + &amp;#39;:&amp;#39; + urllib.quote(consumer_secret) credential = base64.b64encode(token_credential) value = {&amp;#39;grant_type&amp;#39;: &amp;#39;client_credentials&amp;#39;} data = urllib.urlencode(value) req = urllib2.Request(self.TOKEN_URL) req.add_header(&amp;#39;Authorization&amp;#39;, &amp;#39;Basic &amp;#39; + credential) req.add_header(&amp;#39;Content-Type&amp;#39;, &amp;#39;application/x-www-form-urlencoded;charset=UTF-8&amp;#39;) response = urllib2.urlopen(req, data) json_response = json.loads(response.read()) self.</description>
     </item>
     
     <item>
@@ -148,7 +143,7 @@ MeCabはいろいろな言語から呼び出すことができます． 自然�
  MeCabに渡す文字列はencode，戻ってきた文字列はdecodeする MeCabに渡した文字列は必ず変数に入れておく  EncodeとDecode Python2系の文字列には，バイト列として扱われる文字列(str)と，Unicodeで表現された文字列(unicode)があります． 日本語を扱う場合，strだといろいろ問題があるので，特に理由がなければunicodeを使うべきです． しかし，MeCabはstrしか受け付けません． そこでMeCabに渡す直前・直後でencode・decodeするようにします．
 import MeCab tagger = MeCab.tagger(&amp;#39;-Owakati&amp;#39;) text = u&amp;#39;MeCabで遊んでみよう！&amp;#39; result = tagger.parse(text) # エラー！ encoded_text = text.encode(&amp;#39;utf-8&amp;#39;) # encodeが必要 encoded_result = tagger.parse(text) result = result.decode(&amp;#39;utf-8&amp;#39;) # 必ずdecode &#39;utf-8&#39;の部分は辞書の文字コードに合わせて適宜書き換えてください． デフォルトはeuc-jpですが，utf-8の方が幸せになれると思います．
 必ず変数に入れる 次にMeCabの作ったノードに直接アクセスして，品詞情報などを取ってくることを考えます． 適当に書いてみるとこんな感じでしょうか．
-import MeCab tagger = MeCab.tagger(&amp;#39;&amp;#39;) text = u&amp;#39;MeCabで遊んでみよう！&amp;#39; node = tagger.parseToNode(text.encode(&amp;#39;utf-8&amp;#39;)) while node: #printはstrを渡す必要があるのでdecodeは不要 print node.surface + &amp;#39;\t&amp;#39; + node.</description>
+import MeCab tagger = MeCab.tagger(&amp;#39;&amp;#39;) text = u&amp;#39;MeCabで遊んでみよう！&amp;#39; node = tagger.parseToNode(text.encode(&amp;#39;utf-8&amp;#39;)) while node: #printはstrを渡す必要があるのでdecodeは不要 print node.surface + &amp;#39;\t&amp;#39; + node.feature node = node.</description>
     </item>
     
     <item>
@@ -161,14 +156,8 @@ import MeCab tagger = MeCab.tagger(&amp;#39;&amp;#39;) text = u&amp;#39;MeCabで
 インストール CaboCha自体のインストールは公式のドキュメントを参照． ググれば他の人のレポートも出てくるはず．
 CaboChaのソースコードを展開したディレクトリの中の pythonディレクトリにPython-bindingが入ってます． そこに移動した後，管理者権限で以下のコマンドを実行すればインストール完了．
 python setup.py install 食べ方 解析結果を文字列出力 python/test.py に書いてあるとおり．
-``` python test.py http://code.google.com/p/cabocha/source/browse/trunk/python/test.py #!/usr/bin/python
--- coding: utf-8 -- import CaboCha
-c = CaboCha.Parser(&amp;ldquo;&amp;rdquo;); c = CaboCha.Parser()
-sentence = &amp;ldquo;太郎はこの本を二郎を見た女性に渡した。&amp;rdquo;
-print c.parseToString(sentence)
-tree = c.parse(sentence)
-print tree.toString(CaboCha.FORMAT_TREE) print tree.toString(CaboCha.FORMAT_LATTICE)
- 以下のような結果が得られれば成功． ``` plain &amp;lt;PERSON&amp;gt;太郎&amp;lt;/PERSON&amp;gt;は-----------D この-D | 本を---D | 二郎を-D | 見た-D | 女性に-D 渡した。 EOS &amp;lt;PERSON&amp;gt;太郎&amp;lt;/PERSON&amp;gt;は-----------D この-D | 本を---D | 二郎を-D | 見た-D | 女性に-D 渡した。 EOS * 0 6D 0/1 2.</description>
+#!/usr/bin/python # -*- coding: utf-8 -*- import CaboCha # c = CaboCha.Parser(&amp;#34;&amp;#34;); c = CaboCha.Parser() sentence = &amp;#34;太郎はこの本を二郎を見た女性に渡した。&amp;#34; print c.parseToString(sentence) tree = c.parse(sentence) print tree.toString(CaboCha.FORMAT_TREE) print tree.toString(CaboCha.FORMAT_LATTICE) 以下のような結果が得られれば成功．
+&amp;lt;PERSON&amp;gt;太郎&amp;lt;/PERSON&amp;gt;は-----------D この-D | 本を---D | 二郎を-D | 見た-D | 女性に-D 渡した。 EOS &amp;lt;PERSON&amp;gt;太郎&amp;lt;/PERSON&amp;gt;は-----------D この-D | 本を---D | 二郎を-D | 見た-D | 女性に-D 渡した。 EOS * 0 6D 0/1 2.</description>
     </item>
     
   </channel>

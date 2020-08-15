@@ -45,7 +45,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.38.1" />
+  <meta name="generator" content="Hugo 0.74.3" />
 
   
   
@@ -124,69 +124,47 @@
           
           
           
-          
-
-<p>先日<a href="https://twitter.com/mattn_jp">mattn</a>さんの記事を読みました。</p>
-
+          <p>先日<a href="https://twitter.com/mattn_jp">mattn</a>さんの記事を読みました。</p>
 <ul>
 <li><a href="http://mattn.kaoriya.net/software/lang/go/20170112181052.htm">golang の http.Client を速くする</a></li>
 </ul>
-
 <p><a href="https://github.com/abursavich/nett">nett</a>というパッケージを使って
 名前解決の結果をキャッシュすることで、<code>http.Client</code>を早くするというものです。
 この記事に関して、ちょっと疑問に思ったことがあったので、検証してみました。</p>
-
-<!-- More -->
-
+<!-- raw HTML omitted -->
 <h2 id="疑問">疑問</h2>
-
 <p>疑問に思ったのは以下の点です。</p>
-
 <h3 id="名前解決遅すぎでは">名前解決遅すぎでは？</h3>
-
 <p>ベンチマークの結果を見ると5億ns(=500ms)ほど速度が改善しています。
 3つのURLに対してリクエストを投げているので、初回を除く2回DNSのキャッシュがヒットし、
 名前解決2回分の速度改善になるはずです。
 と、いうことは、名前解決1回あたり250msかかっている計算になります。
 googleのsearchは302でリダイレクトがかかるので、<code>Client.Get</code>の呼び出し1回あたり2回リクエストが飛ぶ、
 ということを計算に入れても100msほどかかる計算です。</p>
-
 <p>Google先生の謎テクノロジーによってかなりの最適化がされているはずですし、
 ネットワークプロバイダのDNSキャッシュにヒットする可能性も高いでしょう。
 <strong>名前解決程度にこんなに時間がかかっていたらスプラトゥーンが出来ない！</strong>
 (mattnさんがスプラトゥーンをプレイしているかは知らない)</p>
-
 <p><strong>2017/01/16追記:</strong>
 mattnさんはスプラトゥーンをプレイしていないそうです。残念。</p>
-
-<p><blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">あとスプラトゥーンしてません。。。</p>&mdash; mattn (@mattn_jp) <a href="https://twitter.com/mattn_jp/status/820236711149981696?ref_src=twsrc%5Etfw">2017年1月14日</a></blockquote>
-<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script></p>
-
+<!-- raw HTML omitted -->
 <p>もちろん、ネットワークが混雑していたり、
 モバイルネットワークを利用していたり、という可能性もありますが、
 ちょっと不自然な印象を受けました。</p>
-
 <h3 id="keep-aliveされてるのでは">Keep-Aliveされてるのでは？</h3>
-
 <p>スキーマがhttpsになっているので、Google先生相手ならHTTP2で通信していてもおかしくありません。
 HTTP2は基本的にドメイン毎にコネクションを1つだけ張って、それを使いまわします。
 もし仮にHTTP1.1で通信していたとしても、<code>http.Client</code>はデフォルトでKeep-Aliveが有効になっているので、
 普通に使うとコネクションを再利用してくれます。</p>
-
 <p>そういうわけで、名前解決以前にそもそもTCPのコネクション確立もスキップされている可能性が高いのでは？
 と思ったわけです。
 この予想が正しければ、名前解決は初回リクエストでしか行われないので、ベンチマークに差はでないはずです。</p>
-
 <h2 id="httpリクエストの様子をトレースしてみる">HTTPリクエストの様子をトレースしてみる</h2>
-
 <p>これらの疑問を解消するために、HTTPリクエストの様子をさらに詳細に解析してみることにしました。</p>
-
 <h3 id="dnsキャッシュなし版をトレースする">DNSキャッシュなし版をトレースする</h3>
-
 <p>Go1.7から<a href="https://golang.org/pkg/net/http/httptrace/">net/http/httptrace</a>というパッケージが追加され、
 名前解決やコネクション確立etcのタイミングにフックを仕込めるようになりました。
 これを利用すれば各段階でどの程度時間がかかっているかが具体的に分かるはずです。</p>
-
 <p>頑張って自前でフックを差し込んでもよいのですが、
 <a href="https://twitter.com/deeeet">deeeet</a>さんの<a href="https://github.com/tcnksm/go-httpstat">go-httpstat</a>という便利パッケージがあるので、
 これをありがたく利用させていただきます。
@@ -211,7 +189,7 @@ go-httpstatを使うと時間計測を行うコードを簡単に差し込むこ
 	<span class="p">}</span>
 <span class="p">)</span>
 
-<span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
 	<span class="nx">client</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Client</span><span class="p">{</span>
 		<span class="nx">Transport</span><span class="p">:</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Transport</span><span class="p">{</span>
 			<span class="nx">Proxy</span><span class="p">:</span>             <span class="nx">http</span><span class="p">.</span><span class="nx">ProxyFromEnvironment</span><span class="p">,</span>
@@ -220,31 +198,30 @@ go-httpstatを使うと時間計測を行うコードを簡単に差し込むこ
 	<span class="p">}</span>
 
 	<span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">url</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">urls</span> <span class="p">{</span>
-		<span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&#34;GET %s&#34;</span><span class="p">,</span> <span class="nx">url</span><span class="p">)</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;GET %s&#34;</span><span class="p">,</span> <span class="nx">url</span><span class="p">)</span>
 
-		<span class="nx">req</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">NewRequest</span><span class="p">(</span><span class="s">&#34;GET&#34;</span><span class="p">,</span> <span class="nx">url</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
+		<span class="nx">req</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nf">NewRequest</span><span class="p">(</span><span class="s">&#34;GET&#34;</span><span class="p">,</span> <span class="nx">url</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
 		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
 			<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
 		<span class="p">}</span>
 		<span class="nx">result</span> <span class="o">:=</span> <span class="nb">new</span><span class="p">(</span><span class="nx">httpstat</span><span class="p">.</span><span class="nx">Result</span><span class="p">)</span>
-		<span class="nx">ctx</span> <span class="o">:=</span> <span class="nx">httpstat</span><span class="p">.</span><span class="nx">WithHTTPStat</span><span class="p">(</span><span class="nx">req</span><span class="p">.</span><span class="nx">Context</span><span class="p">(),</span> <span class="nx">result</span><span class="p">)</span>
-		<span class="nx">req</span> <span class="p">=</span> <span class="nx">req</span><span class="p">.</span><span class="nx">WithContext</span><span class="p">(</span><span class="nx">ctx</span><span class="p">)</span>
+		<span class="nx">ctx</span> <span class="o">:=</span> <span class="nx">httpstat</span><span class="p">.</span><span class="nf">WithHTTPStat</span><span class="p">(</span><span class="nx">req</span><span class="p">.</span><span class="nf">Context</span><span class="p">(),</span> <span class="nx">result</span><span class="p">)</span>
+		<span class="nx">req</span> <span class="p">=</span> <span class="nx">req</span><span class="p">.</span><span class="nf">WithContext</span><span class="p">(</span><span class="nx">ctx</span><span class="p">)</span>
 
-		<span class="nx">resp</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">client</span><span class="p">.</span><span class="nx">Do</span><span class="p">(</span><span class="nx">req</span><span class="p">)</span>
+		<span class="nx">resp</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">client</span><span class="p">.</span><span class="nf">Do</span><span class="p">(</span><span class="nx">req</span><span class="p">)</span>
 		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
 			<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
 		<span class="p">}</span>
-		<span class="nx">io</span><span class="p">.</span><span class="nx">Copy</span><span class="p">(</span><span class="nx">ioutil</span><span class="p">.</span><span class="nx">Discard</span><span class="p">,</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">)</span>
-		<span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+		<span class="nx">io</span><span class="p">.</span><span class="nf">Copy</span><span class="p">(</span><span class="nx">ioutil</span><span class="p">.</span><span class="nx">Discard</span><span class="p">,</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">)</span>
+		<span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
 
-		<span class="nx">result</span><span class="p">.</span><span class="nx">End</span><span class="p">(</span><span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">())</span>
-		<span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&#34;%+v\n&#34;</span><span class="p">,</span> <span class="nx">result</span><span class="p">)</span>
+		<span class="nx">result</span><span class="p">.</span><span class="nf">End</span><span class="p">(</span><span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">())</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;%+v\n&#34;</span><span class="p">,</span> <span class="nx">result</span><span class="p">)</span>
 	<span class="p">}</span>
-<span class="p">}</span></code></pre></div>
-<p>元記事はGoogleを叩いていましたが、あのURLだとリダイレクトが発生して考えることが増えそうなので、
+<span class="p">}</span>
+</code></pre></div><p>元記事はGoogleを叩いていましたが、あのURLだとリダイレクトが発生して考えることが増えそうなので、
 このブログのURLに変更してあります。
 あと静的ページなら相手に余計な負荷をかけることも無いですしね。</p>
-
 <p>さっそく実行してみましょう。
 <strong>Keep-Aliveを有効</strong>にした場合の結果です。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">2017/01/14 16:14:10 GET https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/
@@ -279,10 +256,9 @@ Name Lookup:       0 ms
 Connect:           0 ms
 Pre Transfer:      0 ms
 Start Transfer:   17 ms
-Total:            22 ms</code></pre></div>
-<p>二回目以降のDNS lookupやTCP connectionが0msになっています。
+Total:            22 ms
+</code></pre></div><p>二回目以降のDNS lookupやTCP connectionが0msになっています。
 予想通りコネクションが再利用され、名前解決やコネクション確立がスキップされているようです。</p>
-
 <p>次に<strong>Keep-Aliveを無効</strong>にした状態で実行してみます。
 コード中の<code>DisableKeepAlives</code>のコメントを外すと都度接続になります。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">2017/01/14 16:14:33 GET https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/
@@ -317,11 +293,10 @@ Name Lookup:       0 ms
 Connect:          18 ms
 Pre Transfer:     54 ms
 Start Transfer:   73 ms
-Total:            76 ms</code></pre></div>
-<p>リクエスト毎に名前解決が行われるようになりました。
+Total:            76 ms
+</code></pre></div><p>リクエスト毎に名前解決が行われるようになりました。
 ですが、初回に比べて異様に速いですね。
 OS側でキャッシュされてるんでしょうか。</p>
-
 <p><code>GODEBUG=netdns=go</code>と環境変数を設定すると、Pure Golangで名前解決が行われるらしいので、
 その場合の結果も貼っておきます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">2017/01/14 16:15:03 GET https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/
@@ -356,13 +331,11 @@ Name Lookup:      18 ms
 Connect:          34 ms
 Pre Transfer:     70 ms
 Start Transfer:   89 ms
-Total:            91 ms</code></pre></div>
-<h3 id="dnsキャッシュあり版をトレースする">DNSキャッシュあり版をトレースする</h3>
-
+Total:            91 ms
+</code></pre></div><h3 id="dnsキャッシュあり版をトレースする">DNSキャッシュあり版をトレースする</h3>
 <p>DNSキャッシュありも同様にトレースしようと思ったのですが、
 残念ながら<a href="https://github.com/abursavich/nett">nett</a>は<code>context.Context</code>を引数に持つインターフェースをサポートしていません。
 httptraceを利用するにはcontextが必要なので、同じ方法は使えません。</p>
-
 <p>仕方がないので、頑張ってResolverを自作して、
 時間計測するコードを埋め込んでいきます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
@@ -390,14 +363,14 @@ httptraceを利用するにはcontextが必要なので、同じ方法は使え�
 	<span class="nx">Resolver</span> <span class="nx">nett</span><span class="p">.</span><span class="nx">Resolver</span>
 <span class="p">}</span>
 
-<span class="kd">func</span> <span class="p">(</span><span class="nx">r</span> <span class="o">*</span><span class="nx">MyResolver</span><span class="p">)</span> <span class="nx">Resolve</span><span class="p">(</span><span class="nx">host</span> <span class="kt">string</span><span class="p">)</span> <span class="p">([]</span><span class="nx">net</span><span class="p">.</span><span class="nx">IP</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
-	<span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
-	<span class="nx">ips</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">r</span><span class="p">.</span><span class="nx">Resolver</span><span class="p">.</span><span class="nx">Resolve</span><span class="p">(</span><span class="nx">host</span><span class="p">)</span>
-	<span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&#34;Name Lookup: %s&#34;</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">().</span><span class="nx">Sub</span><span class="p">(</span><span class="nx">start</span><span class="p">))</span>
+<span class="kd">func</span> <span class="p">(</span><span class="nx">r</span> <span class="o">*</span><span class="nx">MyResolver</span><span class="p">)</span> <span class="nf">Resolve</span><span class="p">(</span><span class="nx">host</span> <span class="kt">string</span><span class="p">)</span> <span class="p">([]</span><span class="nx">net</span><span class="p">.</span><span class="nx">IP</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+	<span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+	<span class="nx">ips</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">r</span><span class="p">.</span><span class="nx">Resolver</span><span class="p">.</span><span class="nf">Resolve</span><span class="p">(</span><span class="nx">host</span><span class="p">)</span>
+	<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;Name Lookup: %s&#34;</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">().</span><span class="nf">Sub</span><span class="p">(</span><span class="nx">start</span><span class="p">))</span>
 	<span class="k">return</span> <span class="nx">ips</span><span class="p">,</span> <span class="nx">err</span>
 <span class="p">}</span>
 
-<span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
 	<span class="nx">dialer</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">nett</span><span class="p">.</span><span class="nx">Dialer</span><span class="p">{</span>
 		<span class="nx">Resolver</span><span class="p">:</span> <span class="o">&amp;</span><span class="nx">MyResolver</span><span class="p">{</span>
 			<span class="o">&amp;</span><span class="nx">nett</span><span class="p">.</span><span class="nx">CacheResolver</span><span class="p">{</span><span class="nx">TTL</span><span class="p">:</span> <span class="mi">5</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Minute</span><span class="p">},</span>
@@ -408,9 +381,9 @@ httptraceを利用するにはcontextが必要なので、同じ方法は使え�
 	<span class="nx">client</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Client</span><span class="p">{</span>
 		<span class="nx">Transport</span><span class="p">:</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Transport</span><span class="p">{</span>
 			<span class="nx">Dial</span><span class="p">:</span> <span class="kd">func</span><span class="p">(</span><span class="nx">network</span><span class="p">,</span> <span class="nx">address</span> <span class="kt">string</span><span class="p">)</span> <span class="p">(</span><span class="nx">net</span><span class="p">.</span><span class="nx">Conn</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
-				<span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
-				<span class="nx">conn</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">dialer</span><span class="p">.</span><span class="nx">Dial</span><span class="p">(</span><span class="nx">network</span><span class="p">,</span> <span class="nx">address</span><span class="p">)</span>
-				<span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&#34;Connect: %s&#34;</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">().</span><span class="nx">Sub</span><span class="p">(</span><span class="nx">start</span><span class="p">))</span>
+				<span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+				<span class="nx">conn</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">dialer</span><span class="p">.</span><span class="nf">Dial</span><span class="p">(</span><span class="nx">network</span><span class="p">,</span> <span class="nx">address</span><span class="p">)</span>
+				<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;Connect: %s&#34;</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">().</span><span class="nf">Sub</span><span class="p">(</span><span class="nx">start</span><span class="p">))</span>
 				<span class="k">return</span> <span class="nx">conn</span><span class="p">,</span> <span class="nx">err</span>
 			<span class="p">},</span>
 			<span class="nx">Proxy</span><span class="p">:</span>             <span class="nx">http</span><span class="p">.</span><span class="nx">ProxyFromEnvironment</span><span class="p">,</span>
@@ -418,25 +391,24 @@ httptraceを利用するにはcontextが必要なので、同じ方法は使え�
 </span><span class="c1"></span>		<span class="p">},</span>
 	<span class="p">}</span>
 	<span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">url</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">urls</span> <span class="p">{</span>
-		<span class="nx">log</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&#34;GET %s&#34;</span><span class="p">,</span> <span class="nx">url</span><span class="p">)</span>
-		<span class="nx">resp</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">client</span><span class="p">.</span><span class="nx">Get</span><span class="p">(</span><span class="nx">url</span><span class="p">)</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;GET %s&#34;</span><span class="p">,</span> <span class="nx">url</span><span class="p">)</span>
+		<span class="nx">resp</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">client</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="nx">url</span><span class="p">)</span>
 		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
 			<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
 		<span class="p">}</span>
-		<span class="nx">io</span><span class="p">.</span><span class="nx">Copy</span><span class="p">(</span><span class="nx">ioutil</span><span class="p">.</span><span class="nx">Discard</span><span class="p">,</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">)</span>
-		<span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+		<span class="nx">io</span><span class="p">.</span><span class="nf">Copy</span><span class="p">(</span><span class="nx">ioutil</span><span class="p">.</span><span class="nx">Discard</span><span class="p">,</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">)</span>
+		<span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
 	<span class="p">}</span>
-<span class="p">}</span></code></pre></div>
-<p>こちらのコードも実行してみます。
+<span class="p">}</span>
+</code></pre></div><p>こちらのコードも実行してみます。
 <strong>Keep-Aliveを有効</strong>にした場合の結果です。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">2017/01/14 16:29:19 GET https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/
 2017/01/14 16:29:19 Name Lookup: 22.239218ms
 2017/01/14 16:29:19 Connect: 39.364428ms
 2017/01/14 16:29:19 GET https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm/
-2017/01/14 16:29:19 GET https://shogo82148.github.io/blog/2016/11/23/qr-code/</code></pre></div>
-<p>こちらも予想通り名前解決とコネクション確立が初回しか行われないので、
+2017/01/14 16:29:19 GET https://shogo82148.github.io/blog/2016/11/23/qr-code/
+</code></pre></div><p>こちらも予想通り名前解決とコネクション確立が初回しか行われないので、
 最初の一回だけ時間計測のログが出力されています。</p>
-
 <p>次に、<strong>Keep-Aliveを無効</strong>にした場合の結果です。
 DNSキャッシュなし版と同様に<code>DisableKeepAlives</code>のコメントを外すと無効にできます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">2017/01/14 16:29:41 GET https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/
@@ -447,9 +419,8 @@ DNSキャッシュなし版と同様に<code>DisableKeepAlives</code>のコメ�
 2017/01/14 16:29:41 Connect: 14.964222ms
 2017/01/14 16:29:41 GET https://shogo82148.github.io/blog/2016/11/23/qr-code/
 2017/01/14 16:29:41 Name Lookup: 2.024µs
-2017/01/14 16:29:41 Connect: 22.782755ms</code></pre></div>
-<p>二回目以降の名前解決が一瞬で終わっており、キャッシュされている様子が確認できますね。</p>
-
+2017/01/14 16:29:41 Connect: 22.782755ms
+</code></pre></div><p>二回目以降の名前解決が一瞬で終わっており、キャッシュされている様子が確認できますね。</p>
 <p>最後に名前解決にPure Golangを使った結果です。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">2017/01/14 16:30:04 GET https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/
 2017/01/14 16:30:04 Name Lookup: 18.279786ms
@@ -459,15 +430,13 @@ DNSキャッシュなし版と同様に<code>DisableKeepAlives</code>のコメ�
 2017/01/14 16:30:04 Connect: 16.364037ms
 2017/01/14 16:30:04 GET https://shogo82148.github.io/blog/2016/11/23/qr-code/
 2017/01/14 16:30:04 Name Lookup: 1.77µs
-2017/01/14 16:30:04 Connect: 16.048895ms</code></pre></div>
-<h2 id="異様な高速化の理由">異様な高速化の理由</h2>
-
+2017/01/14 16:30:04 Connect: 16.048895ms
+</code></pre></div><h2 id="異様な高速化の理由">異様な高速化の理由</h2>
 <p>さて、ここまでの結果で、たしかにDNSキャッシュの効果があることは確認できました。
 しかし、デフォルトの状態ではKeep-Aliveが有効になっているため、
 事前の予想の通り<strong>名前解決が行われるのは初回のみ</strong>ということがわかりました。
 mattnさんのベンチマークにはKeep-Alive無効化処理は入っていないので、
 DNSキャッシュの有無で差はでないはずです。</p>
-
 <p>思うに、<code>for i := 0; i &lt; b.N; i++ {}</code>がないのが原因なのではないかと・・・。</p>
 <div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
 
@@ -476,143 +445,113 @@ DNSキャッシュの有無で差はでないはずです。</p>
 	<span class="s">&#34;time&#34;</span>
 <span class="p">)</span>
 
-<span class="kd">func</span> <span class="nx">BenchmarkHoge1</span><span class="p">(</span><span class="nx">b</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">B</span><span class="p">)</span> <span class="p">{</span>
-	<span class="nx">time</span><span class="p">.</span><span class="nx">Sleep</span><span class="p">(</span><span class="mi">1100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+<span class="kd">func</span> <span class="nf">BenchmarkHoge1</span><span class="p">(</span><span class="nx">b</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">B</span><span class="p">)</span> <span class="p">{</span>
+	<span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">1100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
 <span class="p">}</span>
 
-<span class="kd">func</span> <span class="nx">BenchmarkHoge2</span><span class="p">(</span><span class="nx">b</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">B</span><span class="p">)</span> <span class="p">{</span>
-	<span class="nx">time</span><span class="p">.</span><span class="nx">Sleep</span><span class="p">(</span><span class="mi">997</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+<span class="kd">func</span> <span class="nf">BenchmarkHoge2</span><span class="p">(</span><span class="nx">b</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">B</span><span class="p">)</span> <span class="p">{</span>
+	<span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">997</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
 <span class="p">}</span>
 
-<span class="kd">func</span> <span class="nx">BenchmarkFuga1</span><span class="p">(</span><span class="nx">b</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">B</span><span class="p">)</span> <span class="p">{</span>
+<span class="kd">func</span> <span class="nf">BenchmarkFuga1</span><span class="p">(</span><span class="nx">b</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">B</span><span class="p">)</span> <span class="p">{</span>
 	<span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="p">&lt;</span> <span class="nx">b</span><span class="p">.</span><span class="nx">N</span><span class="p">;</span> <span class="nx">i</span><span class="o">++</span> <span class="p">{</span>
-		<span class="nx">time</span><span class="p">.</span><span class="nx">Sleep</span><span class="p">(</span><span class="mi">1100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+		<span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">1100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
 	<span class="p">}</span>
 <span class="p">}</span>
 
-<span class="kd">func</span> <span class="nx">BenchmarkFuga2</span><span class="p">(</span><span class="nx">b</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">B</span><span class="p">)</span> <span class="p">{</span>
+<span class="kd">func</span> <span class="nf">BenchmarkFuga2</span><span class="p">(</span><span class="nx">b</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">B</span><span class="p">)</span> <span class="p">{</span>
 	<span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="p">&lt;</span> <span class="nx">b</span><span class="p">.</span><span class="nx">N</span><span class="p">;</span> <span class="nx">i</span><span class="o">++</span> <span class="p">{</span>
-		<span class="nx">time</span><span class="p">.</span><span class="nx">Sleep</span><span class="p">(</span><span class="mi">997</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+		<span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">997</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
 	<span class="p">}</span>
-<span class="p">}</span></code></pre></div>
-<p>僕の手元では以下のような結果になりました。
+<span class="p">}</span>
+</code></pre></div><p>僕の手元では以下のような結果になりました。
 (タイミングの問題なので、再現させるには数値の微調整が必要かも)</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">BenchmarkHoge1-4   	       1	1104960703 ns/op
 BenchmarkHoge2-4   	       2	 500677841 ns/op
 BenchmarkFuga1-4   	       1	1103413336 ns/op
 BenchmarkFuga2-4   	       1	1001147782 ns/op
-PASS</code></pre></div>
-<h2 id="nettの問題点">nettの問題点</h2>
-
+PASS
+</code></pre></div><h2 id="nettの問題点">nettの問題点</h2>
 <p><a href="https://github.com/abursavich/nett">nett</a>の効果も確認できたし、
 ベンチマークが異様に良い理由もわかったので、
 ここで検証終了・・・といきたいところですが、
 nettはあまりおすすめできないというのが僕の意見です。</p>
-
 <h3 id="古い">古い</h3>
-
 <p>最終コミットが2年前と古いです。
 まだGo1.7が出てないころなので、当然<code>context.Context</code>にも対応していないわけです。
 そのため名前解決のタイムアウトやキャンセルを制御できません。
 また、この検証でもhttptraceが使えなくて悲しい思いをしたので、
 contextをサポートして欲しい・・・。</p>
-
 <h3 id="dnsレコードのttlを無視している">DNSレコードのTTLを無視している</h3>
-
 <p><code>nett.CacheResolver</code>のTTLには固定の時間しか設定できないようです。
 DNSレコード自体にTTLが設定されているはずなので、本来であればそれを尊重するべきです。
 短い時間のキャッシュであれば問題ないかもしれないですが、
 アクセスした相手をDNS浸透問題(浸透いうな！)で悩ませてしまう可能性があるので、
 できれば相手の意向を尊重したいところです。</p>
-
 <h3 id="キャッシュクリアが無い">キャッシュクリアが無い</h3>
-
 <p><code>nett.CacheResolver</code>のTTLの実装は
 「前回の名前解決からの経過時間を見て再取得」という単純なものです。
 ようするにガーベージコレクションがない状態です。
 TTLが過ぎてもキャッシュから本当に消えるわけではないので、
 多くのドメインを相手にする場合、メモリを食い尽くす可能性があります。</p>
-
-<h3 id="2017-01-16追記-同一ホストの名前解決の排他制御が甘い">2017/01/16追記: 同一ホストの名前解決の排他制御が甘い</h3>
-
+<h3 id="20170116追記-同一ホストの名前解決の排他制御が甘い">2017/01/16追記: 同一ホストの名前解決の排他制御が甘い</h3>
 <p>fujiwaraさんからの返信を受けて、ちょっと考えたことがあったので追記。</p>
-
-<p><blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">この前Goのhttp clientで名前解決結果をキャッシュしたかったの、ベンチマークしててシナリオ的に新規接続が多かったのとローカルに立てたdnsmasqの負荷が気になるほど名前引いてからなので、キャッシュするにしても数秒で実用的には充分だった(TTLの心配するほどではない</p>&mdash; fujiwara (@fujiwara) <a href="https://twitter.com/fujiwara/status/820232828231163904?ref_src=twsrc%5Etfw">2017年1月14日</a></blockquote>
-<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script></p>
-
-<p><blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">アプリのcacheは(dnsが1段目として)2段目のcacheになるから、dnsに負荷掛けないためにするだけなら数秒で問題ないはずなので、そこまで短くするならちゃんとやる意味がなくて、TTLは専門家(dns)に任せるべきかなあと</p>&mdash; fujiwara (@fujiwara) <a href="https://twitter.com/fujiwara/status/820255789944143876?ref_src=twsrc%5Etfw">2017年1月14日</a></blockquote>
-<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script></p>
-
+<!-- raw HTML omitted -->
+<!-- raw HTML omitted -->
 <p>名前解決をキャッシュしたい理由は「用途はベンチマーク」「キャッシュは数秒で充分」とのことです。</p>
-
 <p>ちょっとここからは推測になりますが・・・
 リソースを徐々に消費してしばらくして突然死というパターンもあるので、
 ベンチマークは短くとも1分以上続けるのが普通だと思います(Mackerel等の監視間隔も最小1分ですしね)。
 にも関わらず、名前解決の負荷が数秒で落ち着くということは、Keep-Aliveは有効になっていたと推測できます。
 それでも名前解決の負荷が問題になるということは、それなりに高い並列度だったのではないかと。</p>
-
 <p>ここで問題になってくるのが、<strong>nettは同一ホストの問い合わせを排他制御していない</strong>という点です。
 複数クライアントが同時にキャッシュの有無を確認→ほぼ同時にDNSに問い合わせ→キャッシュ更新(ここだけは排他制御される)
 というケースが考えられます。
 通常用途ならさほど問題にならないかなーと思ったのですが、
 ベンチマークのように極端に並列度が高い場合、TTLが切れた瞬間だけDNSの負荷があがることになります。</p>
-
 <p>ここは、<a href="https://twitter.com/methane">methane</a>さんがGo Conference 2016 Springで発表されていた
 <a href="https://docs.google.com/presentation/d/1pSywpKera0huKCHDVGPVA2jQMvy-Pk8IR9s7AAVojDM/edit#slide=id.p">zero time cache pattern</a>
 を使うのが賢い気がします。
 (同じくmethaneさんの<a href="http://dsas.blog.klab.org/archives/cat_50043510.html">ISUCON6の予選参戦記事</a>も参照)</p>
-
 <p>・・・と書きましたが、あくまでも推測です。
 本来はnettを導入する前後でベンチマークを取って検証するべきなのですが、
 さすがにこれをpublicなネットワークでやるとDOS攻撃になってしまいます。
 DNSよくわからない・・・検証環境構築つらい・・・ので、とりあえずメモとして残しておきます。
 だれか詳しい人の検証求む。</p>
-
 <p>(以上、追記終わり)</p>
-
 <h2 id="解決策は">解決策は？</h2>
-
 <p>mattnさんの記事には「Go 1.8 からは Resolver提供されるので、自前で簡単に名前引きのキャッシュを実装出来る」とありますが、
 <strong>1.8にはユーザがResolverの動作をカスタマイズする機能はありません</strong>。
 <a href="https://github.com/golang/go/blob/ecc4474341504f5893c8333dbb68c520dbe93ca5/src/net/lookup.go#L100">TODO: optional interface impl override hook</a>
 な状態です。
 マイルストーンをみる限り<a href="https://github.com/golang/go/issues/12503">1.9で入るらしい</a>(？)ので、それを待ちましょう・・・。</p>
-
 <p>また、現時点では、netパッケージにDNSレコードのTTLを取得する機能はありません。
-つまり先に挙げたnettの欠点をすべて補うには、<strong>「Pure GolangなDNSクライアントの独自実装」</strong>が必要となります。
+つまり先に挙げたnettの欠点をすべて補うには、**「Pure GolangなDNSクライアントの独自実装」**が必要となります。
 <a href="https://github.com/golang/go/issues/16218">golang.org/x/net/dnsが入る予定</a>はあるようですが、
 実装は未だ存在せず、入るバージョンも決まっていないようです。</p>
-
 <p>つらい。どう考えても「楽な方法」ではない・・・。</p>
-
 <p>Consulにも使われているという<a href="https://github.com/miekg/dns">miekg/dns</a>は見つけたので、誰か強い人よろしくお願いします。
 (ちなみにgolang.org/x/net/dnsの候補として一度は挙がったものの、別実装で行くらしい)</p>
-
 <h2 id="まとめ">まとめ</h2>
-
 <ul>
 <li><a href="https://github.com/abursavich/nett">nett</a>は名前解決キャッシュに効果あり
-
 <ul>
 <li>しかしコードが古いので、Go1.7が出ている現状ではおすすめできない</li>
-</ul></li>
+</ul>
+</li>
 <li>ResolverのカスタマイズはGo1.9かららしい(Go1.8ではまだ入らない)</li>
 <li>暫定的な解決策は
-
 <ul>
 <li><a href="https://github.com/abursavich/nett">nett</a>を突っついてGo1.7対応をしてもらう(ただし、DNS浸透問題(浸透いうな！)解決にはDNSクライアントの実装が必要)</li>
 <li><a href="https://github.com/miekg/dns">miekg/dns</a>を使ってDNSクライアントを頑張って独自実装(つらい)</li>
-</ul></li>
+</ul>
+</li>
 <li>ベンチの際には<code>for i := 0; i &lt; b.N; i++ {}</code>をわすれずに</li>
 </ul>
-
 <p>http.Clientで名前解決結果cacheする楽な方法、現在も絶賛募集中です。</p>
-
 <h2 id="おまけ">おまけ</h2>
-
 <p>この記事書くのにnetパッケージの中を探っていたら、
 ソースコードの中に<a href="https://github.com/golang/go/blob/ecc4474341504f5893c8333dbb68c520dbe93ca5/src/net/lookup.go#L39">Gopher君を見つけた</a>。</p>
-
 <p>ʕ◔ϖ◔ʔʕ◔ϖ◔ʔʕ◔ϖ◔ʔ</p>
 
         </div>
@@ -716,6 +655,8 @@ DNSよくわからない・・・検証環境構築つらい・・・ので、�
           
           
             
+          
+            
               <li class="post">
                 <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
               </li>
@@ -766,12 +707,6 @@ DNSよくわからない・・・検証環境構築つらい・・・ので、�
             
               <li class="post">
                 <a href="/blog/2019/08/21/aws-xray-with-perl-lambda-runtime/">AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2019/07/24/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
               </li>
             
           

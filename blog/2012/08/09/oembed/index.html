@@ -45,7 +45,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.38.1" />
+  <meta name="generator" content="Hugo 0.74.3" />
 
   
   
@@ -124,88 +124,60 @@
           
           
           
-          
-
-<p>Octopressでツイートを引用しようと思ったけど
+          <p>Octopressでツイートを引用しようと思ったけど
 使えそうなプラグインがなかったので作ってみた。
 ツイートに限らずいろんなものを挿入できるよ！</p>
-
-<!-- more -->
-
+<!-- raw HTML omitted -->
 <h2 id="oembed">OEmbed</h2>
-
 <p>調べてみるとツイートの表示は<a href="http://oembed.com/">OEmbed</a>というのを使うとできるらしい。
 これはURLを埋め込み適した形に変換してくれるプロトコル。
 ツイートのURLから引用のためのHTMLを作ったり、YouTubeのURLから動画再生用のHTMLを作ることができる。</p>
-
 <p>せっかくだからOEmbedに対応してしまえばいろんなものを埋め込めて便利だよね！ってことでやってみた。</p>
-
 <h2 id="インストール">インストール</h2>
-
 <p><a href="https://github.com/judofyr/ruby-oembed">ruby-oembed</a>をインストール。</p>
-<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash">gem install ruby-oembed</code></pre></div>
-<p>ruby-oembedは名前から想像できる通り、RubyでOEmbedプロトコルを扱うためのライブラリ。
+<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash">gem install ruby-oembed
+</code></pre></div><p>ruby-oembedは名前から想像できる通り、RubyでOEmbedプロトコルを扱うためのライブラリ。
 Provider(OEmbedの提供者)を自分で追加したり、Discovery(HTMLドキュメントにProviderの情報を入れる)にも対応している。
 しかし、プロキシ環境下で動かなかったり、文字コードのエラーを吐いて死んだりしたので、
 フォークして<a href="https://github.com/shogo82148/ruby-oembed">改造版ruby-oembed</a>を作った。
 もしオリジナルで不具合が出るようなら、こちらもどうぞ。</p>
-
 <p><a href="https://github.com/shogo82148/oembed_tag">oembed_tag</a>からoembed_tag.rbをダウンロードして、pluginsフォルダに置く。</p>
-
 <p>Gemfileを適当なテキストエディタで開き、「gem &lsquo;ruby-oembed&rsquo;」の行を追加</p>
+<div class="highlight"><pre class="chroma"><code class="language-ruby" data-lang="ruby"><span class="n">source</span> <span class="s2">&#34;http://rubygems.org&#34;</span>
 
-<p>```ruby Gemfile
-source &ldquo;<a href="http://rubygems.org&quot;">http://rubygems.org&quot;</a></p>
+<span class="n">group</span> <span class="ss">:development</span> <span class="k">do</span>
+  <span class="n">gem</span> <span class="s1">&#39;rake&#39;</span>
+  <span class="n">gem</span> <span class="s1">&#39;rack&#39;</span>
+  <span class="n">gem</span> <span class="s1">&#39;jekyll&#39;</span>
+  <span class="n">gem</span> <span class="s1">&#39;rdiscount&#39;</span>
+  <span class="n">gem</span> <span class="s1">&#39;pygments.rb&#39;</span>
+  <span class="n">gem</span> <span class="s1">&#39;RedCloth&#39;</span>
+  <span class="n">gem</span> <span class="s1">&#39;haml&#39;</span><span class="p">,</span> <span class="s1">&#39;&gt;= 3.1&#39;</span>
+  <span class="n">gem</span> <span class="s1">&#39;compass&#39;</span><span class="p">,</span> <span class="s1">&#39;&gt;= 0.11&#39;</span>
+  <span class="n">gem</span> <span class="s1">&#39;rubypants&#39;</span>
+  <span class="n">gem</span> <span class="s1">&#39;rb-fsevent&#39;</span>
+  <span class="n">gem</span> <span class="s1">&#39;stringex&#39;</span>
+  <span class="n">gem</span> <span class="s1">&#39;liquid&#39;</span><span class="p">,</span> <span class="s1">&#39;2.2.2&#39;</span>
+  <span class="n">gem</span> <span class="s1">&#39;ruby-oembed&#39;</span> <span class="c1">#追加</span>
+<span class="k">end</span>
 
-<p>group :development do
-  gem &lsquo;rake&rsquo;
-  gem &lsquo;rack&rsquo;
-  gem &lsquo;jekyll&rsquo;
-  gem &lsquo;rdiscount&rsquo;
-  gem &lsquo;pygments.rb&rsquo;
-  gem &lsquo;RedCloth&rsquo;
-  gem &lsquo;haml&rsquo;, &lsquo;&gt;= 3.1&rsquo;
-  gem &lsquo;compass&rsquo;, &lsquo;&gt;= 0.11&rsquo;
-  gem &lsquo;rubypants&rsquo;
-  gem &lsquo;rb-fsevent&rsquo;
-  gem &lsquo;stringex&rsquo;
-  gem &lsquo;liquid&rsquo;, &lsquo;2.2.2&rsquo;
-  gem &lsquo;ruby-oembed&rsquo; #追加
-end</p>
-
-<p>gem &lsquo;sinatra&rsquo;, &lsquo;1.2.6&rsquo;</p>
-
-<pre><code>
-これでとりあえずは動くはず。
-以上の作業に加えて、キャッシュファイルがリポジトリに含まれないよう.gitignoreに.oembed-cacheを追加しておく。
-
-## 使い方
-
-以下の様に書くと、適切な埋め込み方法をWebから取得して変換してくれる。
-
-```plain
-&amp;#123;% oembed URL %&amp;#125;
-</code></pre>
-
-<h2 id="例">例</h2>
-
+<span class="n">gem</span> <span class="s1">&#39;sinatra&#39;</span><span class="p">,</span> <span class="s1">&#39;1.2.6&#39;</span>
+</code></pre></div><p>これでとりあえずは動くはず。
+以上の作業に加えて、キャッシュファイルがリポジトリに含まれないよう.gitignoreに.oembed-cacheを追加しておく。</p>
+<h2 id="使い方">使い方</h2>
+<p>以下の様に書くと、適切な埋め込み方法をWebから取得して変換してくれる。</p>
+<div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">&amp;#123;% oembed URL %&amp;#125;
+</code></pre></div><h2 id="例">例</h2>
 <h3 id="twitter">Twitter</h3>
-<div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">&amp;#123;% oembed https://twitter.com/shogo82148/status/233612741670207488 %&amp;#125;</code></pre></div>
-<p>{% oembed <a href="https://twitter.com/shogo82148/status/233612741670207488">https://twitter.com/shogo82148/status/233612741670207488</a> %}</p>
-
+<div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">&amp;#123;% oembed https://twitter.com/shogo82148/status/233612741670207488 %&amp;#125;
+</code></pre></div><p>{% oembed <a href="https://twitter.com/shogo82148/status/233612741670207488">https://twitter.com/shogo82148/status/233612741670207488</a> %}</p>
 <h3 id="slideshare">slideshare</h3>
-
 <pre><code>&amp;#123;% oembed http://www.slideshare.net/shogo82148/ss-10377588 %&amp;#125;
-</code></pre>
-
-<p>{% oembed <a href="http://www.slideshare.net/shogo82148/ss-10377588">http://www.slideshare.net/shogo82148/ss-10377588</a> %}</p>
-
+</code></pre><p>{% oembed <a href="http://www.slideshare.net/shogo82148/ss-10377588">http://www.slideshare.net/shogo82148/ss-10377588</a> %}</p>
 <h3 id="youtube">YouTube</h3>
-<div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">&amp;#123;% oembed http://www.youtube.com/watch?v=rrsxEGgQDkM %&amp;#125;</code></pre></div>
-<p>{% oembed <a href="http://www.youtube.com/watch?v=rrsxEGgQDkM">http://www.youtube.com/watch?v=rrsxEGgQDkM</a> %}</p>
-
+<div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">&amp;#123;% oembed http://www.youtube.com/watch?v=rrsxEGgQDkM %&amp;#125;
+</code></pre></div><p>{% oembed <a href="http://www.youtube.com/watch?v=rrsxEGgQDkM">http://www.youtube.com/watch?v=rrsxEGgQDkM</a> %}</p>
 <h2 id="参考">参考</h2>
-
 <ul>
 <li><a href="http://orihubon.com/blog/2012/03/20/instagram-tag-plugin-for-octopress/">OctopressにInstagramの写真を挿入するTag Pluginを作ってみた</a></li>
 <li><a href="http://d.hatena.ne.jp/lyokato/20080815/1218767965">URLを埋め込みコンテンツに変換するoEmbedの仕様</a></li>
@@ -312,6 +284,8 @@ end</p>
           
           
             
+          
+            
               <li class="post">
                 <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
               </li>
@@ -362,12 +336,6 @@ end</p>
             
               <li class="post">
                 <a href="/blog/2019/08/21/aws-xray-with-perl-lambda-runtime/">AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2019/07/24/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
               </li>
             
           

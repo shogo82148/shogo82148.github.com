@@ -45,7 +45,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.38.1" />
+  <meta name="generator" content="Hugo 0.74.3" />
 
   
   
@@ -129,7 +129,6 @@ HTTP以外のプロトコルを透過的に扱うことができます。
 代表的なのは <code>http.NewFileTransport</code> で、これを使うと、<code>file://path/to/file.txt</code> みたいなURLでファイルにアクセスすることができます。
 (<a href="https://golang.org/pkg/net/http/#NewFileTransport">Goオフィシャルの例</a>)
 この仕組を使って、S3へのアクセスも透過的にできるようにしてみたので、メモ。</p>
-
 <p>新しいプロトコルを作成するのは非常に簡単です。
 <code>http.RoundTripper</code>インターフェースを実装し、リクエストに応答するレスポンスを作ってあげればいいだけです。
 S3の場合以下のようになります。(エラー時の扱いが雑だけど・・・)</p>
@@ -147,29 +146,29 @@ S3の場合以下のようになります。(エラー時の扱いが雑だけ�
 	<span class="nx">s3</span> <span class="o">*</span><span class="nx">s3</span><span class="p">.</span><span class="nx">S3</span>
 <span class="p">}</span>
 
-<span class="kd">func</span> <span class="nx">newS3RoundTripper</span><span class="p">(</span><span class="nx">session</span> <span class="o">*</span><span class="nx">session</span><span class="p">.</span><span class="nx">Session</span><span class="p">)</span> <span class="nx">http</span><span class="p">.</span><span class="nx">RoundTripper</span> <span class="p">{</span>
+<span class="kd">func</span> <span class="nf">newS3RoundTripper</span><span class="p">(</span><span class="nx">session</span> <span class="o">*</span><span class="nx">session</span><span class="p">.</span><span class="nx">Session</span><span class="p">)</span> <span class="nx">http</span><span class="p">.</span><span class="nx">RoundTripper</span> <span class="p">{</span>
 	<span class="k">return</span> <span class="o">&amp;</span><span class="nx">s3RoundTripper</span><span class="p">{</span>
-		<span class="nx">s3</span><span class="p">:</span> <span class="nx">s3</span><span class="p">.</span><span class="nx">New</span><span class="p">(</span><span class="nx">session</span><span class="p">),</span>
+		<span class="nx">s3</span><span class="p">:</span> <span class="nx">s3</span><span class="p">.</span><span class="nf">New</span><span class="p">(</span><span class="nx">session</span><span class="p">),</span>
 	<span class="p">}</span>
 <span class="p">}</span>
 
-<span class="kd">func</span> <span class="p">(</span><span class="nx">rt</span> <span class="o">*</span><span class="nx">s3RoundTripper</span><span class="p">)</span> <span class="nx">RoundTrip</span><span class="p">(</span><span class="nx">req</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">(</span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Response</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+<span class="kd">func</span> <span class="p">(</span><span class="nx">rt</span> <span class="o">*</span><span class="nx">s3RoundTripper</span><span class="p">)</span> <span class="nf">RoundTrip</span><span class="p">(</span><span class="nx">req</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">(</span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Response</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
 	<span class="nx">host</span> <span class="o">:=</span> <span class="nx">req</span><span class="p">.</span><span class="nx">Host</span>
 	<span class="k">if</span> <span class="nx">host</span> <span class="o">==</span> <span class="s">&#34;&#34;</span> <span class="p">{</span>
 		<span class="nx">host</span> <span class="p">=</span> <span class="nx">req</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Host</span>
 	<span class="p">}</span>
 	<span class="nx">path</span> <span class="o">:=</span> <span class="nx">req</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span>
 
-	<span class="nx">ctx</span> <span class="o">:=</span> <span class="nx">req</span><span class="p">.</span><span class="nx">Context</span><span class="p">()</span>
-	<span class="nx">out</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">rt</span><span class="p">.</span><span class="nx">s3</span><span class="p">.</span><span class="nx">GetObjectWithContext</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">s3</span><span class="p">.</span><span class="nx">GetObjectInput</span><span class="p">{</span>
-		<span class="nx">Bucket</span><span class="p">:</span> <span class="nx">aws</span><span class="p">.</span><span class="nx">String</span><span class="p">(</span><span class="nx">host</span><span class="p">),</span>
-		<span class="nx">Key</span><span class="p">:</span>    <span class="nx">aws</span><span class="p">.</span><span class="nx">String</span><span class="p">(</span><span class="nx">path</span><span class="p">),</span>
+	<span class="nx">ctx</span> <span class="o">:=</span> <span class="nx">req</span><span class="p">.</span><span class="nf">Context</span><span class="p">()</span>
+	<span class="nx">out</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">rt</span><span class="p">.</span><span class="nx">s3</span><span class="p">.</span><span class="nf">GetObjectWithContext</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">s3</span><span class="p">.</span><span class="nx">GetObjectInput</span><span class="p">{</span>
+		<span class="nx">Bucket</span><span class="p">:</span> <span class="nx">aws</span><span class="p">.</span><span class="nf">String</span><span class="p">(</span><span class="nx">host</span><span class="p">),</span>
+		<span class="nx">Key</span><span class="p">:</span>    <span class="nx">aws</span><span class="p">.</span><span class="nf">String</span><span class="p">(</span><span class="nx">path</span><span class="p">),</span>
 	<span class="p">})</span>
 	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
 		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">err</span>
 	<span class="p">}</span>
 	<span class="nx">header</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">Header</span><span class="p">)</span>
-	<span class="nx">header</span><span class="p">.</span><span class="nx">Set</span><span class="p">(</span><span class="s">&#34;Content-Type&#34;</span><span class="p">,</span> <span class="o">*</span><span class="nx">out</span><span class="p">.</span><span class="nx">ContentType</span><span class="p">)</span>
+	<span class="nx">header</span><span class="p">.</span><span class="nf">Set</span><span class="p">(</span><span class="s">&#34;Content-Type&#34;</span><span class="p">,</span> <span class="o">*</span><span class="nx">out</span><span class="p">.</span><span class="nx">ContentType</span><span class="p">)</span>
 
 	<span class="k">return</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Response</span><span class="p">{</span>
 		<span class="nx">Status</span><span class="p">:</span>        <span class="s">&#34;200 OK&#34;</span><span class="p">,</span>
@@ -181,8 +180,8 @@ S3の場合以下のようになります。(エラー時の扱いが雑だけ�
 		<span class="nx">Body</span><span class="p">:</span>          <span class="nx">out</span><span class="p">.</span><span class="nx">Body</span><span class="p">,</span>
 		<span class="nx">ContentLength</span><span class="p">:</span> <span class="o">*</span><span class="nx">out</span><span class="p">.</span><span class="nx">ContentLength</span><span class="p">,</span>
 	<span class="p">},</span> <span class="kc">nil</span>
-<span class="p">}</span></code></pre></div>
-<p>あとはRegisterProtocolを呼び出してあげれば、HTTPアクセスと同様にS3のオブジェクトを扱えます。</p>
+<span class="p">}</span>
+</code></pre></div><p>あとはRegisterProtocolを呼び出してあげれば、HTTPアクセスと同様にS3のオブジェクトを扱えます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
 
 <span class="kn">import</span> <span class="p">(</span>
@@ -193,20 +192,21 @@ S3の場合以下のようになります。(エラー時の扱いが雑だけ�
 	<span class="s">&#34;github.com/aws/aws-sdk-go/aws/session&#34;</span>
 <span class="p">)</span>
 
-<span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
 	<span class="c1">// s3 scheme の登録
-</span><span class="c1"></span>	<span class="nx">awsConfig</span> <span class="o">:=</span> <span class="nx">aws</span><span class="p">.</span><span class="nx">NewConfig</span><span class="p">().</span><span class="nx">WithRegion</span><span class="p">(</span><span class="s">&#34;ap-northeast-1&#34;</span><span class="p">)</span>
-	<span class="nx">awsSession</span> <span class="o">:=</span> <span class="nx">session</span><span class="p">.</span><span class="nx">Must</span><span class="p">(</span><span class="nx">session</span><span class="p">.</span><span class="nx">NewSession</span><span class="p">(</span><span class="nx">awsConfig</span><span class="p">))</span>
-	<span class="nx">http</span><span class="p">.</span><span class="nx">DefaultTransport</span><span class="p">.(</span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Transport</span><span class="p">).</span><span class="nx">RegisterProtocol</span><span class="p">(</span><span class="s">&#34;s3&#34;</span><span class="p">,</span> <span class="nx">newS3RoundTripper</span><span class="p">(</span><span class="nx">awsSession</span><span class="p">))</span>
+</span><span class="c1"></span>	<span class="nx">awsConfig</span> <span class="o">:=</span> <span class="nx">aws</span><span class="p">.</span><span class="nf">NewConfig</span><span class="p">().</span><span class="nf">WithRegion</span><span class="p">(</span><span class="s">&#34;ap-northeast-1&#34;</span><span class="p">)</span>
+	<span class="nx">awsSession</span> <span class="o">:=</span> <span class="nx">session</span><span class="p">.</span><span class="nf">Must</span><span class="p">(</span><span class="nx">session</span><span class="p">.</span><span class="nf">NewSession</span><span class="p">(</span><span class="nx">awsConfig</span><span class="p">))</span>
+	<span class="nx">http</span><span class="p">.</span><span class="nx">DefaultTransport</span><span class="p">.(</span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Transport</span><span class="p">).</span><span class="nf">RegisterProtocol</span><span class="p">(</span><span class="s">&#34;s3&#34;</span><span class="p">,</span> <span class="nf">newS3RoundTripper</span><span class="p">(</span><span class="nx">awsSession</span><span class="p">))</span>
 
 	<span class="c1">// s3 sheme でアクセス
-</span><span class="c1"></span>	<span class="nx">resp</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">Get</span><span class="p">(</span><span class="s">&#34;s3://backetname/your/file&#34;</span><span class="p">)</span>
+</span><span class="c1"></span>	<span class="nx">resp</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="s">&#34;s3://backetname/your/file&#34;</span><span class="p">)</span>
 	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
 		<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
 	<span class="p">}</span>
-	<span class="k">defer</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
-	<span class="nx">io</span><span class="p">.</span><span class="nx">Copy</span><span class="p">(</span><span class="nx">os</span><span class="p">.</span><span class="nx">Stdout</span><span class="p">,</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">)</span>
-<span class="p">}</span></code></pre></div>
+	<span class="k">defer</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
+	<span class="nx">io</span><span class="p">.</span><span class="nf">Copy</span><span class="p">(</span><span class="nx">os</span><span class="p">.</span><span class="nx">Stdout</span><span class="p">,</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">)</span>
+<span class="p">}</span>
+</code></pre></div>
         </div>
         
 
@@ -308,6 +308,8 @@ S3の場合以下のようになります。(エラー時の扱いが雑だけ�
           
           
             
+          
+            
               <li class="post">
                 <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
               </li>
@@ -358,12 +360,6 @@ S3の場合以下のようになります。(エラー時の扱いが雑だけ�
             
               <li class="post">
                 <a href="/blog/2019/08/21/aws-xray-with-perl-lambda-runtime/">AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2019/07/24/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
               </li>
             
           

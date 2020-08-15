@@ -45,7 +45,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.38.1" />
+  <meta name="generator" content="Hugo 0.74.3" />
 
   
   
@@ -124,281 +124,223 @@
           
           
           
-          
-
-<p>数日前に社内IRCで「スマートな非復元抽出の方法はないか」と話題になったので、
+          <p>数日前に社内IRCで「スマートな非復元抽出の方法はないか」と話題になったので、
 ランダムサンプリングのアルゴリズムについて調べたり考えたりしてみた。</p>
-
-<!-- More -->
-
+<!-- raw HTML omitted -->
 <h2 id="復元抽出">復元抽出</h2>
-
 <p>非復元抽出の手法って調べてもなかなか出てこない・・・。
 ひとまず、復元抽出についてまとめてみましょう。</p>
-
 <h3 id="線形検索">線形検索</h3>
-
 <p>一番簡単な実装方法。
 どの区間に入るかを線形検索して求める。
 選択肢の個数nとすると計算量はO(n)。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">strict</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">warnings</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">List::Util</span> <span class="sx">qw(sum)</span><span class="p">;</span>
 
-<p>``` perl linear_search_method.pl
-use strict;
-use warnings;
-use List::Util qw(sum);</p>
+<span class="k">sub</span> <span class="nf">linear_search_method</span> <span class="p">{</span>
+    <span class="k">my</span> <span class="nv">$weights</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
+    <span class="k">my</span> <span class="nv">$num</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
+    <span class="k">my</span> <span class="nv">$sum</span> <span class="o">=</span> <span class="n">sum</span> <span class="nv">@$weights</span><span class="p">;</span>
+    <span class="k">my</span> <span class="nv">$length</span> <span class="o">=</span> <span class="nv">@$weights</span><span class="p">;</span>
+    <span class="k">my</span> <span class="nv">@a</span><span class="p">;</span>
 
-<p>sub linear_search_method {
-    my $weights = shift;
-    my $num = shift;
-    my $sum = sum @$weights;
-    my $length = @$weights;
-    my @a;</p>
+    <span class="k">for</span> <span class="p">(</span><span class="mi">1</span><span class="o">..</span><span class="nv">$num</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">my</span> <span class="nv">$r</span> <span class="o">=</span> <span class="nb">rand</span><span class="p">(</span><span class="nv">$sum</span><span class="p">);</span>
+        <span class="k">for</span> <span class="k">my</span> <span class="nv">$i</span><span class="p">(</span><span class="mi">0</span><span class="o">..</span><span class="nv">$length</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+            <span class="nv">$r</span> <span class="o">-=</span> <span class="nv">$weights</span><span class="o">-&gt;</span><span class="p">[</span><span class="nv">$i</span><span class="p">];</span>
+            <span class="k">if</span><span class="p">(</span><span class="nv">$r</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+                <span class="nb">push</span> <span class="nv">@a</span><span class="p">,</span> <span class="nv">$i</span><span class="p">;</span>
+                <span class="k">last</span><span class="p">;</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+    <span class="k">return</span> <span class="o">\</span><span class="nv">@a</span><span class="p">;</span>
+<span class="p">}</span>
 
-<pre><code>for (1..$num) {
-    my $r = rand($sum);
-    for my $i(0..$length-1) {
-        $r -= $weights-&gt;[$i];
-        if($r &lt; 0) {
-            push @a, $i;
-            last;
-        }
-    }
-}
-return \@a;
-</code></pre>
+<span class="k">print</span> <span class="nb">join</span> <span class="s">&#39;, &#39;</span><span class="p">,</span> <span class="nv">@</span><span class="p">{</span><span class="n">linear_search_method</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">],</span> <span class="mi">100</span><span class="p">};</span>
+</code></pre></div><h3 id="バイナリサーチ">バイナリサーチ</h3>
+<p>あらかじめ累積分布表を作っておき、どの区間に入るかをバイナリサーチ。
+準備にO(n)、選択に O(log n)かかる。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">strict</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">warnings</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">List::Util</span> <span class="sx">qw(sum)</span><span class="p">;</span>
 
-<p>}</p>
+<span class="k">sub</span> <span class="nf">binary_search_method</span> <span class="p">{</span>
+    <span class="k">my</span> <span class="nv">$weights</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
+    <span class="k">my</span> <span class="nv">$num</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
+    <span class="k">my</span> <span class="nv">$length</span> <span class="o">=</span> <span class="nv">@$weights</span><span class="p">;</span>
+    <span class="k">my</span> <span class="nv">@a</span><span class="p">;</span>
+    <span class="k">my</span> <span class="nv">@b</span><span class="p">;</span>
 
-<p>print join &lsquo;, &lsquo;, @{linear_search_method [1,2,3], 100};</p>
+    <span class="k">my</span> <span class="nv">$sum</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+    <span class="k">for</span> <span class="k">my</span> <span class="nv">$i</span><span class="p">(</span><span class="nv">@$weights</span><span class="p">)</span> <span class="p">{</span>
+        <span class="nb">push</span> <span class="nv">@a</span><span class="p">,</span> <span class="nv">$sum</span><span class="p">;</span>
+        <span class="nv">$sum</span> <span class="o">+=</span> <span class="nv">$i</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="nb">push</span> <span class="nv">@a</span><span class="p">,</span> <span class="nv">$sum</span><span class="p">;</span>
 
-<pre><code>
-### バイナリサーチ
+    <span class="k">for</span> <span class="p">(</span><span class="mi">1</span><span class="o">..</span><span class="nv">$num</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">my</span> <span class="nv">$r</span> <span class="o">=</span> <span class="nb">rand</span><span class="p">(</span><span class="nv">$sum</span><span class="p">);</span>
+        <span class="k">my</span> <span class="p">(</span><span class="nv">$l</span><span class="p">,</span> <span class="nv">$h</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nv">$length</span> <span class="o">+</span> <span class="mi">1</span><span class="p">);</span>
+        <span class="k">while</span><span class="p">(</span><span class="nv">$h</span> <span class="o">-</span> <span class="nv">$l</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+            <span class="k">my</span> <span class="nv">$i</span> <span class="o">=</span> <span class="p">(</span><span class="nv">$l</span> <span class="o">+</span> <span class="nv">$h</span><span class="p">)</span> <span class="o">&gt;&gt;</span> <span class="mi">1</span><span class="p">;</span>
+            <span class="k">if</span><span class="p">(</span><span class="nv">$r</span> <span class="o">&lt;</span> <span class="nv">$a</span><span class="p">[</span><span class="nv">$i</span><span class="p">])</span> <span class="p">{</span>
+                <span class="nv">$h</span> <span class="o">=</span> <span class="nv">$i</span><span class="p">;</span>
+            <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+                <span class="nv">$l</span> <span class="o">=</span> <span class="nv">$i</span><span class="p">;</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        <span class="nb">push</span> <span class="nv">@b</span><span class="p">,</span> <span class="nv">$l</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="k">return</span> <span class="o">\</span><span class="nv">@b</span><span class="p">;</span>
+<span class="p">}</span>
 
-あらかじめ累積分布表を作っておき、どの区間に入るかをバイナリサーチ。
-準備にO(n)、選択に O(log n)かかる。
-
-``` perl binary_search_method.pl
-use strict;
-use warnings;
-use List::Util qw(sum);
-
-sub binary_search_method {
-    my $weights = shift;
-    my $num = shift;
-    my $length = @$weights;
-    my @a;
-    my @b;
-
-    my $sum = 0;
-    for my $i(@$weights) {
-        push @a, $sum;
-        $sum += $i;
-    }
-    push @a, $sum;
-
-    for (1..$num) {
-        my $r = rand($sum);
-        my ($l, $h) = (0, $length + 1);
-        while($h - $l &gt; 1) {
-            my $i = ($l + $h) &gt;&gt; 1;
-            if($r &lt; $a[$i]) {
-                $h = $i;
-            } else {
-                $l = $i;
-            }
-        }
-        push @b, $l;
-    }
-    return \@b;
-}
-
-print join ', ', @{binary_search_method [1,2,3], 100};
-</code></pre>
-
-<h3 id="walker-s-alias-method">Walker&rsquo;s alias method</h3>
-
+<span class="k">print</span> <span class="nb">join</span> <span class="s">&#39;, &#39;</span><span class="p">,</span> <span class="nv">@</span><span class="p">{</span><span class="n">binary_search_method</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">],</span> <span class="mi">100</span><span class="p">};</span>
+</code></pre></div><h3 id="walkers-alias-method">Walker&rsquo;s alias method</h3>
 <p>今回調べて初めて知ったアルゴリズム。
 準備にO(n)、ランダム選択はなんと定数時間O(1)でできる。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">strict</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">warnings</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">List::Util</span> <span class="sx">qw(sum)</span><span class="p">;</span>
 
-<p>``` perl walers_alias_method.pl
-use strict;
-use warnings;
-use List::Util qw(sum);</p>
+<span class="k">sub</span> <span class="nf">walkers_alias_method</span> <span class="p">{</span>
+    <span class="k">my</span> <span class="nv">$weights</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
+    <span class="k">my</span> <span class="nv">$num</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
+    <span class="k">my</span> <span class="nv">$sum</span> <span class="o">=</span> <span class="n">sum</span> <span class="nv">@$weights</span><span class="p">;</span>
+    <span class="k">my</span> <span class="nv">$length</span> <span class="o">=</span> <span class="nv">@$weights</span><span class="p">;</span>
 
-<p>sub walkers_alias_method {
-    my $weights = shift;
-    my $num = shift;
-    my $sum = sum @$weights;
-    my $length = @$weights;</p>
+    <span class="k">my</span> <span class="nv">@p</span> <span class="o">=</span> <span class="nb">map</span> <span class="p">{</span> <span class="nv">$_</span> <span class="o">/</span> <span class="nv">$sum</span> <span class="o">*</span> <span class="nv">$length</span><span class="p">}</span> <span class="nv">@$weights</span><span class="p">;</span>
+    <span class="k">my</span> <span class="nv">@a</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="o">..</span><span class="nv">$length</span><span class="o">-</span><span class="mi">1</span><span class="p">);</span>
 
-<pre><code>my @p = map { $_ / $sum * $length} @$weights;
-my @a = (0..$length-1);
+    <span class="k">my</span> <span class="p">(</span><span class="nv">$h</span><span class="p">,</span> <span class="nv">$l</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nv">$length</span> <span class="o">-</span> <span class="mi">1</span><span class="p">);</span>
+    <span class="k">my</span> <span class="nv">@hl</span><span class="p">;</span>
+    <span class="k">for</span> <span class="k">my</span> <span class="nv">$i</span><span class="p">(</span><span class="mi">0</span><span class="o">..</span><span class="nv">$length</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">if</span> <span class="p">(</span> <span class="nv">$p</span><span class="p">[</span><span class="nv">$i</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+            <span class="nv">$hl</span><span class="p">[</span><span class="nv">$h</span><span class="o">++</span><span class="p">]</span> <span class="o">=</span> <span class="nv">$i</span><span class="p">;</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="nv">$hl</span><span class="p">[</span><span class="nv">$l</span><span class="o">--</span><span class="p">]</span> <span class="o">=</span> <span class="nv">$i</span><span class="p">;</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
 
-my ($h, $l) = (0, $length - 1);
-my @hl;
-for my $i(0..$length-1) {
-    if ( $p[$i] &gt;= 1) {
-        $hl[$h++] = $i;
-    } else {
-        $hl[$l--] = $i;
-    }
-}
+    <span class="k">while</span><span class="p">(</span><span class="nv">$h</span> <span class="o">!=</span> <span class="mi">0</span> <span class="o">&amp;&amp;</span> <span class="nv">$l</span> <span class="o">!=</span> <span class="nv">$length</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">my</span> <span class="p">(</span><span class="nv">$j</span><span class="p">,</span> <span class="nv">$k</span><span class="p">)</span> <span class="o">=</span> <span class="nv">@hl</span><span class="p">[</span><span class="nv">$l</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="nv">$h</span><span class="o">-</span><span class="mi">1</span><span class="p">];</span>
+        <span class="nv">$a</span><span class="p">[</span><span class="nv">$j</span><span class="p">]</span> <span class="o">=</span> <span class="nv">$k</span><span class="p">;</span>
+        <span class="nv">$p</span><span class="p">[</span><span class="nv">$k</span><span class="p">]</span> <span class="o">+=</span> <span class="nv">$p</span><span class="p">[</span><span class="nv">$j</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">;</span>
+        <span class="nv">$l</span><span class="o">++</span><span class="p">;</span>
+        <span class="k">if</span> <span class="p">(</span> <span class="nv">$p</span><span class="p">[</span><span class="nv">$k</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">1</span> <span class="p">)</span> <span class="p">{</span>
+            <span class="nv">$hl</span><span class="p">[</span><span class="nv">$l</span><span class="o">--</span><span class="p">]</span> <span class="o">=</span> <span class="nv">$k</span><span class="p">;</span>
+            <span class="nv">$h</span><span class="o">--</span><span class="p">;</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
 
-while($h != 0 &amp;&amp; $l != $length - 1) {
-    my ($j, $k) = @hl[$l+1, $h-1];
-    $a[$j] = $k;
-    $p[$k] += $p[$j] - 1;
-    $l++;
-    if ( $p[$k] &lt; 1 ) {
-        $hl[$l--] = $k;
-        $h--;
-    }
-}
+    <span class="k">return</span> <span class="p">[</span><span class="nb">map</span> <span class="p">{</span>
+        <span class="k">my</span> <span class="nv">$r</span> <span class="o">=</span> <span class="nb">rand</span><span class="p">(</span><span class="nv">$length</span><span class="p">);</span>
+        <span class="k">my</span> <span class="nv">$k</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nv">$r</span><span class="p">);</span>
+        <span class="nv">$r</span> <span class="o">-=</span> <span class="nv">$k</span><span class="p">;</span>
+        <span class="nv">$r</span> <span class="o">&lt;</span> <span class="nv">$p</span><span class="p">[</span><span class="nv">$k</span><span class="p">]</span> <span class="p">?</span> <span class="nv">$k</span> <span class="p">:</span> <span class="nv">$a</span><span class="p">[</span><span class="nv">$k</span><span class="p">];</span>
+    <span class="p">}</span> <span class="mi">1</span><span class="o">..</span><span class="nv">$num</span><span class="p">];</span>
+<span class="p">}</span>
 
-return [map {
-    my $r = rand($length);
-    my $k = int($r);
-    $r -= $k;
-    $r &lt; $p[$k] ? $k : $a[$k];
-} 1..$num];
-</code></pre>
+<span class="k">print</span> <span class="nb">join</span> <span class="s">&#39;, &#39;</span><span class="p">,</span> <span class="nv">@</span><span class="p">{</span><span class="n">walkers_alias_method</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">],</span> <span class="mi">100</span><span class="p">};</span>
+</code></pre></div><h2 id="非復元抽出">非復元抽出</h2>
+<p>復元抽出のアルゴリズムを応用して、非復元抽出について考えてみましょう。
+一度出たものが2回でないよう、出たものの重みを0にします。</p>
+<h3 id="線形検索-1">線形検索</h3>
+<p>線形検索の場合は、重みリストをほぼそのまま使っているので、更新は簡単。
+一度出たものの重みを0にして、総和を更新するだけ。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">strict</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">warnings</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">List::Util</span> <span class="sx">qw(sum)</span><span class="p">;</span>
 
-<p>}</p>
+<span class="k">sub</span> <span class="nf">linear_method</span> <span class="p">{</span>
+    <span class="k">my</span> <span class="nv">$weights</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
+    <span class="k">my</span> <span class="nv">$num</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
+    <span class="k">my</span> <span class="nv">$sum</span> <span class="o">=</span> <span class="n">sum</span> <span class="nv">@$weights</span><span class="p">;</span>
+    <span class="k">my</span> <span class="nv">$length</span> <span class="o">=</span> <span class="nv">@$weights</span><span class="p">;</span>
+    <span class="k">my</span> <span class="nv">@w</span> <span class="o">=</span> <span class="nv">@$weights</span><span class="p">;</span>
+    <span class="k">my</span> <span class="nv">@a</span><span class="p">;</span>
 
-<p>print join &lsquo;, &lsquo;, @{walkers_alias_method [1,2,3], 100};</p>
+    <span class="k">for</span> <span class="p">(</span><span class="mi">1</span><span class="o">..</span><span class="nv">$num</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">my</span> <span class="nv">$r</span> <span class="o">=</span> <span class="nb">rand</span><span class="p">(</span><span class="nv">$sum</span><span class="p">);</span>
+        <span class="k">for</span> <span class="k">my</span> <span class="nv">$i</span><span class="p">(</span><span class="mi">0</span><span class="o">..</span><span class="nv">$length</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+            <span class="nv">$r</span> <span class="o">-=</span> <span class="nv">$w</span><span class="p">[</span><span class="nv">$i</span><span class="p">];</span>
+            <span class="k">if</span><span class="p">(</span><span class="nv">$r</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+                <span class="nb">push</span> <span class="nv">@a</span><span class="p">,</span> <span class="nv">$i</span><span class="p">;</span>
 
-<pre><code>
-## 非復元抽出
+                 <span class="c1"># 一度出たものの重みを0にする</span>
+                <span class="nv">$sum</span> <span class="o">-=</span> <span class="nv">$w</span><span class="p">[</span><span class="nv">$i</span><span class="p">];</span>
+                <span class="nv">$w</span><span class="p">[</span><span class="nv">$i</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+                <span class="k">last</span><span class="p">;</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+    <span class="k">return</span> <span class="o">\</span><span class="nv">@a</span><span class="p">;</span>
+<span class="p">}</span>
 
-復元抽出のアルゴリズムを応用して、非復元抽出について考えてみましょう。
-一度出たものが2回でないよう、出たものの重みを0にします。
-
-### 線形検索
-
-線形検索の場合は、重みリストをほぼそのまま使っているので、更新は簡単。
-一度出たものの重みを0にして、総和を更新するだけ。
-
-``` perl linear_method.pl
-use strict;
-use warnings;
-use List::Util qw(sum);
-
-sub linear_method {
-    my $weights = shift;
-    my $num = shift;
-    my $sum = sum @$weights;
-    my $length = @$weights;
-    my @w = @$weights;
-    my @a;
-
-    for (1..$num) {
-        my $r = rand($sum);
-        for my $i(0..$length-1) {
-            $r -= $w[$i];
-            if($r &lt; 0) {
-                push @a, $i;
-
-                 # 一度出たものの重みを0にする
-                $sum -= $w[$i];
-                $w[$i] = 0;
-                last;
-            }
-        }
-    }
-    return \@a;
-}
-
-print join ',', linear_method([1 .. 100000], 500);
-</code></pre>
-
-<h3 id="二分木">二分木</h3>
-
+<span class="k">print</span> <span class="nb">join</span> <span class="s">&#39;,&#39;</span><span class="p">,</span> <span class="n">linear_method</span><span class="p">([</span><span class="mi">1</span> <span class="o">..</span> <span class="mi">100000</span><span class="p">],</span> <span class="mi">500</span><span class="p">);</span>
+</code></pre></div><h3 id="二分木">二分木</h3>
 <p>バイナリサーチでは累積分布表を作成したけど、
 これの更新にはO(n)かかってしまうのでバイナリサーチの意味がなくなってしまう。
 そこで重みを二分木を使って管理することで、O(log n)で重みの更新ができる。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">strict</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">warnings</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">List::Util</span> <span class="sx">qw(sum)</span><span class="p">;</span>
 
-<p>``` perl tree.pl
-use strict;
-use warnings;
-use List::Util qw(sum);</p>
+<span class="k">sub</span> <span class="nf">binary_search_method</span> <span class="p">{</span>
+    <span class="k">my</span> <span class="nv">$weights</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
+    <span class="k">my</span> <span class="nv">$num</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
+    <span class="k">my</span> <span class="nv">$length</span> <span class="o">=</span> <span class="nv">@$weights</span><span class="p">;</span>
 
-<p>sub binary_search_method {
-    my $weights = shift;
-    my $num = shift;
-    my $length = @$weights;</p>
+    <span class="c1"># 二分木を構築</span>
+    <span class="k">my</span> <span class="nv">@left_weight</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="n">x</span> <span class="p">(</span><span class="nv">$length</span> <span class="o">*</span> <span class="mi">2</span><span class="p">);</span>
+    <span class="k">my</span> <span class="nv">@right_weight</span> <span class="o">=</span> <span class="p">((</span><span class="mi">0</span><span class="p">)</span> <span class="n">x</span> <span class="nv">$length</span><span class="p">,</span> <span class="nv">@$weights</span><span class="p">);</span>
+    <span class="k">for</span> <span class="p">(</span><span class="k">my</span> <span class="nv">$i</span> <span class="o">=</span> <span class="nv">$length</span><span class="o">-</span><span class="mi">1</span><span class="p">;</span> <span class="nv">$i</span><span class="o">&gt;</span><span class="mi">0</span><span class="p">;</span> <span class="o">--</span><span class="nv">$i</span><span class="p">)</span> <span class="p">{</span>
+        <span class="nv">$left_weight</span><span class="p">[</span><span class="nv">$i</span><span class="p">]</span> <span class="o">=</span> <span class="nv">$left_weight</span><span class="p">[</span><span class="nv">$i</span><span class="o">*</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="nv">$right_weight</span><span class="p">[</span><span class="nv">$i</span><span class="o">*</span><span class="mi">2</span><span class="p">];</span>
+        <span class="nv">$right_weight</span><span class="p">[</span><span class="nv">$i</span><span class="p">]</span> <span class="o">=</span> <span class="nv">$left_weight</span><span class="p">[</span><span class="nv">$i</span><span class="o">*</span><span class="mi">2</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="nv">$right_weight</span><span class="p">[</span><span class="nv">$i</span><span class="o">*</span><span class="mi">2</span><span class="o">+</span><span class="mi">1</span><span class="p">];</span>
+    <span class="p">}</span>
 
-<pre><code># 二分木を構築
-my @left_weight = (0) x ($length * 2);
-my @right_weight = ((0) x $length, @$weights);
-for (my $i = $length-1; $i&gt;0; --$i) {
-    $left_weight[$i] = $left_weight[$i*2] + $right_weight[$i*2];
-    $right_weight[$i] = $left_weight[$i*2+1] + $right_weight[$i*2+1];
-}
+    <span class="k">my</span> <span class="nv">@a</span><span class="p">;</span>
+    <span class="k">for</span> <span class="p">(</span><span class="mi">1</span><span class="o">..</span><span class="nv">$num</span><span class="p">)</span> <span class="p">{</span>
+        <span class="c1"># 二分木から検索</span>
+        <span class="k">my</span> <span class="nv">$i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+        <span class="k">my</span> <span class="nv">$r</span> <span class="o">=</span> <span class="nb">rand</span><span class="p">(</span><span class="nv">$left_weight</span><span class="p">[</span><span class="nv">$i</span><span class="p">]</span> <span class="o">+</span> <span class="nv">$right_weight</span><span class="p">[</span><span class="nv">$i</span><span class="p">]);</span>
+        <span class="k">while</span><span class="p">(</span><span class="nv">$i</span> <span class="o">&lt;</span> <span class="nv">$length</span><span class="p">)</span> <span class="p">{</span>
+            <span class="k">if</span><span class="p">(</span><span class="nv">$r</span> <span class="o">&lt;</span> <span class="nv">$left_weight</span><span class="p">[</span><span class="nv">$i</span><span class="p">])</span> <span class="p">{</span>
+                <span class="nv">$i</span> <span class="o">=</span> <span class="nv">$i</span> <span class="o">*</span> <span class="mi">2</span><span class="p">;</span>
+            <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+                <span class="nv">$r</span> <span class="o">-=</span> <span class="nv">$left_weight</span><span class="p">[</span><span class="nv">$i</span><span class="p">];</span>
+                <span class="nv">$i</span> <span class="o">=</span> <span class="nv">$i</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">+</span> <span class="mi">1</span><span class="p">;</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        <span class="nb">push</span> <span class="nv">@a</span><span class="p">,</span> <span class="nv">$i</span> <span class="o">-</span> <span class="nv">$length</span><span class="p">;</span>
 
-my @a;
-for (1..$num) {
-    # 二分木から検索
-    my $i = 1;
-    my $r = rand($left_weight[$i] + $right_weight[$i]);
-    while($i &lt; $length) {
-        if($r &lt; $left_weight[$i]) {
-            $i = $i * 2;
-        } else {
-            $r -= $left_weight[$i];
-            $i = $i * 2 + 1;
-        }
-    }
-    push @a, $i - $length;
+        <span class="c1"># 木を更新</span>
+        <span class="k">my</span> <span class="nv">$w</span> <span class="o">=</span> <span class="nv">$weights</span><span class="o">-&gt;</span><span class="p">[</span><span class="nv">$i</span><span class="o">-</span><span class="nv">$length</span><span class="p">];</span>
+        <span class="k">while</span><span class="p">(</span><span class="nv">$i</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+            <span class="k">if</span><span class="p">(</span><span class="nv">$i</span> <span class="nv">%</span> <span class="nv">2</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+                <span class="nv">$left_weight</span><span class="p">[</span><span class="nv">$i</span><span class="o">&gt;&gt;</span><span class="mi">1</span><span class="p">]</span> <span class="o">-=</span> <span class="nv">$w</span><span class="p">;</span>
+            <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+                <span class="nv">$right_weight</span><span class="p">[</span><span class="nv">$i</span><span class="o">&gt;&gt;</span><span class="mi">1</span><span class="p">]</span> <span class="o">-=</span> <span class="nv">$w</span><span class="p">;</span>
+            <span class="p">}</span>
+            <span class="nv">$i</span> <span class="o">&gt;&gt;=</span> <span class="mi">1</span><span class="p">;</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
 
-    # 木を更新
-    my $w = $weights-&gt;[$i-$length];
-    while($i &gt; 0) {
-        if($i % 2 == 0) {
-            $left_weight[$i&gt;&gt;1] -= $w;
-        } else {
-            $right_weight[$i&gt;&gt;1] -= $w;
-        }
-        $i &gt;&gt;= 1;
-    }
-}
+    <span class="k">return</span> <span class="o">\</span><span class="nv">@a</span><span class="p">;</span>
+<span class="p">}</span>
 
-return \@a;
-</code></pre>
-
-<p>}</p>
-
-<p>print join &lsquo;,&rsquo;, binary_search_method([1..100000], 500);
-```</p>
-
-<h2 id="その他">その他</h2>
-
+<span class="k">print</span> <span class="nb">join</span> <span class="s">&#39;,&#39;</span><span class="p">,</span> <span class="n">binary_search_method</span><span class="p">([</span><span class="mi">1</span><span class="o">..</span><span class="mi">100000</span><span class="p">],</span> <span class="mi">500</span><span class="p">);</span>
+</code></pre></div><h2 id="その他">その他</h2>
 <p>Walker&rsquo;s alias method でも更新法を考えたけど、
 テーブルを一から再生成する以外にいい方法が思いつかない。</p>
-
 <p>抽出が高速であるという特徴を利用して、
 同じ物が出たらもう一度実行するというのが手っ取り早そう。
 Walker&rsquo;s alias method が必要なときは n が十分に大きいはずなので、
 重複が起こる確率は小さく、これで十分なきがする。</p>
-
 <h2 id="まとめ">まとめ</h2>
-
-<table>
-<tr>
-  <th>手法</th><th>準備</th><th>抽出</th><th>重み更新</th>
-</tr>
-<tr>
-  <td>線形検索</td><td>O(n)</td><td>O(n)</td><td>O(1)</td>
-</tr>
-<tr>
-  <td>バイナリサーチ</td><td>O(n)</td><td>O(log n)</td><td>O(log n)</td>
-</tr>
-<tr>
-  <td>Walker's alias</td><td>O(n)</td><td>O(1)</td><td>O(n)</td>
-</tr>
-</table>
-
+<!-- raw HTML omitted -->
 <h2 id="参考">参考</h2>
-
 <ul>
 <li><a href="http://d.hatena.ne.jp/koiti_yano/20070826/p1">比較的高速な復元抽出アルゴリズム</a></li>
 <li><a href="http://tolstoy.newcastle.edu.au/R/devel/05/06/1403.html">efficiency of sample() with prob</a></li>
@@ -505,6 +447,8 @@ Walker&rsquo;s alias method が必要なときは n が十分に大きいはず�
           
           
             
+          
+            
               <li class="post">
                 <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
               </li>
@@ -555,12 +499,6 @@ Walker&rsquo;s alias method が必要なときは n が十分に大きいはず�
             
               <li class="post">
                 <a href="/blog/2019/08/21/aws-xray-with-perl-lambda-runtime/">AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2019/07/24/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
               </li>
             
           

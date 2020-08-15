@@ -45,7 +45,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.38.1" />
+  <meta name="generator" content="Hugo 0.74.3" />
 
   
   
@@ -124,34 +124,26 @@
           
           
           
-          
-
-<p>この記事は、<a href="http://qiita.com/advent-calendar/2015/perl5">Perl 5 Advent Calendar</a>の17日目の記事です。</p>
-
+          <p>この記事は、<a href="http://qiita.com/advent-calendar/2015/perl5">Perl 5 Advent Calendar</a>の17日目の記事です。</p>
 <p><a href="http://tech.kayac.com/archive/reconnect_redisfast.html">Redis::Fast の reconnect について</a>の中で
 <a href="https://metacpan.org/release/DBIx-Class">DBIx::Class</a>のreconnectについても触れています。
 DBIx::Classの安全にreconnectionが行えるように考慮されていますが、色々と注意点があります。
 reconnection周りで調べてみたので、Advent Calendarの枠を借りてまとめたいと思います。</p>
-
-<h2 id="dbix-classとは">DBIx::Classとは</h2>
-
+<h2 id="dbixclassとは">DBIx::Classとは</h2>
 <p><a href="https://metacpan.org/release/DBIx-Class">DBIx::Class</a>はPerlのO/Rマッピングモジュールです。
 テーブル間のリレーションを定義でき、JOIN句の入ったクエリもサポートする等、かなり高機能なモジュールです。
 もう僕はJOIN句をDBIx::Class以外で書ける気がしません。
 詳しくはtypester先生の解説記事をどうぞ。</p>
-
 <ul>
 <li><a href="http://gihyo.jp/dev/serial/01/perl-hackers-hub">Perl Hackers Hub</a>
-
 <ul>
 <li><a href="http://gihyo.jp/dev/serial/01/perl-hackers-hub/000301">第3回　DBIx::Classでデータベース操作（1）</a></li>
 <li><a href="http://gihyo.jp/dev/serial/01/perl-hackers-hub/000302">第3回　DBIx::Classでデータベース操作（2）</a></li>
 <li><a href="http://gihyo.jp/dev/serial/01/perl-hackers-hub/000303">第3回　DBIx::Classでデータベース操作（3）</a></li>
-</ul></li>
 </ul>
-
+</li>
+</ul>
 <h2 id="サンプル">サンプル</h2>
-
 <p>サンプルとしてユーザの所持金を管理する簡単なアプリを作ってみます。
 Webアプリとか作るの面倒だったので、コンソールアプリです。</p>
 <div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">package</span> <span class="nn">My::Schema::User</span> <span class="p">{</span>
@@ -221,10 +213,9 @@ Webアプリとか作るの面倒だったので、コンソールアプリで�
 
 <span class="k">my</span> <span class="nv">$schema</span> <span class="o">=</span> <span class="nn">My::Schema</span><span class="o">-&gt;</span><span class="nb">connect</span><span class="p">(</span><span class="s">&#39;dbi:mysql:host=127.0.0.1;port=3306;database=test;mysql_write_timeout=1;mysql_read_timeout=1&#39;</span><span class="p">,</span> <span class="s">&#39;root&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">);</span>
 <span class="nv">$schema</span><span class="o">-&gt;</span><span class="nn">storage</span><span class="o">-&gt;</span><span class="nn">dbh</span><span class="o">-&gt;</span><span class="k">do</span><span class="p">(</span><span class="s">&#39;DROP TABLE IF EXISTS money, user&#39;</span><span class="p">);</span>
-<span class="nv">$schema</span><span class="o">-&gt;</span><span class="n">deploy</span><span class="p">;</span></code></pre></div>
-<p>実行するとMySQLのデータベースに以下のようなテーブルが作成されます。
+<span class="nv">$schema</span><span class="o">-&gt;</span><span class="n">deploy</span><span class="p">;</span>
+</code></pre></div><p>実行するとMySQLのデータベースに以下のようなテーブルが作成されます。
 userテーブルはユーザの名前を管理するテーブル、moneyはユーザの所持金を管理するテーブルです。</p>
-
 <pre><code>mysql&gt; desc user;
 +----------+--------------+------+-----+---------+----------------+
 | Field    | Type         | Null | Key | Default | Extra          |
@@ -242,12 +233,8 @@ mysql&gt; desc money;
 | yen     | int(11) | NO   |     | NULL    |       |
 +---------+---------+------+-----+---------+-------+
 2 rows in set (0.00 sec)
-</code></pre>
-
-<h2 id="タイムアウトとロールバックの微妙な関係">タイムアウトとロールバックの微妙な関係</h2>
-
+</code></pre><h2 id="タイムアウトとロールバックの微妙な関係">タイムアウトとロールバックの微妙な関係</h2>
 <h3 id="ユーザの初期化プログラムを実装してみる">ユーザの初期化プログラムを実装してみる</h3>
-
 <p>テーブル作っただけではつまらないので、データを入れてみます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="c1"># スキーマ定義等略</span>
 
@@ -273,27 +260,22 @@ mysql&gt; desc money;
     <span class="n">say</span> <span class="s">&#34;所持金: &#34;</span><span class="p">,</span> <span class="nv">$user</span><span class="o">-&gt;</span><span class="nn">money</span><span class="o">-&gt;</span><span class="n">yen</span><span class="p">;</span>
 <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
     <span class="n">say</span> <span class="s">&#34;ユーザが見つかりませんでした&#34;</span><span class="p">;</span>
-<span class="p">}</span></code></pre></div>
-<p>実行してみると、1000円持ったユーザが作成されます。</p>
+<span class="p">}</span>
+</code></pre></div><p>実行してみると、1000円持ったユーザが作成されます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">$ perl dbic-test.pl
 名前: ok_macopy
-所持金: 1000</code></pre></div>
-<h3 id="タイムアウトと戦う">タイムアウトと戦う</h3>
-
+所持金: 1000
+</code></pre></div><h3 id="タイムアウトと戦う">タイムアウトと戦う</h3>
 <p>一件上手く動いていそうに見えますが、上記コードを何回か実行すると、ときたま以下のように失敗します。</p>
-
 <pre><code>$ perl dbic-test.pl
 DBIx::Class::Storage::DBI::_dbh_execute(): DBI Exception: DBD::mysql::st execute failed: Lost connection to MySQL server during query [for Statement &quot;SELECT SLEEP(1) FROM user me&quot;] at dbic-test.pl line 80
 名前: ok_macopy
 所持金: 0
-</code></pre>
-
-<p>所持金が0円になってしまいました。
+</code></pre><p>所持金が0円になってしまいました。
 <code>SELECT SLEEP(1) FROM user me</code> という時間のかかるクエリを投げたので、コネクションがタイムアウトしてしまったようです。
 データベースの状態を確認すると、userに行はあるけど、moneyは空っぽの状態です。
 「userに対応するmoneyが必ず存在しなければならない」とスキーマで定義したのに、その条件を満たしていませんね。
 たとえタイムアウトしたとしても、このような状態にはならないで欲しいです。</p>
-
 <pre><code>mysql&gt; SELECT * FROM user;
 +----+-----------+
 | id | username  |
@@ -304,10 +286,7 @@ DBIx::Class::Storage::DBI::_dbh_execute(): DBI Exception: DBD::mysql::st execute
 
 mysql&gt; SELECT * FROM money;
 Empty set (0.00 sec)
-</code></pre>
-
-<h3 id="トランザクションを使ってみる">トランザクションを使ってみる</h3>
-
+</code></pre><h3 id="トランザクションを使ってみる">トランザクションを使ってみる</h3>
 <p>リレーショナルデータベースにはこれを実現するためにトランザクションという便利なものがあります。
 DBIx::Classから扱うにはいくつか方法がありますが、例えばガードオブジェクトを使って以下のように書けます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="c1"># ユーザ作成</span>
@@ -335,8 +314,8 @@ DBIx::Classから扱うにはいくつか方法がありますが、例えばガ
     <span class="n">say</span> <span class="s">&#34;所持金: &#34;</span><span class="p">,</span> <span class="nv">$user</span><span class="o">-&gt;</span><span class="n">money</span> <span class="p">?</span> <span class="nv">$user</span><span class="o">-&gt;</span><span class="nn">money</span><span class="o">-&gt;</span><span class="n">yen</span> <span class="p">:</span> <span class="mi">0</span><span class="p">;</span>
 <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
     <span class="n">say</span> <span class="s">&#34;ユーザが見つかりませんでした&#34;</span><span class="p">;</span>
-<span class="p">}</span></code></pre></div>
-<p>これで片一方だけ更新されるのが防げるはず！
+<span class="p">}</span>
+</code></pre></div><p>これで片一方だけ更新されるのが防げるはず！
 ところが、片一方だけ更新自体は防げはするのですが、
 今度は所持金を表示するところでコケてしまいます。
 トランザクションを使っていないときは正常に表示できていたし、
@@ -345,11 +324,10 @@ DBIx::Classから扱うにはいくつか方法がありますが、例えばガ
 Transaction aborted: DBIx::Class::Storage::DBI::_dbh_execute(): DBI Exception: DBD::mysql::st execute failed: Lost connection to MySQL server during query [for Statement &#34;SELECT SLEEP(1) FROM user me&#34;] at dbic-test.pl line 80
  Rollback failed: DBIx::Class::Storage::DBI::_exec_txn_rollback(): DBI Exception: DBD::mysql::db rollback failed: Turning on AutoCommit failed at dbic-test.pl line 72
 DBIx::Class::Storage::DBI::_dbh_execute(): DBI Exception: DBD::mysql::st execute failed: MySQL server has gone away [for Statement &#34;SELECT me.id, me.username FROM user me WHERE ( id = ? )&#34; with ParamValues: 0=1] at dbic-test.pl line 89
-# ※「ユーザが見つかりませんでした」と表示されて欲しいがされない</code></pre></div>
-<p>実はコネクションがタイムアウトしたとはMySQLとの再接続をする必要があるのですが、
+# ※「ユーザが見つかりませんでした」と表示されて欲しいがされない
+</code></pre></div><p>実はコネクションがタイムアウトしたとはMySQLとの再接続をする必要があるのですが、
 DBIx::Classが裏で再接続処理を自動的にやってくれるので、普段は意識する必要はありません。
 ただし例外があって、 <strong>トランザクションの中では再接続処理を行ってくれません</strong> 。</p>
-
 <p>トランザクション内で勝手に再接続が行われると逆に困るので、この挙動自体は正しいのですが、
 これにロールバックが絡むと少し不思議なことが起こります。
 <strong>ロールバックしてトランザクションを抜けても、DBIx::Classはトランザクションの中にいると判断してしまうのです。</strong>
@@ -382,19 +360,18 @@ DBIx::Classが裏で再接続処理を自動的にやってくれるので、普
     <span class="n">say</span> <span class="s">&#34;所持金: &#34;</span><span class="p">,</span> <span class="nv">$user</span><span class="o">-&gt;</span><span class="n">money</span> <span class="p">?</span> <span class="nv">$user</span><span class="o">-&gt;</span><span class="nn">money</span><span class="o">-&gt;</span><span class="n">yen</span> <span class="p">:</span> <span class="mi">0</span><span class="p">;</span>
 <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
     <span class="n">say</span> <span class="s">&#34;ユーザが見つかりませんでした&#34;</span><span class="p">;</span>
-<span class="p">}</span></code></pre></div><div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">$ perl dbic-test.pl
+<span class="p">}</span>
+</code></pre></div><div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">$ perl dbic-test.pl
 transaction_depth = 0
 transaction_depth = 1
 Transaction aborted: DBIx::Class::Storage::DBI::_dbh_execute(): DBI Exception: DBD::mysql::st execute failed: Lost connection to MySQL server during query [for Statement &#34;SELECT SLEEP(1) FROM user me&#34;] at dbic-test.pl line 82
  Rollback failed: DBIx::Class::Storage::DBI::_exec_txn_rollback(): DBI Exception: DBD::mysql::db rollback failed: Turning on AutoCommit failed at dbic-test.pl line 73
 transaction_depth = 1 # ※トランザクションの外なのに1になってる
-DBIx::Class::Storage::DBI::_dbh_execute(): DBI Exception: DBD::mysql::st execute failed: MySQL server has gone away [for Statement &#34;SELECT me.id, me.username FROM user me WHERE ( id = ? )&#34; with ParamValues: 0=1] at dbic-test.pl line 92</code></pre></div>
-<p>この状態になるといつまで経っても再接続は行われません。
+DBIx::Class::Storage::DBI::_dbh_execute(): DBI Exception: DBD::mysql::st execute failed: MySQL server has gone away [for Statement &#34;SELECT me.id, me.username FROM user me WHERE ( id = ? )&#34; with ParamValues: 0=1] at dbic-test.pl line 92
+</code></pre></div><p>この状態になるといつまで経っても再接続は行われません。
 都度接続なら大きな問題にはならないのですが、Webアプリでコネクションの永続化を行っている場合は深刻です。
 一度タイムアウトすると以後のリクエストがすべて失敗してしまいます。</p>
-
 <h3 id="確実に再接続を行う">確実に再接続を行う</h3>
-
 <p>これを防ぐには確実に再接続をおこなって欲しいところで <code>$schema-&gt;storage-&gt;ensure_connected;</code> を実行します。</p>
 <div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="c1"># ユーザ作成</span>
 <span class="k">my</span> <span class="nv">$user_rs</span> <span class="o">=</span> <span class="nv">$schema</span><span class="o">-&gt;</span><span class="n">resultset</span><span class="p">(</span><span class="s">&#39;User&#39;</span><span class="p">);</span>
@@ -423,8 +400,8 @@ DBIx::Class::Storage::DBI::_dbh_execute(): DBI Exception: DBD::mysql::st execute
     <span class="n">say</span> <span class="s">&#34;所持金: &#34;</span><span class="p">,</span> <span class="nv">$user</span><span class="o">-&gt;</span><span class="n">money</span> <span class="p">?</span> <span class="nv">$user</span><span class="o">-&gt;</span><span class="nn">money</span><span class="o">-&gt;</span><span class="n">yen</span> <span class="p">:</span> <span class="mi">0</span><span class="p">;</span>
 <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
     <span class="n">say</span> <span class="s">&#34;ユーザが見つかりませんでした&#34;</span><span class="p">;</span>
-<span class="p">}</span></code></pre></div>
-<p>こうすることで、何度実行しても「所持金1000のユーザが作られる」or「ユーザが見つかりませんでした」の状態になり、
+<span class="p">}</span>
+</code></pre></div><p>こうすることで、何度実行しても「所持金1000のユーザが作られる」or「ユーザが見つかりませんでした」の状態になり、
 中途半端な状態のユーザが作られたり、再接続に失敗したりということはなくなります。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">$ perl dbic-test.pl
 Transaction aborted: DBIx::Class::Storage::DBI::_dbh_execute(): DBI Exception: DBD::mysql::st execute failed: Lost connection to MySQL server during query [for Statement &#34;SELECT SLEEP(1) FROM user me&#34;] at dbic-test.pl line 80
@@ -435,11 +412,9 @@ Transaction aborted: DBIx::Class::Storage::DBI::_dbh_execute(): DBI Exception: D
         DBIx::Class::Storage::DBI::__ANON__(&#34;DBD::mysql::db DESTROY failed: MySQL server has gone away&#34;, DBI::db=HASH(0x16efbb8), undef) called at dbic-test.pl line 91
         eval {...} called at dbic-test.pl line 91
 
-ユーザが見つかりませんでした</code></pre></div>
-<h2 id="ネストしたトランザクションとロールバックの微妙な関係">ネストしたトランザクションとロールバックの微妙な関係</h2>
-
+ユーザが見つかりませんでした
+</code></pre></div><h2 id="ネストしたトランザクションとロールバックの微妙な関係">ネストしたトランザクションとロールバックの微妙な関係</h2>
 <h3 id="トランザクションをネストする">トランザクションをネストする</h3>
-
 <p>キャンペーン期間中なので通常1000円のところ2000円で初期化してあげることになりました。
 <strong>2000円への更新処理の途中で何かエラーが起こった場合は1000円で初期化して欲しい</strong> ので、
 以下のようにトランザクションをネストしてみました。</p>
@@ -474,27 +449,24 @@ Transaction aborted: DBIx::Class::Storage::DBI::_dbh_execute(): DBI Exception: D
     <span class="n">say</span> <span class="s">&#34;所持金: &#34;</span><span class="p">,</span> <span class="nv">$user</span><span class="o">-&gt;</span><span class="nn">money</span><span class="o">-&gt;</span><span class="n">yen</span><span class="p">;</span>
 <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
     <span class="n">say</span> <span class="s">&#34;ユーザが見つかりませんでした&#34;</span><span class="p">;</span>
-<span class="p">}</span></code></pre></div>
-<p>わざとエラーが起こるようにして実行してみましょう。</p>
+<span class="p">}</span>
+</code></pre></div><p>わざとエラーが起こるようにして実行してみましょう。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">$ perl dbic-test.pl
 DBIx::Class::Storage::TxnScopeGuard::DESTROY(): A DBIx::Class::Storage::TxnScopeGuard went out of scope without explicit commit or error. Rolling back. at dbic-test.pl line 88
 名前: ok_macopy
-所持金: 2000</code></pre></div>
-<p>2000円！</p>
-
+所持金: 2000
+</code></pre></div><p>2000円！</p>
 <p><strong>「Rolling back」って出てるのに全然ロールバックされてない！</strong></p>
-
 <h3 id="save-pointを使う">SAVE POINTを使う</h3>
-
 <p>接続時に<code>auto_savepoint</code>オプションを有効にすると、<code>SAVE POINT</code>を使った部分的なロールバックが使用可能になります。</p>
 <div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">my</span> <span class="nv">$schema</span> <span class="o">=</span> <span class="nn">My::Schema</span><span class="o">-&gt;</span><span class="nb">connect</span><span class="p">(</span><span class="s">&#39;dbi:mysql:host=127.0.0.1;port=3306;database=test;mysql_write_timeout=1;mysql_read_timeout=1&#39;</span><span class="p">,</span> <span class="s">&#39;root&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="p">{</span>
     <span class="n">auto_savepoint</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">,</span>
-<span class="p">});</span></code></pre></div><div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">$ perl dbic-test.pl
+<span class="p">});</span>
+</code></pre></div><div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">$ perl dbic-test.pl
 DBIx::Class::Storage::TxnScopeGuard::DESTROY(): A DBIx::Class::Storage::TxnScopeGuard went out of scope without explicit commit or error. Rolling back. at dbic-test.pl line 90
 名前: ok_macopy
-所持金: 1000</code></pre></div>
-<h3 id="大人しく全部ロールバックする">大人しく全部ロールバックする</h3>
-
+所持金: 1000
+</code></pre></div><h3 id="大人しく全部ロールバックする">大人しく全部ロールバックする</h3>
 <p>MySQLにはSAVE POINTという便利機能があるとはいえ、どこまでロールバックするべきかを管理するのはすごく大変です。
 現実的には ALL or NOTHING、失敗したら全部ロールバックで十分なのではと思ってます。
 このサンプルではdieしてしまえばいいですね。</p>
@@ -529,18 +501,16 @@ DBIx::Class::Storage::TxnScopeGuard::DESTROY(): A DBIx::Class::Storage::TxnScope
     <span class="n">say</span> <span class="s">&#34;所持金: &#34;</span><span class="p">,</span> <span class="nv">$user</span><span class="o">-&gt;</span><span class="nn">money</span><span class="o">-&gt;</span><span class="n">yen</span><span class="p">;</span>
 <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
     <span class="n">say</span> <span class="s">&#34;ユーザが見つかりませんでした&#34;</span><span class="p">;</span>
-<span class="p">}</span></code></pre></div><div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">something error! at dbic-test.pl line 85.
-ユーザが見つかりませんでした</code></pre></div>
-<p>途中で<code>eval</code>して例外キャッチしているとロールバックしたのにコミットされる現象が起こる
+<span class="p">}</span>
+</code></pre></div><div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">something error! at dbic-test.pl line 85.
+ユーザが見つかりませんでした
+</code></pre></div><p>途中で<code>eval</code>して例外キャッチしているとロールバックしたのにコミットされる現象が起こる
 (その場合警告すら出ないっぽいので更に怖い)ので、例外握り潰していたら要注意です。</p>
-
 <p>部分的なロールバックができない場合は、
 「子トランザクションがロールバックされていたら親トランザクションのコミットが失敗する」
 が安全だと思うんですが、なぜこんな挙動になっているんでしょうね。
 誰か経緯についてご存知のかたは教えていただきたいです。</p>
-
 <h2 id="まとめ">まとめ</h2>
-
 <ul>
 <li>トランザクション外では自動的に再接続してくれるが、トランザクション内では行われない</li>
 <li>必ず再接続して欲しいところで <code>$schema-&gt;storage-&gt;ensure_connected;</code></li>
@@ -648,6 +618,8 @@ DBIx::Class::Storage::TxnScopeGuard::DESTROY(): A DBIx::Class::Storage::TxnScope
           
           
             
+          
+            
               <li class="post">
                 <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
               </li>
@@ -698,12 +670,6 @@ DBIx::Class::Storage::TxnScopeGuard::DESTROY(): A DBIx::Class::Storage::TxnScope
             
               <li class="post">
                 <a href="/blog/2019/08/21/aws-xray-with-perl-lambda-runtime/">AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2019/07/24/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
               </li>
             
           

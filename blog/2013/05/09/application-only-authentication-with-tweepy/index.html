@@ -45,7 +45,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.38.1" />
+  <meta name="generator" content="Hugo 0.74.3" />
 
   
   
@@ -124,94 +124,76 @@
           
           
           
-          
-
-<p>Twitter の API リファレンスを久しぶりに見たら、
+          <p>Twitter の API リファレンスを久しぶりに見たら、
 <a href="https://dev.twitter.com/docs/auth/application-only-auth">Application-only authentication</a>とかいうのを発見。
 特定のユーザと関連付けられない代わりに、普通に認証するより制限が緩いみたい。
 3月に追加されてたらしい。</p>
-
 <p>知らなかった・・・。
 最近API叩いてなかったからな・・・。</p>
-
 <p>便利そうなので、Python用のTwitterライブラリである<a href="https://github.com/tweepy/tweepy">Tweepy</a>から使ってみた。</p>
-
-<!-- More -->
-
+<!-- raw HTML omitted -->
 <h2 id="authhandler">AuthHandler</h2>
-
 <p>Tweepy用のAuthHandler。
 認証部分は
 <a href="http://ktkrhr.hatenablog.com/entry/2013/03/27/002447">TwitterのApplication-only authenticationを試してみた</a>
 のページからほぼコピペ。</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="kn">import</span> <span class="nn">tweepy</span>
+<span class="kn">import</span> <span class="nn">urllib</span>
+<span class="kn">import</span> <span class="nn">urllib2</span>
+<span class="kn">import</span> <span class="nn">base64</span>
+<span class="kn">import</span> <span class="nn">json</span>
 
-<p>``` python AppAuthHandler.py
-import tweepy
-import urllib
-import urllib2
-import base64
-import json</p>
+<span class="k">class</span> <span class="nc">AppAuthHandler</span><span class="p">(</span><span class="n">tweepy</span><span class="o">.</span><span class="n">auth</span><span class="o">.</span><span class="n">AuthHandler</span><span class="p">):</span>
+    <span class="n">TOKEN_URL</span> <span class="o">=</span> <span class="s1">&#39;https://api.twitter.com/oauth2/token&#39;</span>
 
-<p>class AppAuthHandler(tweepy.auth.AuthHandler):
-    TOKEN_URL = &lsquo;<a href="https://api.twitter.com/oauth2/token'">https://api.twitter.com/oauth2/token'</a></p>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">consumer_key</span><span class="p">,</span> <span class="n">consumer_secret</span><span class="p">):</span>
+        <span class="n">token_credential</span> <span class="o">=</span> <span class="n">urllib</span><span class="o">.</span><span class="n">quote</span><span class="p">(</span><span class="n">consumer_key</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;:&#39;</span> <span class="o">+</span> <span class="n">urllib</span><span class="o">.</span><span class="n">quote</span><span class="p">(</span><span class="n">consumer_secret</span><span class="p">)</span>
+        <span class="n">credential</span> <span class="o">=</span> <span class="n">base64</span><span class="o">.</span><span class="n">b64encode</span><span class="p">(</span><span class="n">token_credential</span><span class="p">)</span>
 
-<pre><code>def __init__(self, consumer_key, consumer_secret):
-    token_credential = urllib.quote(consumer_key) + ':' + urllib.quote(consumer_secret)
-    credential = base64.b64encode(token_credential)
+        <span class="n">value</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;grant_type&#39;</span><span class="p">:</span> <span class="s1">&#39;client_credentials&#39;</span><span class="p">}</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">urllib</span><span class="o">.</span><span class="n">urlencode</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="n">req</span> <span class="o">=</span> <span class="n">urllib2</span><span class="o">.</span><span class="n">Request</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">TOKEN_URL</span><span class="p">)</span>
+        <span class="n">req</span><span class="o">.</span><span class="n">add_header</span><span class="p">(</span><span class="s1">&#39;Authorization&#39;</span><span class="p">,</span> <span class="s1">&#39;Basic &#39;</span> <span class="o">+</span> <span class="n">credential</span><span class="p">)</span>
+        <span class="n">req</span><span class="o">.</span><span class="n">add_header</span><span class="p">(</span><span class="s1">&#39;Content-Type&#39;</span><span class="p">,</span> <span class="s1">&#39;application/x-www-form-urlencoded;charset=UTF-8&#39;</span><span class="p">)</span>
 
-    value = {'grant_type': 'client_credentials'}
-    data = urllib.urlencode(value)
-    req = urllib2.Request(self.TOKEN_URL)
-    req.add_header('Authorization', 'Basic ' + credential)
-    req.add_header('Content-Type', 'application/x-www-form-urlencoded;charset=UTF-8')
+        <span class="n">response</span> <span class="o">=</span> <span class="n">urllib2</span><span class="o">.</span><span class="n">urlopen</span><span class="p">(</span><span class="n">req</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+        <span class="n">json_response</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">response</span><span class="o">.</span><span class="n">read</span><span class="p">())</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_access_token</span> <span class="o">=</span> <span class="n">json_response</span><span class="p">[</span><span class="s1">&#39;access_token&#39;</span><span class="p">]</span>
 
-    response = urllib2.urlopen(req, data)
-    json_response = json.loads(response.read())
-    self._access_token = json_response['access_token']
-
-def apply_auth(self, url, method, headers, parameters):
-    headers['Authorization'] = 'Bearer ' + self._access_token
-</code></pre>
-
-<pre><code>
-## 使ってみる
-
-今まではOAuthHandlerを使っていたのを、上のAppAuthHandlerに置き換えるだけ。
+    <span class="k">def</span> <span class="nf">apply_auth</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">url</span><span class="p">,</span> <span class="n">method</span><span class="p">,</span> <span class="n">headers</span><span class="p">,</span> <span class="n">parameters</span><span class="p">):</span>
+        <span class="n">headers</span><span class="p">[</span><span class="s1">&#39;Authorization&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;Bearer &#39;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_access_token</span>
+</code></pre></div><h2 id="使ってみる">使ってみる</h2>
+<p>今まではOAuthHandlerを使っていたのを、上のAppAuthHandlerに置き換えるだけ。
 あとは今までどおりAPIを叩ける。
-以下は特定のユーザのツイートを取れるだけ取ってくる例。
+以下は特定のユーザのツイートを取れるだけ取ってくる例。</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="ch">#!/usr/bin/env python</span>
+<span class="c1"># -*- coding: utf-8 -*-</span>
 
-``` python crawl.py
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+<span class="kn">import</span> <span class="nn">tweepy</span>
+<span class="kn">import</span> <span class="nn">codecs</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">AppAuthHandler</span>
 
-import tweepy
-import codecs
-import sys
-import AppAuthHandler
+<span class="n">sys</span><span class="o">.</span><span class="n">stdin</span> <span class="o">=</span> <span class="n">codecs</span><span class="o">.</span><span class="n">getreader</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">)(</span><span class="n">sys</span><span class="o">.</span><span class="n">stdin</span><span class="p">)</span>
+<span class="n">sys</span><span class="o">.</span><span class="n">stdout</span> <span class="o">=</span> <span class="n">codecs</span><span class="o">.</span><span class="n">getwriter</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">)(</span><span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="p">)</span>
 
-sys.stdin = codecs.getreader('utf-8')(sys.stdin)
-sys.stdout = codecs.getwriter('utf-8')(sys.stdout)
+<span class="n">CONSUMER_KEY</span> <span class="o">=</span> <span class="s1">&#39;hogehoge&#39;</span>
+<span class="n">CONSUMER_SECRET</span> <span class="o">=</span> <span class="s1">&#39;hogehoge&#39;</span>
 
-CONSUMER_KEY = 'hogehoge'
-CONSUMER_SECRET = 'hogehoge'
+<span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+    <span class="n">user_id</span> <span class="o">=</span> <span class="s2">&#34;JO_RI&#34;</span>
 
-def main():
-    user_id = &quot;JO_RI&quot;
+    <span class="n">auth</span> <span class="o">=</span> <span class="n">AppAuthHandler</span><span class="o">.</span><span class="n">AppAuthHandler</span><span class="p">(</span><span class="n">CONSUMER_KEY</span><span class="p">,</span> <span class="n">CONSUMER_SECRET</span><span class="p">)</span>
+    <span class="n">api</span> <span class="o">=</span> <span class="n">tweepy</span><span class="o">.</span><span class="n">API</span><span class="p">(</span><span class="n">auth</span><span class="p">)</span>
 
-    auth = AppAuthHandler.AppAuthHandler(CONSUMER_KEY, CONSUMER_SECRET)
-    api = tweepy.API(auth)
+    <span class="n">arg</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;id&#39;</span><span class="p">:</span> <span class="n">user_id</span><span class="p">,</span> <span class="s1">&#39;include_rts&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">}</span>
+    <span class="n">user_statuses</span> <span class="o">=</span> <span class="n">tweepy</span><span class="o">.</span><span class="n">Cursor</span><span class="p">(</span><span class="n">api</span><span class="o">.</span><span class="n">user_timeline</span><span class="p">,</span> <span class="o">**</span><span class="n">arg</span><span class="p">)</span><span class="o">.</span><span class="n">items</span><span class="p">(</span><span class="mi">3200</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">user_status</span> <span class="ow">in</span> <span class="n">user_statuses</span><span class="p">:</span>
+        <span class="k">print</span> <span class="n">user_status</span><span class="o">.</span><span class="n">text</span>
 
-    arg = {'id': user_id, 'include_rts': 1}
-    user_statuses = tweepy.Cursor(api.user_timeline, **arg).items(3200)
-    for user_status in user_statuses:
-        print user_status.text
-
-if __name__ == &quot;__main__&quot;:
-  main()
-</code></pre>
-
-<h2 id="参考">参考</h2>
-
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&#34;__main__&#34;</span><span class="p">:</span>
+  <span class="n">main</span><span class="p">()</span>
+</code></pre></div><h2 id="参考">参考</h2>
 <ul>
 <li><a href="https://dev.twitter.com/docs/auth/application-only-auth">Application-only authentication</a></li>
 <li><a href="http://blog.k52.org/0162">TwitterAPIがApplication-only authenticationを公開。これを使うと検索API等の一部回数制限が大幅に緩和される。</a></li>
@@ -320,6 +302,8 @@ if __name__ == &quot;__main__&quot;:
           
           
             
+          
+            
               <li class="post">
                 <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
               </li>
@@ -370,12 +354,6 @@ if __name__ == &quot;__main__&quot;:
             
               <li class="post">
                 <a href="/blog/2019/08/21/aws-xray-with-perl-lambda-runtime/">AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2019/07/24/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
               </li>
             
           

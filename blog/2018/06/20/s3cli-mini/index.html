@@ -45,7 +45,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.38.1" />
+  <meta name="generator" content="Hugo 0.74.3" />
 
   
   
@@ -124,67 +124,50 @@
           
           
           
-          
-
-<p>S3からファイルを落とすだけのツールを作りました。</p>
-
+          <p>S3からファイルを落とすだけのツールを作りました。</p>
 <ul>
 <li><a href="https://github.com/shogo82148/s3cli-mini">s3cli-mini</a></li>
 </ul>
-
 <h2 id="目的">目的</h2>
-
 <p>流行りのCD(継続的デリバリー)を実践するために、専用のデプロイツールをダウンロードする目的で作りました。</p>
-
 <p>主なデプロイ先はAWSなので、デプロイ操作には awscli が必要です。
 しかしCDに使用している<a href="https://circleci.jp/">CircleCI</a>が公式に提供しているコンテナイメージにはawscliがインストールされていません。
 もちろん <code>apt-get install awscli</code> であとからインストールすることは可能ですが、そのぶんジョブの実行時間が長くなってしまいます。
 また、インストールされる awscli のバージョンが古く、ローカル環境ではうまく動くけど、
 CircleCI上では最新の機能が使えず失敗するということがありました。</p>
-
 <p>そこでもう awscli を使うことは諦めて、Goで AWS API を叩いてデプロイするバイナリを作ってしまうことを考えました。
 Goであればシングルバイナリでインストール可能で、CI/CD環境とローカルでバージョンが一致せず悩まされることはありません。
 また並行処理が得意なので、デプロイの時間短縮も図れます。</p>
-
 <p>しかし、このデプロイ用のバイナリをどこに置くか・・・プロジェクト固有の処理が入っているので外部には公開したくない。
 かといってプライベートなS3バケットに置くと、ダウンロードに awscli が必要になってしまう・・・。
 awscli を使うのは諦めたはずでは・・・という、いわゆる「鶏が先か、卵が先か」問題に陥ってしまいました。</p>
-
 <p>そこでS3からのダウンロードの処理に特化したミニawscliが欲しくなって作成したのが <a href="https://github.com/shogo82148/s3cli-mini">s3cli-mini</a> です。</p>
-
 <h2 id="使い方">使い方</h2>
-
 <p>現状v0.0.1でサポートしているのは <code>cp</code> コマンドのみです。
 S3バケットからファイルをダウンロードしたり、S3バケットへファイルをアップロードしたり、
 別のS3バケットへファイルを転送することができます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash"><span class="c1"># download from a S3 bucket
-</span><span class="c1"></span>s3cli-mini cp s3://your-bucket/foobar.zip .
+<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash"><span class="c1"># download from a S3 bucket</span>
+s3cli-mini cp s3://your-bucket/foobar.zip .
 
-<span class="c1"># upload to a S3 bucket
-</span><span class="c1"></span>s3cli-mini cp foobar.zip s3://your-bucket/
+<span class="c1"># upload to a S3 bucket</span>
+s3cli-mini cp foobar.zip s3://your-bucket/
 
-<span class="c1"># copy the file from a S3 bucket to another S3 bucket.
-</span><span class="c1"></span>s3cli-mini cp s3://your-bucket/foobar.zip s3://another-bucket/</code></pre></div>
-<p>一応サブコマンドを追加できるようにしましたが、今の所 <code>cp</code> コマンド以外の追加予定はありません。</p>
-
+<span class="c1"># copy the file from a S3 bucket to another S3 bucket.</span>
+s3cli-mini cp s3://your-bucket/foobar.zip s3://another-bucket/
+</code></pre></div><p>一応サブコマンドを追加できるようにしましたが、今の所 <code>cp</code> コマンド以外の追加予定はありません。</p>
 <h2 id="aws-sdk-go-v2">aws-sdk-go-v2</h2>
-
 <p>これだけだと面白くないので、<a href="https://github.com/aws/aws-sdk-go-v2">aws-sdk-go-v2</a> を使ってみました。
 僕自身つい最近知ったのですが、昨年末に公開されたものです(<a href="https://aws.amazon.com/jp/blogs/developer/aws-sdk-for-go-2-0-developer-preview/">AWS SDK for Go 2.0 Developer Preview</a>)。
 2018年6月20日現在の最新バージョンは<a href="https://github.com/aws/aws-sdk-go-v2/releases/tag/v2.0.0-preview.4">v2.0.0-preview.4 (2018-05-25)</a>とまだ正式リリース前ですが、
 練習も兼ねて採用しました。</p>
-
 <p>詳しい変更点は <a href="https://github.com/aws/aws-sdk-go-v2/blob/master/CHANGELOG.md#release-v200-preview1-2017-12-21">CHANGELOG</a> を見てもらうとして、
 今回楽になったと感じたのは <code>~/.aws/config</code> を勝手に読んでくれることです。
 これによりリージョンの指定などを省略することができます。
 また、AssumeRoleも解釈してくれるので <a href="https://github.com/fujiwara/aswrap">aswrap</a> のような工夫が要らなくなります。</p>
-
 <ul>
 <li><a href="https://sfujiwara.hatenablog.com/entry/2017/12/13/122952">aswrap - ~/.aws/(config|credentials) で定義した AssumeRole 定義から一時キーを取得してコマンドを起動してくれる wrapper を書いた</a></li>
 </ul>
-
 <h2 id="まとめ">まとめ</h2>
-
 <p>AWS ムズカシイ</p>
 
         </div>
@@ -288,6 +271,8 @@ S3バケットからファイルをダウンロードしたり、S3バケット�
           
           
             
+          
+            
               <li class="post">
                 <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
               </li>
@@ -338,12 +323,6 @@ S3バケットからファイルをダウンロードしたり、S3バケット�
             
               <li class="post">
                 <a href="/blog/2019/08/21/aws-xray-with-perl-lambda-runtime/">AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2019/07/24/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
               </li>
             
           

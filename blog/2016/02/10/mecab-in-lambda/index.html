@@ -45,7 +45,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.38.1" />
+  <meta name="generator" content="Hugo 0.74.3" />
 
   
   
@@ -124,128 +124,103 @@
           
           
           
-          
-
-<p>MeCabのPythonバインディングをいじってた関係で、MeCabについてインターネットをさまよっていたら、
+          <p>MeCabのPythonバインディングをいじってた関係で、MeCabについてインターネットをさまよっていたら、
 <a href="http://dev.classmethod.jp/cloud/aws-lambda-with-mecab/">AWS Lambda で MeCab を動かす</a>という記事を見つけました。
 Lambdaの計算リソースで形態素解析できるのは楽しいですねー。
 ただ実装にまだまだ改善できそうな部分があったので修正してみました。</p>
-
 <p><strong>2017/12/06追記</strong>
 Norio Kimuraさんのコメントを受けて、<a href="https://shogo82148.github.io/blog/2017/12/06/mecab-in-lambda/">MeCabをAWS Lambdaで動かす(2017年版)</a>を書きました。
 以下の手順でも動きますが、少し簡単に出来るようになっています。</p>
-
-<!-- More -->
-
+<!-- raw HTML omitted -->
 <h2 id="問題点">問題点</h2>
-
-<p>第一に<strong>「外部プロセスを起動しているので遅い」</strong>という点です。
+<p>第一に**「外部プロセスを起動しているので遅い」**という点です。
 外部プロセスの起動は非常に重くて数百msかかります。
 MeCabは非常に高速で数msもあれば解析が終わるのに、もったいないですよね。</p>
-
-<p>第二に<strong>「OSコマンドインジェクションの危険性がある」</strong>という点です。
+<p>第二に**「OSコマンドインジェクションの危険性がある」**という点です。
 解析対象の文字列をコマンドライン引数として渡しており、この際シェルを経由しています。
 そのため、<code>{&quot;sentence&quot;: &quot;$(ls)&quot;}</code>のような文字列を渡すと、シェルがコマンドとして実行してしまいます。
 API Gatewayなどで外部に公開した場合、第三者が何でもし放題な状態になってしまいます。</p>
-
 <h2 id="頑張ってmecabをライブラリとして呼ぶ">頑張ってMeCabをライブラリとして呼ぶ</h2>
-
 <p>全ての元凶は外部プロセス起動にあるので、頑張ってMeCabをライブラリとして呼んでみましょう。
 そもそもなんで外部プロセス起動をしていたかというと、
 <code>LD_LIBRARY_PATH</code>が正しく設定されていないため<code>import MeCab</code>時に<code>libmecab.so</code>を発見できないからです。
 なんとかならないものかと探したところ、Stack Overflowにそれっぽい記事がありました。</p>
-
 <ul>
 <li><a href="http://stackoverflow.com/questions/6543847/setting-ld-library-path-from-inside-python">Setting LD_LIBRARY_PATH from inside Python</a></li>
 </ul>
-
 <p>「環境変数を設定してから自分自身をexecし直す方法」と「<code>ctypes</code>を使って絶対パス指定で読み込む方法」が紹介されています。
 前者の方がvoteは多いですがLambdaでこれをやるのは大変そうなので、後者で試してみます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="c1"># preload libmecab</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">ctypes</span>
+<span class="n">libdir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">(),</span> <span class="s1">&#39;local&#39;</span><span class="p">,</span> <span class="s1">&#39;lib&#39;</span><span class="p">)</span>
+<span class="n">libmecab</span> <span class="o">=</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">cdll</span><span class="o">.</span><span class="n">LoadLibrary</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">libdir</span><span class="p">,</span> <span class="s1">&#39;libmecab.so&#39;</span><span class="p">))</span>
+</code></pre></div><p>一度読み込んでしまったライブラリは再利用されるため、
+<code>import MeCab</code>はここで読み込んだライブラリにリンクされます(importの順番が重要なの闇な感じがする)。
+<code>LD_LIBRARY_PATH</code>が正しく設定されている必要はありません。</p>
+<p>さて、これで<code>lambda_function.py</code>と<code>tokenizer.py</code>が分かれている必要がなくなったので、二つを合体してみましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-python" data-lang="python"><span class="c1"># coding=utf-8</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">settings</span>
 
-<p>``` python lambda_function.py</p>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+<span class="n">logger</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">LOG_LEVEL</span><span class="p">)</span>
 
-<h1 id="preload-libmecab">preload libmecab</h1>
+<span class="c1"># preload libmecab</span>
+<span class="kn">import</span> <span class="nn">ctypes</span>
+<span class="n">libdir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">(),</span> <span class="s1">&#39;local&#39;</span><span class="p">,</span> <span class="s1">&#39;lib&#39;</span><span class="p">)</span>
+<span class="n">libmecab</span> <span class="o">=</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">cdll</span><span class="o">.</span><span class="n">LoadLibrary</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">libdir</span><span class="p">,</span> <span class="s1">&#39;libmecab.so&#39;</span><span class="p">))</span>
 
-<p>import os
-import ctypes
-libdir = os.path.join(os.getcwd(), &lsquo;local&rsquo;, &lsquo;lib&rsquo;)
-libmecab = ctypes.cdll.LoadLibrary(os.path.join(libdir, &lsquo;libmecab.so&rsquo;))</p>
+<span class="kn">import</span> <span class="nn">MeCab</span>
 
-<pre><code>
-一度読み込んでしまったライブラリは再利用されるため、
-`import MeCab`はここで読み込んだライブラリにリンクされます(importの順番が重要なの闇な感じがする)。
-`LD_LIBRARY_PATH`が正しく設定されている必要はありません。
+<span class="c1"># prepare Tagger</span>
+<span class="n">dicdir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">(),</span> <span class="s1">&#39;local&#39;</span><span class="p">,</span> <span class="s1">&#39;lib&#39;</span><span class="p">,</span> <span class="s1">&#39;mecab&#39;</span><span class="p">,</span> <span class="s1">&#39;dic&#39;</span><span class="p">,</span> <span class="s1">&#39;ipadic&#39;</span><span class="p">)</span>
+<span class="n">rcfile</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">(),</span> <span class="s1">&#39;local&#39;</span><span class="p">,</span> <span class="s1">&#39;etc&#39;</span><span class="p">,</span> <span class="s1">&#39;mecabrc&#39;</span><span class="p">)</span>
+<span class="n">default_tagger</span> <span class="o">=</span> <span class="n">MeCab</span><span class="o">.</span><span class="n">Tagger</span><span class="p">(</span><span class="s2">&#34;-d{} -r{}&#34;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">dicdir</span><span class="p">,</span> <span class="n">rcfile</span><span class="p">))</span>
+<span class="n">unk_tagger</span> <span class="o">=</span> <span class="n">MeCab</span><span class="o">.</span><span class="n">Tagger</span><span class="p">(</span><span class="s2">&#34;-d{} -r{} --unk-feature 未知語,*,*,*,*,*,*,*,*&#34;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">dicdir</span><span class="p">,</span> <span class="n">rcfile</span><span class="p">))</span>
 
-さて、これで`lambda_function.py`と`tokenizer.py`が分かれている必要がなくなったので、二つを合体してみましょう。
+<span class="n">DEFAULT_STOPTAGS</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;BOS/EOS&#39;</span><span class="p">]</span>
 
-``` python lambda_function.py
-# coding=utf-8
-import os
-import settings
+<span class="k">def</span> <span class="nf">lambda_handler</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+    <span class="n">sentence</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;sentence&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">)</span>
+    <span class="n">stoptags</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;stoptags&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;,&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="n">DEFAULT_STOPTAGS</span>
+    <span class="n">unk_feature</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;unk_feature&#39;</span><span class="p">,</span> <span class="bp">False</span><span class="p">)</span>
 
-import logging
-logger = logging.getLogger(__name__)
-logger.setLevel(settings.LOG_LEVEL)
+    <span class="n">tokens</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">tagger</span> <span class="o">=</span> <span class="n">unk_tagger</span> <span class="k">if</span> <span class="n">unk_feature</span> <span class="k">else</span> <span class="n">default_tagger</span>
+    <span class="n">node</span> <span class="o">=</span> <span class="n">tagger</span><span class="o">.</span><span class="n">parseToNode</span><span class="p">(</span><span class="n">sentence</span><span class="p">)</span>
+    <span class="k">while</span> <span class="n">node</span><span class="p">:</span>
+        <span class="n">feature</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">feature</span> <span class="o">+</span> <span class="s1">&#39;,*,*&#39;</span>
+        <span class="n">part_of_speech</span> <span class="o">=</span> <span class="n">get_part_of_speech</span><span class="p">(</span><span class="n">feature</span><span class="p">)</span>
+        <span class="n">reading</span> <span class="o">=</span> <span class="n">get_reading</span><span class="p">(</span><span class="n">feature</span><span class="p">)</span>
+        <span class="n">base_form</span> <span class="o">=</span> <span class="n">get_base_form</span><span class="p">(</span><span class="n">feature</span><span class="p">)</span>
+        <span class="n">token</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&#34;surface&#34;</span><span class="p">:</span> <span class="n">node</span><span class="o">.</span><span class="n">surface</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">),</span>
+            <span class="s2">&#34;feature&#34;</span><span class="p">:</span> <span class="n">node</span><span class="o">.</span><span class="n">feature</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">),</span>
+            <span class="s2">&#34;pos&#34;</span><span class="p">:</span> <span class="n">part_of_speech</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">),</span>
+            <span class="s2">&#34;reading&#34;</span><span class="p">:</span> <span class="n">reading</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">),</span>
+            <span class="s2">&#34;baseform&#34;</span><span class="p">:</span> <span class="n">base_form</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">),</span>
+            <span class="s2">&#34;stat&#34;</span><span class="p">:</span> <span class="n">node</span><span class="o">.</span><span class="n">stat</span><span class="p">,</span>
+        <span class="p">}</span>
 
-# preload libmecab
-import ctypes
-libdir = os.path.join(os.getcwd(), 'local', 'lib')
-libmecab = ctypes.cdll.LoadLibrary(os.path.join(libdir, 'libmecab.so'))
+        <span class="k">if</span> <span class="n">part_of_speech</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">stoptags</span><span class="p">:</span>
+            <span class="n">tokens</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">token</span><span class="p">)</span>
+        <span class="n">node</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">next</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&#34;tokens&#34;</span><span class="p">:</span> <span class="n">tokens</span><span class="p">}</span>
 
-import MeCab
+<span class="k">def</span> <span class="nf">get_part_of_speech</span><span class="p">(</span><span class="n">feature</span><span class="p">):</span>
+    <span class="k">return</span> <span class="s1">&#39;-&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">v</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">feature</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;,&#39;</span><span class="p">)[:</span><span class="mi">4</span><span class="p">]</span> <span class="k">if</span> <span class="n">v</span> <span class="o">!=</span> <span class="s1">&#39;*&#39;</span><span class="p">])</span>
 
-# prepare Tagger
-dicdir = os.path.join(os.getcwd(), 'local', 'lib', 'mecab', 'dic', 'ipadic')
-rcfile = os.path.join(os.getcwd(), 'local', 'etc', 'mecabrc')
-default_tagger = MeCab.Tagger(&quot;-d{} -r{}&quot;.format(dicdir, rcfile))
-unk_tagger = MeCab.Tagger(&quot;-d{} -r{} --unk-feature 未知語,*,*,*,*,*,*,*,*&quot;.format(dicdir, rcfile))
+<span class="k">def</span> <span class="nf">get_reading</span><span class="p">(</span><span class="n">feature</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">feature</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;,&#39;</span><span class="p">)[</span><span class="mi">7</span><span class="p">]</span>
 
-DEFAULT_STOPTAGS = ['BOS/EOS']
-
-def lambda_handler(event, context):
-    sentence = event.get('sentence', '').encode('utf-8')
-    stoptags = event.get('stoptags', '').encode('utf-8').split(',') + DEFAULT_STOPTAGS
-    unk_feature = event.get('unk_feature', False)
-
-    tokens = []
-    tagger = unk_tagger if unk_feature else default_tagger
-    node = tagger.parseToNode(sentence)
-    while node:
-        feature = node.feature + ',*,*'
-        part_of_speech = get_part_of_speech(feature)
-        reading = get_reading(feature)
-        base_form = get_base_form(feature)
-        token = {
-            &quot;surface&quot;: node.surface.decode('utf-8'),
-            &quot;feature&quot;: node.feature.decode('utf-8'),
-            &quot;pos&quot;: part_of_speech.decode('utf-8'),
-            &quot;reading&quot;: reading.decode('utf-8'),
-            &quot;baseform&quot;: base_form.decode('utf-8'),
-            &quot;stat&quot;: node.stat,
-        }
-
-        if part_of_speech not in stoptags:
-            tokens.append(token)
-        node = node.next
-    return {&quot;tokens&quot;: tokens}
-
-def get_part_of_speech(feature):
-    return '-'.join([v for v in feature.split(',')[:4] if v != '*'])
-
-def get_reading(feature):
-    return feature.split(',')[7]
-
-def get_base_form(feature):
-    return feature.split(',')[6]
-</code></pre>
-
-<h2 id="試してみる">試してみる</h2>
-
+<span class="k">def</span> <span class="nf">get_base_form</span><span class="p">(</span><span class="n">feature</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">feature</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;,&#39;</span><span class="p">)[</span><span class="mi">6</span><span class="p">]</span>
+</code></pre></div><h2 id="試してみる">試してみる</h2>
 <p><a href="https://github.com/shogo82148/aws-lambda-ja-tokenizer">forkして上記の修正をいれたレポジトリ</a>を用意したので、READMEにしたがってzipファイルを作り、Lambdaに登録しましょう。
 雑なテストですが、Testボタンを5回押しみてログを見てみました。</p>
-
 <p>まずは元記事にあったオリジナルのコードから。</p>
-
 <table>
 <thead>
 <tr>
@@ -255,7 +230,6 @@ def get_base_form(feature):
 <th align="center">Max Memory Used</th>
 </tr>
 </thead>
-
 <tbody>
 <tr>
 <td align="center">280.76 ms</td>
@@ -263,28 +237,24 @@ def get_base_form(feature):
 <td align="center">128 MB</td>
 <td align="center">29 MB</td>
 </tr>
-
 <tr>
 <td align="center">310.00 ms</td>
 <td align="center">400 ms</td>
 <td align="center">128 MB</td>
 <td align="center">29 MB</td>
 </tr>
-
 <tr>
 <td align="center">205.99 ms</td>
 <td align="center">300 ms</td>
 <td align="center">128 MB</td>
 <td align="center">30 MB</td>
 </tr>
-
 <tr>
 <td align="center">205.74 ms</td>
 <td align="center">300 ms</td>
 <td align="center">128 MB</td>
 <td align="center">30 MB</td>
 </tr>
-
 <tr>
 <td align="center">213.96 ms</td>
 <td align="center">300 ms</td>
@@ -293,9 +263,7 @@ def get_base_form(feature):
 </tr>
 </tbody>
 </table>
-
 <p>外部プロセスを起動しないように修正したバージョンです。</p>
-
 <table>
 <thead>
 <tr>
@@ -305,7 +273,6 @@ def get_base_form(feature):
 <th align="center">Max Memory Used</th>
 </tr>
 </thead>
-
 <tbody>
 <tr>
 <td align="center">0.74 ms</td>
@@ -313,28 +280,24 @@ def get_base_form(feature):
 <td align="center">128 MB</td>
 <td align="center">11 MB</td>
 </tr>
-
 <tr>
 <td align="center">0.74 ms</td>
 <td align="left">100 ms</td>
 <td align="center">128 MB</td>
 <td align="center">11 MB</td>
 </tr>
-
 <tr>
 <td align="center">0.70 ms</td>
 <td align="left">100 ms</td>
 <td align="center">128 MB</td>
 <td align="center">11 MB</td>
 </tr>
-
 <tr>
 <td align="center">0.69 ms</td>
 <td align="left">100 ms</td>
 <td align="center">128 MB</td>
 <td align="center">11 MB</td>
 </tr>
-
 <tr>
 <td align="center">0.73 ms</td>
 <td align="left">100 ms</td>
@@ -343,23 +306,16 @@ def get_base_form(feature):
 </tr>
 </tbody>
 </table>
-
 <p>速くなった！！！</p>
-
 <h2 id="まとめ">まとめ</h2>
-
 <ul>
 <li>AWS Lambdaでは外部プロセス起動は案外重たいのでなるべく避ける</li>
 <li>深遠な理由により外部プロセス起動する場合でもシェルは使わない方が無難</li>
 <li><code>LD_LIBRARY_PATH</code>の設定が必要なときは、<code>ctypes.cdll.LoadLibrary</code>を使って直接読みこめばなんとかなる</li>
 </ul>
-
 <p>外部ライブラリを読み込めるのは、いろいろ遊べそうですね・・・</p>
-
-<h2 id="追記-2016-02-15">追記(2016-02-15)</h2>
-
+<h2 id="追記2016-02-15">追記(2016-02-15)</h2>
 <p><a href="https://github.com/KunihikoKido/aws-lambda-ja-tokenizer/pull/1">pullreq送って</a>取り込んでもらいました。</p>
-
 <ul>
 <li><a href="http://dev.classmethod.jp/cloud/improved-aws-lambda-with-mecab/">【改】AWS Lambda で MeCab を動かす</a></li>
 </ul>
@@ -465,6 +421,8 @@ def get_base_form(feature):
           
           
             
+          
+            
               <li class="post">
                 <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
               </li>
@@ -515,12 +473,6 @@ def get_base_form(feature):
             
               <li class="post">
                 <a href="/blog/2019/08/21/aws-xray-with-perl-lambda-runtime/">AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2019/07/24/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
               </li>
             
           

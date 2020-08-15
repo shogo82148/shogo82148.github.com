@@ -45,7 +45,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.38.1" />
+  <meta name="generator" content="Hugo 0.74.3" />
 
   
   
@@ -124,240 +124,212 @@
           
           
           
-          
-
-<p><a href="https://mackerel.io/">Mackerel</a> は <a href="https://mackerel.io/ja/docs/entry/advanced/cli">mkr</a> コマンドを用いて cli から操作ができます。
+          <p><a href="https://mackerel.io/">Mackerel</a> は <a href="https://mackerel.io/ja/docs/entry/advanced/cli">mkr</a> コマンドを用いて cli から操作ができます。
 mkr コマンドを用いると <a href="https://mackerel.io/ja/docs/entry/advanced/monitors-github">監視ルールを GitHub で管理</a> したり、
 カスタムダッシュボードを管理したり、といったことができます。
 しかし、個人的に以下のような不満があります。</p>
-
 <ul>
 <li>サービス、ロール、ホスト、新ダッシュボード等々、監視設定以外のリソースに対応していない
-
 <ul>
 <li>旧ダッシュボードは対応しているんだけど、新ダッシュボード対応がまだ</li>
 <li>新ダッシュボードのUIは使いやすくてすごくいいんだけど、コピペや一斉置換ができないので、テキストで管理したい</li>
-</ul></li>
+</ul>
+</li>
 <li>出力がJSONなのつらい
-
 <ul>
 <li>JSON手で書くの難しくないですか？</li>
-</ul></li>
+</ul>
+</li>
 <li>メトリックスの送信設定と監視設定の管理が別になってしまう
-
 <ul>
 <li>カスタムメトリックス送っているのに監視設定を忘れた、みたいなことが起こる</li>
-</ul></li>
 </ul>
-
+</li>
+</ul>
 <p>メトリックスの送信設定については、以前 <a href="https://shogo82148.github.io/blog/2019/01/31/mackerel-cloudwatch-transfer/">サーバーレスでCloudWatchメトリクスをMackerelに転送する</a> で
 CloudFormation上での管理を実現しました。
 ここにさらに Mackerel の監視設定を追加できれば、最強なのでは？とやってみました。</p>
-
 <h2 id="例">例</h2>
-
 <p>あれこれ説明する前に例を見てもらったほうがわかりやすいと思うので、こんなことができますよ、という設定例から。</p>
-
-<h3 id="例1-レスポンスタイムの99-パーセンタイルを監視する">例1: レスポンスタイムの99%パーセンタイルを監視する</h3>
-
+<h3 id="例1-レスポンスタイムの99パーセンタイルを監視する">例1: レスポンスタイムの99%パーセンタイルを監視する</h3>
 <p><a href="https://mackerel.io/ja/docs/entry/integrations/aws/alb">Mackerel の AWSインテグレーション</a> は ALB に対応していますが、
 レスポンスタイムのメトリックスは平均レスポンスタイムだけです。
 「平均」は代表的な統計値ですが、全体としては速いんだけど一部のリクエストだけ遅い、という状況を見逃してしまいます。
 レスポンスタイムの大まかな分布をパーセンタイルで把握したい、ということはよくありますよね？
 (K社でZabbixを使って監視していたときによくお世話になった)</p>
-
 <p>今回作ったインテグレーションを使えば、以下のように「Mackerelのサービス定義」「メトリックスの転送設定」「監視設定」が
 CloudFormation のテンプレートとして表現できます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml">AWSTemplateFormatVersion<span class="p">:</span><span class="w"> </span><span class="ld">2010-09-09</span><span class="w">
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml"><span class="k">AWSTemplateFormatVersion</span><span class="p">:</span><span class="w"> </span><span class="ld">2010-09-09</span><span class="w">
 </span><span class="w">
 </span><span class="w"></span><span class="c"># Type: Mackerel::* を使うためのおまじない</span><span class="w">
-</span><span class="w"></span>Transform<span class="p">:</span><span class="w">
-</span><span class="w">  </span>-<span class="w"> </span>AWS<span class="p">::</span>Serverless-<span class="ld">2016-10-31</span><span class="w">
-</span><span class="w">  </span>-<span class="w"> </span>Mackerel<span class="w">
-</span><span class="w">  </span>-<span class="w"> </span>JSONString<span class="w">
+</span><span class="w"></span><span class="k">Transform</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span>- AWS<span class="p">::</span>Serverless<span class="m">-2016-10-31</span><span class="w">
+</span><span class="w">  </span>- Mackerel<span class="w">
+</span><span class="w">  </span>- JSONString<span class="w">
 </span><span class="w">
-</span><span class="w"></span>Resources<span class="p">:</span><span class="w">
-</span><span class="w">  </span>MackerelService<span class="p">:</span><span class="w">
-</span><span class="w">    </span>Type<span class="p">:</span><span class="w"> </span>Mackerel<span class="p">::</span>Service<span class="w">
-</span><span class="w">    </span>Properties<span class="p">:</span><span class="w">
-</span><span class="w">      </span>Name<span class="p">:</span><span class="w"> </span><span class="s2">&#34;awesome-service&#34;</span><span class="w">
+</span><span class="w"></span><span class="k">Resources</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span><span class="k">MackerelService</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="k">Type</span><span class="p">:</span><span class="w"> </span>Mackerel<span class="p">::</span>Service<span class="w">
+</span><span class="w">    </span><span class="k">Properties</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span><span class="k">Name</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;awesome-service&#34;</span><span class="w">
 </span><span class="w">
 </span><span class="w">  </span><span class="c"># メトリックスを転送する Lambda 関数</span><span class="w">
-</span><span class="w">  </span>MetricsForwarder<span class="p">:</span><span class="w">
-</span><span class="w">    </span>Type<span class="p">:</span><span class="w"> </span>AWS<span class="p">::</span>Serverless<span class="p">::</span>Application<span class="w">
-</span><span class="w">    </span>Properties<span class="p">:</span><span class="w">
-</span><span class="w">      </span>Location<span class="p">:</span><span class="w">
-</span><span class="w">        </span>ApplicationId<span class="p">:</span><span class="w"> </span>arn<span class="p">:</span>aws<span class="p">:</span>serverlessrepo<span class="p">:</span>us-east-<span class="m">1</span><span class="p">:</span><span class="m">445285296882</span><span class="p">:</span>applications/mackerel-cloudwatch-forwarder<span class="w">
-</span><span class="w">        </span>SemanticVersion<span class="p">:</span><span class="w"> </span><span class="m">0.0</span>.<span class="m">9</span><span class="w">
-</span><span class="w">      </span>Parameters<span class="p">:</span><span class="w">
-</span><span class="w">        </span>ParameterName<span class="p">:</span><span class="w"> </span><span class="s2">&#34;/api-keys/api.mackerelio.com/headers/X-Api-Key&#34;</span><span class="w">
-</span><span class="w">        </span>ForwardSettings<span class="p">:</span><span class="w"> </span>!GetAtt<span class="w"> </span>MetricsForwarderSettings.Query<span class="w">
+</span><span class="w">  </span><span class="k">MetricsForwarder</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="k">Type</span><span class="p">:</span><span class="w"> </span>AWS<span class="p">::</span>Serverless<span class="p">::</span>Application<span class="w">
+</span><span class="w">    </span><span class="k">Properties</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span><span class="k">Location</span><span class="p">:</span><span class="w">
+</span><span class="w">        </span><span class="k">ApplicationId</span><span class="p">:</span><span class="w"> </span>arn<span class="p">:</span>aws<span class="p">:</span>serverlessrepo<span class="p">:</span>us-east<span class="m">-1</span><span class="p">:</span><span class="m">445285296882</span><span class="p">:</span>applications/mackerel-cloudwatch-forwarder<span class="w">
+</span><span class="w">        </span><span class="k">SemanticVersion</span><span class="p">:</span><span class="w"> </span><span class="m">0.0.9</span><span class="w">
+</span><span class="w">      </span><span class="k">Parameters</span><span class="p">:</span><span class="w">
+</span><span class="w">        </span><span class="k">ParameterName</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;/api-keys/api.mackerelio.com/headers/X-Api-Key&#34;</span><span class="w">
+</span><span class="w">        </span><span class="k">ForwardSettings</span><span class="p">:</span><span class="w"> </span>!GetAtt<span class="w"> </span>MetricsForwarderSettings.Query<span class="w">
 </span><span class="w">
 </span><span class="w">  </span><span class="c"># CloudWatch から99%パーセンタイルを取得する</span><span class="w">
-</span><span class="w">  </span>MetricsForwarderSettings<span class="p">:</span><span class="w">
-</span><span class="w">    </span>Type<span class="p">:</span><span class="w"> </span>JSON<span class="p">::</span>String<span class="w">
-</span><span class="w">    </span>Properties<span class="p">:</span><span class="w">
-</span><span class="w">      </span>Query<span class="p">:</span><span class="w">
-</span><span class="w">        </span>-<span class="w"> </span>service<span class="p">:</span><span class="w"> </span>!GetAtt<span class="w"> </span>MackerelService.Name<span class="w">
-</span><span class="w">          </span>name<span class="p">:</span><span class="w"> </span>request_percentile.p99<span class="w">
-</span><span class="w">          </span>metric<span class="p">:</span><span class="w">
-</span><span class="w">            </span>-<span class="w"> </span>AWS/ApplicationELB<span class="w">
-</span><span class="w">            </span>-<span class="w"> </span>TargetResponseTime<span class="w">
-</span><span class="w">            </span>-<span class="w"> </span>LoadBalancer<span class="w">
-</span><span class="w">            </span>-<span class="w"> </span>!GetAtt<span class="w"> </span>LoadBalancer.FullName<span class="w">
-</span><span class="w">            </span>-<span class="w"> </span>TargetGroup<span class="w">
-</span><span class="w">            </span>-<span class="w"> </span>!GetAtt<span class="w"> </span>TargetGroup.TargetGroupFullName<span class="w">
-</span><span class="w">          </span>stat<span class="p">:</span><span class="w"> </span>p99<span class="w">
+</span><span class="w">  </span><span class="k">MetricsForwarderSettings</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="k">Type</span><span class="p">:</span><span class="w"> </span>JSON<span class="p">::</span>String<span class="w">
+</span><span class="w">    </span><span class="k">Properties</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span><span class="k">Query</span><span class="p">:</span><span class="w">
+</span><span class="w">        </span>- <span class="k">service</span><span class="p">:</span><span class="w"> </span>!GetAtt<span class="w"> </span>MackerelService.Name<span class="w">
+</span><span class="w">          </span><span class="k">name</span><span class="p">:</span><span class="w"> </span>request_percentile.p99<span class="w">
+</span><span class="w">          </span><span class="k">metric</span><span class="p">:</span><span class="w">
+</span><span class="w">            </span>- AWS/ApplicationELB<span class="w">
+</span><span class="w">            </span>- TargetResponseTime<span class="w">
+</span><span class="w">            </span>- LoadBalancer<span class="w">
+</span><span class="w">            </span>- !GetAtt<span class="w"> </span>LoadBalancer.FullName<span class="w">
+</span><span class="w">            </span>- TargetGroup<span class="w">
+</span><span class="w">            </span>- !GetAtt<span class="w"> </span>TargetGroup.TargetGroupFullName<span class="w">
+</span><span class="w">          </span><span class="k">stat</span><span class="p">:</span><span class="w"> </span>p99<span class="w">
 </span><span class="w">
-</span><span class="w">  </span>MonitorP99<span class="p">:</span><span class="w">
-</span><span class="w">    </span>Type<span class="p">:</span><span class="w"> </span>Mackerel<span class="p">::</span>Monitor<span class="w">
-</span><span class="w">    </span>Properties<span class="p">:</span><span class="w">
-</span><span class="w">      </span>Type<span class="p">:</span><span class="w"> </span>service<span class="w">
-</span><span class="w">      </span>Name<span class="p">:</span><span class="w"> </span>request_percentile.p99<span class="w">
-</span><span class="w">      </span>Duration<span class="p">:</span><span class="w"> </span><span class="m">1</span><span class="w">
-</span><span class="w">      </span>Service<span class="p">:</span><span class="w"> </span>!Ref<span class="w"> </span>MackerelService<span class="w">
-</span><span class="w">      </span>Metric<span class="p">:</span><span class="w"> </span>request_percentile.p99<span class="w">
-</span><span class="w">      </span>Operator<span class="p">:</span><span class="w"> </span><span class="s2">&#34;&gt;&#34;</span><span class="w">
-</span><span class="w">      </span>Warning<span class="p">:</span><span class="w"> </span><span class="m">3</span><span class="w"> </span><span class="c"># 3秒を超えたらWarning</span><span class="w">
-</span><span class="w">      </span>Critical<span class="p">:</span><span class="w"> </span><span class="m">10</span><span class="w"> </span><span class="c"># 10秒を超えたらCritical</span><span class="w">
-</span><span class="w">      </span>MaxCheckAttempts<span class="p">:</span><span class="w"> </span><span class="m">3</span></code></pre></div>
-<h3 id="例2-ログに吐かれたエラーを監視する">例2: ログに吐かれたエラーを監視する</h3>
-
+</span><span class="w">  </span><span class="k">MonitorP99</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="k">Type</span><span class="p">:</span><span class="w"> </span>Mackerel<span class="p">::</span>Monitor<span class="w">
+</span><span class="w">    </span><span class="k">Properties</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span><span class="k">Type</span><span class="p">:</span><span class="w"> </span>service<span class="w">
+</span><span class="w">      </span><span class="k">Name</span><span class="p">:</span><span class="w"> </span>request_percentile.p99<span class="w">
+</span><span class="w">      </span><span class="k">Duration</span><span class="p">:</span><span class="w"> </span><span class="m">1</span><span class="w">
+</span><span class="w">      </span><span class="k">Service</span><span class="p">:</span><span class="w"> </span>!Ref<span class="w"> </span>MackerelService<span class="w">
+</span><span class="w">      </span><span class="k">Metric</span><span class="p">:</span><span class="w"> </span>request_percentile.p99<span class="w">
+</span><span class="w">      </span><span class="k">Operator</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;&gt;&#34;</span><span class="w">
+</span><span class="w">      </span><span class="k">Warning</span><span class="p">:</span><span class="w"> </span><span class="m">3</span><span class="w"> </span><span class="c"># 3秒を超えたらWarning</span><span class="w">
+</span><span class="w">      </span><span class="k">Critical</span><span class="p">:</span><span class="w"> </span><span class="m">10</span><span class="w"> </span><span class="c"># 10秒を超えたらCritical</span><span class="w">
+</span><span class="w">      </span><span class="k">MaxCheckAttempts</span><span class="p">:</span><span class="w"> </span><span class="m">3</span><span class="w">
+</span></code></pre></div><h3 id="例2-ログに吐かれたエラーを監視する">例2: ログに吐かれたエラーを監視する</h3>
 <p><code>check-aws-cloudwatch-logs</code> を使うと、 CloudWatch Logs に吐かれたログを検索して、エラーを見つけたらアラートを飛ばすということができます。</p>
-
 <ul>
 <li><a href="https://mackerel.io/ja/blog/entry/weekly/20181001">AWS CloudWatch Logs のチェック監視プラグインを追加しました ほか</a></li>
 </ul>
-
 <p>しかし、check pluginを使うには mackerel-agent をインストールするサーバーが必要です。
 運用が大変になるので管理するサーバーはあまり増やしたくありません。</p>
-
 <p>いろいろと調べた結果、 CloudWatch Logs のメトリックスフィルターが使えそうです。
 CloudFormation のテンプレートは以下のようになります。</p>
-<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml">AWSTemplateFormatVersion<span class="p">:</span><span class="w"> </span><span class="ld">2010-09-09</span><span class="w">
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml"><span class="k">AWSTemplateFormatVersion</span><span class="p">:</span><span class="w"> </span><span class="ld">2010-09-09</span><span class="w">
 </span><span class="w">
 </span><span class="w"></span><span class="c"># Type: Mackerel::* を使うためのおまじない</span><span class="w">
-</span><span class="w"></span>Transform<span class="p">:</span><span class="w">
-</span><span class="w">  </span>-<span class="w"> </span>AWS<span class="p">::</span>Serverless-<span class="ld">2016-10-31</span><span class="w">
-</span><span class="w">  </span>-<span class="w"> </span>Mackerel<span class="w">
-</span><span class="w">  </span>-<span class="w"> </span>JSONString<span class="w">
+</span><span class="w"></span><span class="k">Transform</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span>- AWS<span class="p">::</span>Serverless<span class="m">-2016-10-31</span><span class="w">
+</span><span class="w">  </span>- Mackerel<span class="w">
+</span><span class="w">  </span>- JSONString<span class="w">
 </span><span class="w">
-</span><span class="w"></span>Resources<span class="p">:</span><span class="w">
-</span><span class="w">  </span>MackerelService<span class="p">:</span><span class="w">
-</span><span class="w">    </span>Type<span class="p">:</span><span class="w"> </span>Mackerel<span class="p">::</span>Service<span class="w">
-</span><span class="w">    </span>Properties<span class="p">:</span><span class="w">
-</span><span class="w">      </span>Name<span class="p">:</span><span class="w"> </span><span class="s2">&#34;awesome-service&#34;</span><span class="w">
+</span><span class="w"></span><span class="k">Resources</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span><span class="k">MackerelService</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="k">Type</span><span class="p">:</span><span class="w"> </span>Mackerel<span class="p">::</span>Service<span class="w">
+</span><span class="w">    </span><span class="k">Properties</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span><span class="k">Name</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;awesome-service&#34;</span><span class="w">
 </span><span class="w">
-</span><span class="w">  </span>LogGroup<span class="p">:</span><span class="w">
-</span><span class="w">    </span>Type<span class="p">:</span><span class="w"> </span>AWS<span class="p">::</span>Logs<span class="p">::</span>LogGroup<span class="w">
-</span><span class="w">    </span>Properties<span class="p">:</span><span class="w">
-</span><span class="w">      </span>LogGroupName<span class="p">:</span><span class="w"> </span>awesome-service-log<span class="w">
+</span><span class="w">  </span><span class="k">LogGroup</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="k">Type</span><span class="p">:</span><span class="w"> </span>AWS<span class="p">::</span>Logs<span class="p">::</span>LogGroup<span class="w">
+</span><span class="w">    </span><span class="k">Properties</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span><span class="k">LogGroupName</span><span class="p">:</span><span class="w"> </span>awesome-service-log<span class="w">
 </span><span class="w">
 </span><span class="w">  </span><span class="c"># ログの検索結果をメトリックスとして保存し、傾向をモニタリングできる</span><span class="w">
 </span><span class="w">  </span><span class="c"># https://docs.aws.amazon.com/ja_jp/AmazonCloudWatch/latest/logs/Counting404Responses.html</span><span class="w">
-</span><span class="w">  </span>MetricFilter<span class="p">:</span><span class="w">
-</span><span class="w">    </span>Type<span class="p">:</span><span class="w"> </span>AWS<span class="p">::</span>Logs<span class="p">::</span>MetricFilter<span class="w">
-</span><span class="w">    </span>Properties<span class="p">:</span><span class="w">
+</span><span class="w">  </span><span class="k">MetricFilter</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="k">Type</span><span class="p">:</span><span class="w"> </span>AWS<span class="p">::</span>Logs<span class="p">::</span>MetricFilter<span class="w">
+</span><span class="w">    </span><span class="k">Properties</span><span class="p">:</span><span class="w">
 </span><span class="w">      </span><span class="c"># JSON形式のログに対応しているので、エラーのみをフィルタリング</span><span class="w">
-</span><span class="w">      </span>FilterPattern<span class="p">:</span><span class="w"> </span><span class="s1">&#39;{ $.level = &#34;error&#34; }&#39;</span><span class="w">
-</span><span class="w">      </span>LogGroupName<span class="p">:</span><span class="w"> </span>!Ref<span class="w"> </span>LogGroup<span class="w">
-</span><span class="w">      </span>MetricTransformations<span class="p">:</span><span class="w">
-</span><span class="w">        </span>-<span class="w"> </span>DefaultValue<span class="p">:</span><span class="w"> </span><span class="m">0</span><span class="w">
-</span><span class="w">          </span>MetricName<span class="p">:</span><span class="w"> </span>error_count<span class="w">
-</span><span class="w">          </span>MetricNamespace<span class="p">:</span><span class="w"> </span>awesome-service<span class="w">
-</span><span class="w">          </span>MetricValue<span class="p">:</span><span class="w"> </span><span class="m">1</span><span class="w">
+</span><span class="w">      </span><span class="k">FilterPattern</span><span class="p">:</span><span class="w"> </span><span class="s1">&#39;{ $.level = &#34;error&#34; }&#39;</span><span class="w">
+</span><span class="w">      </span><span class="k">LogGroupName</span><span class="p">:</span><span class="w"> </span>!Ref<span class="w"> </span>LogGroup<span class="w">
+</span><span class="w">      </span><span class="k">MetricTransformations</span><span class="p">:</span><span class="w">
+</span><span class="w">        </span>- <span class="k">DefaultValue</span><span class="p">:</span><span class="w"> </span><span class="m">0</span><span class="w">
+</span><span class="w">          </span><span class="k">MetricName</span><span class="p">:</span><span class="w"> </span>error_count<span class="w">
+</span><span class="w">          </span><span class="k">MetricNamespace</span><span class="p">:</span><span class="w"> </span>awesome-service<span class="w">
+</span><span class="w">          </span><span class="k">MetricValue</span><span class="p">:</span><span class="w"> </span><span class="m">1</span><span class="w">
 </span><span class="w">
 </span><span class="w">  </span><span class="c"># メトリックスを転送する Lambda 関数</span><span class="w">
-</span><span class="w">  </span>MetricsForwarder<span class="p">:</span><span class="w">
-</span><span class="w">    </span>Type<span class="p">:</span><span class="w"> </span>AWS<span class="p">::</span>Serverless<span class="p">::</span>Application<span class="w">
-</span><span class="w">    </span>Properties<span class="p">:</span><span class="w">
-</span><span class="w">      </span>Location<span class="p">:</span><span class="w">
-</span><span class="w">        </span>ApplicationId<span class="p">:</span><span class="w"> </span>arn<span class="p">:</span>aws<span class="p">:</span>serverlessrepo<span class="p">:</span>us-east-<span class="m">1</span><span class="p">:</span><span class="m">445285296882</span><span class="p">:</span>applications/mackerel-cloudwatch-forwarder<span class="w">
-</span><span class="w">        </span>SemanticVersion<span class="p">:</span><span class="w"> </span><span class="m">0.0</span>.<span class="m">9</span><span class="w">
-</span><span class="w">      </span>Parameters<span class="p">:</span><span class="w">
-</span><span class="w">        </span>ParameterName<span class="p">:</span><span class="w"> </span><span class="s2">&#34;/api-keys/api.mackerelio.com/headers/X-Api-Key&#34;</span><span class="w">
-</span><span class="w">        </span>ForwardSettings<span class="p">:</span><span class="w"> </span>!GetAtt<span class="w"> </span>MetricsForwarderSettings.Query<span class="w">
+</span><span class="w">  </span><span class="k">MetricsForwarder</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="k">Type</span><span class="p">:</span><span class="w"> </span>AWS<span class="p">::</span>Serverless<span class="p">::</span>Application<span class="w">
+</span><span class="w">    </span><span class="k">Properties</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span><span class="k">Location</span><span class="p">:</span><span class="w">
+</span><span class="w">        </span><span class="k">ApplicationId</span><span class="p">:</span><span class="w"> </span>arn<span class="p">:</span>aws<span class="p">:</span>serverlessrepo<span class="p">:</span>us-east<span class="m">-1</span><span class="p">:</span><span class="m">445285296882</span><span class="p">:</span>applications/mackerel-cloudwatch-forwarder<span class="w">
+</span><span class="w">        </span><span class="k">SemanticVersion</span><span class="p">:</span><span class="w"> </span><span class="m">0.0.9</span><span class="w">
+</span><span class="w">      </span><span class="k">Parameters</span><span class="p">:</span><span class="w">
+</span><span class="w">        </span><span class="k">ParameterName</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;/api-keys/api.mackerelio.com/headers/X-Api-Key&#34;</span><span class="w">
+</span><span class="w">        </span><span class="k">ForwardSettings</span><span class="p">:</span><span class="w"> </span>!GetAtt<span class="w"> </span>MetricsForwarderSettings.Query<span class="w">
 </span><span class="w">
 </span><span class="w">  </span><span class="c"># エラー発生数を Mackerel に転送する設定</span><span class="w">
-</span><span class="w">  </span>MetricsForwarderSettings<span class="p">:</span><span class="w">
-</span><span class="w">    </span>Type<span class="p">:</span><span class="w"> </span>JSON<span class="p">::</span>String<span class="w">
-</span><span class="w">    </span>Properties<span class="p">:</span><span class="w">
-</span><span class="w">      </span>Query<span class="p">:</span><span class="w">
-</span><span class="w">        </span>-<span class="w"> </span>service<span class="p">:</span><span class="w"> </span>!GetAtt<span class="w"> </span>MackerelService.Name<span class="w">
-</span><span class="w">          </span>name<span class="p">:</span><span class="w"> </span>error_count<span class="w">
-</span><span class="w">          </span>metric<span class="p">:</span><span class="w">
-</span><span class="w">            </span>-<span class="w"> </span>awesome-service<span class="w">
-</span><span class="w">            </span>-<span class="w"> </span>error_count<span class="w">
-</span><span class="w">          </span>stat<span class="p">:</span><span class="w"> </span>Sum<span class="w">
+</span><span class="w">  </span><span class="k">MetricsForwarderSettings</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="k">Type</span><span class="p">:</span><span class="w"> </span>JSON<span class="p">::</span>String<span class="w">
+</span><span class="w">    </span><span class="k">Properties</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span><span class="k">Query</span><span class="p">:</span><span class="w">
+</span><span class="w">        </span>- <span class="k">service</span><span class="p">:</span><span class="w"> </span>!GetAtt<span class="w"> </span>MackerelService.Name<span class="w">
+</span><span class="w">          </span><span class="k">name</span><span class="p">:</span><span class="w"> </span>error_count<span class="w">
+</span><span class="w">          </span><span class="k">metric</span><span class="p">:</span><span class="w">
+</span><span class="w">            </span>- awesome-service<span class="w">
+</span><span class="w">            </span>- error_count<span class="w">
+</span><span class="w">          </span><span class="k">stat</span><span class="p">:</span><span class="w"> </span>Sum<span class="w">
 </span><span class="w">
 </span><span class="w">  </span><span class="c"># 監視設定</span><span class="w">
-</span><span class="w">  </span>MonitorError<span class="p">:</span><span class="w">
-</span><span class="w">    </span>Type<span class="p">:</span><span class="w"> </span>Mackerel<span class="p">::</span>Monitor<span class="w">
-</span><span class="w">    </span>Properties<span class="p">:</span><span class="w">
-</span><span class="w">      </span>Type<span class="p">:</span><span class="w"> </span>service<span class="w">
-</span><span class="w">      </span>Name<span class="p">:</span><span class="w"> </span>error_count<span class="w">
-</span><span class="w">      </span>Duration<span class="p">:</span><span class="w"> </span><span class="m">1</span><span class="w">
-</span><span class="w">      </span>Service<span class="p">:</span><span class="w"> </span>!Ref<span class="w"> </span>MackerelService<span class="w">
-</span><span class="w">      </span>Metric<span class="p">:</span><span class="w"> </span>error_count<span class="w">
-</span><span class="w">      </span>Operator<span class="p">:</span><span class="w"> </span><span class="s2">&#34;&gt;&#34;</span><span class="w">
-</span><span class="w">      </span>Warning<span class="p">:</span><span class="w"> </span><span class="m">0</span><span class="w"> </span><span class="c"># 1件でもエラーが発生したらWarning</span><span class="w">
-</span><span class="w">      </span>Critical<span class="p">:</span><span class="w"> </span><span class="m">10</span><span class="w"> </span><span class="c"># 10件でCritical</span><span class="w">
-</span><span class="w">      </span>MaxCheckAttempts<span class="p">:</span><span class="w"> </span><span class="m">3</span></code></pre></div>
-<h2 id="仕組み">仕組み</h2>
-
+</span><span class="w">  </span><span class="k">MonitorError</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="k">Type</span><span class="p">:</span><span class="w"> </span>Mackerel<span class="p">::</span>Monitor<span class="w">
+</span><span class="w">    </span><span class="k">Properties</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span><span class="k">Type</span><span class="p">:</span><span class="w"> </span>service<span class="w">
+</span><span class="w">      </span><span class="k">Name</span><span class="p">:</span><span class="w"> </span>error_count<span class="w">
+</span><span class="w">      </span><span class="k">Duration</span><span class="p">:</span><span class="w"> </span><span class="m">1</span><span class="w">
+</span><span class="w">      </span><span class="k">Service</span><span class="p">:</span><span class="w"> </span>!Ref<span class="w"> </span>MackerelService<span class="w">
+</span><span class="w">      </span><span class="k">Metric</span><span class="p">:</span><span class="w"> </span>error_count<span class="w">
+</span><span class="w">      </span><span class="k">Operator</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;&gt;&#34;</span><span class="w">
+</span><span class="w">      </span><span class="k">Warning</span><span class="p">:</span><span class="w"> </span><span class="m">0</span><span class="w"> </span><span class="c"># 1件でもエラーが発生したらWarning</span><span class="w">
+</span><span class="w">      </span><span class="k">Critical</span><span class="p">:</span><span class="w"> </span><span class="m">10</span><span class="w"> </span><span class="c"># 10件でCritical</span><span class="w">
+</span><span class="w">      </span><span class="k">MaxCheckAttempts</span><span class="p">:</span><span class="w"> </span><span class="m">3</span><span class="w">
+</span></code></pre></div><h2 id="仕組み">仕組み</h2>
 <h3 id="cloudformation-マクロとトランスフォーム">CloudFormation マクロとトランスフォーム</h3>
-
 <p>CloudFormation マクロはテンプレートを実際に反映する前に、テンプレートの中身を書き換えることのできる機能です。
 CloufFormationのテンプレートはどうしても長くなってしまいがちですが、
 マクロを使うことでショートハンドを自作することができます。</p>
-
 <p>AWS Serverless Application Model (SAM) も、実態はAWSが提供するCloudFormationマクロです。
 テンプレートの Transform セクションに指定した <code>AWS::Serverless-2016-10-31</code> マクロが
 SAMのショートハンドを展開し、最終的に通常の CloudFormation テンプレートへと変換します。</p>
-
 <p>マクロは Lambda 関数で自作ができるので、好きな言語を使ってテンプレートを自由に書き換えることができます。
 GitHubで公開されている <a href="https://github.com/awslabs/aws-cloudformation-templates/tree/master/aws/services/CloudFormation/MacrosExamples/">MacrosExamples</a> を見てもらうとわかりますが、
 <a href="https://github.com/awslabs/aws-cloudformation-templates/tree/master/aws/services/CloudFormation/MacrosExamples/ShortHand">ショートハンドを定義する</a>のはもちろん、
 <a href="https://github.com/awslabs/aws-cloudformation-templates/tree/master/aws/services/CloudFormation/MacrosExamples/PyPlate">テンプレート内でPythonを実行</a>できるようにしたりと、
 入出力の形式さえ守っていれば何でもできます。
 何でも出来すぎて怖いですね。</p>
-
 <p>上に挙げた例では <code>Type: Mackerel::Monitor</code> が指定されたリソースをカスタムリソースに書き換えることで、
 他のAWSリソースと同じような記法で Mackerel のリソースを定義できるようにしています。
 (MacrosExamplesに比べると、非常におとなしい書き換えに見えますね)</p>
-
 <h3 id="cloudformation-カスタムリソース">CloudFormation カスタムリソース</h3>
-
 <p>CloudFormation カスタムリソースは、リソースの「作成」「更新」「削除」の処理をユーザーが定義することで、
 CloudFormation 自体が対応していないリソースであっても、CloudFormation上で扱うことのできる機能です。
 リソースの操作には Lambda 関数を使用できるので、 Mackerel のような外部サービスであっても、
 「作成」「更新」「削除」の処理さえ実行できればOKです。</p>
-
 <p>嬉しいことに Go の Lambda ライブラリには、カスタムリソースを扱うためパッケージが含まれるので、
 カスタムリソースを提供する Lambda 関数を簡単に作れます。</p>
-
 <ul>
 <li><a href="https://github.com/aws/aws-lambda-go/tree/master/cfn">aws/aws-lambda-go/cfn</a></li>
 <li><a href="https://godoc.org/github.com/aws/aws-lambda-go/cfn">godoc</a></li>
 </ul>
-
 <p>また、作成したリソースの属性を <code>Fn:GetAtt</code> 組み込み関数を利用して参照可能できます。
 さらにリソースIDさえテキトウに発行すれば、実リソースを持たず、CloudFormation上で属性だけを持つリソースを作成可能です。
 このことを利用して <code>JSON::String</code> カスタムリソースは、実リソースを作成せず、 <code>Properties</code> をJSONでエンコードした文字列を属性として返します。
 これにより YAML の中に JSON 書く苦行から開放されました。</p>
-
 <h2 id="使い方">使い方</h2>
-
 <p>ソースコードとテンプレートはすべて GitHub に公開しています。</p>
-
 <ul>
 <li><a href="https://github.com/shogo82148/cfn-mackerel-macro">shogo82148/cfn-mackerel-macro</a></li>
 <li><a href="https://github.com/shogo82148/cfn-json-string-macro">shogo82148/cfn-json-string-macro</a></li>
 </ul>
-
 <p>マクロを利用するには、自分の AWS アカウントにマクロをインストールする必要があります。
 S3にテンプレートとビルド済みバイナリを上げておいたので、インストールは awscli でいっぱつです。</p>
-
 <pre><code>aws cloudformation create-stack \
     --template-url https://s3-ap-northeast-1.amazonaws.com/shogo82148-cloudformation-template-ap-northeast-1/cfn-mackerel-macro/latest.yaml \
     --stack-name cfn-mackerel-macro \
@@ -367,25 +339,18 @@ aws cloudformation create-stack \
     --template-url https://s3-ap-northeast-1.amazonaws.com/shogo82148-cloudformation-template-ap-northeast-1/cfn-json-string-macro/latest.yaml \
     --stack-name json-macro \
     --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND
-</code></pre>
-
-<p>あとはマクロを使うための「おまじない」をテンプレートに追加すればOKです。</p>
-<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml">Transform<span class="p">:</span><span class="w">
-</span><span class="w">  </span>-<span class="w"> </span>AWS<span class="p">::</span>Serverless-<span class="ld">2016-10-31</span><span class="w">
-</span><span class="w">  </span>-<span class="w"> </span>Mackerel<span class="w">
-</span><span class="w">  </span>-<span class="w"> </span>JSONString</code></pre></div>
-<p>プロパティー名は <a href="https://mackerel.io/ja/api-docs/">Mackerel API ドキュメント（v0）</a> を参考にしてください。
+</code></pre><p>あとはマクロを使うための「おまじない」をテンプレートに追加すればOKです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml"><span class="k">Transform</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span>- AWS<span class="p">::</span>Serverless<span class="m">-2016-10-31</span><span class="w">
+</span><span class="w">  </span>- Mackerel<span class="w">
+</span><span class="w">  </span>- JSONString<span class="w">
+</span></code></pre></div><p>プロパティー名は <a href="https://mackerel.io/ja/api-docs/">Mackerel API ドキュメント（v0）</a> を参考にしてください。
 とはいえ、ドキュメントがまったくないのは不便なので、徐々に整備していこうと思います・・・。</p>
-
 <h2 id="まとめ">まとめ</h2>
-
 <p>CloudFormation の「マクロ」「トランスフォーム」「カスタムリソース」を利用して、
 Mackerel の構成管理に挑戦しているお話を紹介しました。</p>
-
 <p>CloudFormation 意外と遊べて便利ですね()</p>
-
 <h2 id="参考">参考</h2>
-
 <ul>
 <li><a href="https://mackerel.io/ja/api-docs/">Mackerel API ドキュメント（v0）</a></li>
 <li><a href="https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/transform-section-structure.html">トランスフォーム</a></li>
@@ -499,6 +464,8 @@ Mackerel の構成管理に挑戦しているお話を紹介しました。</p>
           
           
             
+          
+            
               <li class="post">
                 <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
               </li>
@@ -549,12 +516,6 @@ Mackerel の構成管理に挑戦しているお話を紹介しました。</p>
             
               <li class="post">
                 <a href="/blog/2019/08/21/aws-xray-with-perl-lambda-runtime/">AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2019/07/24/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
               </li>
             
           

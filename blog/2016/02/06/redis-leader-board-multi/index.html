@@ -45,7 +45,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.38.1" />
+  <meta name="generator" content="Hugo 0.74.3" />
 
   
   
@@ -124,23 +124,16 @@
           
           
           
-          
-
-<p>ランキングを作っているとスコアを複数設定したいことがよくあると思います。
+          <p>ランキングを作っているとスコアを複数設定したいことがよくあると思います。
 例えば「得点が同じだったら早くその得点を出した人優先」とか「勝ち点が同じだったら得失点差が大きい方優先」とかのように、
 最初の基準で順位を決められなかった場合の第二基準が欲しいみたいな場合です。</p>
-
 <p>ランキングを作るのにはRedisのSorted Setを使うのが便利ですが、残念ながらSorted Setはひとつしかスコアを設定できません。
 少し前にどうやったら実装できるかと社内チャットで話題に上ったので、試しにRedis::LeaderBoardMulti(仮名)という名前で書いてみました。</p>
-
 <ul>
 <li><a href="https://github.com/shogo82148/p5-Redis-LeaderBoardMulti">shogo82148/p5-Redis-LeaderBoardMulti</a></li>
 </ul>
-
-<!-- More -->
-
+<!-- raw HTML omitted -->
 <h2 id="使い方">使い方</h2>
-
 <p>メソッドの名前は<a href="http://www.songmu.jp/riji/archives/2013/06/redisleaderboar.html">Redis::LeaderBoard</a>にあわせてありますが、
 スコアが複数指定できるようになった関係でちょっと変わってます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">Redis</span><span class="p">;</span>
@@ -153,32 +146,27 @@
 <span class="p">);</span>
 <span class="nv">$lb</span><span class="o">-&gt;</span><span class="n">set_score</span><span class="p">(</span><span class="s">&#39;one&#39;</span> <span class="o">=&gt;</span> <span class="mi">100</span><span class="p">,</span> <span class="nb">time</span><span class="p">);</span> <span class="c1"># 第二基準は時間=得点が同じだったら早くその得点を出した人優先</span>
 <span class="nv">$lb</span><span class="o">-&gt;</span><span class="n">set_score</span><span class="p">(</span><span class="s">&#39;two&#39;</span> <span class="o">=&gt;</span>  <span class="mi">50</span><span class="p">,</span> <span class="nb">time</span><span class="p">);</span>
-<span class="k">my</span> <span class="p">(</span><span class="nv">$rank</span><span class="p">,</span> <span class="nv">$score</span><span class="p">,</span> <span class="nv">$time</span><span class="p">)</span> <span class="o">=</span> <span class="nv">$lb</span><span class="o">-&gt;</span><span class="n">get_rank_with_score</span><span class="p">(</span><span class="s">&#39;one&#39;</span><span class="p">);</span></code></pre></div>
-<p><code>set_score</code>の第二引数以降はすべてスコアとして扱われます。(そのためRedis::LeaderBoardと互換性はない)
+<span class="k">my</span> <span class="p">(</span><span class="nv">$rank</span><span class="p">,</span> <span class="nv">$score</span><span class="p">,</span> <span class="nv">$time</span><span class="p">)</span> <span class="o">=</span> <span class="nv">$lb</span><span class="o">-&gt;</span><span class="n">get_rank_with_score</span><span class="p">(</span><span class="s">&#39;one&#39;</span><span class="p">);</span>
+</code></pre></div><p><code>set_score</code>の第二引数以降はすべてスコアとして扱われます。(そのためRedis::LeaderBoardと互換性はない)
 上の例では「得点が同じだったら早くその得点を出した人優先」になってます。</p>
-
 <h2 id="制限事項">制限事項</h2>
-
 <p>実装の都合により、以下のような制限があります。</p>
-
 <ul>
 <li>スコアはすべて64bit符号付き整数です
-
 <ul>
 <li>Redis::LeaderBoardのスコアは倍精度浮動小数点型なので小数も扱えるが、Redis::LeaderBoardMultiは整数だけ</li>
-</ul></li>
+</ul>
+</li>
 <li>Redis 2.8.9以降のみで動きます</li>
 </ul>
-
 <h2 id="実装の仕組み">実装の仕組み</h2>
-
 <p>Sorted Setの同じスコアを持つメンバーは辞書順にソートされます(zaddの<a href="http://redis.io/commands/zadd#elements-with-the-same-score">同じスコアを持つ要素</a>の項を参照)。
 例えば以下の様にメンバー「a」「b」「c」を追加すると、必ず「abc」の順番になることが保証されています。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">127.0.0.1:6379&gt; ZADD ranking 0 &#34;a&#34; 0 &#34;b&#34; 0 &#34;c&#34;
 (integer) 3
 127.0.0.1:6379&gt; ZRANK ranking &#34;b&#34;
-(integer) 1</code></pre></div>
-<p>これを利用して、メンバーの先頭にスコアをエンコードして付けておきます。
+(integer) 1
+</code></pre></div><p>これを利用して、メンバーの先頭にスコアをエンコードして付けておきます。
 もちろんエンコードしたあとでもスコアの大小関係が保たれている必要があります。
 以下はエンコード方式にビッグエンディアンの16bit整数を使った例です。
 Redis 2.8.9から辞書順比較に特化したコマンド(LEXがつくやつ)が追加されているので、
@@ -188,33 +176,27 @@ Redis 2.8.9から辞書順比較に特化したコマンド(LEXがつくやつ)�
 127.0.0.1:6379&gt; ZADD ranking 0 &#34;\x00\x01a&#34;    (aをスコア1で追加)
 (integer) 1
 127.0.0.1:6379&gt; ZLEXCOUNT ranking - &#34;(\x00\x02&#34;    (スコア2未満の個数=bのランク)
-(integer) 1</code></pre></div>
-<p>さすがに16bit符号なし整数だと範囲が狭いので、実際の実装は以下のようになっています。</p>
-
+(integer) 1
+</code></pre></div><p>さすがに16bit符号なし整数だと範囲が狭いので、実際の実装は以下のようになっています。</p>
 <ul>
 <li>エンコードはビッグエンディアンの64bit符号付き整数</li>
 <li>負数も扱えるように下駄を履かせる
-
 <ul>
 <li>1と-1を単純にエンコードすると-1の方が大きくなってしまう</li>
 <li>0x8000000000000000を足して符号なし整数の範囲で比較できるように補正</li>
-</ul></li>
 </ul>
-
+</li>
+</ul>
 <h2 id="アトミック性について">アトミック性について</h2>
-
 <p>この方法だとSorted Setだけでは現在のスコアを取得できないので、
 スコアだけ別管理にする必要があります。
 スコアの更新とランキングの更新があるので、
 片方だけ更新される状況がないようにアトミック性に注意する必要があります。
 更新途中の間違った結果を返すだけならすぐに復旧するのでまだマシですが、
 途中でネットワーク障害が起こって不整合なデータが残ってしまうと面倒です。</p>
-
 <p>アトミック性を確保するためのパターンをいくつか実装してみました。
 <code>use_script</code>と<code>use_hash</code>で制御が可能です。</p>
-
 <h3 id="トランザクションを使った方法">トランザクションを使った方法</h3>
-
 <p>Redisには<a href="http://redis.io/topics/transactions">トランザクション</a>の仕組みがあるのでこれを使った方法です。
 <code>use_script=&gt;0</code>が指定されるとこの方法で更新を行います。</p>
 <div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">127.0.0.1:6379&gt; WATCH ranking:a   (他のクライアントが更新を行っていないか監視)
@@ -232,17 +214,14 @@ QUEUED
 127.0.0.1:6379&gt; EXEC   (スコアの更新とランキングの更新をアトミックに行う)
 1) (integer) 1
 2) (integer) 1
-3) OK</code></pre></div>
-<p>Redisのトランザクションは楽観的ロックなので、他のクライアントがスコアを更新していると失敗する場合があります。
+3) OK
+</code></pre></div><p>Redisのトランザクションは楽観的ロックなので、他のクライアントがスコアを更新していると失敗する場合があります。
 失敗した場合はリトライが必要です。
 (この機構、いろいろと注意点があって毎回実装するのはつらすぎるので、別モジュールとして分離したいけど、いい名前とインターフェース募集中)</p>
-
 <p><code>use_hash=&gt;1</code>が指定されていると、スコアの記録にHashを使います。
 「Hashの特定のキーの更新をWATCHする」という命令はないため、ランキング全体を<code>WATCH</code>で監視します。
 (<code>use_hash=&gt;0</code>の場合、そのメンバのスコアだけ監視する)</p>
-
 <h3 id="luaスクリプトを使った方法">Luaスクリプトを使った方法</h3>
-
 <p>RedisはLuaスクリプトを実行する機能があります。
 Luaスクリプト実行中は他の命令の実行をブロックするので、アトミック性が確保されます。</p>
 <div class="highlight"><pre class="chroma"><code class="language-lua" data-lang="lua"><span class="kd">local</span> <span class="n">s</span><span class="o">=</span><span class="n">redis.call</span><span class="p">(</span><span class="s1">&#39;GET&#39;</span><span class="p">,</span> <span class="s1">&#39;ranking:a&#39;</span><span class="p">)</span>
@@ -250,45 +229,37 @@ Luaスクリプト実行中は他の命令の実行をブロックするので�
   <span class="n">redis.call</span><span class="p">(</span><span class="s1">&#39;ZREM&#39;</span><span class="p">,</span> <span class="s1">&#39;ranking&#39;</span><span class="p">,</span> <span class="n">s</span><span class="o">..</span><span class="s1">&#39;a&#39;</span><span class="p">)</span>
 <span class="kr">end</span>
 <span class="n">redis.call</span><span class="p">(</span><span class="s1">&#39;ZADD&#39;</span><span class="p">,</span> <span class="s1">&#39;ranking&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="s1">&#39;</span><span class="se">\x00\x03</span><span class="s1">a&#39;</span><span class="p">)</span>
-<span class="n">redis.call</span><span class="p">(</span><span class="s1">&#39;SET&#39;</span><span class="p">,</span> <span class="s1">&#39;ranking:a&#39;</span><span class="p">,</span> <span class="s1">&#39;</span><span class="se">\x00\x03</span><span class="s1">&#39;</span><span class="p">)</span></code></pre></div>
-<p>Luaスクリプトを実行するには<code>EVAL</code>と<code>EVALSHA</code>の二種類のコマンドがあります。
+<span class="n">redis.call</span><span class="p">(</span><span class="s1">&#39;SET&#39;</span><span class="p">,</span> <span class="s1">&#39;ranking:a&#39;</span><span class="p">,</span> <span class="s1">&#39;</span><span class="se">\x00\x03</span><span class="s1">&#39;</span><span class="p">)</span>
+</code></pre></div><p>Luaスクリプトを実行するには<code>EVAL</code>と<code>EVALSHA</code>の二種類のコマンドがあります。
 <code>EVALSHA</code>は転送量を抑えられて便利ですが、事前に<code>SCRIPT LOAD</code>で使うスクリプトを登録しておく必要があります。
 (ココらへんも別モジュールに分離したいけど、いい名前とインターフェース募集中)
 <code>use_evalsha</code>オプションでどちらを使うか制御可能です。</p>
-
 <p>ちなみに<code>EVAL</code>で実行したスクリプトも<a href="http://redis.io/commands/eval#script-cache-semantics">永遠にキャッシュされる</a>らしいです。
 上の例はわかりやすいようにキー名や値を直接埋め込んでいますが、同じことをしようとLuaスクリプトの動的生成なんてすると死にます。
 スクリプト内で<code>KEYS</code>や<code>ARGV</code>を使うと<code>EVAL</code>時にパラメータを渡せるようになるので、これを活用しましょう。</p>
-
 <h3 id="諦める">諦める</h3>
-
 <p><a href="https://metacpan.org/pod/Redis::LeaderBoard">Redis::LeaderBoard</a>の実装を見て気がついたんですが、
 <code>get_rank</code>の実装は「スコアの取得」「スコアに対応するランクの取得」がアトミックでないため、
 以下の条件を満たすと実際のランクより1大きい結果を返します。</p>
-
 <ul>
 <li>同じメンバーのスコア更新とランク取得が同時に行われる</li>
 <li>ランクが上がるようにスコアが更新される</li>
 </ul>
-
 <p>確かに厳密性は欠けますがたかだか1結果が変わるだけですし、
 そもそも更新と取得が同時に行われないようにモジュールを使う側が排他制御するべきですね。
 こういうケースでは諦めるというのも一つの手かなと思いました。
 もちろんデータの整合性が壊れる場合は頑張ってアトミック性を確保するべきでしょう。</p>
-
 <h2 id="まとめ">まとめ</h2>
-
 <ul>
 <li>Redisでランキングをつくる際に、スコアを複数設定する方法を紹介しました</li>
 <li>アトミック性を確保する方法を紹介しました
-
 <ul>
 <li>トランザクションを使った方法</li>
 <li>Luaスクリプトを使った方法</li>
 <li>諦める</li>
-</ul></li>
 </ul>
-
+</li>
+</ul>
 <p>もうちょっとドキュメントを整備したらCPANにあげてみますかね。
 トランザクション管理・Luaスクリプト管理も分離したい(いい名前を思いついたら)。
 「こんな名前がいい！」「こんなインターフェースがいい！」等あればコメントください。</p>
@@ -394,6 +365,8 @@ Luaスクリプト実行中は他の命令の実行をブロックするので�
           
           
             
+          
+            
               <li class="post">
                 <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
               </li>
@@ -444,12 +417,6 @@ Luaスクリプト実行中は他の命令の実行をブロックするので�
             
               <li class="post">
                 <a href="/blog/2019/08/21/aws-xray-with-perl-lambda-runtime/">AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2019/07/24/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
               </li>
             
           
