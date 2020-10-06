@@ -45,7 +45,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.74.3" />
+  <meta name="generator" content="Hugo 0.75.1" />
 
   
   
@@ -145,23 +145,23 @@
 <div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml"><span class="c"># ここらへんにテストとかの設定ば別途描く</span><span class="w">
 </span><span class="w">
 </span><span class="w"></span><span class="c"># coveralls.io に送信</span><span class="w">
-</span><span class="w"></span>- <span class="k">uses</span><span class="p">:</span><span class="w"> </span>shogo82148/actions-goveralls@v1<span class="w">
-</span><span class="w">  </span><span class="k">with</span><span class="p">:</span><span class="w">
-</span><span class="w">    </span><span class="k">github-token</span><span class="p">:</span><span class="w"> </span>${{<span class="w"> </span>secrets.GITHUB_TOKEN<span class="w"> </span>}}<span class="w">
-</span><span class="w">    </span><span class="k">path-to-profile</span><span class="p">:</span><span class="w"> </span>profile.cov<span class="w">
+</span><span class="w"></span>- <span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">shogo82148/actions-goveralls@v1</span><span class="w">
+</span><span class="w">  </span><span class="nt">with</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="nt">github-token</span><span class="p">:</span><span class="w"> </span><span class="l">${{ secrets.GITHUB_TOKEN }}</span><span class="w">
+</span><span class="w">    </span><span class="nt">path-to-profile</span><span class="p">:</span><span class="w"> </span><span class="l">profile.cov</span><span class="w">
 </span></code></pre></div><p>簡単ですね。</p>
 <h2 id="マトリックスビルド">マトリックスビルド</h2>
 <p>され、後発なだけあって GitHub Actions では他のCIの便利な機能を簡単に使えます。
 その中でも最も便利(偏見)なのがマトリックスビルドです。
 例えば以下のように設定するだけで、Linux, macOS, Windows で同じテストを実行できます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml"><span class="k">strategy</span><span class="p">:</span><span class="w">
-</span><span class="w">  </span><span class="k">fail-fast</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="w">
-</span><span class="w">  </span><span class="k">matrix</span><span class="p">:</span><span class="w">
-</span><span class="w">    </span><span class="k">os</span><span class="p">:</span><span class="w">
-</span><span class="w">      </span>- ubuntu-latest<span class="w">
-</span><span class="w">      </span>- macos-latest<span class="w">
-</span><span class="w">      </span>- windows-latest<span class="w">
-</span><span class="w"></span><span class="k">runs-on</span><span class="p">:</span><span class="w"> </span>${{<span class="w"> </span>matrix.os<span class="w"> </span>}}<span class="w">
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml"><span class="nt">strategy</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span><span class="nt">fail-fast</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="w">
+</span><span class="w">  </span><span class="nt">matrix</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="nt">os</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span>- <span class="l">ubuntu-latest</span><span class="w">
+</span><span class="w">      </span>- <span class="l">macos-latest</span><span class="w">
+</span><span class="w">      </span>- <span class="l">windows-latest</span><span class="w">
+</span><span class="w"></span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l">${{ matrix.os }}</span><span class="w">
 </span></code></pre></div><p>・・・と、ここまではいいんですが、カバレッジをとって coveralls に送ると残念なことになります。
 (例:<a href="https://coveralls.io/builds/27037772">https://coveralls.io/builds/27037772</a>)</p>
 <p><img src="/images/2019-12-05-build.png" alt="ビルド一覧">
@@ -172,45 +172,45 @@
 <p>coveralls にはこの問題を解決してくれる<a href="https://docs.coveralls.io/parallel-build-webhook">parallel build webhook</a>というものがあります。
 travis-ci だと coveralls側がいい感じにフックを挟んで処理してくれるんですが、GitHub Actions では自前でやらないといけません。
 全部自前でやるのは面倒なので、actions-goveralls には補助する機能をいれてあります。</p>
-<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml"><span class="k">on</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>push<span class="p">,</span><span class="w"> </span>pull_request<span class="p">]</span><span class="w">
-</span><span class="w"></span><span class="k">jobs</span><span class="p">:</span><span class="w">
-</span><span class="w">  </span><span class="k">test</span><span class="p">:</span><span class="w">
-</span><span class="w">    </span><span class="k">strategy</span><span class="p">:</span><span class="w">
-</span><span class="w">      </span><span class="k">fail-fast</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="w">
-</span><span class="w">      </span><span class="k">matrix</span><span class="p">:</span><span class="w">
-</span><span class="w">        </span><span class="k">os</span><span class="p">:</span><span class="w">
-</span><span class="w">          </span>- ubuntu-latest<span class="w">
-</span><span class="w">          </span>- macos-latest<span class="w">
-</span><span class="w">          </span>- windows-latest<span class="w">
-</span><span class="w">    </span><span class="k">runs-on</span><span class="p">:</span><span class="w"> </span>${{<span class="w"> </span>matrix.os<span class="w"> </span>}}<span class="w">
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml"><span class="nt">on</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="l">push, pull_request]</span><span class="w">
+</span><span class="w"></span><span class="nt">jobs</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span><span class="nt">test</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="nt">strategy</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span><span class="nt">fail-fast</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="w">
+</span><span class="w">      </span><span class="nt">matrix</span><span class="p">:</span><span class="w">
+</span><span class="w">        </span><span class="nt">os</span><span class="p">:</span><span class="w">
+</span><span class="w">          </span>- <span class="l">ubuntu-latest</span><span class="w">
+</span><span class="w">          </span>- <span class="l">macos-latest</span><span class="w">
+</span><span class="w">          </span>- <span class="l">windows-latest</span><span class="w">
+</span><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l">${{ matrix.os }}</span><span class="w">
 </span><span class="w">
-</span><span class="w">    </span><span class="k">steps</span><span class="p">:</span><span class="w">
-</span><span class="w">      </span>- <span class="k">uses</span><span class="p">:</span><span class="w"> </span>actions/setup-go@v1<span class="w">
-</span><span class="w">        </span><span class="k">with</span><span class="p">:</span><span class="w">
-</span><span class="w">          </span><span class="k">go-version</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;1&#34;</span><span class="w">
-</span><span class="w">      </span>- <span class="k">uses</span><span class="p">:</span><span class="w"> </span>actions/checkout@v1<span class="w">
-</span><span class="w">      </span>- <span class="k">run</span><span class="p">:</span><span class="w"> </span>go<span class="w"> </span>test<span class="w"> </span>-v<span class="w"> </span>-coverprofile=profile.cov<span class="w"> </span>.<span class="w">
+</span><span class="w">    </span><span class="nt">steps</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span>- <span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">actions/setup-go@v1</span><span class="w">
+</span><span class="w">        </span><span class="nt">with</span><span class="p">:</span><span class="w">
+</span><span class="w">          </span><span class="nt">go-version</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;1&#34;</span><span class="w">
+</span><span class="w">      </span>- <span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">actions/checkout@v1</span><span class="w">
+</span><span class="w">      </span>- <span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l">go test -v -coverprofile=profile.cov .</span><span class="w">
 </span><span class="w">
-</span><span class="w">      </span>- <span class="k">name</span><span class="p">:</span><span class="w"> </span>coveralls<span class="w"> </span>にカバレッジを送る<span class="w">
-</span><span class="w">        </span><span class="k">uses</span><span class="p">:</span><span class="w"> </span>shogo82148/actions-goveralls@v1<span class="w">
-</span><span class="w">        </span><span class="k">with</span><span class="p">:</span><span class="w">
-</span><span class="w">          </span><span class="k">github-token</span><span class="p">:</span><span class="w"> </span>${{<span class="w"> </span>secrets.GITHUB_TOKEN<span class="w"> </span>}}<span class="w">
-</span><span class="w">          </span><span class="k">path-to-profile</span><span class="p">:</span><span class="w"> </span>profile.cov<span class="w">
-</span><span class="w">          </span><span class="k">parallel</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="w">
-</span><span class="w">          </span><span class="k">job-number</span><span class="p">:</span><span class="w"> </span>${{<span class="w"> </span>strategy.job-index<span class="w"> </span>}}<span class="w">
+</span><span class="w">      </span>- <span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">coveralls にカバレッジを送る</span><span class="w">
+</span><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">shogo82148/actions-goveralls@v1</span><span class="w">
+</span><span class="w">        </span><span class="nt">with</span><span class="p">:</span><span class="w">
+</span><span class="w">          </span><span class="nt">github-token</span><span class="p">:</span><span class="w"> </span><span class="l">${{ secrets.GITHUB_TOKEN }}</span><span class="w">
+</span><span class="w">          </span><span class="nt">path-to-profile</span><span class="p">:</span><span class="w"> </span><span class="l">profile.cov</span><span class="w">
+</span><span class="w">          </span><span class="nt">parallel</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="w">
+</span><span class="w">          </span><span class="nt">job-number</span><span class="p">:</span><span class="w"> </span><span class="l">${{ strategy.job-index }}</span><span class="w">
 </span><span class="w">
 </span><span class="w">  </span><span class="c"># parallel build webhook を叩く</span><span class="w">
-</span><span class="w">  </span><span class="k">finish</span><span class="p">:</span><span class="w">
-</span><span class="w">    </span><span class="k">needs</span><span class="p">:</span><span class="w"> </span>test<span class="w">
-</span><span class="w">    </span><span class="k">runs-on</span><span class="p">:</span><span class="w"> </span>ubuntu-latest<span class="w">
-</span><span class="w">    </span><span class="k">steps</span><span class="p">:</span><span class="w">
-</span><span class="w">      </span>- <span class="k">uses</span><span class="p">:</span><span class="w"> </span>shogo82148/actions-goveralls@v1<span class="w">
-</span><span class="w">        </span><span class="k">with</span><span class="p">:</span><span class="w">
-</span><span class="w">          </span><span class="k">github-token</span><span class="p">:</span><span class="w"> </span>${{<span class="w"> </span>secrets.GITHUB_TOKEN<span class="w"> </span>}}<span class="w">
-</span><span class="w">          </span><span class="k">parallel-finished</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="w">
+</span><span class="w">  </span><span class="nt">finish</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="nt">needs</span><span class="p">:</span><span class="w"> </span><span class="l">test</span><span class="w">
+</span><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l">ubuntu-latest</span><span class="w">
+</span><span class="w">    </span><span class="nt">steps</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span>- <span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">shogo82148/actions-goveralls@v1</span><span class="w">
+</span><span class="w">        </span><span class="nt">with</span><span class="p">:</span><span class="w">
+</span><span class="w">          </span><span class="nt">github-token</span><span class="p">:</span><span class="w"> </span><span class="l">${{ secrets.GITHUB_TOKEN }}</span><span class="w">
+</span><span class="w">          </span><span class="nt">parallel-finished</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="w">
 </span></code></pre></div><p>大事なのはここ。ジョブが複数あることを伝えるのと、ジョブ番号を含めること。</p>
-<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml"><span class="k">parallel</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="w">
-</span><span class="w"></span><span class="k">job-number</span><span class="p">:</span><span class="w"> </span>${{<span class="w"> </span>strategy.job-index<span class="w"> </span>}}<span class="w">
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml"><span class="nt">parallel</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="w">
+</span><span class="w"></span><span class="nt">job-number</span><span class="p">:</span><span class="w"> </span><span class="l">${{ strategy.job-index }}</span><span class="w">
 </span></code></pre></div><p>すべてのジョブが終わったら <code>finish</code> ジョブが走って結果を集計してくれます。
 結果はこちら <a href="https://coveralls.io/builds/27089216">https://coveralls.io/builds/27089216</a></p>
 <p><img src="/images/2019-12-05-parallel-build.png" alt="ビルド一覧"></p>
