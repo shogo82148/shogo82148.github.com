@@ -14,14 +14,14 @@ categories: [github]
 そういうわけで、Pull Request のコメントをトリガーにしてワークフローを実行する簡単なボットを作ってみました。
 
 
-## 要件
+## 方針
 
 `workflow_dispatch` と `issue_comment` をトリガーにしたワークフローを作ればいいだけの気もしますが、
 以下のような理由からワークフローからワークフローを呼び出す形にしました。
 
 - `workflow_dispatch` を使った既存のワークフローがあるので、それを流用したい
-  - トリガーとなったイベントに応じて、ペイロードの形式が異なるので、地味に処理が大変
-  - `issue_comment` は全部のコメントに反応するので、ログが埋もれてしまう
+  - トリガーが複数あると、イベントの種類に応じてペイロードの形式が異なるので、地味に処理が大変
+  - `issue_comment` は全部のコメントに反応するので、本当に見たいログが埋もれてしまう
 - コメントを投稿した Pull Request のHEADでワークフローを実行して欲しい
   - `issue_comment` はイベントの発生元として、デフォルトブランチのHEADが渡ってきます
   - イベントのペイロードには、プルリクエストへのリンクが入っているだけで、HEADの情報はわからない
@@ -76,7 +76,8 @@ jobs:
 ```
 
 [GitHub CLI がGAになり](https://github.blog/2020-09-17-github-cli-1-0-is-now-available/) 程なくして GitHub Actions にも Pre Install されるようになったのでこれを使っています。
-残念ながらIssueへの書き込み等は対応しておらず `gh api` を使ってほぼ生のAPIを叩くことになりますが、認証ヘッダーを環境変数から読み取ってくれる分 `curl` で頑張るよりは少し楽になりました。
+残念ながらIssueへの書き込み等は対応しておらず `gh api` を使ってほぼ生のAPIを叩くことになります。
+しかし認証ヘッダーを環境変数から読み取ってくれる分 `curl` で頑張るよりは少し楽になりました。
 
 - [gh api - Make an authenticated GitHub API request](https://cli.github.com/manual/gh_api)
 
