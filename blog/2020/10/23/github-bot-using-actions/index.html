@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+    
+    
+      <link href="/css/fonts.css" rel="stylesheet" type="text/css">
+    
+  
+
+  
+  <title>GitHub Actions を使って簡単なボットを作る</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+    <link rel="stylesheet" href="/css/fork-awesome.min.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.75.1" />
+
+  
+  
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Oct 23, 2020
+     - 2 minute read 
+     - <a href="https://shogo82148.github.io/blog/2020/10/23/github-bot-using-actions/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/github/">github </a>
+    
+  </p>
+  <h1 class="entry-title">
+     GitHub Actions を使って簡単なボットを作る 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>リリース当初は <code>git push</code> など GitHub 上のイベントしかトリガーにできなかった <a href="https://github.com/features/actions">GitHub Actions</a>ですが、
+<a href="https://docs.github.com/en/free-pro-team@latest/actions/reference/events-that-trigger-workflows#workflow_dispatch">workflow_dispatch イベント</a> の登場により手動実行ができるようになりました。</p>
+<p>社内でもこの機能を利用してワークフローの手動実行をしていたのですが、人間とは欲深いもので「毎回ワークフローを選択してポチポチするのだるい」という声があがってきました。
+そういうわけで、Pull Request のコメントをトリガーにしてワークフローを実行する簡単なボットを作ってみました。</p>
+<h2 id="要件">要件</h2>
+<p><code>workflow_dispatch</code> と <code>issue_comment</code> をトリガーにしたワークフローを作ればいいだけの気もしますが、
+以下のような理由からワークフローからワークフローを呼び出す形にしました。</p>
+<ul>
+<li><code>workflow_dispatch</code> を使った既存のワークフローがあるので、それを流用したい
+<ul>
+<li>トリガーとなったイベントに応じて、ペイロードの形式が異なるので、地味に処理が大変</li>
+<li><code>issue_comment</code> は全部のコメントに反応するので、ログが埋もれてしまう</li>
+</ul>
+</li>
+<li>コメントを投稿した Pull Request のHEADでワークフローを実行して欲しい
+<ul>
+<li><code>issue_comment</code> はイベントの発生元として、デフォルトブランチのHEADが渡ってきます</li>
+<li>イベントのペイロードには、プルリクエストへのリンクが入っているだけで、HEADの情報はわからない</li>
+</ul>
+</li>
+</ul>
+<h2 id="実装">実装</h2>
+<p><a href="https://github.com/jfurudo1">jfurudo1</a> がサードパーティのアクションを使ってゴニョゴニョやっていたものの、
+あんまりうまく行ってなさそうだったので、bash script でエイヤッと書き直しました。</p>
+<p>「<code>build</code>」 とコメントすると、<code>.github/workflows/build.yml</code> のワークフローを実行するサンプルです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml"><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">comment hook</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="nt">on</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span><span class="nt">issue_comment</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="nt">types</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="l">created]</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="nt">jobs</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span><span class="nt">distribute</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l">ubuntu-latest</span><span class="w">
+</span><span class="w">    </span><span class="nt">steps</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span>- <span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">dispatch workflow</span><span class="w">
+</span><span class="w">        </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="sd">|
+</span><span class="sd">          # イベントに関する詳細情報を取ってくる
+</span><span class="sd">          PAYLOAD=$(cat &#34;$GITHUB_EVENT_PATH&#34;)
+</span><span class="sd">          NUMBER=$(echo &#34;$PAYLOAD&#34; | jq -c &#39;.issue.number&#39;)
+</span><span class="sd">
+</span><span class="sd">          # Issue と Pull Request のコメントが混ざってくるので、Issueは無視する
+</span><span class="sd">          if [[ &#34;$(echo &#34;$PAYLOAD&#34; | jq -c &#39;.issue.pull_request&#39;)&#34; = &#34;null&#34; ]]; then
+</span><span class="sd">            echo &#34;It&#39;s not pull request. Skip it.&#34;
+</span><span class="sd">            exit 0
+</span><span class="sd">          fi
+</span><span class="sd">
+</span><span class="sd">          # 前述の通り $PAYLOAD にはプルリクエストの詳細が入っていないので、GitHub CLIを使って詳細を取得
+</span><span class="sd">          PULL_REQUEST=$(gh api &#34;repos/$GITHUB_REPOSITORY/pulls/$NUMBER&#34;)
+</span><span class="sd">
+</span><span class="sd">          # jq でコメントの内容を取り出し、正規表現マッチ
+</span><span class="sd">          if [[ &#34;$(echo &#34;$PAYLOAD&#34; | jq -c &#39;.comment.body | test(&#34;build&#34;; &#34;i&#34;)&#39;)&#34; = &#34;true&#34; ]]; then
+</span><span class="sd">            # レスポンスを返してあげる
+</span><span class="sd">            gh api &#34;repos/$GITHUB_REPOSITORY/issues/$NUMBER/comments&#34; -F &#34;body=ビルドを実行します :rocket:&#34;
+</span><span class="sd">
+</span><span class="sd">            # ワークフロー呼び出し
+</span><span class="sd">            # Pull Request の .head.ref を渡してあげているのがポイント
+</span><span class="sd">            gh api &#34;repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/dispatches&#34; -F &#34;ref=$( echo &#34;$PULL_REQUEST&#34; | jq -r &#39;.head.ref&#39;)&#34;
+</span><span class="sd">          fi
+</span><span class="sd">        env:
+</span><span class="sd">          # 標準で渡ってくる secrets.GITHUB_TOKEN は他のワークフローを呼び出せないので、
+</span><span class="sd">          # コメント専用にトークンを発行する
+</span><span class="sd">          GITHUB_TOKEN: ${{ secrets.USERS_GITHUB_TOKEN }}
+</span></code></pre></div><p><a href="https://github.blog/2020-09-17-github-cli-1-0-is-now-available/">GitHub CLI がGAになり</a> 程なくして GitHub Actions にも Pre Install されるようになったのでこれを使っています。
+残念ながらIssueへの書き込み等は対応しておらず <code>gh api</code> を使ってほぼ生のAPIを叩くことになりますが、認証ヘッダーを環境変数から読み取ってくれる分 <code>curl</code> で頑張るよりは少し楽になりました。</p>
+<ul>
+<li><a href="https://cli.github.com/manual/gh_api">gh api - Make an authenticated GitHub API request</a></li>
+</ul>
+<p>ちなみに <code>gh api &quot;repos/:owner/:repo&quot;</code> のようにレポジトリ名を表すプレースホルダーが使えるのですが、上のワークフローでは使っていません。
+代わりに <code>GITHUB_REPOSITORY</code> 環境変数を使っています。
+なぜかというとレポジトリをクローンせずにYAMLファイルの中で完結しているので、GitHub CLI がレポジトリを特定できないんですね。
+プレースホルダーを使ったほうが短くかけるし、手元でのデバッグもやりやすいので、使えると良かったんですけどね。</p>
+<h2 id="まとめ">まとめ</h2>
+<p>やはり頼れるのは jq と curl。あとついでに <a href="https://cli.github.com/">GitHub CLI</a></p>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://stedolan.github.io/jq/manual/v1.6/">jq 1.6 Manual</a></li>
+<li><a href="https://help.github.com/en/actions/configuring-and-managing-workflows/using-environment-variables">Using environment variables</a></li>
+<li><a href="https://shogo82148.github.io/blog/2020/04/02/re-pull-request-title-injection/">RE: Pull Request Title Injection とその対策</a></li>
+<li><a href="https://cli.github.com/">GitHub CLI</a></li>
+<li><a href="https://cli.github.com/manual/gh_api">gh api - Make an authenticated GitHub API request</a></li>
+<li><a href="https://github.blog/2020-09-17-github-cli-1-0-is-now-available/">GitHub CLI 1.0 is now available</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>Oct 23, 2020</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2020/08/15/perl-lambda-runtime-on-amazon-linux2/" title="AWS Lambda Perl Runtime on Amazon Linux 2 を公開しました">AWS Lambda Perl Runtime on Amazon Linux 2 を公開しました</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2020/10/23/github-bot-using-actions/">GitHub Actions を使って簡単なボットを作る</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/08/15/perl-lambda-runtime-on-amazon-linux2/">AWS Lambda Perl Runtime on Amazon Linux 2 を公開しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/04/02/re-pull-request-title-injection/">RE: Pull Request Title Injection とその対策</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/03/30/aws-xray-yasdk-go/">Yet Another AWS X-Ray Go SDK を作った</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/02/11/aws-xray-golang/">AWS X-Ray Go SDK の地雷処理をしている話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/02/01/goodbye-geocities/">元Yahoo!ジオシティーズ利用者のかたへ、GitHub Pagesのすゝめ</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/12/06/actions-cfn-lint/">CloudFormationのテンプレートのLiner actions-cfn-lint のご紹介</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2019/12/05/actions-goveralls/">GitHub Goveralls Action を公開しました</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2020 Shogo Ichinose - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['\\(','\\)']],
+    displayMath: [['\\[','\\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all.length) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+  </script>
+
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+</html>
+
