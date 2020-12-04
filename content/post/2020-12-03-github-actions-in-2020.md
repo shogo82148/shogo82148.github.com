@@ -141,4 +141,4 @@ actions-setup-mysql, actions-setup-redis, actions-setup-perl のバイナリは 
 
 -----
 
-[フラーAdvent Calendar 2020](https://adventar.org/calendars/5034) 4日目の担当は [@furusax](https://twitter.com/furusax) さんで「頑張ってなにかかく」です。
+[フラーAdvent Calendar 2020](https://adventar.org/calendars/5034) 4日目の担当は [@furusax](https://twitter.com/furusax) さんで「[CloudFormation でドリフトを検出してしまった Aurora MySQL クラスターを再インポートした話](https://furusax0621.hatenablog.com/entry/2020/12/04/000000)」です。
