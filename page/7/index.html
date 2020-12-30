@@ -104,6 +104,39 @@
         
 
 <header>
+  <p class="meta">Dec 20, 2016
+     - 1 minute read 
+     - <a href="https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a><a class="label" href="https://shogo82148.github.io/categories/reids/">reids </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/">Redis::Fast 0.19リリースのお知らせ</a>
+  </h1>
+</header>
+
+        
+          <p>Redis::Fast 0.19 をリリースしました。 主な変更点は以下の通りです。
+ reconnect_on_error オプションの追加 Sentinelのノード一覧が更新されない不具合の修正 IPv6の実験的サポート  reconnect_on_error オプションの追加 @yoheimutaさんからのプルリクエストです。 今まではネットワークエラーが発生した時のみ再接続処理が走っていましたが、 Redisがエラーを返した場合にも再接続を行うようになります。 マスタースレーブ構成をしているときに、 何らかの原因によりRedis::Fastからのコネクションを維持したまま、 マスターがスレーブに降格してしまった場合に対処するための機能です。 以下のように設定することで、新しいマスターに再接続を行うことが可能になります。
+my $r = Redis::Fast-&gt;new( reconnect =&gt; 1, # 0以上で再接続有効 reconnect_on_error =&gt; sub { my ($error, $ret, $command) = @_; if ($error =~/READONLY You can&#39;t write against a read only slave/) { return 1; # 再接続を行う。次の再接続まで最低1秒空ける } return -1; # 再接続は行わない }, ); Sentinelのノード一覧が更新されない不具合の修正 Redis::FastにはどれかひとつのSentinelノードに接続すると、 他のノードの情報を自動的に収集する機能があります。 この機能が最新のRedisでは動いていなかったので修正しました。 具体的にいつからなのかまでは追ってないのですが、 Redisのバージョン3.0.6から3.2.6の間のどこかで ノード一覧の形式が変わってしまったようです。
+(最近Sentinelの話題を聞かないけど、みんな使ってるのかな・・・)
+IPv6の実験的サポート サーバの指定にIPv6のアドレスが使えるようになりました。 Redis::Fast-&gt;new(server =&gt; &quot;[::1]:6379&quot;) のような指定ができます。</p>
+          
+            <footer>
+              <a href="https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/" rel="full-article">Read On &rarr;</a>
+            </footer>
+          
+        
+      </article>
+      
+      <article>
+        
+        
+
+<header>
   <p class="meta">Dec 15, 2016
      - 2 minute read 
      - <a href="https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm/#disqus_thread">Comments</a>
@@ -405,42 +438,6 @@ se Redis; use Redis::LeaderBoard; my $redis = Redis-&gt;new; my $lb = Redis::Lea
         
       </article>
       
-      <article>
-        
-        
-
-<header>
-  <p class="meta">Mar 14, 2016
-     - 2 minute read 
-     - <a href="https://shogo82148.github.io/blog/2016/03/14/http2-over-websocket/#disqus_thread">Comments</a>
-
-    
-    
-      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a><a class="label" href="https://shogo82148.github.io/categories/websocket/">websocket </a>
-    
-  </p>
-  <h1 class="entry-title">
-    <a href="https://shogo82148.github.io/blog/2016/03/14/http2-over-websocket/">ngrokみたいなHTTPプロキシを書いてみた</a>
-  </h1>
-</header>
-
-        
-          <p>開発中のWebアプリをみんなに試してほしいけど、 サーバなんてなくて開発環境がローカルにしか無くて公開できないということは、 開発初期段階だとよくあることだと思います。 もちろん本格的にやるならテスト用にサーバを建てるべきですが、 小さなものならngrokを使うと簡単です。 ngrokの公開サーバへのHTTPリクエストをローカルにリレーして、 ローカルのサーバをお手がるに公開できるサービスです。
-びっくりするほど簡単に公開できて便利ですが、 一応oAuthで制限とかかけたいなーとかカスタマイズしてみたくなってきたので、 似たようなものを自作できないかといろいろ遊んでみました。
-その結果、HTTP2 over Websocketみたいな謎なものが出来上がってしまったというお話です。
-HTTP2 over Websocketというアイデア ngrokっぽいものを実現するためには、 サーバが受け取ったHTTPリクエストをローカルの環境に転送する必要があります。 ご存知のとおり通常のHTTPではサーバ側からのプッシュ配信が難しいので、Websocketを使うのが良さそうです。 しかし、複数のコネクションで並列にやってくるHTTPリクエストを、一本のWebsocketに束ねる必要があり、 上手く制御するのは大変そうです。
-さて、HTTP2は一つのTCPコネクションで複数のリクエストを並行処理する仕様があります。 「複数のリクエストを一本に束ねる」という点ではなんか似ているので、なんだか流用できそうな気がしてきました。 Golangならきっと上手いことinterfaceを実装すれば、なんとかできるのではとやってみました。
-実装 HTTP2は暗号化や複雑なフロー制御を行っていますが、 外から見ればnet.Connインターフェースに読み書きしている何かに過ぎません。 そして、websocket.Connもnet.Connを実装しているので、そのままHTTP2のライブラリに渡せるはずです。
-そうしてできたのが以下のサーバです。
-package main import ( &#34;errors&#34; &#34;log&#34; &#34;net/http&#34; &#34;net/http/httputil&#34; &#34;sync&#34; &#34;golang.org/x/net/http2&#34; &#34;golang.org/x/net/websocket&#34; ) type transport struct { m sync.Mutex t http.RoundTripper closed chan struct{} } var t *transport func main() { t = &amp;transport{} s := websocket.Server{Handler: websocket.Handler(Handler)} http.Handle(&#34;/&#34;, s) go http.ListenAndServe(&#34;:3000&#34;, nil) http.</p>
-          
-            <footer>
-              <a href="https://shogo82148.github.io/blog/2016/03/14/http2-over-websocket/" rel="full-article">Read On &rarr;</a>
-            </footer>
-          
-        
-      </article>
-      
       
       
 
@@ -568,11 +565,17 @@ package main import ( &#34;errors&#34; &#34;log&#34; &#34;net/http&#34; &#34;net
           
           
             
+          
+            
               <li class="post">
-                <a href="/blog/2020/12/03/github-actions-in-2020/">2020年に書いた GitHub Action &#43; α</a>
+                <a href="/blog/2020/12/30/github-actions-mutex/">排他制御を行う GitHub Action を作った</a>
               </li>
             
           
+            
+              <li class="post">
+                <a href="/blog/2020/12/03/github-actions-in-2020/">2020年に書いた GitHub Action &#43; α</a>
+              </li>
             
           
             
@@ -614,12 +617,6 @@ package main import ( &#34;errors&#34; &#34;log&#34; &#34;net/http&#34; &#34;net
             
               <li class="post">
                 <a href="/blog/2020/02/11/aws-xray-golang/">AWS X-Ray Go SDK の地雷処理をしている話</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2020/02/01/goodbye-geocities/">元Yahoo!ジオシティーズ利用者のかたへ、GitHub Pagesのすゝめ</a>
               </li>
             
           
