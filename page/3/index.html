@@ -104,6 +104,40 @@
         
 
 <header>
+  <p class="meta">Apr 17, 2019
+     - 2 minute read 
+     - <a href="https://shogo82148.github.io/blog/2019/04/17/cfn-mackerel-macro/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a><a class="label" href="https://shogo82148.github.io/categories/aws/">aws </a><a class="label" href="https://shogo82148.github.io/categories/cloudformation/">cloudformation </a><a class="label" href="https://shogo82148.github.io/categories/mackerelio/">mackerelio </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2019/04/17/cfn-mackerel-macro/">CloudFormationのMackerel用インテグレーションを作ってる話</a>
+  </h1>
+</header>
+
+        
+          <p>Mackerel は mkr コマンドを用いて cli から操作ができます。 mkr コマンドを用いると 監視ルールを GitHub で管理 したり、 カスタムダッシュボードを管理したり、といったことができます。 しかし、個人的に以下のような不満があります。
+ サービス、ロール、ホスト、新ダッシュボード等々、監視設定以外のリソースに対応していない  旧ダッシュボードは対応しているんだけど、新ダッシュボード対応がまだ 新ダッシュボードのUIは使いやすくてすごくいいんだけど、コピペや一斉置換ができないので、テキストで管理したい   出力がJSONなのつらい  JSON手で書くの難しくないですか？   メトリックスの送信設定と監視設定の管理が別になってしまう  カスタムメトリックス送っているのに監視設定を忘れた、みたいなことが起こる    メトリックスの送信設定については、以前 サーバーレスでCloudWatchメトリクスをMackerelに転送する で CloudFormation上での管理を実現しました。 ここにさらに Mackerel の監視設定を追加できれば、最強なのでは？とやってみました。
+例 あれこれ説明する前に例を見てもらったほうがわかりやすいと思うので、こんなことができますよ、という設定例から。
+例1: レスポンスタイムの99%パーセンタイルを監視する Mackerel の AWSインテグレーション は ALB に対応していますが、 レスポンスタイムのメトリックスは平均レスポンスタイムだけです。 「平均」は代表的な統計値ですが、全体としては速いんだけど一部のリクエストだけ遅い、という状況を見逃してしまいます。 レスポンスタイムの大まかな分布をパーセンタイルで把握したい、ということはよくありますよね？ (K社でZabbixを使って監視していたときによくお世話になった)
+今回作ったインテグレーションを使えば、以下のように「Mackerelのサービス定義」「メトリックスの転送設定」「監視設定」が CloudFormation のテンプレートとして表現できます。
+AWSTemplateFormatVersion:2010-09-09# Type: Mackerel::* を使うためのおまじないTransform:- AWS::Serverless-2016-10-31- Mackerel- JSONStringResources:MackerelService:Type:Mackerel::ServiceProperties:Name:&#34;awesome-service&#34;# メトリックスを転送する Lambda 関数MetricsForwarder:Type:AWS::Serverless::ApplicationProperties:Location:ApplicationId:arn:aws:serverlessrepo:us-east-1:445285296882:applications/mackerel-cloudwatch-forwarderSemanticVersion:0.0.9Parameters:ParameterName:&#34;/api-keys/api.mackerelio.com/headers/X-Api-Key&#34;ForwardSettings:!GetAtt MetricsForwarderSettings.Query# CloudWatch から99%パーセンタイルを取得するMetricsForwarderSettings:Type:JSON::StringProperties:Query:- service:!GetAtt MackerelService.</p>
+          
+            <footer>
+              <a href="https://shogo82148.github.io/blog/2019/04/17/cfn-mackerel-macro/" rel="full-article">Read On &rarr;</a>
+            </footer>
+          
+        
+      </article>
+      
+      <article>
+        
+        
+
+<header>
   <p class="meta">Feb 28, 2019
      - 1 minute read 
      - <a href="https://shogo82148.github.io/blog/2019/02/28/leak-gengo/#disqus_thread">Comments</a>
@@ -419,45 +453,6 @@ package main import ( &#34;fmt&#34; ) func main() { int := 42 fmt.</p>
         
       </article>
       
-      <article>
-        
-        
-
-<header>
-  <p class="meta">Sep 24, 2018
-     - 3 minute read 
-     - <a href="https://shogo82148.github.io/blog/2018/09/24/go-phper-json/#disqus_thread">Comments</a>
-
-    
-    
-      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a><a class="label" href="https://shogo82148.github.io/categories/php/">php </a>
-    
-  </p>
-  <h1 class="entry-title">
-    <a href="https://shogo82148.github.io/blog/2018/09/24/go-phper-json/">PHPer向けGoのJSONデコーダーを作った</a>
-  </h1>
-</header>
-
-        
-          <p>必要に迫られて作りました。 PHPでエンコードしたJSONをいい感じにデコードしてくれるGoのパッケージです。
- shogo82148/go-phper-json  背景 さて、PHPerの方々には当たり前のことかもしれませんが、PHPの言語仕様について少しおさらいです。 それがどうしてGoで問題になるか見ていきます。
-PHPのarray問題 PHPはとても便利なプログラミング言語なので、配列を扱うことができます。 ここでPHPの配列のマニュアルを読んでみましょう。
- http://php.net/manual/ja/language.types.array.php
-PHP の配列は、実際には順番付けられたマップです。マップは型の一種で、 値をキーに関連付けます。 この型は、さまざまな使い道にあわせて最適化されます。 配列としてだけでなく、リスト (ベクター)、 ハッシュテーブル (マップの実装の一つ)、辞書、コレクション、スタック、 キュー等として使用することが可能です。 PHP の配列には他の PHP 配列を値として保持することができるため、 非常に簡単にツリー構造を表現することが可能です。 (強調部分は筆者によるもの)
- 重要なことなのでもう一度。
- 配列としてだけでなく、リスト (ベクター)、 ハッシュテーブル (マップの実装の一つ)、辞書、コレクション、スタック、 キュー等として使用することが可能です。
- 他の言語でリスト、ハッシュテーブル、辞書等と呼ばれているものは、PHPにおいてはいずれも配列です。 PHPにとっては、整数を添字にしているか、文字列を添字にしているかの違いでしかありません。 (PHP7.xから整数が添字の場合に最適化が入るようになったらしいけど、大きな挙動の変更はないはず)
-そのため、以下のスクリプトは true を返します。
-&lt;?php $a = array(&#34;apple&#34;, &#34;banana&#34;); $b = array(0 =&gt; &#34;apple&#34;, 1 =&gt; &#34;banana&#34;); var_dump($a == $b); // bool(true) この仕様のため、JSONにエンコードすると最初は配列だったのに、 処理を進めていくうちにうっかり文字列のキーを作ってしまって、 JSONのオブジェクトに変わってました、ということが起こりえます。 Goにおいて両者は全く違う型なので、デコードの際に非常に困ります。
-&lt;?php $a = array(1, 2, 3); print json_encode($a); // [1,2,3]  $a[&#34;foo&#34;] = &#34;bar&#34;; print json_encode($a); // {&#34;0&#34;:1,&#34;1&#34;:2,&#34;2&#34;:3,&#34;foo&#34;:&#34;bar&#34;} このような悲劇を防ぐために、 JSON_FORCE_OBJECT というオプションがあるのですが、 オプションの名前通りに全部JSONのオブジェクトになってしまいます。 この要素だけJSONの配列にして欲しい！といった細かな操作はできません。</p>
-          
-            <footer>
-              <a href="https://shogo82148.github.io/blog/2018/09/24/go-phper-json/" rel="full-article">Read On &rarr;</a>
-            </footer>
-          
-        
-      </article>
-      
       
       
 
@@ -585,6 +580,12 @@ PHP の配列は、実際には順番付けられたマップです。マップ�
           
           
             
+              <li class="post">
+                <a href="/blog/2021/01/02/perl-runtime-supports-docker-format/">Perl Runtime for AWS Lambda の Docker コンテナ対応を公開しました</a>
+              </li>
+            
+          
+            
           
             
               <li class="post">
@@ -634,12 +635,6 @@ PHP の配列は、実際には順番付けられたマップです。マップ�
               </li>
             
           
-            
-              <li class="post">
-                <a href="/blog/2020/02/11/aws-xray-golang/">AWS X-Ray Go SDK の地雷処理をしている話</a>
-              </li>
-            
-          
         </ul>
       </section>
     
@@ -649,7 +644,7 @@ PHP の配列は、実際には順番付けられたマップです。マップ�
   </div>
 </div>
 <footer role="contentinfo">
-  <p>Copyright &copy; 2020 Shogo Ichinose - <a
+  <p>Copyright &copy; 2021 Shogo Ichinose - <a
       href="https://shogo82148.github.io/license/">License</a> -
     <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
         href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.

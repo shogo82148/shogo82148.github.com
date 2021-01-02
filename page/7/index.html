@@ -104,6 +104,47 @@
         
 
 <header>
+  <p class="meta">Jan 14, 2017
+     - 5 minute read 
+     - <a href="https://shogo82148.github.io/blog/2017/01/14/re-golang-dns-cache/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2017/01/14/re-golang-dns-cache/">Re:golang の http.Client を速くする</a>
+  </h1>
+</header>
+
+        
+          <p>先日mattnさんの記事を読みました。
+ golang の http.Client を速くする  nettというパッケージを使って 名前解決の結果をキャッシュすることで、http.Clientを早くするというものです。 この記事に関して、ちょっと疑問に思ったことがあったので、検証してみました。
+疑問 疑問に思ったのは以下の点です。
+名前解決遅すぎでは？ ベンチマークの結果を見ると5億ns(=500ms)ほど速度が改善しています。 3つのURLに対してリクエストを投げているので、初回を除く2回DNSのキャッシュがヒットし、 名前解決2回分の速度改善になるはずです。 と、いうことは、名前解決1回あたり250msかかっている計算になります。 googleのsearchは302でリダイレクトがかかるので、Client.Getの呼び出し1回あたり2回リクエストが飛ぶ、 ということを計算に入れても100msほどかかる計算です。
+Google先生の謎テクノロジーによってかなりの最適化がされているはずですし、 ネットワークプロバイダのDNSキャッシュにヒットする可能性も高いでしょう。 名前解決程度にこんなに時間がかかっていたらスプラトゥーンが出来ない！ (mattnさんがスプラトゥーンをプレイしているかは知らない)
+2017/01/16追記: mattnさんはスプラトゥーンをプレイしていないそうです。残念。
+もちろん、ネットワークが混雑していたり、 モバイルネットワークを利用していたり、という可能性もありますが、 ちょっと不自然な印象を受けました。
+Keep-Aliveされてるのでは？ スキーマがhttpsになっているので、Google先生相手ならHTTP2で通信していてもおかしくありません。 HTTP2は基本的にドメイン毎にコネクションを1つだけ張って、それを使いまわします。 もし仮にHTTP1.1で通信していたとしても、http.ClientはデフォルトでKeep-Aliveが有効になっているので、 普通に使うとコネクションを再利用してくれます。
+そういうわけで、名前解決以前にそもそもTCPのコネクション確立もスキップされている可能性が高いのでは？ と思ったわけです。 この予想が正しければ、名前解決は初回リクエストでしか行われないので、ベンチマークに差はでないはずです。
+HTTPリクエストの様子をトレースしてみる これらの疑問を解消するために、HTTPリクエストの様子をさらに詳細に解析してみることにしました。
+DNSキャッシュなし版をトレースする Go1.7からnet/http/httptraceというパッケージが追加され、 名前解決やコネクション確立etcのタイミングにフックを仕込めるようになりました。 これを利用すれば各段階でどの程度時間がかかっているかが具体的に分かるはずです。
+頑張って自前でフックを差し込んでもよいのですが、 deeeetさんのgo-httpstatという便利パッケージがあるので、 これをありがたく利用させていただきます。 go-httpstatを使うと時間計測を行うコードを簡単に差し込むことができます。
+package main import ( &#34;io&#34; &#34;io/ioutil&#34; &#34;log&#34; &#34;net/http&#34; &#34;time&#34; &#34;github.com/tcnksm/go-httpstat&#34; ) var ( urls = []string{ &#34;https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/&#34;, &#34;https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm/&#34;, &#34;https://shogo82148.github.io/blog/2016/11/23/qr-code/&#34;, } ) func main() { client := &amp;http.</p>
+          
+            <footer>
+              <a href="https://shogo82148.github.io/blog/2017/01/14/re-golang-dns-cache/" rel="full-article">Read On &rarr;</a>
+            </footer>
+          
+        
+      </article>
+      
+      <article>
+        
+        
+
+<header>
   <p class="meta">Dec 20, 2016
      - 1 minute read 
      - <a href="https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/#disqus_thread">Comments</a>
@@ -406,38 +447,6 @@ package main import ( &#34;encoding/json&#34; &#34;fmt&#34; &#34;log&#34; &#34;g
         
       </article>
       
-      <article>
-        
-        
-
-<header>
-  <p class="meta">Mar 18, 2016
-     - 2 minute read 
-     - <a href="https://shogo82148.github.io/blog/2016/03/18/releaes-redis-modules/#disqus_thread">Comments</a>
-
-    
-    
-      - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a><a class="label" href="https://shogo82148.github.io/categories/redis/">redis </a>
-    
-  </p>
-  <h1 class="entry-title">
-    <a href="https://shogo82148.github.io/blog/2016/03/18/releaes-redis-modules/">Redisのトランザクション・スクリプト・ランキングを扱うPerlモジュールを公開しました</a>
-  </h1>
-</header>
-
-        
-          <p>以前Redisでスコアを複数設定できるランキングを作ってみたけど、 Githubの肥やしになっていてもあれなので、CPANizeしました。 あわせて、この実装のために作ったユーティリティモジュールも別モジュールとして公開しました。
- Redis::LeaderBoardMulti Redis::Script Redis::Transaction  Redis::LeaderBoardMulti 最初の基準で順位を決められなかった場合の第二基準が欲しいというときに使うモジュールです。 インターフェースがRedis::LeaderBoard互換になるように調整したので、 前回とインターフェースがちょっと変わっています。
-se Redis; use Redis::LeaderBoard; my $redis = Redis-&gt;new; my $lb = Redis::LeaderBoardMulti-&gt;new( redis =&gt; $redis, key =&gt; &#39;leader_board:1&#39;, order =&gt; [&#39;asc&#39;, &#39;desc&#39;], # asc/desc, desc as default ); # Redis::LeaderBoardに合わせて複数指定できるようになりました $lb-&gt;set_score( &#39;one&#39; =&gt; [100, time], &#39;two&#39; =&gt; [ 50, time], ); my ($rank, $score, $time) = $lb-&gt;get_rank_with_score(&#39;one&#39;); Redis::LeaderBoard互換なのでそのまま入れ替えられるはずですが、以下のような実装上の制限があります。
- スコアはすべて64bit符号付き整数  Redis::LeaderBoardのスコアは倍精度浮動小数点型なので小数も扱えるが、Redis::LeaderBoardMultiは整数だけ   Redis 2.8.9以降のみで動きます 同順の場合の出現順  Redis::LeaderBoard は ZRANK, ZREVRANK を使い分けているので、orderパラメータによって昇順/降順が変わります Redis::LaederBoardMulti は ZRANK しか使わないので、必ず昇順になります    一応 Lua Script を使わないオプションもそのまま残してありますが、特に理由がない限りデフォルト(Lua Script を使う)で使うといいと思います。 どうしてもロックの範囲が広くなってしまう場合があり、楽観的ロックでは効率が悪いケースがあるためです。</p>
-          
-            <footer>
-              <a href="https://shogo82148.github.io/blog/2016/03/18/releaes-redis-modules/" rel="full-article">Read On &rarr;</a>
-            </footer>
-          
-        
-      </article>
-      
       
       
 
@@ -565,6 +574,12 @@ se Redis; use Redis::LeaderBoard; my $redis = Redis-&gt;new; my $lb = Redis::Lea
           
           
             
+              <li class="post">
+                <a href="/blog/2021/01/02/perl-runtime-supports-docker-format/">Perl Runtime for AWS Lambda の Docker コンテナ対応を公開しました</a>
+              </li>
+            
+          
+            
           
             
               <li class="post">
@@ -614,12 +629,6 @@ se Redis; use Redis::LeaderBoard; my $redis = Redis-&gt;new; my $lb = Redis::Lea
               </li>
             
           
-            
-              <li class="post">
-                <a href="/blog/2020/02/11/aws-xray-golang/">AWS X-Ray Go SDK の地雷処理をしている話</a>
-              </li>
-            
-          
         </ul>
       </section>
     
@@ -629,7 +638,7 @@ se Redis; use Redis::LeaderBoard; my $redis = Redis-&gt;new; my $lb = Redis::Lea
   </div>
 </div>
 <footer role="contentinfo">
-  <p>Copyright &copy; 2020 Shogo Ichinose - <a
+  <p>Copyright &copy; 2021 Shogo Ichinose - <a
       href="https://shogo82148.github.io/license/">License</a> -
     <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
         href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.

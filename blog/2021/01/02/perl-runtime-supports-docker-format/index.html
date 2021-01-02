@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+    
+    
+      <link href="/css/fonts.css" rel="stylesheet" type="text/css">
+    
+  
+
+  
+  <title>Perl Runtime for AWS Lambda の Docker コンテナ対応を公開しました</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+    <link rel="stylesheet" href="/css/fork-awesome.min.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.75.1" />
+
+  
+  
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Jan 2, 2021
+     - 2 minute read 
+     - <a href="https://shogo82148.github.io/blog/2021/01/02/perl-runtime-supports-docker-format/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2021/01/02/perl-runtime-supports-docker-format/">Perl Runtime for AWS Lambda の Docker コンテナ対応を公開しました</a>
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>いつかやろうと思っていた <a href="https://metacpan.org/pod/AWS::Lambda">AWS::Lambda</a>の Docker コンテナ対応、
+年を越してしまったけど、ようやく手を付けました。</p>
+<ul>
+<li><a href="https://aws.amazon.com/jp/blogs/news/new-for-aws-lambda-container-image-support/">AWS Lambda の新機能 – コンテナイメージのサポート</a></li>
+</ul>
+<h2 id="使い方">使い方</h2>
+<p>以下の <code>handler.pl</code> を Docker コンテナとして AWS Lambda デプロイする例です。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">utf8</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">warnings</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">strict</span><span class="p">;</span>
+
+<span class="k">sub</span> <span class="nf">handle</span> <span class="p">{</span>
+    <span class="k">my</span> <span class="nv">$payload</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
+    <span class="k">return</span> <span class="o">+</span><span class="p">{</span><span class="s">&#34;hello&#34;</span> <span class="o">=&gt;</span> <span class="s">&#34;lambda&#34;</span><span class="p">};</span>
+<span class="p">}</span>
+
+<span class="mi">1</span><span class="p">;</span>
+</code></pre></div><h3 id="ビルド済みイメージを使う">ビルド済みイメージを使う</h3>
+<p>Amazon Linux 2 ベースの Perl Runtime 入りイメージを<a href="https://hub.docker.com/r/shogo82148/p5-aws-lambda">Docker Hub で公開しています</a>。
+これをベースにデプロイしたいファイルを追加し、<code>CMD</code> に実行したい関数名を指定するだけ。
+簡単ですね。</p>
+<div class="highlight"><pre class="chroma"><code class="language-dockerfile" data-lang="dockerfile"><span class="k">FROM</span><span class="s"> shogo82148/p5-aws-lambda:base-5.32-paws.al2</span><span class="err">
+</span><span class="err"></span><span class="k">COPY</span> handler.pl /var/task/<span class="err">
+</span><span class="err"></span><span class="k">CMD</span> <span class="p">[</span> <span class="s2">&#34;handler.handle&#34;</span> <span class="p">]</span><span class="err">
+</span></code></pre></div><p><a href="https://docs.docker.com/docker-hub/download-rate-limit/">Docker Hub からのダウンロードに Rate Limit が適用される</a>ようになったので、
+同じイメージを <a href="https://gallery.ecr.aws/w2s0h5h2/p5-aws-lambda">Amazon ECR Public Gallery でも公開しました</a>。
+こちらを利用することも可能です。</p>
+<div class="highlight"><pre class="chroma"><code class="language-dockerfile" data-lang="dockerfile"><span class="k">FROM</span><span class="s"> public.ecr.aws/w2s0h5h2/p5-aws-lambda:base-5.32-paws.al2</span><span class="err">
+</span><span class="err"></span><span class="k">COPY</span> handler.pl /var/task/<span class="err">
+</span><span class="err"></span><span class="k">CMD</span> <span class="p">[</span> <span class="s2">&#34;handler.handle&#34;</span> <span class="p">]</span><span class="err">
+</span></code></pre></div><p>このベースイメージには AWS Lambda Runtime Interface Emulator がインストールされているので、
+ビルドすればローカルで動かすこともできます。</p>
+<pre><code>$ docker run -p 9000:8080 hello-perl:latest
+$ curl -XPOST &quot;http://localhost:9000/2015-03-31/functions/function/invocations&quot; -d '{}'
+</code></pre><p>これをそのまま ECR にアップロードすれば・・・</p>
+<pre><code>$ aws ecr create-repository --repository-name hello-perl --image-scanning-configuration scanOnPush=true
+$ docker tag hello-perl:latest 123412341234.dkr.ecr.sa-east-1.amazonaws.com/hello-perl:latest
+$ aws ecr get-login-password | docker login --username AWS --password-stdin 123412341234.dkr.ecr.sa-east-1.amazonaws.com
+$ docker push 123412341234.dkr.ecr.sa-east-1.amazonaws.com/hello-perl:latest
+</code></pre><p>AWS Lambda 関数としてデプロイできます。</p>
+<pre><code>$ aws --region &quot;$REGION&quot; --profile &quot;$PROFILE&quot; lambda create-function \
+    --function-name &quot;hello-perl&quot; \
+    --code ImageUri=123412341234.dkr.ecr.sa-east-1.amazonaws.com/hello-perl:latest \
+    --handler &quot;handler.handle&quot; \
+    --runtime provided.al2 \
+    --role arn:aws:iam::xxxxxxxxxxxx:role/service-role/lambda-custom-runtime-perl-role
+</code></pre><h3 id="全部自前でビルドする">全部自前でビルドする</h3>
+<p>Docker コンテナ対応によって、Amazon Linux 以外の Linux を使用可能になりました。
+例として<a href="https://hub.docker.com/_/perl">Perl の Docker Official Images</a>を使ってみましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-dockerfile" data-lang="dockerfile"><span class="k">FROM</span><span class="s"> perl:5.32-slim-buster</span><span class="err">
+</span><span class="err"></span><span class="k">RUN</span> mkdir -p /var/task <span class="se">\
+</span><span class="se"></span>    <span class="o">&amp;&amp;</span> apt-get update <span class="se">\
+</span><span class="se"></span>    <span class="o">&amp;&amp;</span> apt-get install -y --no-install-recommends gcc libc6-dev <span class="se">\
+</span><span class="se"></span>    <span class="o">&amp;&amp;</span> cpanm --notest AWS::Lambda <span class="se">\
+</span><span class="se"></span>    <span class="o">&amp;&amp;</span> apt-get purge -y --auto-remove gcc libc6-dev <span class="se">\
+</span><span class="se"></span>    <span class="o">&amp;&amp;</span> rm -fr /var/cache/apt/* /var/lib/apt/lists/* <span class="se">\
+</span><span class="se"></span>    <span class="o">&amp;&amp;</span> rm -fr ./cpanm /root/.cpanm /tmp/*<span class="err">
+</span><span class="err"></span><span class="k">COPY</span> handler.pl /var/task/<span class="err">
+</span><span class="err"></span><span class="k">WORKDIR</span><span class="s"> /var/task</span><span class="err">
+</span><span class="err"></span><span class="k">ENTRYPOINT</span> <span class="p">[</span> <span class="s2">&#34;/usr/local/bin/perl&#34;</span><span class="p">,</span> <span class="s2">&#34;-MAWS::Lambda::Bootstrap&#34;</span><span class="p">,</span> <span class="s2">&#34;-e&#34;</span><span class="p">,</span> <span class="s2">&#34;bootstrap(@ARGV)&#34;</span> <span class="p">]</span><span class="err">
+</span><span class="err"></span><span class="k">CMD</span> <span class="p">[</span> <span class="s2">&#34;handler.handle&#34;</span> <span class="p">]</span><span class="err">
+</span></code></pre></div><p>AWS::Lambda の依存に XS を利用したモジュールが含まれているので、gcc をインストールが必要です。
+その分長くなってしまいましたが、<a href="https://metacpan.org/pod/App::cpanminus">App::cpanminus</a>で AWS::Lambda をインストールしているだけです。</p>
+<p>エントリーポイントでは <a href="https://metacpan.org/pod/AWS::Lambda::Bootstrap">AWS::Lambda::Bootstrap</a> を読み込んで、
+<code>bootstrap</code> 関数を呼び出せば OK です。</p>
+<div class="highlight"><pre class="chroma"><code class="language-dockerfile" data-lang="dockerfile"><span class="k">ENTRYPOINT</span> <span class="p">[</span> <span class="s2">&#34;/usr/local/bin/perl&#34;</span><span class="p">,</span> <span class="s2">&#34;-MAWS::Lambda::Bootstrap&#34;</span><span class="p">,</span> <span class="s2">&#34;-e&#34;</span><span class="p">,</span> <span class="s2">&#34;bootstrap(@ARGV)&#34;</span> <span class="p">]</span><span class="err">
+</span></code></pre></div><p>ちょっとハマったのは <code>/usr/local/bin/perl</code> のように絶対パスを指定する必要があること。
+どうやら環境変数の PATH は読んでくれないみたい(？)</p>
+<p>あとは ECR にアップロードすれば AWS Lambda 関数としてデプロイできます。</p>
+<h2 id="実装">実装</h2>
+<p>AWS Lambda との連携 API は今までのカスタムランタイムと一緒なので、AWS::Lambda の実装自体はほとんどいじらずに済みました。
+イメージの作成と実行が簡単になるよう、ちょっと調整したくらいです。</p>
+<ul>
+<li>AWS Lambda Runtime Interface Emulator が <code>Lambda-Runtime-Invoked-Function-Arn</code> ヘッダーを返してくれない
+<ul>
+<li>必須にしていたのをオプションに変えて対応</li>
+</ul>
+</li>
+<li><code>ENTRYPOINT</code> から直接モジュールを呼べるよう <code>bootstrap</code> をエクスポートするようにした</li>
+</ul>
+<h2 id="ecr-public">ECR Public</h2>
+<p>今回始めて Amazon ECR Public Gallery にイメージを公開してみました。
+今までの <a href="https://github.com/lambci/docker-lambda">lambci/docker-lambda</a> ベースのイメージも公開しているので、合わせてご利用ください。
+オフィシャルな Docker イメージが提供されるようになったとはいえ、XS を使ったモジュールに依存していて gcc が必要になるケースは結構多いと思います。
+そういった場合は、開発ツールがインストールされたイメージを使うのが便利でしょう。</p>
+<p>レポジトリの作成には <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ecr-publicrepository.html">CloudFormation の AWS::ECR::PublicRepository リソース</a>を利用しました。
+ここにちょっとハマって、何も考えずに東京リージョンでデプロイしたら、 &ldquo;Template format error: Unrecognized resource types: [AWS::ECR::PublicRepository]&rdquo;
+と怒られてしまいました。
+最終的にはバージニア北部(us-east-1) でデプロイすることで解決しました。</p>
+<p>ざっとドキュメントを見た感じリージョンの指定はなかったのと、マネージドコンソールではリージョンの切り替えが必要ないので、ちょっと手こずりました。
+<code>docker login</code> のコマンドを注意深く見ていなかったら気が付かないままだったでしょう・・・。</p>
+<pre><code>aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/w2s0h5h2
+</code></pre><h2 id="まとめ">まとめ</h2>
+<p>Perl Runtime for AWS Lambda で Docker コンテナを簡単にデプロイできるようになりました。
+一番嬉しいのは Zip ファイルだと 50MB、レイヤー機能を含めても 250MB までのサイズしかデプロイできなかったのが、 10GB まで拡張されたことだと思います。
+ぜひ遊んでみてください。</p>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://gallery.ecr.aws/w2s0h5h2/p5-aws-lambda">p5-aws-lambda - Amazon ECR Public Gallery</a></li>
+<li><a href="https://hub.docker.com/r/shogo82148/p5-aws-lambda">p5-aws-lambda - Docker Hub</a></li>
+<li><a href="https://github.com/shogo82148/p5-aws-lambda">shogo82148/p5-aws-lambda</a></li>
+<li><a href="https://metacpan.org/pod/AWS::Lambda">AWS::Lambda - metacpan</a></li>
+<li><a href="https://aws.amazon.com/jp/blogs/news/new-for-aws-lambda-container-image-support/">AWS Lambda の新機能 – コンテナイメージのサポート</a></li>
+<li><a href="https://docs.aws.amazon.com/lambda/latest/dg/runtimes-api.html">AWS Lambda runtime API</a></li>
+<li><a href="https://github.com/aws/aws-lambda-runtime-interface-emulator">AWS Lambda Runtime Interface Emulator</a></li>
+<li><a href="https://gallery.ecr.aws/lambda/provided">AWS Lambda base images for custom runtimes - Amazon ECR Public Gallery</a></li>
+<li><a href="https://gallery.ecr.aws/lambda/provided">AWS Lambda base images for custom runtimes - Docker Hub</a></li>
+<li><a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ecr-publicrepository.html">AWS::ECR::PublicRepository - AWS CloudFormation</a></li>
+<li><a href="https://docs.docker.com/docker-hub/download-rate-limit/">Download rate limit - docker docs</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>Jan 2, 2021</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2020/12/30/github-actions-mutex/" title="排他制御を行う GitHub Action を作った">排他制御を行う GitHub Action を作った</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2021/01/02/perl-runtime-supports-docker-format/">Perl Runtime for AWS Lambda の Docker コンテナ対応を公開しました</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/12/30/github-actions-mutex/">排他制御を行う GitHub Action を作った</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/12/03/github-actions-in-2020/">2020年に書いた GitHub Action &#43; α</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/10/24/aws-sdk-go-v2-broken/">AWS SDK for Go v2 の今後が不安な件について</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/10/23/github-bot-using-actions/">GitHub Actions を使って簡単なボットを作る</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/08/15/perl-lambda-runtime-on-amazon-linux2/">AWS Lambda Perl Runtime on Amazon Linux 2 を公開しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/04/02/re-pull-request-title-injection/">RE: Pull Request Title Injection とその対策</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/03/30/aws-xray-yasdk-go/">Yet Another AWS X-Ray Go SDK を作った</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2021 Shogo Ichinose - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['\\(','\\)']],
+    displayMath: [['\\[','\\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all.length) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+  </script>
+
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+</html>
+
