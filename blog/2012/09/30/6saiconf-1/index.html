@@ -100,7 +100,7 @@
 
 <header>
   <p class="meta">Sep 30, 2012
-     - 8 minute read 
+     - 13 minute read 
      - <a href="https://shogo82148.github.io/blog/2012/09/30/6saiconf-1/#disqus_thread">Comments</a>
 
     
@@ -122,9 +122,186 @@
           <p>だいぶ時間がたってしまったけど、2012/09/06に<a href="https://twitter.com/kuina_tesso">くいなちゃん</a>さん主催で開催された6さいカンファレンスのまとめ。
 第1回は「C言語で作る、はじめてのDAWソフト制作」です。</p>
 <p>勝手にまとめてしまったので、何か問題があれば<a href="https://twitter.com/shogo82148">@shogo82148</a>まで。</p>
-<!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
+<!-- more -->
+<script>
+(function(global) {
+    global.executeC = executeC;
+    function base64(input) {
+        var i, length = input.length;
+        var val;
+        var s = '';
+        var table = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+        for(i = 0; i < length; i += 3) {
+            val = (input[i] << 16) |
+                (i + 1 < length ? (input[i+1] << 8) : 0) |
+                (i + 2 < length ? input[i+2] : 0);
+            s += table.charAt((val>>18)&0x3F) +
+                table.charAt((val>>12)&0x3F) +
+                (i + 1 < length ? table.charAt((val>>6) & 0x3F) : '=') +
+                (i + 2 < length ? table.charAt(val & 0x3F) : '=');
+        }
+        return s;
+    }
+
+    function C2js(source) {
+        var type = '(?:(?:unsigned|signed)?\\s+(?:char|short|int|long|float|double)|FILE)';
+        var name = '[a-z_][a-z0-9_]*';
+        var const_str_cnt = 0;
+        var global = {};
+        var env = global;
+        source = source.replace(/^#.*$/igm, '');
+        source = source.replace(/"([^"]*)"/ig, function(m, m1) {
+            var name = '_const_str' + const_str_cnt++;
+            global[name] = m1;
+            return name;
+        });
+        source = source.replace(new RegExp('\\b(' + name + ')', 'ig'), function(m) {
+            if(m == 'if' || m == 'for' || m == 'while' || m == 'else' || m == 'return' ||
+               m == 'unsigned' || m == 'signed' || m == 'char' || m == 'short' || m == 'int' || m == 'long' ||
+               m == 'float' || m == 'double' || m == 'FILE' || m == 'void') {
+                return m;
+            }
+            return '(env.' + m + ')';
+        });
+        source = source.replace(new RegExp(type + '(?:\\s+|\\s*\\*+\\s*)\\((env\\.' + name + ')\\)\\((.*)\\)\\s*\\{', 'ig'), function(m, name, args) {
+            var def = name + ' = function() {';
+            var i, a;
+            def += 'function ENV(){}; ENV.prototype = global; var env = new ENV();';
+            if(args.match(/\s*void\s*/)) return def;
+            if(args.match(/^\s*$/)) return def;
+            args = args.split(',');
+            for(i=0;i<args.length;++i) {
+                a = args[i].split(/\s+/);
+                def += a[a.length-1] + ' = arguments[' + i + '];';
+            }
+            return def;
+        });
+        source = source.replace(new RegExp(type + '(?:\\s+|\\s*\\*+\\s*)\\((env\\.' + name + ')\\)', 'ig'), '($1)');
+        source = source.replace(new RegExp('\\((env\\.' + name + ')\\)\\s*\\[(.*)\\]\\s*=\\s*\\{(.*)\\}\\s*[;,]', 'ig'), '$1=_array($2, [$3]);');
+        source = source.replace(/\bunsigned\s+(short|int|char|long)/gm, '_unsigned_$1');
+        source = source.replace(new RegExp('(,|\\()\\s*&\\s*\\(env\\.(' + name + ')\\)', 'ig'), '$1 new Pointer(env, "$2")');
+        source = source.replace(/\}/g, '};');
+        source = source.replace(/\};\s*else\s*\{/g, '} else {');
+        return [global, source];
+    }
+
+    function executeC(source, stdin) {
+        var a = C2js(source);
+        console.log(a);
+        var global = a[0];
+        var env = global;
+        var stdin_cnt = 0;
+        stdin = stdin || [];
+        source = a[1];
+        global.print = function(x) {
+            console.log(x);
+        };
+        var files = {};
+        global.fopen = function(filename, mode) {
+            var fp = [];
+            files[filename] = fp;
+            return fp
+        };
+        global.scanf = function(format, p) {
+            if(format!='%d') throw 'Unkown scanf format';
+            if(!p instanceof Pointer) throw '2nd argument of scanf must be pointer';
+            p.env[p.name] = stdin[stdin_cnt++]|0;
+            return 1;
+        };
+        global.fwrite = function(buf, size, n, fp) {
+            var val, i;
+            if(buf instanceof Pointer) {
+                val = buf.env[buf.name];
+                switch(size) {
+                case 1:
+                    fp.push(val & 0xFF);
+                    break;
+                case 2:
+                    fp.push(val & 0xFF);
+                    fp.push((val>>8) & 0xFF);
+                    break;
+                case 4:
+                    fp.push(val & 0xFF);
+                    fp.push((val>>8) & 0xFF);
+                    fp.push((val>>16) & 0xFF);
+                    fp.push((val>>24) & 0xFF);
+                    break;
+                default:
+                    throw 'fwrite: invalid size';
+                }
+            } else {
+                switch(size) {
+                case 1:
+                    for(i=0;i<n;++i) fp.push(buf[i] & 0xFF);
+                    break;
+                case 2:
+                    for(i=0;i<n;++i) {
+                        val = buf[i];
+                        fp.push(val & 0xFF);
+                        fp.push((val>>8) & 0xFF);
+                    }
+                    break;
+                case 4:
+                    for(i=0;i<n;++i) {
+                        val = buf[i];
+                        fp.push(val & 0xFF);
+                        fp.push((val>>8) & 0xFF);
+                        fp.push((val>>8) & 0xFF);
+                        fp.push((val>>16) & 0xFF);
+                        fp.push((val>>24) & 0xFF);
+                    }
+                    break;
+                default:
+                    throw 'fwrite: invalid size';
+                }
+            }
+        };
+        global.fclose = function(fp) {};
+        global.sin = Math.sin;
+        global.cos = Math.cos;
+        global.tan = Math.tan;
+        global.asin = Math.asin;
+        global.acos = Math.acos;
+        global.atan = Math.atan;
+        global.atan2 = Math.atan2;
+        global.sqrt = Math.sqrt;
+        global.pow = Math.pow;
+        global.exp = Math.exp;
+        global.log = Math.log;
+
+        function char(x) {return (x&0xFF) - (x>=0?0:0x100);}
+        function short(x) {return (x&0xFFFF) - (x>=0?0:10000);}
+        function int(x) {return (x & 0xFFFFFFFF);}
+        function long(x) {return (x & 0xFFFFFFFF);}
+        function float(x) {return x;}
+        function double(x) {return x;}
+        function _unsigned_char(x) {return x&0xFF;}
+        function _unsigned_short(x) {return x&0xFFFF;}
+        function _unsigned_int(x) {return (x&0x7FFFFFFF) + (x<0 ? 0x100000000 : 0);}
+        function _unsigned_long(x) {return (x&0x7FFFFFFF) + (x<0 ? 0x100000000 : 0);}
+        function Pointer(env, name) {this.env = env; this.name = name;}
+        function _array(size, init) {
+            var a = new Array(size);
+            var i;
+            for(i=0;i<size;++i) {
+                a[i] = init[i] || 0;
+            }
+            return a;
+        }
+        eval(source);
+        global.main();
+
+        var ret = {};
+        var name, mime;
+        for(name in files) {
+            if(name.match(/\.wav$/i)) mime = 'audio/wav';
+            else mime = 'application/octet-stream';
+            ret[name] = 'data:' + mime + ';base64,' + base64(files[name]);
+        }
+        return ret;
+    }
+})(this);
+</script>
 <h2 id="battle-start">BATTLE START!!</h2>
 <p>くいなちゃん: みなさんは、既にC言語の基本的なところはマスターしていると思いますが、念のために軽く復習しておきましょう。　まずは、このソースコードをご覧ください。
 <a href="http://kuina.tes.so/6saiconf/a.png">http://kuina.tes.so/6saiconf/a.png</a>(<a href="/files/6saiconf/1/a.png">魚拓</a>)</p>
@@ -209,8 +386,34 @@ return 0; の直前ですね。
     <span class="n">fclose</span><span class="p">(</span><span class="n">fp</span><span class="p">);</span>
     <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
 <span class="p">}</span>
-</code></pre></div><!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
+</code></pre></div><script id="program1" type="text/c">
+#include <stdio.h>
+#include <math.h>
+
+/* 7 6 7 6 7 2 5 3 0 0 0 0 0 0 0 0 Für Elise*/
+/* 9 9 7 7 6 6 6 6 4 6 7 4 2 2 2 2 Biene */
+
+int main(void) {
+    int i, j;
+    unsigned char header[44] = {0x52, 0x49, 0x46, 0x46, 0x34, 0xb1, 0x02, 0x00, 0x57, 0x41, 0x56, 0x45, 0x66, 0x6d, 0x74, 0x20, 0x10, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x44, 0xac, 0x00, 0x00, 0x44, 0xac , 0x00, 0x00, 0x01, 0x00, 0x08, 0x00, 0x64, 0x61, 0x74, 0x61, 0x10, 0xb1, 0x02, 0x00};
+    FILE *fp = fopen("out.wav", "wb");
+    double x = 0.0;
+    fwrite(header, 1, 44, fp);
+    for (i = 0; i < 16; i++)
+    {
+        int key;
+        scanf("%d", &key);
+        for (j = 0; j < 44100 / 4; j++)
+        {
+            unsigned char a = (unsigned char)(sin(x) * 127.0 + 128.0);
+            fwrite(&a, 1, 1, fp);
+            x += 441.0 * pow(2.0, (double)key / 12.0) * 2.0 * 3.14159265358979 / 44100.0;
+        }
+    }
+    fclose(fp);
+    return 0;
+}
+</script>
 <p>くいなちゃん: それでは、実行してみましょう！
 実行したら、
 <code>7 6 7 6 7 2 5 3 0 0 0 0 0 0 0 0</code>
@@ -218,9 +421,17 @@ return 0; の直前ですね。
 0 は 8個です。</p>
 <p>くいなちゃん: すると、out.wav というファイルが作成されていると思います。
 再生すると…</p>
-<!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
+<input type="text" value="7 6 7 6 7 2 5 3 0 0 0 0 0 0 0 0" size="35" id="program1-stdin">
+<input type="button" value="実行" id="program1-run">
+<div id="program1-result"></div>
+<script>
+document.getElementById('program1-run').addEventListener('click', function() {
+    var program = document.getElementById('program1').text;
+    var stdin = document.getElementById('program1-stdin').value.split(/\s+/);
+    var wav = executeC(program, stdin)['out.wav'];
+    document.getElementById('program1-result').innerHTML = '<audio src="' + wav + '" controls="controls"></audio>';
+}, false);
+</script>
 <p>くいなちゃん: はい、何か鳴りましたね。
 それでは、ループの中身を軽く説明しましょう。
 えっ、曲名解らない人いますか？
@@ -275,17 +486,51 @@ double型の場合は、<code>&quot;%lf&quot;</code> とします。</p>
     <span class="n">fclose</span><span class="p">(</span><span class="n">fp</span><span class="p">);</span>
     <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
 <span class="p">}</span>
-</code></pre></div><!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
+</code></pre></div><script id="program2" type="text/c">
+#include <stdio.h>
+#include <math.h>
+
+/* 7 6 7 6 7 2 5 3 0 0 0 0 0 0 0 0 Für Elise*/
+/* 9 9 7 7 6 6 6 6 4 6 7 4 2 2 2 2 Biene */
+
+int main(void) {
+    int i, j;
+    unsigned char header[44] = {0x52, 0x49, 0x46, 0x46, 0x34, 0xb1, 0x02, 0x00, 0x57, 0x41, 0x56, 0x45, 0x66, 0x6d, 0x74, 0x20, 0x10, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x44, 0xac, 0x00, 0x00, 0x44, 0xac , 0x00, 0x00, 0x01, 0x00, 0x08, 0x00, 0x64, 0x61, 0x74, 0x61, 0x10, 0xb1, 0x02, 0x00};
+    FILE *fp = fopen("out.wav", "wb");
+    double x = 0.0;
+    fwrite(header, 1, 44, fp);
+    for (i = 0; i < 16; i++)
+    {
+        int key;
+        scanf("%d", &key);
+        for (j = 0; j < 44100 / 4; j++)
+        {
+            unsigned char a = (unsigned char)((sin(x) >= 0.0 ? 1.0 : -1.0) * 127.0 + 128.0);
+            fwrite(&a, 1, 1, fp);
+            x += 441.0 * pow(2.0, (double)key / 12.0) * 2.0 * 3.14159265358979 / 44100.0;
+        }
+    }
+    fclose(fp);
+    return 0;
+}
+</script>
 <p>くいなちゃん: 今までは、sin(x) でサイン波の波形の音を鳴らしていましたが、今度は矩形波です。
 <code>sin(x) &gt;= 0.0</code> のとき、1.0になり、それ以外は -1.0 となります。</p>
 <p>くいなちゃん: 鳴らしてみてください。
 実行時に
 <code>9 9 7 7 6 6 6 6 4 6 7 4 2 2 2 2</code>
 と入れると、別の曲が楽しめます。</p>
-<!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
+<input type="text" value="9 9 7 7 6 6 6 6 4 6 7 4 2 2 2 2" size="35" id="program2-stdin">
+<input type="button" value="実行" id="program2-run">
+<div id="program2-result"></div>
+<script>
+document.getElementById('program2-run').addEventListener('click', function() {
+    var program = document.getElementById('program2').text;
+    var stdin = document.getElementById('program2-stdin').value.split(/\s+/);
+    var wav = executeC(program, stdin)['out.wav'];
+    document.getElementById('program2-result').innerHTML = '<audio src="' + wav + '" controls="controls"></audio>';
+}, false);
+</script>
 <h2 id="ビブラートをかけてみる">ビブラートをかけてみる</h2>
 <p>くいなちゃん: 今度は、音にビブラートをかけてみましょう。下記のように 3行変更してみてください。
 <a href="http://kuina.tes.so/6saiconf/img2.png">http://kuina.tes.so/6saiconf/img2.png</a>(<a href="/files/6saiconf/1/img2.png">魚拓</a>)</p>
@@ -317,11 +562,47 @@ double型の場合は、<code>&quot;%lf&quot;</code> とします。</p>
     <span class="n">fclose</span><span class="p">(</span><span class="n">fp</span><span class="p">);</span>
     <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
 <span class="p">}</span>
-</code></pre></div><!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
+</code></pre></div><script id="program3" type="text/c">
+#include <stdio.h>
+#include <math.h>
+
+/* 7 6 7 6 7 2 5 3 0 0 0 0 0 0 0 0 Für Elise*/
+/* 9 9 7 7 6 6 6 6 4 6 7 4 2 2 2 2 Biene */
+
+int main(void) {
+    int i, j;
+    unsigned char header[44] = {0x52, 0x49, 0x46, 0x46, 0x34, 0xb1, 0x02, 0x00, 0x57, 0x41, 0x56, 0x45, 0x66, 0x6d, 0x74, 0x20, 0x10, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x44, 0xac, 0x00, 0x00, 0x44, 0xac , 0x00, 0x00, 0x01, 0x00, 0x08, 0x00, 0x64, 0x61, 0x74, 0x61, 0x10, 0xb1, 0x02, 0x00};
+    FILE *fp = fopen("out.wav", "wb");
+    double x = 0.0;
+    double y = 0.0;
+    fwrite(header, 1, 44, fp);
+    for (i = 0; i < 16; i++)
+    {
+        int key;
+        scanf("%d", &key);
+        for (j = 0; j < 44100 / 4; j++)
+        {
+            unsigned char a = (unsigned char)((sin(x) >= 0.0 ? 1.0 : -1.0) * 127.0 + 128.0);
+            fwrite(&a, 1, 1, fp);
+            x += (441.0 + sin(y) * 10) * pow(2.0, (double)key / 12.0) * 2.0 * 3.14159265358979 / 44100.0;
+            y += 5.0 * 2.0 * 3.14159265358979 / 44100.0;
+        }
+    }
+    fclose(fp);
+    return 0;
+}
+</script>
+<input type="text" value="9 9 7 7 6 6 6 6 4 6 7 4 2 2 2 2" size="35" id="program3-stdin">
+<input type="button" value="実行" id="program3-run">
+<div id="program3-result"></div>
+<script>
+document.getElementById('program3-run').addEventListener('click', function() {
+    var program = document.getElementById('program3').text;
+    var stdin = document.getElementById('program3-stdin').value.split(/\s+/);
+    var wav = executeC(program, stdin)['out.wav'];
+    document.getElementById('program3-result').innerHTML = '<audio src="' + wav + '" controls="controls"></audio>';
+}, false);
+</script>
 <p>くいなちゃん: 今までは、441.0 という値(実は&quot;ラ&quot;の音) を中心に音を作っていたんですが、その中心音を揺るがすことで、ビブラートをかけています。
 y がその揺るぎを生成させるもので、5Hz で振動させています。</p>
 <p>くいなちゃん: なんとなく、プログラム眺めてたら解るでしょう。</p>
@@ -358,14 +639,52 @@ y がその揺るぎを生成させるもので、5Hz で振動させていま�
     <span class="n">fclose</span><span class="p">(</span><span class="n">fp</span><span class="p">);</span>
     <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
 <span class="p">}</span>
-</code></pre></div><!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
+</code></pre></div><script id="program4" type="text/c">
+#include <stdio.h>
+#include <math.h>
+
+/* 7 6 7 6 7 2 5 3 0 0 0 0 0 0 0 0 Für Elise*/
+/* 9 9 7 7 6 6 6 6 4 6 7 4 2 2 2 2 Biene */
+
+int main(void) {
+    int i, j;
+    unsigned char header[44] = {0x52, 0x49, 0x46, 0x46, 0x34, 0xb1, 0x02, 0x00, 0x57, 0x41, 0x56, 0x45, 0x66, 0x6d, 0x74, 0x20, 0x10, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x44, 0xac, 0x00, 0x00, 0x44, 0xac , 0x00, 0x00, 0x01, 0x00, 0x08, 0x00, 0x64, 0x61, 0x74, 0x61, 0x10, 0xb1, 0x02, 0x00};
+    FILE *fp = fopen("out.wav", "wb");
+    double x = 0.0;
+    double y = 0.0;
+    double z = 0.0;
+    fwrite(header, 1, 44, fp);
+    for (i = 0; i < 16; i++)
+    {
+        int key;
+        scanf("%d", &key);
+        for (j = 0; j < 44100 / 4; j++)
+        {
+            unsigned char a = (unsigned char)((sin(x) >= 0.0 ? 1.0 : -1.0) * 64.0 + sin(z) * 63.0 + 128.0);
+            fwrite(&a, 1, 1, fp);
+            x += (441.0 + sin(y) * 10) * pow(2.0, (double)key / 12.0) * 2.0 * 3.14159265358979 / 44100.0;
+            y += 5.0 * 2.0 * 3.14159265358979 / 44100.0;
+            z += (441.0 + sin(y) * 10) * pow(2.0, (double)(key + 7) / 12.0) * 2.0 * 3.14159265358979 / 44100.0;
+        }
+    }
+    fclose(fp);
+    return 0;
+}
+</script>
 <p>くいなちゃん: プログラムを眺めたら解ると思いますが、新たな変数 z を定義し、さっき作った矩形派に加算する形で <code>sin(z)</code> が合成されています。
 今まで、 <code>* 127.0 + 128.0</code> となっていましたが、2つの音を合成するので、 <code>* 127.0</code> を、<code>*64.0</code> と <code>*63.0</code> の2つに分割しています。</p>
 <p>くいなちゃん: 適宜、鳴らしてみてくださいね</p>
-<!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
+<input type="text" value="9 9 7 7 6 6 6 6 4 6 7 4 2 2 2 2" size="35" id="program4-stdin">
+<input type="button" value="実行" id="program4-run">
+<div id="program4-result"></div>
+<script>
+document.getElementById('program4-run').addEventListener('click', function() {
+    var program = document.getElementById('program4').text;
+    var stdin = document.getElementById('program4-stdin').value.split(/\s+/);
+    var wav = executeC(program, stdin)['out.wav'];
+    document.getElementById('program4-result').innerHTML = '<audio src="' + wav + '" controls="controls"></audio>';
+}, false);
+</script>
 <h2 id="ディレイを実装しちゃう">ディレイを実装しちゃう</h2>
 <p>くいなちゃん: はい、最後にラスボス、「ディレイ」を実装しちゃいましょう。
 これは非常に手ごわい相手ですが、音がかなり幻想的な雰囲気になるので、挑戦しちゃいましょう！</p>
@@ -409,8 +728,42 @@ y がその揺るぎを生成させるもので、5Hz で振動させていま�
     <span class="n">fclose</span><span class="p">(</span><span class="n">fp</span><span class="p">);</span>
     <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
 <span class="p">}</span>
-</code></pre></div><!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
+</code></pre></div><script id="program5" type="text/c">
+#include <stdio.h>
+#include <math.h>
+
+/* 7 6 7 6 7 2 5 3 0 0 0 0 0 0 0 0 Für Elise*/
+/* 9 9 7 7 6 6 6 6 4 6 7 4 2 2 2 2 Biene */
+
+int main(void) {
+    int i, j;
+    unsigned char header[44] = {0x52, 0x49, 0x46, 0x46, 0x34, 0xb1, 0x02, 0x00, 0x57, 0x41, 0x56, 0x45, 0x66, 0x6d, 0x74, 0x20, 0x10, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x44, 0xac, 0x00, 0x00, 0x44, 0xac , 0x00, 0x00, 0x01, 0x00, 0x08, 0x00, 0x64, 0x61, 0x74, 0x61, 0x10, 0xb1, 0x02, 0x00};
+    FILE *fp = fopen("out.wav", "wb");
+    double x = 0.0;
+    double y = 0.0;
+    double z = 0.0;
+    unsigned char buf[44100 / 4] = {0};
+    int p = 0;
+    fwrite(header, 1, 44, fp);
+    for (i = 0; i < 16; i++)
+    {
+        int key;
+        scanf("%d", &key);
+        for (j = 0; j < 44100 / 4; j++)
+        {
+            unsigned char a = ((unsigned char)((sin(x) >= 0.0 ? 1.0 : -1.0) * 64.0 + sin(z) * 63.0 + 128.0) + buf[p] * 3) / 4;
+            buf[p] = a;
+            p = (p + 1) % (44100 / 4);
+            fwrite(&a, 1, 1, fp);
+            x += (441.0 + sin(y) * 10) * pow(2.0, (double)key / 12.0) * 2.0 * 3.14159265358979 / 44100.0;
+            y += 5.0 * 2.0 * 3.14159265358979 / 44100.0;
+            z += (441.0 + sin(y) * 10) * pow(2.0, (double)(key + 7) / 12.0) * 2.0 * 3.14159265358979 / 44100.0;
+        }
+    }
+    fclose(fp);
+    return 0;
+}
+</script>
 <p>くいなちゃん: 15行目で、あらかじめディレイ用のバッファを作成します。
 <code>unsigned char buff[44100 / 4] = {0};</code> により、
 44100 / 4、すなわち、1/4秒間のバッファを作成し、 <code>{0}</code> により、全て 0 で初期化します。</p>
@@ -426,19 +779,50 @@ buff内の、p (初期は0) の部分にデータを書き込み、p を 1ずつ
 <p>くいなちゃん: 鳴らしてみてください。
 お風呂場みたいな雰囲気？
 <code>7 6 7 6 7 2 5 3 0 0 0 0 0 0 0 0</code></p>
-<!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
+<input type="text" value="7 6 7 6 7 2 5 3 0 0 0 0 0 0 0 0" size="35" id="program5-stdin">
+<input type="button" value="実行" id="program5-run">
+<div id="program5-result"></div>
+<script>
+document.getElementById('program5-run').addEventListener('click', function() {
+    var program = document.getElementById('program5').text;
+    var stdin = document.getElementById('program5-stdin').value.split(/\s+/);
+    var wav = executeC(program, stdin)['out.wav'];
+    document.getElementById('program5-result').innerHTML = '<audio src="' + wav + '" controls="controls"></audio>';
+}, false);
+</script>
 <p>くいなちゃん: ディレイの効果が判りやすいように、本来の音1 : ディレイ3 の割合で計算しています。
 が、実際の音楽を作るときは、もっと ディレイを押さえるべきですね＞ameri1341さん</p>
 <h2 id="改造してみる">改造してみる</h2>
 <p>第1回 6さいカンファレンスは以上です。
 カンファレンス内で出てきたプログラムをお手軽に実行できるようJavascriptを組んでみました。
 自分で改造して遊んでみましょう！</p>
-<!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
+<textarea id="myprogram" rows="35" cols="100" style="width: 100%">
+</textarea>
+<input type="button" value="sin波" id="loadprogram1">
+<input type="button" value="矩形波" id="loadprogram2">
+<input type="button" value="ビブラート" id="loadprogram3">
+<input type="button" value="和音" id="loadprogram4">
+<input type="button" value="ディレイ" id="loadprogram5">
+<input type="text" value="7 6 7 6 7 2 5 3 0 0 0 0 0 0 0 0" size="35" id="myprogram-stdin">
+<input type="button" value="実行" id="myprogram-run">
+<div id="myprogram-result"></div>
+<script>
+(function() {
+    var i;
+    for(i=1;i<=5;++i) (function(i) {
+        document.getElementById('loadprogram' + i).addEventListener('click', function() {
+            document.getElementById('myprogram').value = document.getElementById('program' + i).text;
+        });
+    })(i);
+})();
+
+document.getElementById('myprogram-run').addEventListener('click', function() {
+    var program = document.getElementById('myprogram').value;
+    var stdin = document.getElementById('myprogram-stdin').value.split(/\s+/);
+    var wav = executeC(program, stdin)['out.wav'];
+    document.getElementById('myprogram-result').innerHTML = '<audio src="' + wav + '" controls="controls"></audio>';
+}, false);
+</script>
 <p>正規表現で置換してJavascriptにしているだけなので、いろいろ制限付き。</p>
 <ul>
 <li>プリプロセッサは解釈しない</li>

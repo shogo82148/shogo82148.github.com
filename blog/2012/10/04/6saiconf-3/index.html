@@ -100,7 +100,7 @@
 
 <header>
   <p class="meta">Oct 4, 2012
-     - 8 minute read 
+     - 9 minute read 
      - <a href="https://shogo82148.github.io/blog/2012/10/04/6saiconf-3/#disqus_thread">Comments</a>
 
     
@@ -122,9 +122,156 @@
           <p>2012/09/06に<a href="https://twitter.com/kuina_tesso">くいなちゃん</a>さん主催で開催された6さいカンファレンスのまとめ。
 第3回は「アルゴリズムを自力で生み出すプログラムを作ろう！」です。</p>
 <p>勝手にまとめてしまったので、何か問題があれば<a href="https://twitter.com/shogo82148">@shogo82148</a>まで。</p>
-<!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
+<!-- more -->
+<script>
+function Tree() {
+   this.value = '';
+   this.children = [];
+}
+
+Tree.prototype.dump = function() {
+    var result = this.value;
+    var i;
+    for(i = 0; i < this.children.length; i++)
+        result += ' ' + this.children[i].dump();
+    return result;
+};
+
+Tree.prototype.calc = function(x) {
+    switch(this.value) {
+    case '+': return this.children[0].calc(x) + this.children[1].calc(x);
+    case '-': return this.children[0].calc(x) - this.children[1].calc(x);
+    case '*': return this.children[0].calc(x) * this.children[1].calc(x);
+    case '/': return this.children[0].calc(x) / this.children[1].calc(x);
+    case '^': return Math.pow(this.children[0].calc(x), this.children[1].calc(x));
+    case 'x': return x;
+    }
+    return this.value * 1;
+};
+
+Tree.make = function(len) {
+    var result = new Tree();
+    var numchildren = 0;
+    switch(len >= 5 ? 6 : (Math.random()*7|0)) {
+    case 0: result.value = '+'; numchildren = 2; break;
+    case 1: result.value = '-'; numchildren = 2; break;
+    case 2: result.value = '*'; numchildren = 2; break;
+    case 3: result.value = '/'; numchildren = 2; break;
+    case 4: result.value = '^'; numchildren = 2; break;
+    case 5: result.value = 'x'; numchildren = 0; break;
+    default: result.value = (Math.random()*10|0)+1; numchildren = 0; break;
+    }
+    var i;
+    for(i = 0; i < numchildren; i++)
+        result.children.push(this.make(len + 1));
+    return result;
+};
+
+Tree.prototype.countLeaves = function() {
+    var result = 1;
+    var i;
+    for( i = 0; i < this.children.length; i++)
+        result += this.children[i].countLeaves();
+    return result;
+};
+
+Tree.prototype.copy = function(leaf, other) {
+    leaf.value--;
+    if(leaf.value == -1)
+        return other.copy(leaf, null);
+    var result = new Tree();
+    result.value = this.value;
+    var i;
+    for(i = 0; i < this.children.length; i++)
+        result.children.push(this.children[i].copy(leaf, other));
+    return result;
+};
+
+Tree.prototype.select = function(leaf) {
+    leaf.value--;
+    if(leaf.value == -1)
+        return this;
+    var i, result;
+    for(i = 0; i < this.children.length; i++) {
+        result = this.children[i].select(leaf);
+        if(result != null)
+            return result;
+    }
+    return null;
+};
+
+function GP(genesnum) {
+    this.genes = new Array(genesnum);
+    var i;
+    for(i=0; i<genesnum; i++)
+        this.genes[i] = Tree.make(0);
+    this.values = new Array(genesnum);
+    this.bestgene = null;
+    this.bestvalue = 0.0;
+    this.refreshValues();
+}
+
+GP.prototype.refreshValues = function() {
+    var i, j, v;
+    for(i = 0; i < this.genes.length; i++) {
+        var fx = [0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55];
+        this.values[i] = 0.0;
+        for(j = 0; j < fx.length; j++) {
+            if(this.genes[i].countLeaves() >= 50) {
+                v = 100000000;
+            } else {
+                v = this.genes[i].calc(j) - fx[j];
+                v *= v;
+            }
+            if(isNaN(v)) v = 100000000;
+            this.values[i] += v;
+        }
+        this.values[i] = 1 / this.values[i];
+        if(this.bestvalue < this.values[i]) {
+            this.bestvalue = this.values[i];
+            this.bestgene = this.genes[i];
+        }
+    }
+    return this.bestgene;
+};
+
+GP.prototype.getGoodGene = function() {
+    var totalvalue = 0;
+    var i;
+    for(i = 0; i < this.genes.length; i++) {
+        totalvalue += this.values[i];
+    }
+    var r = Math.random() * totalvalue;
+    var select = 0;
+    while(r >= this.values[select]) {
+        r -= this.values[select];
+        select++;
+    }
+    return this.genes[select];
+};
+
+GP.prototype.inherit = function() {
+    var newgenes = [];
+    var i, a, b, leafa, leafb;
+    for(i = 0; i < this.genes.length; i++) {
+        a = this.getGoodGene(), b;
+        if(Math.random() < 0.05) {
+            b = Tree.make(0);
+        } else {
+            b = this.getGoodGene();
+        }
+        if(a==b) newgenes.push(a);
+        else {
+            leafa = {value: Math.random()*a.countLeaves()|0};
+            leafb = {value: Math.random()*b.countLeaves()|0};
+            newgenes.push(a.copy(leafa, b.select(leafb)));
+        }
+    }
+    this.genes = newgenes;
+    this.refreshValues();
+    return this.bestvalue;
+};
+</script>
 <h2 id="welcome-to-heaven">WELCOME TO HEAVEN!!</h2>
 <p>くいなちゃん: ところでみなさん、次の( ) に入る数を当ててください</p>
 <pre><code>0, 1, 1, 2, 3, 5, 8, 13, 21, 34, ( )
@@ -252,7 +399,14 @@ Wikipedia で調べると、　f(x) = 1 / √5 ( ((1+√5)/2)^x - ((1-√5)/2)^x
         <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&#34;= &#34;</span> <span class="o">+</span> <span class="o">((</span><span class="n">Double</span><span class="o">)</span><span class="n">tree</span><span class="o">.</span><span class="na">calc</span><span class="o">(</span><span class="n">1</span><span class="o">.</span><span class="na">0</span><span class="o">)).</span><span class="na">toString</span><span class="o">());</span>
     <span class="o">}</span>
 <span class="o">}</span>
-</code></pre></div><!-- raw HTML omitted -->
+</code></pre></div><input type="button" id="Example1" value="計算">
+<pre><code id="Example1Result"></code></pre>
+<script>
+document.getElementById('Example1').addEventListener('click', function() {
+    var tree = Tree.make(0);
+    document.getElementById('Example1Result').innerText = tree.dump() + '\n= ' + tree.calc(1.0);
+}, false);
+</script>
 <h2 id="遺伝させる">遺伝させる</h2>
 <p>くいなちゃん: こんな感じで、式が木構造で表現できるようになりました！
 あとは、これを遺伝させて、フィボナッチ数を求めるアルゴリズム(例の複雑な式)が求まれば、成功ですん☆</p>
@@ -335,7 +489,21 @@ Javaのせいで気分が悪くなったら、無理に読まなくて結構で�
             <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&#34;f(&#34;</span> <span class="o">+</span> <span class="n">i</span> <span class="o">+</span> <span class="s">&#34;)&#34;</span> <span class="o">+</span> <span class="s">&#34;= &#34;</span> <span class="o">+</span> <span class="o">((</span><span class="n">Double</span><span class="o">)</span><span class="n">tree</span><span class="o">.</span><span class="na">calc</span><span class="o">((</span><span class="kt">double</span><span class="o">)</span><span class="n">i</span><span class="o">)).</span><span class="na">toString</span><span class="o">());</span>
     <span class="o">}</span>
 <span class="o">}</span>
-</code></pre></div><!-- raw HTML omitted -->
+</code></pre></div><input type="button" id="Example2" value="計算">
+<pre><code id="Example2Result"></code></pre>
+<script>
+document.getElementById('Example2').addEventListener('click', function() {
+    var gp = new GP(100);
+    var tree = gp.refreshValues();
+    var result = '';
+    var i;
+    result += tree.dump() + '\n';
+    for(i = 0; i < 11; i++) {
+        result += 'f(' + i + ') = ' + tree.calc(i) + '\n';
+    }
+    document.getElementById('Example2Result').innerText = result;
+}, false);
+</script>
 <p>くいなちゃん: (そうでもない)</p>
 <p>くいなちゃん: はい、いよいよ交叉と突然変異を追加するわけですが、
 その前に、便利関数として、木のノード数を数える関数や、自分自身のコピー木を作る関数や、任意の番号のノードを取得できる関数などを、数式木のクラスに書き加えました。
@@ -508,7 +676,18 @@ inherit は、交叉・突然変異を一まとめにして、「次の世代を
             <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">gp</span><span class="o">.</span><span class="na">inherit</span><span class="o">());</span>
     <span class="o">}</span>
 <span class="o">}</span>
-</code></pre></div><!-- raw HTML omitted -->
+</code></pre></div><input type="button" id="Example3" value="計算">
+<pre><code id="Example3Result"></code></pre>
+<script>
+document.getElementById('Example3').addEventListener('click', function() {
+    var gp = new GP(100);
+    var i, result = '';
+    for(i = 0; i < 50; i++) {
+        result += gp.inherit() + '\n';
+    }
+    document.getElementById('Example3Result').innerText = result;
+}, false);
+</script>
 <p>くいなちゃん: では、せっかくなので、100000回くらい遺伝させてみましょう！！</p>
 <p>くいなちゃん: 100000回というと、孫の孫の孫の孫の…　と膨大な数の子孫を経た世代ということです。
 恐ろしい。</p>
@@ -531,7 +710,12 @@ inherit は、交叉・突然変異を一まとめにして、「次の世代を
             <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&#34;f(&#34;</span> <span class="o">+</span> <span class="n">i</span> <span class="o">+</span> <span class="s">&#34;)&#34;</span> <span class="o">+</span> <span class="s">&#34;= &#34;</span> <span class="o">+</span> <span class="o">((</span><span class="n">Double</span><span class="o">)</span><span class="n">bestgene</span><span class="o">.</span><span class="na">calc</span><span class="o">((</span><span class="kt">double</span><span class="o">)</span><span class="n">i</span><span class="o">)).</span><span class="na">toString</span><span class="o">());</span>
     <span class="o">}</span>
 <span class="o">}</span>
-</code></pre></div><!-- raw HTML omitted -->
+</code></pre></div><input type="button" id="Example4" value="計算">
+<pre><code id="Example4Result"></code></pre>
+<script>
+document.getElementById('Example4').addEventListener('click', function() {
+    var gp = new GP(100);
+    var i, result = [];
 <pre><code>for(i=0;i&lt;20;i++) result.push('');
 
 i = 0;
@@ -559,7 +743,7 @@ function println(s) {
 }
 </code></pre>
 <p>}, false);
-<!-- raw HTML omitted --></p>
+</script></p>
 <p>くいなちゃん: その式とは、　+ x + / x 4 / * …　　と続く、大変意味不明な式です。
 なんですか、この式は…？</p>
 <p>くいなちゃん: 期待していた、最初のほうで言った式とは、なんか違いますよね…　気のせいかな？</p>
