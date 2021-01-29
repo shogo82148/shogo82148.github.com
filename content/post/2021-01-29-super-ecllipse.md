@@ -114,8 +114,8 @@ SVG で簡単なアニメーションを作ってみました。
         return x > 0 ? 1 : x < 0 ? -1 : 0;
     }
 
-    const w = document.documentElement.getAttribute('width')-0;
-    const h = document.documentElement.getAttribute('height')-0;
+    const w = 500;
+    const h = 500;
     const cx = w/2;
     const cy = h/2;
 
@@ -135,7 +135,6 @@ SVG で簡単なアニメーションを作ってみました。
             points.push(`${xx*r+cx} ${yy*r+cy}`);
         }
         $("superellipse").setAttribute("points", points.join(" "));
-        count = (count+1) % period;
 
         const k = ( 8/3 * (1/Math.pow(2,1/n)-1/2) ) * r;
         $("path").setAttribute(
@@ -164,6 +163,8 @@ SVG で簡単なアニメーションを作ってみました。
         $("l2").setAttribute("y1", -r+cy);
         $("l2").setAttribute("x2",    cx);
         $("l2").setAttribute("y2", -r+cy);
+
+        count = (count+1) % period;
     }
 
     setInterval(animate, 50);
