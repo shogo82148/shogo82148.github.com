@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "スーパー楕円をベジェ曲線で近似してみる"
-slug:
+slug: super-ellipse
 date: 2021-01-29 22:01:00 +0900
 comments: true
 categories: []
