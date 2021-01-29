@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+    
+    
+      <link href="/css/fonts.css" rel="stylesheet" type="text/css">
+    
+  
+
+  
+  <title>スーパー楕円をベジェ曲線で近似してみる</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+    <link rel="stylesheet" href="/css/fork-awesome.min.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.75.1" />
+
+  
+  
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Jan 29, 2021
+     - 2 minute read 
+     - <a href="https://shogo82148.github.io/blog/2021/01/29/super-ellipse/#disqus_thread">Comments</a>
+
+    
+    
+      - 
+    
+  </p>
+  <h1 class="entry-title">
+     スーパー楕円をベジェ曲線で近似してみる 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>最近アプリの UI で角丸アイコンを見ることが多くなりました。
+この角は完全な円ではなく、スーパー楕円というものだという情報を入手しました。</p>
+<ul>
+<li><a href="https://spinners.work/posts/swift-superellipse/">スーパー楕円 UI を iOS+Swift で実装する</a></li>
+<li><a href="https://www.spinners.work/posts/kudakurage-superellipse-desgin/">丸よりも丸みを感じる!? スーパー楕円の魅力とデザイン</a></li>
+</ul>
+<p>記事の中ではベジェ曲線で近似する方法が書かれています。
+なるほど、こうすれば描けるのか！と関心したので、自分でもベジェ曲線で描いてみることにしました。</p>
+<h2 id="スーパー楕円">スーパー楕円</h2>
+<p>スーパー楕円というのは円の方程式を以下のように拡張したものです。</p>
+<p>{% math %}
+\left|\frac{x}{a}\right|^n + \left|\frac{y}{b}\right|^n = 1
+{% endmath %}</p>
+<p>n は曲線を制御するパラメーターで n=2 は円となり、n&gt;2 の場合は円と四角形のあいだのような形になります。
+n が大きいほど四角形に近づいていきます。</p>
+<h2 id="3-次のベジェ曲線">3 次のベジェ曲線</h2>
+<p>Illustrator のようなベクターツールではおなじみのベジェ曲線です。
+ベジェ曲線は任意の次数に拡張することができますが、コンピューターグラフィックスで多く用いられるのは 3 次ベジェ曲線です。</p>
+<p>制御点を {% m %} \boldsymbol{B}_0, \boldsymbol{B}_1, \boldsymbol{B}_2, \boldsymbol{B}_3 {% em %} とした場合の
+3 次ベジェ曲線の数式を具体的に書き下すと以下のようになります。</p>
+<p>{% math %}
+\boldsymbol{P}(t) = \boldsymbol{B}_0(1-t)^3 + \boldsymbol{B}_1 3t(1-t)^2 + \boldsymbol{B}_2 3t^2(1-t) + \boldsymbol{B}_3 t^3
+{% endmath %}</p>
+<h2 id="近似してみる">近似してみる</h2>
+<p>以下の記事と同じ戦略で近似してみます。</p>
+<ul>
+<li><a href="https://cat-in-136.github.io/2014/03/bezier-1-kappa.html">ベジェ曲線による円の描画の制御点の位置はなぜ 0.55228…なのか?</a></li>
+</ul>
+<p>スーパー楕円は左右対称・上下対象なので、第一象限の形だけ求めれば十分です (x &gt; 0, y &gt; 0 )。
+またアフィン変換に対して不変なので a = b = 1 の場合のみを考えます。</p>
+<p>{% math %}
+x^n + y^n = 1 (x &gt; 0, y &gt; 0)
+{% endmath %}</p>
+<p>ベジェ曲線の制御点は両端でスーパー楕円に接するよう、以下のように定めます。</p>
+<ul>
+<li>B0: (0, 1)</li>
+<li>B1: (k, 1)</li>
+<li>B2: (1, k)</li>
+<li>B3: (1, 0)</li>
+</ul>
+<p>k はベジェ曲線の制御ハンドルの長さです。
+曲線の中間点でスーパー楕円とベジェ曲線が一致するような k を求めます。</p>
+<p>ベジェ曲線の中間点は、ベジェ曲線の式で t = 0.5 とすれば、</p>
+<p>{% math %}
+\boldsymbol{P}(0.5) = \frac{1}{8}(\boldsymbol{B}_0 + 3\boldsymbol{B}_1 + 3\boldsymbol{B}_2 + \boldsymbol{B}_3)
+{% endmath %}</p>
+<p>スーパー楕円の中間点は x = y となる点なので、</p>
+<p>{% math %}
+x = y = \frac{1}{{}^n\sqrt{2}}
+{% endmath %}</p>
+<p>x 成分について比較すると</p>
+<p>{% math %}
+\frac{1}{{}^n\sqrt{2}} = \frac{1}{8}(0 + 3k + 3 + 1)
+{% endmath %}</p>
+<p>{% math %}
+k = \frac{8}{3}\left(\frac{1}{{}^n\sqrt{2}}-\frac{1}{2}\right)
+{% endmath %}</p>
+<p>n = 2 の場合は k = 0.5522847498307932&hellip; となります。
+これは円を近似した場合の制御点の位置と一致するので、合っていそうです。</p>
+<p>参考にした記事では n = 2.5 のスーパー楕円を描くのに「1.25 倍の円を描いてアンカーポイントを移動する」という方法が紹介されています。
+n = 2.5 の場合 k = 0.6876220886805309&hellip; となり、これは円の場合の約 1.245 倍です。
+1.25 に近い数字が出てきましたね。</p>
+<h2 id="やってみた">やってみた</h2>
+<p>SVG で簡単なアニメーションを作ってみました。
+赤い線がスーパー楕円、黒がベジェ曲線での近似です。 n = 2 〜 5 の範囲でパラメーターをいじっています。</p>
+<svg width="500" height="500" viewBox="0 0 500 500" xmlns="http://www.w3.org/2000/svg">
+<path id="path" d="" stroke="black" width="3px" fill="transparent"/>
+<line id="l1" x1="450" y1="250" x2="450" y2="250" stroke="black" />
+<line id="l2" x1="250" y1="50" x2="50" y2="50" stroke="black" />
+<circle id="p1" cx="450" cy="250" r="3" stroke="black" fill="white" />
+<circle id="p2" cx="450" cy="250" r="3" stroke="black" fill="white" />
+<circle id="p3" cx="250" cy="50" r="3" stroke="black" fill="white" />
+<circle id="p4" cx="250" cy="50" r="3" stroke="black" fill="white" />
+<polygon id="superellipse" points="" stroke="red" stroke-opacity="0.8" width="3px" fill="transparent" />
+<script type="text/javascript"><![CDATA[
+    var $ = function(id) {
+        return document.getElementById(id);
+    }
+    function sign(x) {
+        return x > 0 ? 1 : x < 0 ? -1 : 0;
+    }
+
+    const w = 500;
+    const h = 500;
+    const cx = w/2;
+    const cy = h/2;
+
+    const r = Math.min(w, h)/2 * 0.8;
+
+    const period = 100;
+    let count = 0;
+    function animate() {
+        const n = (count<(period/2)?count:period-count)/(period/2)*3 + 2;
+        const points = [];
+        for (let i = 0; i < 100; i++) {
+            const t = (i/100) * (Math.PI*2)
+            const x = Math.cos(t);
+            const y = Math.sin(t);
+            const xx = Math.pow( Math.abs(x), 2/n ) * sign(x);
+            const yy = Math.pow( Math.abs(y), 2/n ) * sign(y);
+            points.push(`${xx*r+cx} ${yy*r+cy}`);
+        }
+        $("superellipse").setAttribute("points", points.join(" "));
+
+        const k = ( 8/3 * (1/Math.pow(2,1/n)-1/2) ) * r;
+        $("path").setAttribute(
+            "d",
+            `M ${r+cx} ${cy}` +
+            ` C ${ r+cx} ${-k+cy}, ${ k+cx} ${-r+cy}, ${   cx} ${-r+cy}` +
+            ` C ${-k+cx} ${-r+cy}, ${-r+cx} ${-k+cy}, ${-r+cx} ${   cy}` +
+            ` C ${-r+cx} ${ k+cy}, ${-k+cx} ${ r+cy}, ${   cx} ${ r+cy}` +
+            ` C ${ k+cx} ${ r+cy}, ${ r+cx} ${ k+cy}, ${ r+cx} ${   cy}`
+        );
+
+        $("p1").setAttribute("cx",  r+cx);
+        $("p1").setAttribute("cy",    cy);
+        $("p2").setAttribute("cx",  r+cx);
+        $("p2").setAttribute("cy", -k+cy);
+        $("p3").setAttribute("cx",  k+cx);
+        $("p3").setAttribute("cy", -r+cy);
+        $("p4").setAttribute("cx",    cx);
+        $("p4").setAttribute("cy", -r+cy);
+
+        $("l1").setAttribute("x1",  r+cx);
+        $("l1").setAttribute("y1",    cy);
+        $("l1").setAttribute("x2",  r+cx);
+        $("l1").setAttribute("y2", -k+cy);
+        $("l2").setAttribute("x1",  k+cx);
+        $("l2").setAttribute("y1", -r+cy);
+        $("l2").setAttribute("x2",    cx);
+        $("l2").setAttribute("y2", -r+cy);
+
+        count = (count+1) % period;
+    }
+
+    setInterval(animate, 50);
+]]></script>
+</svg>
+<p>n が 2 に近いときはそこそこ近いですが、大きくなると結構差が出ます。
+半径 200px, 線の太さ 3px で描画したところ、大きいところでは線一本分くらいズレる感じです。
+半径に対してだいたい誤差 1〜2% というところでしょうか。</p>
+<h2 id="まとめ">まとめ</h2>
+<p>スーパー楕円をベジェ曲線で近似してみました。
+以下のように k を計算して、制御点の位置を計算するとだいたいそれっぽくなります。</p>
+<p>{% math %}
+k = \frac{8}{3}\left(\frac{1}{{}^n\sqrt{2}}-\frac{1}{2}\right)
+{% endmath %}</p>
+<p>「真ん中で一致する」という雑な近似方法なので本物とは少しズレますが、
+大体の目安にどうぞ。</p>
+<p>まあ、そもそもベジェ曲線一本での近似は限界があるし、
+スーパー楕円は手段であって目的ではないので、これ以上こだわっても意味ない気がしてきた。</p>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://cat-in-136.github.io/2014/03/bezier-1-kappa.html">ベジェ曲線による円の描画の制御点の位置はなぜ 0.55228…なのか?</a></li>
+<li><a href="https://spinners.work/posts/swift-superellipse/">スーパー楕円 UI を iOS+Swift で実装する</a></li>
+<li><a href="https://www.spinners.work/posts/kudakurage-superellipse-desgin/">丸よりも丸みを感じる!? スーパー楕円の魅力とデザイン</a></li>
+<li><a href="https://en.wikipedia.org/wiki/Superellipse">Superellipse</a></li>
+<li><a href="https://en.wikipedia.org/wiki/B%C3%A9zier_curve">Bézier curve</a></li>
+<li><a href="https://www.figma.com/blog/desperately-seeking-squircles/">Desperately seeking squircles</a>
+<ul>
+<li>Figma による iOS7 から導入された Continuous Corner Curve の解析記事</li>
+<li>(まだちゃんと読めていない、英語難しい)</li>
+</ul>
+</li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>Jan 29, 2021</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2021/01/02/perl-runtime-supports-docker-format/" title="Perl Runtime for AWS Lambda の Docker コンテナ対応を公開しました">Perl Runtime for AWS Lambda の Docker コンテナ対応を公開しました</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/01/29/super-ellipse/">スーパー楕円をベジェ曲線で近似してみる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/01/02/perl-runtime-supports-docker-format/">Perl Runtime for AWS Lambda の Docker コンテナ対応を公開しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/12/30/github-actions-mutex/">排他制御を行う GitHub Action を作った</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/12/03/github-actions-in-2020/">2020年に書いた GitHub Action &#43; α</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/10/24/aws-sdk-go-v2-broken/">AWS SDK for Go v2 の今後が不安な件について</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/10/23/github-bot-using-actions/">GitHub Actions を使って簡単なボットを作る</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/08/15/perl-lambda-runtime-on-amazon-linux2/">AWS Lambda Perl Runtime on Amazon Linux 2 を公開しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/04/02/re-pull-request-title-injection/">RE: Pull Request Title Injection とその対策</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2021 Shogo Ichinose - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['\\(','\\)'], ['{% m %}', '{% em %}']],
+    displayMath: [['\\[','\\]'], ['{% math %}', '{% endmath %}']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+  </script>
+
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+</html>
+
