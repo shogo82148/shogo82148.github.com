@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+    
+    
+      <link href="/css/fonts.css" rel="stylesheet" type="text/css">
+    
+  
+
+  
+  <title>Setup Perl Environment Action のストレージを Azure Blob Storage に移行しました</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+    <link rel="stylesheet" href="/css/fork-awesome.min.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.75.1" />
+
+  
+  
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Feb 3, 2021
+     - 3 minute read 
+     - <a href="https://shogo82148.github.io/blog/2021/02/03/setup-perl-uses-azure-blob-storage/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/github/">github </a><a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a>
+    
+  </p>
+  <h1 class="entry-title">
+     Setup Perl Environment Action のストレージを Azure Blob Storage に移行しました 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>GitHub Actions が一般公開された際に Perl をセットアップするアクションを書きました。</p>
+<ul>
+<li><a href="https://shogo82148.github.io/blog/2019/09/18/actions-setup-perl/">Setup Perl GitHub Action を公開しました</a></li>
+</ul>
+<p>セットアップのたびに毎回コンパイルすると遅いので、コンパイル済みのバイナリを事前に Amazon S3 にアップロードしていました。
+アップロード先に S3 を選んだのは単に自分が AWS に慣れているからなのですが、最近になってちょっとした問題に直面してます。
+解決へ向けて S3 から Azure Blob Storage へ移行した、というお話です。</p>
+<p>利用する分には全く影響ないはずなんですが、Azure Blob Storage を使ってみたメモも兼ねてやったことを書いておきます。</p>
+<h2 id="s3-の問題点">S3 の問題点</h2>
+<p>もちろん S3 自体が悪いわけじゃなくって、単に自分の見積もりが甘かっただけなんですが、 <strong>ネットワークのアウト向きのデーター転送料が高い！！！！</strong></p>
+<p>これまでの僕のユースケースではせいぜい数 MB のバイナリをアップロードするだけだったのが、perl のバイナリは 1 バージョン当たり 100MB 以上あります。
+Perl Monger の方々は互換性に気を使うので、いろんな OS、バージョン、コンパイルオプションでテストを実行します。
+各 OS(Linux, Windows, macOS)、Perl 5.6〜5.32、multi-thread オプションありなし、という条件でマトリックスのワークフローを組むと 84 ジョブ。
+単純計算で 1 ワークフローを実行するだけで、約 8GB の転送が発生するわけです。
+2021-02-05 現在のアウトデーター転送料は 0.09USD/GB なので、1 ワークフローあたり 0.72USD です。</p>
+<p>去年の秋あたりから使ってくれる人が増えたようで、転送量だけで 100USD/mo を超えるようになってきました。
+趣味の範囲でやってるので、ちょっと許容できる範囲を超えてきたかな・・・ということでコスト削減に乗り出しました。</p>
+<h2 id="azure-blob-storage">Azure Blob Storage</h2>
+<p>というわけで目をつけたのが Azure Blob Storage です。
+<a href="https://github.com/actions/virtual-environments#github-actions-virtual-environments">GitHub Actions の仮想環境のドキュメント</a> にもあるとおり、
+Azure Pipeline 上で動いています。</p>
+<p>その証拠に Azure 上で動いているインスタンスからは、インスタンスのメタデータを確認が確認できて</p>
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml"><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="sd">|
+</span><span class="sd">  curl -H &#34;Metadata: true&#34; http://169.254.169.254/metadata/instance?api-version=2020-09-01 | jq .
+</span></code></pre></div><p>以下のような結果が返ってきます。このインスタンスは AzurePublicCloud の eastus2 リージョンで動いているようです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-json" data-lang="json"><span class="p">{</span>
+  <span class="nt">&#34;compute&#34;</span><span class="p">:</span> <span class="p">{</span>
+    <span class="nt">&#34;azEnvironment&#34;</span><span class="p">:</span> <span class="s2">&#34;AzurePublicCloud&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;customData&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;isHostCompatibilityLayerVm&#34;</span><span class="p">:</span> <span class="s2">&#34;false&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;licenseType&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;location&#34;</span><span class="p">:</span> <span class="s2">&#34;eastus2&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;name&#34;</span><span class="p">:</span> <span class="s2">&#34;EUS2-EUS21GHUBT18EUS21-0288&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;offer&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;osProfile&#34;</span><span class="p">:</span> <span class="p">{</span>
+      <span class="nt">&#34;adminUsername&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+      <span class="nt">&#34;computerName&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span>
+    <span class="p">},</span>
+    <span class="nt">&#34;osType&#34;</span><span class="p">:</span> <span class="s2">&#34;Linux&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;placementGroupId&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;plan&#34;</span><span class="p">:</span> <span class="p">{</span>
+      <span class="nt">&#34;name&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+      <span class="nt">&#34;product&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+      <span class="nt">&#34;publisher&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span>
+    <span class="p">},</span>
+    <span class="nt">&#34;platformFaultDomain&#34;</span><span class="p">:</span> <span class="s2">&#34;0&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;platformUpdateDomain&#34;</span><span class="p">:</span> <span class="s2">&#34;0&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;provider&#34;</span><span class="p">:</span> <span class="s2">&#34;Microsoft.Compute&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;publicKeys&#34;</span><span class="p">:</span> <span class="p">[],</span>
+    <span class="nt">&#34;publisher&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;resourceGroupName&#34;</span><span class="p">:</span> <span class="s2">&#34;eus21ghubt18eus21&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;resourceId&#34;</span><span class="p">:</span> <span class="s2">&#34;/subscriptions/22283944-deaa-4840-812f-81c9120070eb/resourceGroups/eus21ghubt18eus21/providers/Microsoft.Compute/virtualMachines/EUS2-EUS21GHUBT18EUS21-0288&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;securityProfile&#34;</span><span class="p">:</span> <span class="p">{</span>
+      <span class="nt">&#34;secureBootEnabled&#34;</span><span class="p">:</span> <span class="s2">&#34;false&#34;</span><span class="p">,</span>
+      <span class="nt">&#34;virtualTpmEnabled&#34;</span><span class="p">:</span> <span class="s2">&#34;false&#34;</span>
+    <span class="p">},</span>
+    <span class="nt">&#34;sku&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;storageProfile&#34;</span><span class="p">:</span> <span class="p">{</span>
+      <span class="nt">&#34;dataDisks&#34;</span><span class="p">:</span> <span class="p">[],</span>
+      <span class="nt">&#34;imageReference&#34;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="nt">&#34;id&#34;</span><span class="p">:</span> <span class="s2">&#34;/subscriptions/22283944-deaa-4840-812f-81c9120070eb/resourceGroups/eus21ghubt18eus21/providers/Microsoft.Compute/galleries/eus21ghubt18eus21/images/factory/versions/0.0.31206120&#34;</span><span class="p">,</span>
+        <span class="nt">&#34;offer&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+        <span class="nt">&#34;publisher&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+        <span class="nt">&#34;sku&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+        <span class="nt">&#34;version&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span>
+      <span class="p">},</span>
+      <span class="nt">&#34;osDisk&#34;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="nt">&#34;caching&#34;</span><span class="p">:</span> <span class="s2">&#34;ReadOnly&#34;</span><span class="p">,</span>
+        <span class="nt">&#34;createOption&#34;</span><span class="p">:</span> <span class="s2">&#34;FromImage&#34;</span><span class="p">,</span>
+        <span class="nt">&#34;diffDiskSettings&#34;</span><span class="p">:</span> <span class="p">{</span>
+          <span class="nt">&#34;option&#34;</span><span class="p">:</span> <span class="s2">&#34;Local&#34;</span>
+        <span class="p">},</span>
+        <span class="nt">&#34;diskSizeGB&#34;</span><span class="p">:</span> <span class="s2">&#34;86&#34;</span><span class="p">,</span>
+        <span class="nt">&#34;encryptionSettings&#34;</span><span class="p">:</span> <span class="p">{</span>
+          <span class="nt">&#34;enabled&#34;</span><span class="p">:</span> <span class="s2">&#34;false&#34;</span>
+        <span class="p">},</span>
+        <span class="nt">&#34;image&#34;</span><span class="p">:</span> <span class="p">{</span>
+          <span class="nt">&#34;uri&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span>
+        <span class="p">},</span>
+        <span class="nt">&#34;managedDisk&#34;</span><span class="p">:</span> <span class="p">{</span>
+          <span class="nt">&#34;id&#34;</span><span class="p">:</span> <span class="s2">&#34;/subscriptions/22283944-deaa-4840-812f-81c9120070eb/resourceGroups/eus21ghubt18eus21/providers/Microsoft.Compute/disks/EUS2-EUS21GHUBT18EUS21-0288-af0e7c49&#34;</span><span class="p">,</span>
+          <span class="nt">&#34;storageAccountType&#34;</span><span class="p">:</span> <span class="s2">&#34;Standard_LRS&#34;</span>
+        <span class="p">},</span>
+        <span class="nt">&#34;name&#34;</span><span class="p">:</span> <span class="s2">&#34;EUS2-EUS21GHUBT18EUS21-0288-af0e7c49&#34;</span><span class="p">,</span>
+        <span class="nt">&#34;osType&#34;</span><span class="p">:</span> <span class="s2">&#34;Linux&#34;</span><span class="p">,</span>
+        <span class="nt">&#34;vhd&#34;</span><span class="p">:</span> <span class="p">{</span>
+          <span class="nt">&#34;uri&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span>
+        <span class="p">},</span>
+        <span class="nt">&#34;writeAcceleratorEnabled&#34;</span><span class="p">:</span> <span class="s2">&#34;false&#34;</span>
+      <span class="p">}</span>
+    <span class="p">},</span>
+    <span class="nt">&#34;subscriptionId&#34;</span><span class="p">:</span> <span class="s2">&#34;22283944-deaa-4840-812f-81c9120070eb&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;tags&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;tagsList&#34;</span><span class="p">:</span> <span class="p">[],</span>
+    <span class="nt">&#34;version&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;vmId&#34;</span><span class="p">:</span> <span class="s2">&#34;1fbeca5e-6c91-4207-af0d-66af453dddf0&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;vmScaleSetName&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;vmSize&#34;</span><span class="p">:</span> <span class="s2">&#34;Standard_DS2_v2&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;zone&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span>
+  <span class="p">},</span>
+  <span class="nt">&#34;network&#34;</span><span class="p">:</span> <span class="p">{</span>
+    <span class="nt">&#34;interface&#34;</span><span class="p">:</span> <span class="p">[</span>
+      <span class="p">{</span>
+        <span class="nt">&#34;ipv4&#34;</span><span class="p">:</span> <span class="p">{</span>
+          <span class="nt">&#34;ipAddress&#34;</span><span class="p">:</span> <span class="p">[</span>
+            <span class="p">{</span>
+              <span class="nt">&#34;privateIpAddress&#34;</span><span class="p">:</span> <span class="s2">&#34;10.1.0.4&#34;</span><span class="p">,</span>
+              <span class="nt">&#34;publicIpAddress&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span>
+            <span class="p">}</span>
+          <span class="p">],</span>
+          <span class="nt">&#34;subnet&#34;</span><span class="p">:</span> <span class="p">[</span>
+            <span class="p">{</span>
+              <span class="nt">&#34;address&#34;</span><span class="p">:</span> <span class="s2">&#34;10.1.0.0&#34;</span><span class="p">,</span>
+              <span class="nt">&#34;prefix&#34;</span><span class="p">:</span> <span class="s2">&#34;16&#34;</span>
+            <span class="p">}</span>
+          <span class="p">]</span>
+        <span class="p">},</span>
+        <span class="nt">&#34;ipv6&#34;</span><span class="p">:</span> <span class="p">{</span>
+          <span class="nt">&#34;ipAddress&#34;</span><span class="p">:</span> <span class="p">[]</span>
+        <span class="p">},</span>
+        <span class="nt">&#34;macAddress&#34;</span><span class="p">:</span> <span class="s2">&#34;000D3AE27125&#34;</span>
+      <span class="p">}</span>
+    <span class="p">]</span>
+  <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div><p>インターネットへ出るための通信料は AWS と大差無いものの、 Azure のリージョン間では割安です。
+GitHub Actions のパイプラインが存在する北米内のリージョン間で $0.02/GB (2021-02-05 現在) と AWS の 22% の価格で済みます。</p>
+<ul>
+<li><a href="https://azure.microsoft.com/ja-jp/pricing/details/bandwidth/">帯域幅の料金詳細</a></li>
+</ul>
+<p>Azure Blob Storage に移行すればこの料金が適用されるのでは？と考えて移行してみることにしました。</p>
+<h2 id="はじめての-azure-blob-storage">はじめての Azure Blob Storage</h2>
+<p>Azure 自体が始めてなので Portal も始めて利用したわけですが、さすが Microsoft。きれいな UI ですね。</p>
+<p><img src="/images/2021-02-05-azure-portal.png" alt="Azure Portal"></p>
+<p>UI 自体はわかりやすくて便利だなーと思ったんですが、AWS, GCP とはまったく違う概念が登場するので戸惑いました。</p>
+<h3 id="ストレージアカウントを作成する">ストレージアカウントを作成する</h3>
+<p>AWS, GCP で言うところのバケットに相当するもの・・・だと勝手に解釈しています。
+他のユーザーと同じ名前はつけられず、作成時にリージョン指定が必要です。</p>
+<h3 id="コンテナーを作成する">コンテナーを作成する</h3>
+<p>ストレージアカウントはオブジェクトストレージ以外にもデーターを保存するサービスを利用できます。</p>
+<ul>
+<li><a href="https://azure.microsoft.com/en-us/services/storage/blobs/">Blob storage</a></li>
+<li><a href="https://azure.microsoft.com/en-us/services/storage/files/">Azure Files</a></li>
+<li><a href="https://azure.microsoft.com/en-us/services/storage/tables/">Table storage</a></li>
+<li><a href="https://azure.microsoft.com/en-us/services/storage/queues/">Queue Storage</a></li>
+</ul>
+<p>それぞれ AWS でいうところの<a href="https://aws.amazon.com/jp/s3/">S3</a>, <a href="https://aws.amazon.com/jp/efs/">EFS</a>,
+<a href="https://aws.amazon.com/jp/dynamodb/">DynamoDB</a>, <a href="https://aws.amazon.com/jp/sqs/">SQS</a> といったところでしょうか？
+(今回 Blob storage 以外は使ってないので間違ってるかも)</p>
+<p>Blob storage ではコンテナーという単位で Blob オブジェクトをグルーピングできるようです。
+コンテナー毎にアクセス制御ができます。</p>
+<h3 id="アプリを登録する">アプリを登録する</h3>
+<p>Blob ストレージへアクセスするにはいくつか方法がありますが、 Azure AD (Azure Active Directly) を使うのがおすすめと書いてあったので、
+この方法を選択しました。
+Active Directly はコンピューターにアクセスするユーザーを一元管理するための仕組みですね。
+名前だけは聞いたことある。</p>
+<p>今回は CI からアクセスしたいので、「サービスプリンシパル承認する」のセクションを参考に、
+アプリを登録して、認証用のクライアントシークレットを発行します。</p>
+<ul>
+<li><a href="https://docs.microsoft.com/ja-jp/azure/storage/common/storage-use-azcopy-authorize-azure-active-directory#authorize-a-service-principal">AzCopy と Azure Active Directory (Azure AD) を使用して BLOB へのアクセスを承認する</a></li>
+</ul>
+<h3 id="github-actions-からアップロードするための設定をする">GitHub Actions からアップロードするための設定をする</h3>
+<p>CI 環境からのアップロードには <code>azcopy</code> コマンドを使います。
+GitHub Actions には <code>azcopy</code> コマンドがプリインストールされているから楽ちん！と思っていたのですが、
+Ubuntu 18.04 にインストールされているのは v7 と古いバージョンだという罠を踏みました。
+v10 が最新で他の環境にはこのバージョンがインストールされています。
+v7 は .NET による実装、 v10 は Go による実装で、この２つは同じ <code>azcopy</code> でも全くの別物です。</p>
+<p>環境毎にバージョンが違うことを意識したくなかったので、 <a href="https://github.com/marketplace/actions/install-azcopy">install azcopy GitHub Action</a>
+を使って v10 を明示的にインストールしました。</p>
+<p>Azure AD を使用するには <a href="https://docs.microsoft.com/ja-jp/azure/storage/common/storage-ref-azcopy-login">azcopy login</a> コマンドを使用します。</p>
+<pre><code>export AZCOPY_SPA_CLIENT_SECRET=クライアントシークレット
+azcopy_v10 login --service-principal --application-id &quot;アプリ登録時に発行されるID&quot; --tenant-id &quot;規定のディレクトリから確認できるテナントID&quot;
+</code></pre><h3 id="アップロードする">アップロードする</h3>
+<p>アップロードするのは <a href="https://docs.microsoft.com/ja-jp/azure/storage/common/storage-ref-azcopy-copy?toc=/azure/storage/blobs/toc.json">azcopy copy</a> コマンドです。
+アップロード先の指定は https スキームの URL を使います。</p>
+<pre><code>azcopy cp perl.zip https://${ストレージアカウント名}.blob.core.windows.net/${コンテナー名}/${オブジェクト名}
+</code></pre><p>コンテナー作成時に匿名アクセスを許可しておけば、アップロードに使ったのと同じ URL でダウンロードもできます。</p>
+<h2 id="まとめ">まとめ</h2>
+<p>コスト削減のために Setup Perl Environment Action で利用しているストレージを S3 から Azure Blob Storage に移行しました。
+とはいえ、Azure のリージョン間転送料が適用されるかは確証がないんですよね。
+まだ Azure 登録したばかりで無料期間中なので、無料期間の 1 ヶ月様子を見たいと思います。</p>
+<p>コスト削減したからといって転送料が 0 になるわけではないので、スポンサーもお待ちしてます。 🥺</p>
+<iframe src="https://github.com/sponsors/shogo82148/card" title="Sponsor shogo82148" height="225" width="600" style="border: 0;"></iframe>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://github.com/actions/virtual-environments#github-actions-virtual-environments">GitHub Actions Virtual Environments</a></li>
+<li><a href="https://azure.microsoft.com/">MicrosoftAzure</a></li>
+<li><a href="https://azure.microsoft.com/ja-jp/pricing/details/bandwidth/">帯域幅の料金詳細</a></li>
+<li><a href="https://docs.microsoft.com/ja-jp/azure///virtual-machines/linux/instance-metadata-service?tabs=windows">Azure Instance Metadata Service (IMDS)</a></li>
+<li><a href="https://azure.microsoft.com/ja-jp/services/storage/blobs/">Azure Blob Storage</a></li>
+<li><a href="https://docs.microsoft.com/en-us/azure/storage/common/storage-use-azcopy-blobs-upload?toc=/azure/storage/blobs/toc.json">Upload files to Azure Blob storage by using AzCopy v10</a></li>
+<li><a href="https://docs.microsoft.com/ja-jp/azure/storage/common/storage-use-azcopy-authorize-azure-active-directory#authorize-a-service-principal">AzCopy と Azure Active Directory (Azure AD) を使用して BLOB へのアクセスを承認する</a></li>
+<li><a href="https://docs.microsoft.com/en-us/azure/storage/common/storage-use-azcopy-s3">Copy data from Amazon S3 to Azure Storage by using AzCopy</a></li>
+<li><a href="https://docs.microsoft.com/ja-jp/azure/storage/common/storage-ref-azcopy-login">azcopy login</a></li>
+<li><a href="https://github.com/marketplace/actions/install-azcopy">install azcopy GitHub Action</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>Feb 3, 2021</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2021/01/29/super-ellipse/" title="スーパー楕円をベジェ曲線で近似してみる">スーパー楕円をベジェ曲線で近似してみる</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/02/03/setup-perl-uses-azure-blob-storage/">Setup Perl Environment Action のストレージを Azure Blob Storage に移行しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/01/29/super-ellipse/">スーパー楕円をベジェ曲線で近似してみる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/01/02/perl-runtime-supports-docker-format/">Perl Runtime for AWS Lambda の Docker コンテナ対応を公開しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/12/30/github-actions-mutex/">排他制御を行う GitHub Action を作った</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/12/03/github-actions-in-2020/">2020年に書いた GitHub Action &#43; α</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/10/24/aws-sdk-go-v2-broken/">AWS SDK for Go v2 の今後が不安な件について</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/10/23/github-bot-using-actions/">GitHub Actions を使って簡単なボットを作る</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/08/15/perl-lambda-runtime-on-amazon-linux2/">AWS Lambda Perl Runtime on Amazon Linux 2 を公開しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/">Yet Another AWS X-Ray Go SDK でログの関連付けをサポートした</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2021 Shogo Ichinose - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['\\(','\\)'], ['{% m %}', '{% em %}']],
+    displayMath: [['\\[','\\]'], ['{% math %}', '{% endmath %}']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+  </script>
+
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+</html>
+
