@@ -59,6 +59,11 @@ func main() { fmt.Println("Hello macotasu", Pi) }
 
 もっと簡潔にかけないかな。
 
+## 追記 (2021-02-23)
+
+もうちょっと短く書けることに気が付きました。
+
+- [改: PerlとGolangで実行できるPolyglot書いてみた](/blog/2021/02/23/improve-go-and-perl-polyglot/)
 
 ## 追記
 
