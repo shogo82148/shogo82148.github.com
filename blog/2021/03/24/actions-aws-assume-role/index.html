@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+    
+    
+      <link href="/css/fonts.css" rel="stylesheet" type="text/css">
+    
+  
+
+  
+  <title>AWS_SECRET_ACCESS_KEY を GitHub Actions secrets へ突っ込むのに疲れた俺達は</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+    <link rel="stylesheet" href="/css/fork-awesome.min.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.75.1" />
+
+  
+  
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Mar 24, 2021
+     - 2 minute read 
+     - <a href="https://shogo82148.github.io/blog/2021/03/24/actions-aws-assume-role/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/github/">github </a>
+    
+  </p>
+  <h1 class="entry-title">
+     AWS_SECRET_ACCESS_KEY を GitHub Actions secrets へ突っ込むのに疲れた俺達は 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>「GitHub Actions から継続的デプロイをしたい！」と思ったときに、
+僕の扱うデプロイ先は AWS なことが多いので AWS のキー (<code>AWS_ACCESS_KEY</code>, <code>AWS_SECRET_ACCESS_KEY</code> ) を
+GitHub Actions secrets へ突っ込む必要があります。
+まあ一回や二回ならやるんですが、デベロップメント、ステージング、プロダクション、と複数環境あったり、
+プロジェクトも複数あったりして、中々の回数設定を行わなければなりません。
+設定するだけでつらいのに、AWS はキーのローテーションを勧めてきます。つらい。</p>
+<p>と言うわけで、シークレットの管理を極力しなくて済む方法を考えて、設定用の Action を作成しました。</p>
+<ul>
+<li><a href="https://github.com/shogo82148/actions-aws-assume-role">shogo82148/actions-aws-assume-role</a></li>
+<li><a href="https://github.com/marketplace/actions/configure-aws-credentials-by-assuming-roles">Configure AWS Credentials by Assuming Roles</a></li>
+</ul>
+<h2 id="使い方">使い方</h2>
+<p>まずは AWS 側に IAM Role を作成します。
+IAM Role の信頼関係(trust policy) には以下の内容を記載します。
+信頼する AWS アカウントには <code>053160724612</code> を指定してください。
+これは僕の管理している AWS アカウントなので、<strong>僕を信頼できる方だけこの先に進んでください</strong>。
+外部 ID(<code>ExternalId</code>) にはこのロールを使用する予定のレポジトリ名を入れます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-json" data-lang="json"><span class="p">{</span>
+  <span class="nt">&#34;Version&#34;</span><span class="p">:</span> <span class="s2">&#34;2012-10-17&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;Statement&#34;</span><span class="p">:</span> <span class="p">[</span>
+    <span class="p">{</span>
+      <span class="nt">&#34;Effect&#34;</span><span class="p">:</span> <span class="s2">&#34;Allow&#34;</span><span class="p">,</span>
+      <span class="nt">&#34;Principal&#34;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="nt">&#34;AWS&#34;</span><span class="p">:</span> <span class="s2">&#34;arn:aws:iam::053160724612:root&#34;</span>
+      <span class="p">},</span>
+      <span class="nt">&#34;Action&#34;</span><span class="p">:</span> <span class="s2">&#34;sts:AssumeRole&#34;</span><span class="p">,</span>
+      <span class="nt">&#34;Condition&#34;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="nt">&#34;StringEquals&#34;</span><span class="p">:</span> <span class="p">{</span>
+          <span class="nt">&#34;sts:ExternalId&#34;</span><span class="p">:</span> <span class="s2">&#34;your-name/your-repo&#34;</span>
+        <span class="p">}</span>
+      <span class="p">}</span>
+    <span class="p">}</span>
+  <span class="p">]</span>
+<span class="p">}</span>
+</code></pre></div><p>IAM Role に付与するパーミッションは、用途に合わせてご自由に設定してください。</p>
+<p>次に GitHub Actions のワークフローに以下のステップを追加します。
+<code>aws-region</code> には接続先のリージョンを、 <code>role-to-assume</code> には先程設定した Role の Arn を入力してください。</p>
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml">- <span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">Configure AWS Credentials</span><span class="w">
+</span><span class="w">  </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">shogo82148/actions-aws-assume-role@v1</span><span class="w">
+</span><span class="w">  </span><span class="nt">with</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="nt">aws-region</span><span class="p">:</span><span class="w"> </span><span class="l">ap-northeast-1</span><span class="w">
+</span><span class="w">    </span><span class="nt">role-to-assume</span><span class="p">:</span><span class="w"> </span><span class="l">arn:aws:iam::123456789012:role/GitHubRepoRole</span><span class="w">
+</span></code></pre></div><p>これで完了です！
+このアクションが <code>AWS_ACCESS_KEY</code>, <code>AWS_SECRET_ACCESS_KEY</code> 環境変数を設定してくれます。
+Actions secrets の設定画面を開くことなく設定が終わりました！</p>
+<h2 id="セッションタギング">セッションタギング</h2>
+<p><code>role-session-tagging: true</code> を追加するとセッションタギングが有効化されます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml">- <span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">shogo82148/actions-aws-assume-role@v1</span><span class="w">
+</span><span class="w">  </span><span class="nt">with</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="nt">aws-region</span><span class="p">:</span><span class="w"> </span><span class="l">ap-northeast-1</span><span class="w">
+</span><span class="w">    </span><span class="nt">role-to-assume</span><span class="p">:</span><span class="w"> </span><span class="l">arn:aws:iam::123456789012:role/GitHubRepoRole</span><span class="w">
+</span><span class="w">    </span><span class="nt">role-session-tagging</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="w">
+</span></code></pre></div><p>セッションに以下の内容のタグが付きます。
+trust policy の条件に使用できたり、CloudTrail のログからどのような用途に使われたのか調査したり、といった用途使えます。</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GitHub</td>
+<td>&ldquo;Actions&rdquo;</td>
+</tr>
+<tr>
+<td>Repository</td>
+<td><code>GITHUB_REPOSITORY</code></td>
+</tr>
+<tr>
+<td>Workflow</td>
+<td><code>GITHUB_WORKFLOW</code></td>
+</tr>
+<tr>
+<td>RunId</td>
+<td><code>GITHUB_RUN_ID</code></td>
+</tr>
+<tr>
+<td>Actor</td>
+<td><code>GITHUB_ACTOR</code></td>
+</tr>
+<tr>
+<td>Branch</td>
+<td><code>GITHUB_REF</code></td>
+</tr>
+<tr>
+<td>Commit</td>
+<td><code>GITHUB_SHA</code></td>
+</tr>
+</tbody>
+</table>
+<p>セッションタギングを使用するには IAM Role 側の trust policy の変更も必要です。
+<code>sts:TagSession</code> を許可してください。</p>
+<div class="highlight"><pre class="chroma"><code class="language-json" data-lang="json"><span class="p">{</span>
+  <span class="nt">&#34;Version&#34;</span><span class="p">:</span> <span class="s2">&#34;2012-10-17&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;Statement&#34;</span><span class="p">:</span> <span class="p">[</span>
+    <span class="p">{</span>
+      <span class="nt">&#34;Effect&#34;</span><span class="p">:</span> <span class="s2">&#34;Allow&#34;</span><span class="p">,</span>
+      <span class="nt">&#34;Principal&#34;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="nt">&#34;AWS&#34;</span><span class="p">:</span> <span class="s2">&#34;arn:aws:iam::053160724612:root&#34;</span>
+      <span class="p">},</span>
+      <span class="nt">&#34;Action&#34;</span><span class="p">:</span> <span class="s2">&#34;sts:AssumeRole&#34;</span><span class="p">,</span>
+      <span class="nt">&#34;Condition&#34;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="nt">&#34;StringEquals&#34;</span><span class="p">:</span> <span class="p">{</span>
+          <span class="nt">&#34;sts:ExternalId&#34;</span><span class="p">:</span> <span class="s2">&#34;your-name/your-repo&#34;</span>
+        <span class="p">}</span>
+      <span class="p">}</span>
+    <span class="p">},</span>
+    <span class="p">{</span>
+      <span class="nt">&#34;Effect&#34;</span><span class="p">:</span> <span class="s2">&#34;Allow&#34;</span><span class="p">,</span>
+      <span class="nt">&#34;Principal&#34;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="nt">&#34;AWS&#34;</span><span class="p">:</span> <span class="s2">&#34;arn:aws:iam::053160724612:root&#34;</span>
+      <span class="p">},</span>
+      <span class="nt">&#34;Action&#34;</span><span class="p">:</span> <span class="s2">&#34;sts:TagSession&#34;</span>
+    <span class="p">}</span>
+  <span class="p">]</span>
+<span class="p">}</span>
+</code></pre></div><h2 id="仕組み">仕組み</h2>
+<p>バックエンドで API Gateway + AWS Lambda が動いており、それと連携して認証を行います。</p>
+<p><img src="/images/2021-03-24-how-to-work.svg" alt="概要図"></p>
+<h3 id="1-クレデンシャルのリクエスト">1. クレデンシャルのリクエスト</h3>
+<p>アクションが実行されると API Gateway へ AWS のクレデンシャルのリクエストを投げます。
+このとき認証用に GitHub Actions が自動生成してくれた <code>GITHUB_TOKEN</code> も一緒に送ります。</p>
+<h3 id="2-github-のパーミッションチェック">2. GitHub のパーミッションチェック</h3>
+<p>アクションから送信された <code>GITHUB_TOKEN</code> を使って GitHub API を叩き、正規のリクエストであることを確認します。</p>
+<ul>
+<li>
+<p>アクションが実行された GitHub レポジトリへの書き込み権限があること</p>
+</li>
+<li>
+<p>GitHub Actions GitHub App (ややこしい) が発行したトークンであること</p>
+<ul>
+<li>色々遊んでみたところ GitHub Actions 内で使える <code>GITHUB_TOKEN</code> は GitHub Apps の仕組みを流用したもののようです
+<ul>
+<li><code>GITHUB_TOKEN</code> は使用できるレポジトリを絞れるのが特長ですが、 GitHub Apps にはこのトークンを作るための API が存在します</li>
+<li><a href="https://docs.github.com/en/rest/reference/apps#create-an-installation-access-token-for-an-app">Create an installation access token for an app</a></li>
+</ul>
+</li>
+<li>GitHub Apps には ID が振られているので、この ID をもとに GitHub Actions によって発行されたものであることを確認します</li>
+<li>この条件を満たすトークンは GitHub Actions を実行する以外の発行方法がない (少なくとも僕は知らない) ので確実に判定できます。</li>
+</ul>
+</li>
+</ul>
+<p>ここのパーミッションチェックはこのアクションの肝と言っていい部分です。
+万が一判定ロジックが改ざんされると IAM Role 乗っ取り放題になってしまいます。
+GitHub Action のコードは VM に展開されてから実行されるためいくらでも改ざん可能ですし、フォークして自由に書き換えることも可能です。
+それを防ぐためこれらのパーミッションチェックは改変の心配がない AWS Lambda 上で実行します。</p>
+<h3 id="3-assumerole-api-を呼び出す">3. AssumeRole API を呼び出す</h3>
+<p>Assume Role は他のプリンシパル(AWS のサービスだったり、IAM User だったり、別の AWS アカウントだったり)に、自分の持っている権限を受け渡す API です。
+この API を使って一時的なクレデンシャルの発行を行います。</p>
+<h3 id="4-信頼関係trust-policy-のチェック">4. 信頼関係(trust policy) のチェック</h3>
+<p>AWS IAM が trust policy にしたがって、 Assume Role を呼び出す権限があるのかをチェックします。
+ここも異なった AWS 間でクレデンシャルのやり取りを行う重要なステップです。</p>
+<p><code>shogo82148/actions-aws-assume-role</code> には今の所使用制限はかけていません。誰でも自由に使用できることができます。
+そのため AWS アカウント <code>053160724612</code> から AssumeRole のリクエストが来たからと言って、一番最初のリクエストが誰から来たものなのかはわかりません。
+(そもそもお前のアカウントなんて信頼できないよ！って方もいるかも知れないですが、便宜上信頼してもらったものとして話を進めますね)</p>
+<p>ここでキーになってくるのが <code>ExternalId</code> です。
+AssumeRole の際、<code>ExternalId</code> にはクレデンシャルリクエストを出した元のレポジトリの名前を入れます。
+このレポジトリ名は Step2 の段階で身元の証明ができているので、このステップでは単に名前を確認すれば OK です。
+レポジトリ名を偽装しようとしても Step2 で弾かれてこのステップまで到達することができないので、
+意図したレポジトリにだけ権限を払い出すことができます。</p>
+<h3 id="5-6-クレデンシャルの払い出し">5, 6 クレデンシャルの払い出し</h3>
+<p>AssumeRole が成功すると一時的なクレデンシャルが払い出されるので、GitHub Actions Job の環境変数にセットします。
+これで AWS のクレデンシャルを使った操作を自由に行うことができます。</p>
+<h2 id="注意">注意</h2>
+<ul>
+<li>クロスアカウントで AssumeRole を実行したログは、自動的に <a href="https://aws.amazon.com/jp/cloudtrail/">CloudTrail</a> によって双方の AWS アカウントに記録されます。<br>
+これはつまり <code>shogo82148/actions-aws-assume-role</code> を提供している僕には、アクションを実行したレポジトリの名前、AWS アカウントの名前、実行に使用したロール名等がわかるということです。</li>
+<li>さらに <code>role-session-tagging: true</code> を指定した場合、ワークフローの名前、Run ID、実行のトリガーとなったユーザー、ブランチ、コミットハッシュ、もログに残ります。</li>
+<li>もちろんこれらのログは厳重に管理し、セキュリティーチェックのためだけに使用します</li>
+<li>が、しかし、これらの情報がどこの誰だか知らない一個人に渡っているという認識だけはお願いします。特にプライベートレポジトリでの使用はよく考えてから導入しましょう</li>
+<li><code>shogo82148/actions-aws-assume-role</code> のバックエンドのソースコードは公開しています。ログを見られるのが気になる方はご自身でサーバーを立ち上げることをお勧めします</li>
+</ul>
+<h2 id="まとめ">まとめ</h2>
+<p>AWS アクセストークンの管理に疲れたので、なるべく管理が楽になるアクションを作りました。</p>
+<ul>
+<li><a href="https://github.com/shogo82148/actions-aws-assume-role">shogo82148/actions-aws-assume-role</a></li>
+<li><a href="https://github.com/marketplace/actions/configure-aws-credentials-by-assuming-roles">Configure AWS Credentials by Assuming Roles</a></li>
+</ul>
+<p>やり取りされるトークンはすべて一時的なもので、どんなに頑張って延長しても最長で 12 時間で有効期限が切れます。
+シークレットの管理が楽になる上に、セキュリティーの向上も図れていると思うので、ぜひご利用ください。</p>
+<hr>
+<p>万が一不備を見つけた場合は、内容が内容なので <a href="mailto:shogo82148.com">shogo82148@gmail.com</a> まで直接連絡をお願いします。</p>
+<h2 id="参考文献">参考文献</h2>
+<ul>
+<li><a href="https://docs.github.com/en/rest/reference/apps">GitHub Rest API - Apps</a></li>
+<li><a href="https://techblog.kayac.com/github-apps-bot">GitHub API を使う Bot たちの GitHub Apps への移行</a></li>
+<li><a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-user_externalid.html">How to use an external ID when granting access to your AWS resources to a third party</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>Mar 24, 2021</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2021/03/17/actions-check-permissions/" title="Dependabot が起動する GitHub Actions Workflow から write 権限が無くなった件">Dependabot が起動する GitHub Actions Workflow から write 権限が無くなった件</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2021/03/24/actions-aws-assume-role/">AWS_SECRET_ACCESS_KEY を GitHub Actions secrets へ突っ込むのに疲れた俺達は</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/03/17/actions-check-permissions/">Dependabot が起動する GitHub Actions Workflow から write 権限が無くなった件</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/03/02/perl-lambda-in-ap-northeast-3/">AWS Lambda Perl Runtime Layer in 大阪リージョン を公開しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/02/28/fix-ghq-list-fails-with-interrupted-system-call/">ghq list が interrupted system call で死ぬ問題を直した</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/02/23/improve-go-and-perl-polyglot/">改: PerlとGolangで実行できるPolyglot書いてみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/02/21/private-yum-repo-on-s3/">AWS Lambda &#43; S3 を使ってyumレポジトリを作った</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/02/03/setup-perl-uses-azure-blob-storage/">Setup Perl Environment Action のストレージを Azure Blob Storage に移行しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/01/29/super-ellipse/">スーパー楕円をベジェ曲線で近似してみる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/01/02/perl-runtime-supports-docker-format/">Perl Runtime for AWS Lambda の Docker コンテナ対応を公開しました</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2021 Shogo Ichinose - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['\\(','\\)'], ['{% m %}', '{% em %}']],
+    displayMath: [['\\[','\\]'], ['{% math %}', '{% endmath %}']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+  </script>
+
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+</html>
+
