@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "AWS_SECRET_ACCESS_KEY を GitHub Actions secrets へ突っ込むのに疲れた俺達は"
-slug: actions-check-permissions
+slug: actions-aws-assume-role
 date: 2021-03-24 21:57:00 +0900
 comments: true
 categories: [github]
