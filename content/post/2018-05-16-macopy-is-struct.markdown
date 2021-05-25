@@ -7,17 +7,37 @@ comments: true
 categories: [go, golang]
 ---
 
-[去年仕込んだネタ](https://github.com/kuiperbelt/kuiperbelt/pull/34/files#diff-ac30af7ac3674a84335ddfddbe2d4d03R12)が見つかってしまったので、macopy構造体について一応解説。
+[去年仕込んだネタ](https://github.com/kuiperbelt/kuiperbelt/pull/34/files#diff-ac30af7ac3674a84335ddfddbe2d4d03R12)が見つかってしまったので、macopy 構造体について一応解説。
 
 <blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr"><a href="https://t.co/mHq6oWY3rj">https://t.co/mHq6oWY3rj</a><br><br>macopyさん構造体だったのか・・・</p>&mdash; serinuntius (@_serinuntius) <a href="https://twitter.com/_serinuntius/status/996040976274608128?ref_src=twsrc%5Etfw">2018年5月14日</a></blockquote>
 <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
 
+**2021-05-25 追記**
+
+今はこの方法では動かないというツイートを見かけました。
+
+<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">これで出てくる &quot;Goの文法を使った構造体のコピーを防ぐ方法&quot; が動かなかった話ですが <a href="https://t.co/FpEnspIfmN">https://t.co/FpEnspIfmN</a> このへんに書いてありました.重要なことはその型がstructであること,Lock だけでなく Unlockも実装されていることでした.<a href="https://t.co/zQc6T058Ip">https://t.co/zQc6T058Ip</a> このように変更すると検知されました</p>&mdash; おりさの (@orisano) <a href="https://twitter.com/orisano/status/1397022250381938689?ref_src=twsrc%5Etfw">May 25, 2021</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+どうやら Go 1.11 から判定基準が 「[sync.Locker](https://golang.org/pkg/sync/#Locker) を実装しているか」に変わっていたようです。
+(修正コミット: [c2eba53](https://github.com/golang/go/commit/c2eba53e7f80df21d51285879d51ab81bcfbf6bc), Issue: [#26165](https://github.com/golang/go/issues/26165))
+
+というわけで、 macopy 構造体を以下のように変更する必要があります。
+
+```go
+type macopy struct{}
+
+func (*macopy) Lock() {}
+func (*macopy) Unlock() {}
+```
+
+追記ここまで
+
 ## 目的
 
-深淵な理由でGoの構造体のコピーを禁止したい場合があると思います。
-kuiperbeltのケースでは、[sync/atomicパッケージ](https://golang.org/pkg/sync/atomic/)を使ってフィールドを更新しているので、
-フィールドへの読み書きは必ずsync/atomicパッケージを使わなければなりません。
-sync/atomicパッケージを使わずに構造体をコピーするとレースコンディションが発生してしまうので、コピーを禁止する必要がありました。
+深淵な理由で Go の構造体のコピーを禁止したい場合があると思います。
+kuiperbelt のケースでは、[sync/atomic パッケージ](https://golang.org/pkg/sync/atomic/)を使ってフィールドを更新しているので、
+フィールドへの読み書きは必ず sync/atomic パッケージを使わなければなりません。
+sync/atomic パッケージを使わずに構造体をコピーするとレースコンディションが発生してしまうので、コピーを禁止する必要がありました。
 
 ```go
 // https://github.com/kuiperbelt/kuiperbelt/blob/e3c1432ed798716c8e88183518f9126951c227f3/stats.go#L20-L28
@@ -43,9 +63,9 @@ func (s *Stats) ConnectEvent() {
 }
 ```
 
-## macopy構造体の使い方
+## macopy 構造体の使い方
 
-そこで登場するのがmacopy構造体です(いや、もちろん別の名前でもいいんですが)。
+そこで登場するのが macopy 構造体です(いや、もちろん別の名前でもいいんですが)。
 
 ```go
 // https://github.com/kuiperbelt/kuiperbelt/blob/e3c1432ed798716c8e88183518f9126951c227f3/stats.go#L12-L18
@@ -79,7 +99,7 @@ $ go vet
 ```
 
 コンパイル自体はできてしまうので完全に禁止することはできませんが、
-Gopherなみなさんなら `go vet` はCIとかエディターの拡張等で自動的に実行するようにしてあるでしょうから、
+Gopher なみなさんなら `go vet` は CI とかエディターの拡張等で自動的に実行するようにしてあるでしょうから、
 これでコピーを防ぐことができるでしょう。
 
 もちろんこの機能は構造体のフィールドに含まれている場合も指摘してくれます。
@@ -102,7 +122,7 @@ Gopherなみなさんなら `go vet` はCIとかエディターの拡張等で�
 `sync.Mutex`構造体のコピーをチェックしているのではなく、
 `Lock` メソッドが存在している型のコピーをチェックしていることがわかります。
 
-というわけで、`sync.Mutex`構造体にかぎらず、[`Lock`メソッドを実装](https://github.com/kuiperbelt/kuiperbelt/blob/e3c1432ed798716c8e88183518f9126951c227f3/stats.go#L16)さえしていればOKなので、自作可能というわけです。
+というわけで、`sync.Mutex`構造体にかぎらず、[`Lock`メソッドを実装](https://github.com/kuiperbelt/kuiperbelt/blob/e3c1432ed798716c8e88183518f9126951c227f3/stats.go#L16)さえしていれば OK なので、自作可能というわけです。
 
 ## まとめ
 
