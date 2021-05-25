@@ -302,12 +302,17 @@ package main import ( &amp;#34;net/http&amp;#34; &amp;#34;github.com/aws/aws-sdk
       <pubDate>Wed, 16 May 2018 07:29:00 +0900</pubDate>
       
       <guid>https://shogo82148.github.io/blog/2018/05/16/macopy-is-struct/</guid>
-      <description>去年仕込んだネタが見つかってしまったので、macopy構造体について一応解説。
+      <description>去年仕込んだネタが見つかってしまったので、macopy 構造体について一応解説。
 https://t.co/mHq6oWY3rj
 macopyさん構造体だったのか・・・
-&amp;mdash; serinuntius (@_serinuntius) 2018年5月14日  目的 深淵な理由でGoの構造体のコピーを禁止したい場合があると思います。 kuiperbeltのケースでは、sync/atomicパッケージを使ってフィールドを更新しているので、 フィールドへの読み書きは必ずsync/atomicパッケージを使わなければなりません。 sync/atomicパッケージを使わずに構造体をコピーするとレースコンディションが発生してしまうので、コピーを禁止する必要がありました。
-// https://github.com/kuiperbelt/kuiperbelt/blob/e3c1432ed798716c8e88183518f9126951c227f3/stats.go#L20-L28 type Stats struct { connections int64 totalConnections int64 totalMessages int64 connectErrors int64 messageErrors int64 closingConnections int64 noCopy macopy } // atomic.AddInt64 を使っているので、s.connections の読み取り時には必ずこのメソッドを呼んで欲しい。 func (s *Stats) Connections() int64 { // return s.connections ではレースコンディションになってしまう。 	return atomic.LoadInt64(&amp;amp;s.connections) } func (s *Stats) ConnectEvent() { atomic.AddInt64(&amp;amp;s.totalConnections, 1) atomic.AddInt64(&amp;amp;s.connections, 1) } macopy構造体の使い方 そこで登場するのがmacopy構造体です(いや、もちろん別の名前でもいいんですが)。
-// https://github.com/kuiperbelt/kuiperbelt/blob/e3c1432ed798716c8e88183518f9126951c227f3/stats.go#L12-L18  // macopy may be embedded into structs which must not be copied // after the first use.</description>
+&amp;mdash; serinuntius (@_serinuntius) 2018年5月14日  2021-05-25 追記
+今はこの方法では動かないというツイートを見かけました。
+これで出てくる &amp;quot;Goの文法を使った構造体のコピーを防ぐ方法&amp;quot; が動かなかった話ですが https://t.co/FpEnspIfmN このへんに書いてありました.重要なことはその型がstructであること,Lock だけでなく Unlockも実装されていることでした.https://t.co/zQc6T058Ip このように変更すると検知されました
+&amp;mdash; おりさの (@orisano) May 25, 2021  どうやら Go 1.11 から判定基準が 「sync.Locker を実装しているか」に変わっていたようです。 (修正コミット: c2eba53, Issue: #26165)
+というわけで、 macopy 構造体を以下のように変更する必要があります。
+type macopy struct{} func (*macopy) Lock() {} func (*macopy) Unlock() {} 追記ここまで
+目的 深淵な理由で Go の構造体のコピーを禁止したい場合があると思います。 kuiperbelt のケースでは、sync/atomic パッケージを使ってフィールドを更新しているので、 フィールドへの読み書きは必ず sync/atomic パッケージを使わなければなりません。 sync/atomic パッケージを使わずに構造体をコピーするとレースコンディションが発生してしまうので、コピーを禁止する必要がありました。
+// https://github.com/kuiperbelt/kuiperbelt/blob/e3c1432ed798716c8e88183518f9126951c227f3/stats.go#L20-L28 type Stats struct { connections int64 totalConnections int64 totalMessages int64 connectErrors int64 messageErrors int64 closingConnections int64 noCopy macopy } // atomic.</description>
     </item>
     
     <item>

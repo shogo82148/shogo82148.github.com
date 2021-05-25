@@ -100,7 +100,7 @@
 
 <header>
   <p class="meta">May 16, 2018
-     - 1 minute read 
+     - 2 minute read 
      - <a href="https://shogo82148.github.io/blog/2018/05/16/macopy-is-struct/#disqus_thread">Comments</a>
 
     
@@ -119,14 +119,25 @@
           
           
           
-          <p><a href="https://github.com/kuiperbelt/kuiperbelt/pull/34/files#diff-ac30af7ac3674a84335ddfddbe2d4d03R12">去年仕込んだネタ</a>が見つかってしまったので、macopy構造体について一応解説。</p>
+          <p><a href="https://github.com/kuiperbelt/kuiperbelt/pull/34/files#diff-ac30af7ac3674a84335ddfddbe2d4d03R12">去年仕込んだネタ</a>が見つかってしまったので、macopy 構造体について一応解説。</p>
 <blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr"><a href="https://t.co/mHq6oWY3rj">https://t.co/mHq6oWY3rj</a><br><br>macopyさん構造体だったのか・・・</p>&mdash; serinuntius (@_serinuntius) <a href="https://twitter.com/_serinuntius/status/996040976274608128?ref_src=twsrc%5Etfw">2018年5月14日</a></blockquote>
 <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+<p><strong>2021-05-25 追記</strong></p>
+<p>今はこの方法では動かないというツイートを見かけました。</p>
+<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">これで出てくる &quot;Goの文法を使った構造体のコピーを防ぐ方法&quot; が動かなかった話ですが <a href="https://t.co/FpEnspIfmN">https://t.co/FpEnspIfmN</a> このへんに書いてありました.重要なことはその型がstructであること,Lock だけでなく Unlockも実装されていることでした.<a href="https://t.co/zQc6T058Ip">https://t.co/zQc6T058Ip</a> このように変更すると検知されました</p>&mdash; おりさの (@orisano) <a href="https://twitter.com/orisano/status/1397022250381938689?ref_src=twsrc%5Etfw">May 25, 2021</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+<p>どうやら Go 1.11 から判定基準が 「<a href="https://golang.org/pkg/sync/#Locker">sync.Locker</a> を実装しているか」に変わっていたようです。
+(修正コミット: <a href="https://github.com/golang/go/commit/c2eba53e7f80df21d51285879d51ab81bcfbf6bc">c2eba53</a>, Issue: <a href="https://github.com/golang/go/issues/26165">#26165</a>)</p>
+<p>というわけで、 macopy 構造体を以下のように変更する必要があります。</p>
+<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">type</span> <span class="nx">macopy</span> <span class="kd">struct</span><span class="p">{}</span>
+
+<span class="kd">func</span> <span class="p">(</span><span class="o">*</span><span class="nx">macopy</span><span class="p">)</span> <span class="nf">Lock</span><span class="p">()</span> <span class="p">{}</span>
+<span class="kd">func</span> <span class="p">(</span><span class="o">*</span><span class="nx">macopy</span><span class="p">)</span> <span class="nf">Unlock</span><span class="p">()</span> <span class="p">{}</span>
+</code></pre></div><p>追記ここまで</p>
 <h2 id="目的">目的</h2>
-<p>深淵な理由でGoの構造体のコピーを禁止したい場合があると思います。
-kuiperbeltのケースでは、<a href="https://golang.org/pkg/sync/atomic/">sync/atomicパッケージ</a>を使ってフィールドを更新しているので、
-フィールドへの読み書きは必ずsync/atomicパッケージを使わなければなりません。
-sync/atomicパッケージを使わずに構造体をコピーするとレースコンディションが発生してしまうので、コピーを禁止する必要がありました。</p>
+<p>深淵な理由で Go の構造体のコピーを禁止したい場合があると思います。
+kuiperbelt のケースでは、<a href="https://golang.org/pkg/sync/atomic/">sync/atomic パッケージ</a>を使ってフィールドを更新しているので、
+フィールドへの読み書きは必ず sync/atomic パッケージを使わなければなりません。
+sync/atomic パッケージを使わずに構造体をコピーするとレースコンディションが発生してしまうので、コピーを禁止する必要がありました。</p>
 <div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="c1">// https://github.com/kuiperbelt/kuiperbelt/blob/e3c1432ed798716c8e88183518f9126951c227f3/stats.go#L20-L28
 </span><span class="c1"></span><span class="kd">type</span> <span class="nx">Stats</span> <span class="kd">struct</span> <span class="p">{</span>
 	<span class="nx">connections</span>        <span class="kt">int64</span>
@@ -148,8 +159,8 @@ sync/atomicパッケージを使わずに構造体をコピーするとレース
 	<span class="nx">atomic</span><span class="p">.</span><span class="nf">AddInt64</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">s</span><span class="p">.</span><span class="nx">totalConnections</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
 	<span class="nx">atomic</span><span class="p">.</span><span class="nf">AddInt64</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">s</span><span class="p">.</span><span class="nx">connections</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
 <span class="p">}</span>
-</code></pre></div><h2 id="macopy構造体の使い方">macopy構造体の使い方</h2>
-<p>そこで登場するのがmacopy構造体です(いや、もちろん別の名前でもいいんですが)。</p>
+</code></pre></div><h2 id="macopy-構造体の使い方">macopy 構造体の使い方</h2>
+<p>そこで登場するのが macopy 構造体です(いや、もちろん別の名前でもいいんですが)。</p>
 <div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="c1">// https://github.com/kuiperbelt/kuiperbelt/blob/e3c1432ed798716c8e88183518f9126951c227f3/stats.go#L12-L18
 </span><span class="c1"></span>
 <span class="c1">// macopy may be embedded into structs which must not be copied
@@ -171,7 +182,7 @@ sync/atomicパッケージを使わずに構造体をコピーするとレース
 # github.com/kuiperbelt/kuiperbelt
 ./test.go:5: assignment copies lock value to _: kuiperbelt.macopy
 </code></pre><p>コンパイル自体はできてしまうので完全に禁止することはできませんが、
-Gopherなみなさんなら <code>go vet</code> はCIとかエディターの拡張等で自動的に実行するようにしてあるでしょうから、
+Gopher なみなさんなら <code>go vet</code> は CI とかエディターの拡張等で自動的に実行するようにしてあるでしょうから、
 これでコピーを防ぐことができるでしょう。</p>
 <p>もちろんこの機能は構造体のフィールドに含まれている場合も指摘してくれます。</p>
 <h2 id="原理">原理</h2>
@@ -186,7 +197,7 @@ Gopherなみなさんなら <code>go vet</code> はCIとかエディターの拡
 	<span class="p">}</span>
 </code></pre></div><p><code>sync.Mutex</code>構造体のコピーをチェックしているのではなく、
 <code>Lock</code> メソッドが存在している型のコピーをチェックしていることがわかります。</p>
-<p>というわけで、<code>sync.Mutex</code>構造体にかぎらず、<a href="https://github.com/kuiperbelt/kuiperbelt/blob/e3c1432ed798716c8e88183518f9126951c227f3/stats.go#L16"><code>Lock</code>メソッドを実装</a>さえしていればOKなので、自作可能というわけです。</p>
+<p>というわけで、<code>sync.Mutex</code>構造体にかぎらず、<a href="https://github.com/kuiperbelt/kuiperbelt/blob/e3c1432ed798716c8e88183518f9126951c227f3/stats.go#L16"><code>Lock</code>メソッドを実装</a>さえしていれば OK なので、自作可能というわけです。</p>
 <h2 id="まとめ">まとめ</h2>
 <p>必要なところにはどんどんまこぴー仕込んでいきましょう。</p>
 <blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">今後は「ここ、まこぴーしこんどいたほうが良いですね」という会話がGo使いの間でなされるのか</p>&mdash; 猫型🐱蓄音機 (@shinpei0213) <a href="https://twitter.com/shinpei0213/status/996392941957496832?ref_src=twsrc%5Etfw">2018年5月15日</a></blockquote>
