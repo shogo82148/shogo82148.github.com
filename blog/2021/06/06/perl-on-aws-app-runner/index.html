@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+    
+    
+      <link href="/css/fonts.css" rel="stylesheet" type="text/css">
+    
+  
+
+  
+  <title>AWS App Runner に Perl をデプロイしてみた</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+    <link rel="stylesheet" href="/css/fork-awesome.min.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.75.1" />
+
+  
+  
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Jun 6, 2021
+     - 2 minute read 
+     - <a href="https://shogo82148.github.io/blog/2021/06/06/perl-on-aws-app-runner/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a><a class="label" href="https://shogo82148.github.io/categories/aws/">aws </a>
+    
+  </p>
+  <h1 class="entry-title">
+     AWS App Runner に Perl をデプロイしてみた 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>先月 <a href="https://aws.amazon.com/jp/apprunner/">AWS App Runner</a> という新サービスがリリースされました。</p>
+<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">📣 新サービス <a href="https://twitter.com/hashtag/AWSAppRunner?src=hash&amp;ref_src=twsrc%5Etfw">#AWSAppRunner</a> のローンチです！🚀<br><br>＼数クリックでソースコードやコンテナイメージをデプロイ！／<br><br>AWS Fargate より高い抽象度、あるいは AWS Lambda のようなスレッドではなくプロセスそのものを実行したかった方にぜひお試しいただきたいサービスです！1/n<a href="https://t.co/LPFNOP7CBT">https://t.co/LPFNOP7CBT</a></p>&mdash; Tori Hara (@toricls) <a href="https://twitter.com/toricls/status/1394795120013103106?ref_src=twsrc%5Etfw">May 18, 2021</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+<p>既にたくさんのデプロイしてみた系の記事が公開されていますが、流石に(残念ながら？) Perl をデプロイしている人はいないですよね？
+と言うわけで、ネタがかぶらないよう Perl でやってみましょう。</p>
+<p>ソースコードは <a href="https://github.com/shogo82148/perl-on-aws-app-runner">shogo82148/perl-on-aws-app-runner</a> においてあります。</p>
+<h2 id="psgi-アプリを用意する">PSGI アプリを用意する</h2>
+<p><a href="https://ja.wikipedia.org/wiki/PSGI">Wikipedia の PSGI のページ</a>に書いてあった例をそのまま使います。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="c1"># app.psgi</span>
+<span class="k">my</span> <span class="nv">$app</span> <span class="o">=</span> <span class="k">sub</span> <span class="p">{</span>
+    <span class="k">return</span> <span class="p">[</span><span class="mi">200</span><span class="p">,</span> <span class="p">[</span><span class="s">&#39;Content-Type&#39;</span> <span class="o">=&gt;</span> <span class="s">&#39;text/plain&#39;</span><span class="p">],</span> <span class="p">[</span><span class="s">&#34;hello, world\n&#34;</span><span class="p">]];</span>
+<span class="p">}</span>
+</code></pre></div><h2 id="dockerfile-を用意する">Dockerfile を用意する</h2>
+<p>PSGI アプリを起動するのに <a href="https://metacpan.org/pod/Plack">Plack</a> を使用するので、
+cpanfile に Plack への依存を書いておきます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="c1"># cpanfile</span>
+<span class="n">requires</span> <span class="s">&#39;Plack&#39;</span><span class="p">;</span>
+</code></pre></div><p>Perl の公式イメージをベースに、依存モジュールをインストールして<a href="https://metacpan.org/pod/distribution/Plack/script/plackup">plackuo</a>するだけの
+簡単な Dockerfile を書きます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-dockerfile" data-lang="dockerfile"><span class="c"># Dockerfile</span><span class="err">
+</span><span class="err"></span><span class="k">FROM</span><span class="s"> perl:5.34.0</span><span class="err">
+</span><span class="err">
+</span><span class="err"></span><span class="k">WORKDIR</span><span class="s"> /usr/src/myapp</span><span class="err">
+</span><span class="err"></span><span class="k">COPY</span> cpanfile .<span class="err">
+</span><span class="err"></span><span class="k">RUN</span> cpanm --notest --installdeps .<span class="err">
+</span><span class="err"></span><span class="k">COPY</span> app.psgi .<span class="err">
+</span><span class="err">
+</span><span class="err"></span><span class="k">CMD</span> <span class="p">[</span> <span class="s2">&#34;plackup&#34;</span><span class="p">,</span> <span class="s2">&#34;app.psgi&#34;</span> <span class="p">]</span><span class="err">
+</span></code></pre></div><p>さて、一応ちゃんと動作するか手元で確認しておきましょう。
+デフォルトで 5000 番ポートで立ち上がるので、ポートバインディングの設定をして、起動してみます。</p>
+<pre><code class="language-console" data-lang="console">$ docker build -t perl-test .
+$ docker run -p 5000:5000 perl-test
+HTTP::Server::PSGI: Accepting connections at http://0:5000/
+</code></pre><p>&ldquo;http://localhost:5000&rdquo; にアクセスすると &ldquo;hello, world&rdquo; と表示されるはずです。</p>
+<h2 id="ecr-に-push-する">ECR に Push する</h2>
+<p><a href="https://console.aws.amazon.com/ecr/home">マネージメントコンソールで Amazon ECR を開いて</a> 新規レポジトリを作成、イメージをプッシュします。
+レポジトリを作成するとプッシュの手順が表示されるので、それにしたがいましょう。</p>
+<pre><code class="language-console" data-lang="console">aws ecr get-login-password --region ap-northeast-1 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.ap-northeast-1.amazonaws.com
+$ docker build -t perl-test .
+docker tag perl-test:latest 123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/perl-test:latest
+docker push 123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/perl-test:latest
+</code></pre><h2 id="aws-app-runner-でサービスを作成する">AWS App Runner でサービスを作成する</h2>
+<p><a href="https://console.aws.amazon.com/apprunner/home">マネージメントコンソールで AWS App Runner を開いて</a> 新しいサービスを作成します。
+特に Container image URI に先程作成したイメージを指定するのと、ポート番号が 5000 番なことに注意しましょう。</p>
+<ul>
+<li>Source
+<ul>
+<li><strong>Repository type</strong>: Container registry</li>
+<li><strong>Provider</strong>: Amazon ECR</li>
+<li><strong>Container image URI</strong>: <code>123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/perl-test:latest</code></li>
+</ul>
+</li>
+<li>Deployment settings
+<ul>
+<li><strong>Deployment trigger</strong>: Automatic</li>
+<li><strong>ECR access role</strong>: Create new service role (or &ldquo;Use existing service role&rdquo; if you have already created it)</li>
+</ul>
+</li>
+<li>Service settings:
+<ul>
+<li><strong>Service name</strong>: perl-test</li>
+<li><strong>Virtual CPU &amp; memory</strong>: 1vCPU &amp; 2GB</li>
+<li><strong>Port</strong>: 5000</li>
+</ul>
+</li>
+</ul>
+<p>5 分ほど待っていると <code>https://xxxxxxxx.ap-northeast-1.awsapprunner.com/</code> のような URL が利用可能になります。</p>
+<h2 id="まとめ">まとめ</h2>
+<p>特にハマることもなく簡単にできました。
+Docker イメージさえ作ってしまえば、何回かポチポチするだけで公開できるので楽ちんですね。</p>
+<p>唯一の問題は App Runner 自体は永続化層を持たないと言うことでしょうか・・・。
+個人的には RDS for MySQL を使いたいところですが、VPC の設定をいじって直接接続できないので一工夫必要です。
+AWS の中の人的には「DynamoDB を使え」ということなんでしょう。</p>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://aws.amazon.com/jp/apprunner/">AWS App Runner</a></li>
+<li><a href="https://aws.amazon.com/jp/blogs/news/app-runner-from-code-to-scalable-secure-web-apps/">新機能 – AWS App Runner: スケーラブルで安全なウェブアプリケーションをコードから数分で作成</a></li>
+<li><a href="https://aws.amazon.com/jp/blogs/news/introducing-aws-app-runner/">AWS App Runner のご紹介</a></li>
+<li><a href="https://dev.classmethod.jp/articles/release-aws-app-runner/">新サービス AWS App Runner がローンチされたので試してみた</a></li>
+<li><a href="https://ja.wikipedia.org/wiki/PSGI">PSGI - Wikipedia</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>Jun 6, 2021</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2021/05/22/perl-5.34-is-released/" title="Perl 5.34 がリリースされました">Perl 5.34 がリリースされました</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2021/06/06/perl-on-aws-app-runner/">AWS App Runner に Perl をデプロイしてみた</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/05/22/perl-5.34-is-released/">Perl 5.34 がリリースされました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/05/18/hello-maven-central/">Gradle Ribbonizer Plugin を Maven Central へ移行してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/03/24/actions-aws-assume-role/">AWS_SECRET_ACCESS_KEY を GitHub Actions secrets へ突っ込むのに疲れた俺達は</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/03/17/actions-check-permissions/">Dependabot が起動する GitHub Actions Workflow から write 権限が無くなった件</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/03/02/perl-lambda-in-ap-northeast-3/">AWS Lambda Perl Runtime Layer in 大阪リージョン を公開しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/02/28/fix-ghq-list-fails-with-interrupted-system-call/">ghq list が interrupted system call で死ぬ問題を直した</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/02/23/improve-go-and-perl-polyglot/">改: PerlとGolangで実行できるPolyglot書いてみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/02/21/private-yum-repo-on-s3/">AWS Lambda &#43; S3 を使ってyumレポジトリを作った</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2021 Shogo Ichinose - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['\\(','\\)'], ['{% m %}', '{% em %}']],
+    displayMath: [['\\[','\\]'], ['{% math %}', '{% endmath %}']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+  </script>
+
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+</html>
+
