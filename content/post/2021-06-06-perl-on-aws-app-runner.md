@@ -37,7 +37,7 @@ cpanfile に Plack への依存を書いておきます。
 requires 'Plack';
 ```
 
-Perl の公式イメージをベースに、依存モジュールをインストールして[plackuo](https://metacpan.org/pod/distribution/Plack/script/plackup)するだけの
+Perl の公式イメージをベースに、依存モジュールをインストールして[plackup](https://metacpan.org/pod/distribution/Plack/script/plackup)するだけの
 簡単な Dockerfile を書きます。
 
 ```dockerfile
