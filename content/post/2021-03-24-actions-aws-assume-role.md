@@ -16,15 +16,24 @@ GitHub Actions secrets へ突っ込む必要があります。
 
 と言うわけで、シークレットの管理を極力しなくて済む方法を考えて、設定用の Action を作成しました。
 
-- [shogo82148/actions-aws-assume-role](https://github.com/shogo82148/actions-aws-assume-role)
+- [fuller-inc/actions-aws-assume-role](https://github.com/fuller-inc/actions-aws-assume-role)
 - [Configure AWS Credentials by Assuming Roles](https://github.com/marketplace/actions/configure-aws-credentials-by-assuming-roles)
+
+## 2021-08-19 更新
+
+「会社でも使いたいな(ﾎﾞｿｯ」と言ったら社のアカウントで管理してもらえることになりました。
+それにともないアクションの URL が `shogo82148/actions-aws-assume-role` から `fuller-inc/actions-aws-assume-role` に変更になっています。
+正しくリダイレクトされるようですが、念の為 URL の変更をお願いします。
+
+信頼関係に指定する AWS アカウント `053160724612` に変更はありません。
+こんなこともあろうかと専用の AWS アカウントを作成しておいたので、まるごと権限を移しました。
 
 ## 使い方
 
 まずは AWS 側に IAM Role を作成します。
 IAM Role の信頼関係(trust policy) には以下の内容を記載します。
 信頼する AWS アカウントには `053160724612` を指定してください。
-これは僕の管理している AWS アカウントなので、**僕を信頼できる方だけこの先に進んでください**。
+これは[フラー株式会社](https://www.fuller-inc.com/)の管理している AWS アカウントなので、**フラーを信頼できる方だけこの先に進んでください**。
 外部 ID(`ExternalId`) にはこのロールを使用する予定のレポジトリ名を入れます。
 
 ```json
@@ -54,7 +63,7 @@ IAM Role に付与するパーミッションは、用途に合わせてご自�
 
 ```yaml
 - name: Configure AWS Credentials
-  uses: shogo82148/actions-aws-assume-role@v1
+  uses: fuller-inc/actions-aws-assume-role@v1
   with:
     aws-region: ap-northeast-1
     role-to-assume: arn:aws:iam::123456789012:role/GitHubRepoRole
@@ -69,7 +78,7 @@ Actions secrets の設定画面を開くことなく設定が終わりました�
 `role-session-tagging: true` を追加するとセッションタギングが有効化されます。
 
 ```yaml
-- uses: shogo82148/actions-aws-assume-role@v1
+- uses: fuller-inc/actions-aws-assume-role@v1
   with:
     aws-region: ap-northeast-1
     role-to-assume: arn:aws:iam::123456789012:role/GitHubRepoRole
@@ -158,7 +167,7 @@ Assume Role は他のプリンシパル(AWS のサービスだったり、IAM Us
 AWS IAM が trust policy にしたがって、 Assume Role を呼び出す権限があるのかをチェックします。
 ここも異なった AWS 間でクレデンシャルのやり取りを行う重要なステップです。
 
-`shogo82148/actions-aws-assume-role` には今の所使用制限はかけていません。誰でも自由に使用できることができます。
+`fuller-inc/actions-aws-assume-role` には今の所使用制限はかけていません。誰でも自由に使用できることができます。
 そのため AWS アカウント `053160724612` から AssumeRole のリクエストが来たからと言って、一番最初のリクエストが誰から来たものなのかはわかりません。
 (そもそもお前のアカウントなんて信頼できないよ！って方もいるかも知れないですが、便宜上信頼してもらったものとして話を進めますね)
 
@@ -176,17 +185,17 @@ AssumeRole が成功すると一時的なクレデンシャルが払い出され
 ## 注意
 
 - クロスアカウントで AssumeRole を実行したログは、自動的に [CloudTrail](https://aws.amazon.com/jp/cloudtrail/) によって双方の AWS アカウントに記録されます。\
-  これはつまり `shogo82148/actions-aws-assume-role` を提供している僕には、アクションを実行したレポジトリの名前、AWS アカウントの名前、実行に使用したロール名等がわかるということです。
+  これはつまり `fuller-inc/actions-aws-assume-role` を提供している僕には、アクションを実行したレポジトリの名前、AWS アカウントの名前、実行に使用したロール名等がわかるということです。
 - さらに `role-session-tagging: true` を指定した場合、ワークフローの名前、Run ID、実行のトリガーとなったユーザー、ブランチ、コミットハッシュ、もログに残ります。
 - もちろんこれらのログは厳重に管理し、セキュリティーチェックのためだけに使用します
 - が、しかし、これらの情報がどこの誰だか知らない一個人に渡っているという認識だけはお願いします。特にプライベートレポジトリでの使用はよく考えてから導入しましょう
-- `shogo82148/actions-aws-assume-role` のバックエンドのソースコードは公開しています。ログを見られるのが気になる方はご自身でサーバーを立ち上げることをお勧めします
+- `fuller-inc/actions-aws-assume-role` のバックエンドのソースコードは公開しています。ログを見られるのが気になる方はご自身でサーバーを立ち上げることをお勧めします
 
 ## まとめ
 
 AWS アクセストークンの管理に疲れたので、なるべく管理が楽になるアクションを作りました。
 
-- [shogo82148/actions-aws-assume-role](https://github.com/shogo82148/actions-aws-assume-role)
+- [fuller-inc/actions-aws-assume-role](https://github.com/fuller-inc/actions-aws-assume-role)
 - [Configure AWS Credentials by Assuming Roles](https://github.com/marketplace/actions/configure-aws-credentials-by-assuming-roles)
 
 やり取りされるトークンはすべて一時的なもので、どんなに頑張って延長しても最長で 12 時間で有効期限が切れます。
