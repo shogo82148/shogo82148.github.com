@@ -18,6 +18,16 @@ categories: [github]
 
 なるほど、こう来ましたか。しかし、まだまだ甘いですね・・・。
 
+## 2021-08-19 追記
+
+[ドッグさん](https://twitter.com/Linda_pp) が便利なツールを作ってくれました。
+
+- [rhysd/actionlint](https://github.com/rhysd/actionlint)
+- [actionlint v1.4 → v1.6 で実装した新機能の紹介](https://rhysd.hatenablog.com/entry/2021/08/11/221044)
+
+GitHub Actions のワークフローファイルの静的チェッカーです。
+チェック項目にこの記事で紹介したような脆弱性検知も含まれているのでおすすめです！
+
 ## Pull Request Title Injection について
 
 まずはこの記事に出てくる「Pull Request Title Injection」についておさらいです。
@@ -31,7 +41,7 @@ jobs:
     name: Slack Notification
     runs-on: ubuntu-latest
     steps:
-      - name: 'Send Notification'
+      - name: "Send Notification"
         run: |
           jq -n '{
             attachments: [{
@@ -59,7 +69,7 @@ jobs:
     name: Slack Notification
     runs-on: ubuntu-latest
     steps:
-      - name: 'Send Notification'
+      - name: "Send Notification"
         run: |
           jq -n '{
             attachments: [{
@@ -71,7 +81,7 @@ jobs:
           }' | curl -H 'Content-Type: application/json' -d @- http://example.com/
 ```
 
-Injection攻撃とはいったものの、これ自体の危険度はあまり高くありません。
+Injection 攻撃とはいったものの、これ自体の危険度はあまり高くありません。
 なぜなら `secrets.SLACK_WEBHOOK` にアクセスできる権限を持っている人は、
 このワークフロー自体を書き換えることができる権限も持っているので、
 ワークフローを書き換えたほうが手っ取り早いからです。
@@ -79,9 +89,9 @@ Injection攻撃とはいったものの、これ自体の危険度はあまり�
 とはいえ、通常の Injection 攻撃と同様の構造をしているので、頭の体操にはぴったりですね。
 ちょっと対策を考えてみましょう。
 
-## toJSON関数を用いた対策の問題点
+## toJSON 関数を用いた対策の問題点
 
-Injection対策の基本はサニタイズです。
+Injection 対策の基本はサニタイズです。
 プルリクエストのタイトルをサニタイズして、単なる文字列として扱われるようにしましょう。
 
 [Pull Request Title Injection とその対策](https://furusax0621.hatenablog.com/entry/2020/03/31/220042)では、
@@ -93,7 +103,7 @@ jobs:
     name: Slack Notification
     runs-on: ubuntu-latest
     steps:
-      - name: 'Send Notification'
+      - name: "Send Notification"
         run: |
           jq -n '{
             attachments: [{
@@ -113,7 +123,7 @@ jobs:
     name: Slack Notification
     runs-on: ubuntu-latest
     steps:
-      - name: 'Send Notification'
+      - name: "Send Notification"
         run: |
           jq -n '{
             attachments: [{
@@ -128,10 +138,10 @@ jobs:
 ダブルクオーテーションがエスケープされて `jq` の文字列として解釈されるようになりました。
 これならプルリクエストのタイトルが正しく title に設定されます。
 
------
+---
 
 しかし、ここに重要な見落としがありますね。
-プルリクエストのタイトルは `jq` の式としてだけでなく、 **bashのコマンドの一部としても解釈** されるということを見落としています。
+プルリクエストのタイトルは `jq` の式としてだけでなく、 **bash のコマンドの一部としても解釈** されるということを見落としています。
 
 例えば以下のプルリクエストタイトルはどうでしょう？
 
@@ -143,7 +153,7 @@ jobs:
     name: Slack Notification
     runs-on: ubuntu-latest
     steps:
-      - name: 'Send Notification'
+      - name: "Send Notification"
         run: |
           jq -n '{
             attachments: [{
@@ -157,7 +167,6 @@ jobs:
 
 ちょっと分かりづらいですが、 `\"` は `bash` によってエスケープが解除されてしまい、 Injection が成功してしまいます。
 これではだめですね・・・。
-
 
 ## もうちょっとちゃんとした対策
 
@@ -174,7 +183,7 @@ jobs:
     name: Slack Notification
     runs-on: ubuntu-latest
     steps:
-      - name: 'Send Notification'
+      - name: "Send Notification"
         run: |
           jq -n '{
             attachments: [{
@@ -200,7 +209,7 @@ jobs:
     name: Slack Notification
     runs-on: ubuntu-latest
     steps:
-      - name: 'Send Notification'
+      - name: "Send Notification"
         run: |
           jq -n --arg title "$TITLE" --arg link "$LINK" '{
             attachments: [{
@@ -215,15 +224,15 @@ jobs:
           LINK: ${{ github.event.pull_request.html_url }}
 ```
 
-(早くデフォルトjq1.6にならないかな)
+(早くデフォルト jq1.6 にならないかな)
 
 ### webhook payload を使う方法
 
-次はJSONのまま扱う方法。
+次は JSON のまま扱う方法。
 
-GitHub Actionを実行するサーバー上には、ワークフローを起動したイベントに関する情報が入ったJSONファイルが置かれています。
+GitHub Action を実行するサーバー上には、ワークフローを起動したイベントに関する情報が入った JSON ファイルが置かれています。
 場所は `GITHUB_EVENT_PATH` 環境変数に設定されているので、簡単にアクセスできます。
-JSONの加工は `jq` の得意分野ですね。
+JSON の加工は `jq` の得意分野ですね。
 
 ```yaml
 jobs:
@@ -231,7 +240,7 @@ jobs:
     name: Slack Notification
     runs-on: ubuntu-latest
     steps:
-      - name: 'Send Notification'
+      - name: "Send Notification"
         run: |
           cat "$GITHUB_EVENT_PATH" | jq '{
             attachments: [{
