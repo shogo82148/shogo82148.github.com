@@ -15,7 +15,7 @@ categories: [mackerel, aws]
 - [【リリース予告】AWS インテグレーションの権限チェックを強化していきます](https://mackerel.io/ja/blog/entry/announcement/20210705)
 - [AWS Step Functions インテグレーションをリリースしました　ほか](https://mackerel.io/ja/blog/entry/weekly/20190529)
 
-これらのアップデートは「[混乱した代理問題(Confused deputy problem)](https://ja.wikipedia.org/wiki/Confused_deputy_problem))」に対応するものです。
+これらのアップデートは「[混乱した代理問題(Confused deputy problem)](https://ja.wikipedia.org/wiki/Confused_deputy_problem)」に対応するものです。
 僕が AWS インテグレーションの設定をしている際にふと **「この機能、攻撃に利用できるのでは？」** と思いついてしまったので、
 Mackerel サポートに問題点を伝えて修正していただきました。
 
@@ -98,15 +98,15 @@ ARN の命名規則にしたがって、アカウント番号とロール名を�
 ## Mackerel における「混乱した代理」問題
 
 前置きが長くなりましたが、ここからが本題です。
-IAM Role を用いた AWS インテグレーションが Mackerel に導入された当初、 **すべてのユーザーが外部 ID に `Mackerel-AWS-Integration` を指定する** という仕様でした。
+IAM Role を用いた AWS インテグレーションが Mackerel に導入された当初、 **外部 ID は `Mackerel-AWS-Integration` で固定** という仕様でした。
 
 正規のユーザー @shogo82148 が AWS インテグレーションを使うぶんには問題ありません。
 IAM Role の信頼ポリシーに「Mackerel からの要求のみ許可する」という条件が設定されているため、
-Mackerel はメトリックスの収集を行うことができます。
+Mackerel はメトリックスの収集を行うことができますが、第三者がメトリックスの収集を行うことはできません。
 
 ![Mackerelで発生していた混乱した代理問題](/images/2021-08-26-confused-deputy-problem-on-mackerelio1.svg)
 
-しかし Mackerel のユーザーの中に不正を行うユーザー @chooblarin がいた場合はどうでしょう？
+しかし **Mackerel のユーザーの中に不正を行うユーザー @chooblarin がいた場合** はどうでしょう？
 前節に書いたように Role ARN はシークレットではありません。
 公開されている情報から AWS アカウント番号を取得したり、ロール名を推測したりなどすれば、Role ARN を割り出すことが可能です。
 不正を行うユーザーは、この Role ARN を使って Mackerel の AWS インテグレーションを設定します。
