@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+    
+    
+      <link href="/css/fonts.css" rel="stylesheet" type="text/css">
+    
+  
+
+  
+  <title>Mackerelにおける「混乱した代理」問題に対応しよう</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+    <link rel="stylesheet" href="/css/fork-awesome.min.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.75.1" />
+
+  
+  
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Aug 26, 2021
+     - 3 minute read 
+     - <a href="https://shogo82148.github.io/blog/2021/08/26/confused-deputy-problem-on-mackerelio/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/mackerel/">mackerel </a><a class="label" href="https://shogo82148.github.io/categories/aws/">aws </a>
+    
+  </p>
+  <h1 class="entry-title">
+     Mackerelにおける「混乱した代理」問題に対応しよう 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>最近 <a href="https://ja.mackerel.io/">Mackerel</a> の AWS インテグレーション機能にいくつかセキュリティ強化のアップデートが入りました。
+(「最近」と言っても最も古いアップデートは 2 年前ですが・・・)</p>
+<ul>
+<li><a href="https://mackerel.io/ja/blog/entry/weekly/20210806">AWS インテグレーションで IAM ロールによる認証利用時の権限チェック頻度を変更しました ほか</a></li>
+<li><a href="https://mackerel.io/ja/blog/entry/weekly/20210727">AWS インテグレーション CloudFront 連携で取得できるメトリックを追加しました ほか</a></li>
+<li><a href="https://mackerel.io/ja/blog/entry/announcement/20210705">【リリース予告】AWS インテグレーションの権限チェックを強化していきます</a></li>
+<li><a href="https://mackerel.io/ja/blog/entry/weekly/20190529">AWS Step Functions インテグレーションをリリースしました　ほか</a></li>
+</ul>
+<p>これらのアップデートは「<a href="https://ja.wikipedia.org/wiki/Confused_deputy_problem">混乱した代理問題(Confused deputy problem)</a>)」に対応するものです。
+僕が AWS インテグレーションの設定をしている際にふと <strong>「この機能、攻撃に利用できるのでは？」</strong> と思いついてしまったので、
+Mackerel サポートに問題点を伝えて修正していただきました。</p>
+<p>リリース記事に関連する AWS のドキュメントが貼ってありますが、正直 AWS のドキュメントは難しい・・・。
+そういうわけで、Mackerel の AWS インテグレーションを例に「混乱した代理問題」を噛み砕いて解説しよう、というのが本記事の趣旨です。
+(いちおう Mackerel のサポートから許可は頂いています。)</p>
+<h2 id="tldr">TL;DR</h2>
+<p>「詳しい解説とかいらない！」という方も、最低限これだけはやっておきましょう。</p>
+<p>Mackerel の <a href="https://mackerel.io/ja/docs/entry/integrations/aws">AWS インテグレーション</a> を利用している場合、以下の項目を確認すること。</p>
+<ul>
+<li><a href="https://mackerel.io/my?tab=awsIntegration">Mackerel の AWS インテグレーション設定のページ</a> で各設定の「編集」をクリックし、ロール ARN に緑のチェックマークが入っていること</li>
+<li>連携用の AWS IAM Role に External ID (外部 ID)が設定されていること
+<ul>
+<li>設定されていても <code>Mackerel-AWS-Integration</code> になっている場合、それは古い設定です。今すぐ更新してください！</li>
+</ul>
+</li>
+</ul>
+<p>AWS インテグレーションのような「アクセス権の委任」を使った機能を提供する場合は以下の点に注意すること。</p>
+<ul>
+<li><code>AssumeRole</code> API を呼び出す際は外部 ID(<code>sts:ExternalId</code>) にユーザー毎に異なる値を設定すること</li>
+<li>不正な外部 ID を <code>sts:ExternalId</code> に設定し <code>AssumeRole</code> API を呼び出した場合に失敗することを確認すること</li>
+</ul>
+<h2 id="前提">前提</h2>
+<p>さて、本題に入る前に、「シークレット」と「シークレットではないもの」の区別をしっかりしておきましょう。
+AWS アカウントに関する情報はすべてが秘密なわけではなく、どうしても第三者に漏れてしまうのもあります。
+不正アクセスをする人間はこれらの情報を知っていると考えるべきです。</p>
+<h3 id="aws-のアカウント番号はシークレット-ではない">AWS のアカウント番号はシークレット <strong>ではない</strong></h3>
+<p><strong>AWS のアカウント番号はシークレットではありません</strong>。
+今更隠してもしょうがないので、例えば僕の AWS アカウント番号(のひとつ)を書いておくと <code>445285296882</code> です。</p>
+<p>この番号は色んな所で見つけられます。
+例えば僕は AWS Lambda の <a href="https://metacpan.org/pod/AWS::Lambda">Perl Custom Runtime</a> を公開しているのですが、
+このときに利用する Layer の ARN にはバッチリアカウント番号が入っています。</p>
+<blockquote>
+<ul>
+<li><code>arn:aws:lambda:ap-northeast-1:445285296882:layer:perl-5-34-runtime-al2:2</code></li>
+</ul>
+</blockquote>
+<p>また、<a href="https://aws.amazon.com/jp/serverless/serverlessrepo/">AWS Serverless Application Repository</a>にもいくつかアプリケーションを公開しています。
+その中から適当にひとつ<a href="https://serverlessrepo.aws.amazon.com/applications/us-east-1/445285296882/acme-cert-updater">acme-cert-updater</a>というアプリケーションの詳細を開くと、URL や アプリケーションの ARN にアカウント番号が載っています。</p>
+<blockquote>
+<ul>
+<li><code>https://serverlessrepo.aws.amazon.com/applications/us-east-1/445285296882/acme-cert-updater</code></li>
+<li><code>arn:aws:serverlessrepo:us-east-1:445285296882:applications/acme-cert-updater</code></li>
+</ul>
+</blockquote>
+<p>僕の個人アカウント以外にも AWS アカウント番号が公開されている例はあります。
+例えば Mackerel の (AWS インテグレーション専用？)AWS アカウント <code>217452466226</code> は、
+<a href="https://mackerel.io/ja/docs/entry/integrations/aws">AWS インテグレーション</a> のページで公開されています。</p>
+<blockquote>
+<p>Mackerel の AWS インテグレーション設定のページから作成ボタンを押して、External ID を取得してください。許可する Account ID には <code>217452466226</code> を入力してください。</p>
+</blockquote>
+<p>このように AWS はアカウント番号をシークレットとして扱っておらず、外部に公開する場合があります。
+「アカウント番号は世界中に知れ渡っているもの」という前提でセキュリティ対策を行う必要があります。</p>
+<h3 id="iam-ロール名はシークレット-ではない">IAM ロール名はシークレット <strong>ではない</strong></h3>
+<p><strong>IAM ロール名はシークレットではありません</strong>。
+ロール名はユーザーが自由に名前をつけられます。名前はわかりやすさが優先で、わざわざパスワードのような複雑な文字列を設定することはないでしょう。
+そのため用途から簡単に名前を推測できてしまいます。</p>
+<p>例えば、<a href="https://mackerel.io/ja/docs/entry/integrations/aws">AWS インテグレーション</a> のページでは例として <code>MackerelAWSIntegrationRole</code> を挙げていますね。</p>
+<blockquote>
+<p>ロール名を指定してロールを作成します。 <code>MackerelAWSIntegrationRole</code> のように Mackerel の AWS インテグレーションで使用していることが分かりやすい名前を付けることを推奨します。</p>
+</blockquote>
+<p>統計を取ったわけではありませんが、ドキュメント通り <code>MackerelAWSIntegrationRole</code> という名前で作成したという方は多いのではないでしょうか？</p>
+<h3 id="iam-ロール-arn-はシークレット-ではない">IAM ロール ARN はシークレット <strong>ではない</strong></h3>
+<p>「AWS のアカウント番号」と「ロール名」がわかってしまえば、それから ARN (Amazon Resource Name) は自動的にわかります。</p>
+<ul>
+<li><code>arn:aws:iam::${AccountNumber}:role/${RoleName}</code></li>
+</ul>
+<p>ARN の命名規則にしたがって、アカウント番号とロール名を埋めるだけです。
+例えば僕が AWS インテグレーションに使っている IAM Role ARN は以下のように簡単にわかってしまいます。</p>
+<ul>
+<li><code>arn:aws:iam::445285296882:role/MackerelAWSIntegrationRole</code></li>
+</ul>
+<p>「AWS のアカウント番号」と「ロール名」はシークレットではないので、もちろん ARN もシークレットではありません。</p>
+<h2 id="mackerel-における混乱した代理問題">Mackerel における「混乱した代理」問題</h2>
+<p>前置きが長くなりましたが、ここからが本題です。
+IAM Role を用いた AWS インテグレーションが Mackerel に導入された当初、 <strong>すべてのユーザーが外部 ID に <code>Mackerel-AWS-Integration</code> を指定する</strong> という仕様でした。</p>
+<p>正規のユーザー @shogo82148 が AWS インテグレーションを使うぶんには問題ありません。
+IAM Role の信頼ポリシーに「Mackerel からの要求のみ許可する」という条件が設定されているため、
+Mackerel はメトリックスの収集を行うことができます。</p>
+<p><img src="/images/2021-08-26-confused-deputy-problem-on-mackerelio1.svg" alt="Mackerelで発生していた混乱した代理問題"></p>
+<p>しかし Mackerel のユーザーの中に不正を行うユーザー @chooblarin がいた場合はどうでしょう？
+前節に書いたように Role ARN はシークレットではありません。
+公開されている情報から AWS アカウント番号を取得したり、ロール名を推測したりなどすれば、Role ARN を割り出すことが可能です。
+不正を行うユーザーは、この Role ARN を使って Mackerel の AWS インテグレーションを設定します。
+すると AWS アカウントからは <strong>Mackerel から要求が来ているようにしか見えません</strong>。
+そのため、AWS はメトリックスの収集を許可してしまい、 <strong>第三者が Mackerel を介してメトリックスを収集できしてしまいます</strong>。</p>
+<p>不正を行うユーザーは Mackerel を踏み台にして、本来は見ることのできないメトリックスにアクセスできてしまいました。
+これが「混乱した代理問題(Confused Deputy Problem)」です。</p>
+<h2 id="外部-id-を用いた解決">外部 ID を用いた解決</h2>
+<p>「混乱した代理問題」に対して、AWS は「外部 ID(External ID)」を用いた防御策を提供しています。</p>
+<h3 id="外部-id">外部 ID</h3>
+<p>Mackerel は外部 ID としてランダムな(？)文字列を利用していますが、ここではわかりやすいようユーザー名を使って説明します。</p>
+<p>正規のユーザーである @shogo82148 は、 IAM Role の信頼ポリシーに「外部 ID が <code>shogo82148</code> である」という条件を追加します。
+Mackerel はメトリックスの収集時、外部 ID にユーザー名 <code>shogo82148</code> を設定してリクエストしてきます。
+これは正規のリクエストなので、もちろん要求は通ります。</p>
+<p><img src="/images/2021-08-26-confused-deputy-problem-on-mackerelio2.svg" alt="外部IDを用いた混乱した代理問題の解決"></p>
+<p>では先程と同じように、不正を行うユーザー @chooblarin が現れた場合はどうでしょう。
+Mackerel に正しい IAM Role ARN を渡したとしても、
+Mackerel はメトリックスの収集時、外部 ID に <code>chooblarin</code> を設定します。
+IAM Role の信頼ポリシーの「外部 ID が <code>shogo82148</code> である」という条件を満たさないので、このリクエストは拒否されます。</p>
+<p>@chooblarin が IAM Role ARN を Mackerel に入力する際、外部 ID に <code>shogo82148</code> を指定した場合はどうでしょう。
+このケースでは、Mackerel が入力された外部 ID はすでに使用されていることを検知して、この設定を拒否します。</p>
+<p>こうして外部 ID を用いることで不正なアクセスを防ぐことができ、「混乱した代理問題」を解消することができます。</p>
+<h3 id="信頼ポリシーの検証">信頼ポリシーの検証</h3>
+<p>さて、外部 ID を使用することで「混乱した代理問題」は完全に解決したように見えます。
+しかし、この仕組がうまく不正リクエストを弾くのは <strong>ユーザーが IAM Role の信頼ポリシーを正しく設定した場合に限ります</strong>。
+例えば僕が信頼ポリシーに「外部 ID が <code>shogo82148</code> である」という条件を入れるのをうっかり忘れてしまったら、
+第三者のアクセスを許可してしまい、外部 ID を導入した意味がありません。
+僕の AWS アカウントは当然ながら僕の管理下にあるので、Mackerel は信頼ポリシーを直接確認してこのような設定を拒否することはできません。</p>
+<p>そこで AWS のドキュメントでは、あえて「正しくない外部 ID」を使用して <code>AssumeRole</code> API を呼び出すことを推奨しています。</p>
+<blockquote>
+<p><a href="https://docs.aws.amazon.com/ja_jp/IAM/latest/UserGuide/id_roles_create_for-user_externalid.html#external-id-use">https://docs.aws.amazon.com/ja_jp/IAM/latest/UserGuide/id_roles_create_for-user_externalid.html#external-id-use</a>
+外部 ID は常に AssumeRole API 呼び出しで指定する必要があります。さらに、顧客からロールの ARN を受け取ったら、正しい外部 ID と正しくない外部 ID の両方を使用して、そのロールを引き受けることができるかどうかをテストします。正しい外部 ID がなくてもロールを引き受けることのできる場合は、システムに顧客のロール ARN を保存しないでください。顧客がロール信頼ポリシーを更新し、正しい外部 ID を要求するまで待ちます。こうすることにより、顧客による不正を防止し、&ldquo;混乱した代理&rdquo; 問題からお客様と顧客の両方を守ることができます。</p>
+</blockquote>
+<p>ちなみに「お客様」と「顧客」という似た単語が使われていて混乱したんですが、両者は全くの別物です。英語の原文では「お客様」= &ldquo;You&rdquo;, 「顧客」= &ldquo;Your customers&rdquo; となっています。</p>
+<blockquote>
+<p>You should always specify the external ID in your AssumeRole API calls. In addition when a customer gives you a role ARN, test whether you can assume the role both with and without the correct external ID. If you can assume the role without the correct external ID, don&rsquo;t store the customer&rsquo;s role ARN in your system. Wait until your customer has updated the role trust policy to require the correct external ID. In this way you help your customers to do the right thing, which helps to keep both of you protected against the confused deputy problem.</p>
+</blockquote>
+<p>Mackerel ではこのチェックが行われていないようだったので、報告して修正してもらったのが <a href="https://mackerel.io/ja/blog/entry/announcement/20210705">【リリース予告】AWS インテグレーションの権限チェックを強化していきます</a> で入った権限チェックの強化です。
+<code>sts:ExternalId</code> の設定をうっかり忘れてしまっても、AWS インテグレーションの設定に失敗するようになりました。</p>
+<h2 id="まとめ">まとめ</h2>
+<p>Mackerel の <a href="https://mackerel.io/ja/docs/entry/integrations/aws">AWS インテグレーション</a> を利用している場合、以下の項目を確認すること。</p>
+<ul>
+<li><a href="https://mackerel.io/my?tab=awsIntegration">Mackerel の AWS インテグレーション設定のページ</a> で各設定の「編集」をクリックし、ロール ARN に緑のチェックマークが入っていること</li>
+<li>連携用の AWS IAM Role に External ID (外部 ID)が設定されていること
+<ul>
+<li>設定されていても <code>Mackerel-AWS-Integration</code> になっている場合、それは古い設定です。今すぐ更新してください！</li>
+</ul>
+</li>
+</ul>
+<p>AWS インテグレーションのような「アクセス権の委任」を使った機能を提供する場合は以下の点に注意すること。</p>
+<ul>
+<li><code>AssumeRole</code> API を呼び出す際は外部 ID(<code>sts:ExternalId</code>) にユーザー毎に異なる値を設定すること</li>
+<li>不正な外部 ID を <code>sts:ExternalId</code> に設定し <code>AssumeRole</code> API を呼び出した場合に失敗することを確認すること</li>
+</ul>
+<p>大事なことなので二回書きました。</p>
+<p>権限の委任は難しいですね。僕は外部 ID の意義を理解するまで 3 年くらいかかりました。
+(Mackerel の AWS インテグレーションが IAM Role を使ってできることを知ってから、今回の修正依頼を出すまでがたぶんそれくらい・・・)</p>
+<p>難しいんですが、効果的に利用すればシークレットを扱う機会を減らすことができ、セキュリティの向上が見込めます。
+権限の委任を使って連携を行うサービスが増えてくれるといいなと思っています。</p>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://mackerel.io/ja/blog/entry/weekly/20210806">AWS インテグレーションで IAM ロールによる認証利用時の権限チェック頻度を変更しました ほか</a></li>
+<li><a href="https://mackerel.io/ja/blog/entry/weekly/20210727">AWS インテグレーション CloudFront 連携で取得できるメトリックを追加しました ほか</a></li>
+<li><a href="https://mackerel.io/ja/blog/entry/announcement/20210705">【リリース予告】AWS インテグレーションの権限チェックを強化していきます</a></li>
+<li><a href="https://mackerel.io/ja/blog/entry/weekly/20190529">AWS Step Functions インテグレーションをリリースしました　ほか</a></li>
+<li><a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-user_externalid.html">How to use an external ID when granting access to your AWS resources to a third party - AWS Identity and Access Management</a></li>
+<li><a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/confused-deputy.html">The confused deputy problem - AWS Identity and Access Management</a></li>
+<li><a href="https://cloud.google.com/kms/docs/additional-authenticated-data">Additional authenticated data - Cloud Key Management Service</a></li>
+<li><a href="https://ja.wikipedia.org/wiki/Confused_deputy_problem">Confused deputy problem - Wikipedia</a></li>
+</ul>
+<hr>
+<p>@chooblarin ごめんね・・・</p>
+<p>あと <code>arn:aws:iam::445285296882:role/MackerelAWSIntegrationRole</code> を使っていると言ったな。
+あれは嘘だ。</p>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>Aug 26, 2021</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2021/06/13/aws-lambada-efs-and-perl/" title="AWS Lambda に EFS をマウントして Perl CGI 完全復活">AWS Lambda に EFS をマウントして Perl CGI 完全復活</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2021/08/26/confused-deputy-problem-on-mackerelio/">Mackerelにおける「混乱した代理」問題に対応しよう</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/06/13/aws-lambada-efs-and-perl/">AWS Lambda に EFS をマウントして Perl CGI 完全復活</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/06/06/perl-on-aws-app-runner/">AWS App Runner に Perl をデプロイしてみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/05/22/perl-5.34-is-released/">Perl 5.34 がリリースされました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/05/18/hello-maven-central/">Gradle Ribbonizer Plugin を Maven Central へ移行してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/03/24/actions-aws-assume-role/">AWS_SECRET_ACCESS_KEY を GitHub Actions secrets へ突っ込むのに疲れた俺達は</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/03/17/actions-check-permissions/">Dependabot が起動する GitHub Actions Workflow から write 権限が無くなった件</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/03/02/perl-lambda-in-ap-northeast-3/">AWS Lambda Perl Runtime Layer in 大阪リージョン を公開しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/02/28/fix-ghq-list-fails-with-interrupted-system-call/">ghq list が interrupted system call で死ぬ問題を直した</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2021 Shogo Ichinose - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['\\(','\\)'], ['{% m %}', '{% em %}']],
+    displayMath: [['\\[','\\]'], ['{% math %}', '{% endmath %}']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+  </script>
+
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+</html>
+
