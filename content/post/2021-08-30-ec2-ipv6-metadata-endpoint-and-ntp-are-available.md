@@ -30,16 +30,18 @@ categories: [aws]
 
 ドキュメントを見ても有効化の方法どこにも書いてないぞ？？？と思ったんですが、それもそのはず。
 AWS CLI が対応していないので、有効化する方法がなかったのです。
-IPv6 エンドポイントに対応 4 日前にリリースされた [AWS CLI v2.2.33](https://github.com/aws/aws-cli/blob/v2/CHANGELOG.rst#2233) からでした・・・。
+IPv6 エンドポイントに対応したのは 4 日前にリリースされた [AWS CLI v2.2.33](https://github.com/aws/aws-cli/blob/v2/CHANGELOG.rst#2233) からでした・・・。
 
 > api-change:`ec2`: Support added for IMDS IPv6 endpoint
+
+アナウンスを見てからアップデートしたつもりだったんですが、タイミングが悪かった。
 
 ```
 $ aws --version
 aws-cli/2.2.33 Python/3.9.6 Darwin/20.6.0 source/x86_64 prompt/off
 ```
 
-AWS CLI v2.2.33 で IMDS のオプションを確認すると `HttpProtocolIpv6` といういかにもそれっぽいオプションが増えています。
+AWS CLI v2.2.33 にアップデートしてから、あらためて IMDS のオプションを確認すると `HttpProtocolIpv6` といういかにもそれっぽい項目が増えています。
 
 ```
 $ aws ec2 modify-instance-metadata-options --instance-id i-009df055e1f06d17f
