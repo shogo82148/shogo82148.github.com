@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "EC2 Instance Metadata Service と Amazon Time Sync Service で IPv6 エンドポイントが利用可能になりました"
-slug: confused-deputy-problem-on-mackerelio
+slug: ipv6-metadata-endpoint-and-ntp-are-available
 date: 2021-08-30 22:39:00 +0900
 comments: true
 categories: [aws]
