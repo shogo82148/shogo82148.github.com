@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+    
+    
+      <link href="/css/fonts.css" rel="stylesheet" type="text/css">
+    
+  
+
+  
+  <title>GitHub Actions &#43; OIDC Token の情報をAWSのセッションタグに設定してみた</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+    <link rel="stylesheet" href="/css/fork-awesome.min.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.75.1" />
+
+  
+  
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Sep 24, 2021
+     - 3 minute read 
+     - <a href="https://shogo82148.github.io/blog/2021/09/24/github-actions-oidc/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/aws/">aws </a><a class="label" href="https://shogo82148.github.io/categories/github/">github </a>
+    
+  </p>
+  <h1 class="entry-title">
+     GitHub Actions &#43; OIDC Token の情報をAWSのセッションタグに設定してみた 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>GitHub Actions で ID Token が使えるようになったと話題ですね。</p>
+<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">うおー！サイコー！！！！！ <a href="https://t.co/2stS4miUOD">https://t.co/2stS4miUOD</a></p>&mdash; Tori Hara (@toricls) <a href="https://twitter.com/toricls/status/1438111074138480645?ref_src=twsrc%5Etfw">September 15, 2021</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+<blockquote class="twitter-tweet"><p lang="en" dir="ltr">Ok I blogged about it. That&#39;s how excited I am. <br><br>1. Deploy this CFN template<br>2. Write this GHA workflow<br>3. Never worry about IAM users again<br> <a href="https://t.co/KJrr2Jw4bE">https://t.co/KJrr2Jw4bE</a> <a href="https://t.co/9IcocgurxP">pic.twitter.com/9IcocgurxP</a></p>&mdash; Aidan W Steele (@__steele) <a href="https://twitter.com/__steele/status/1437984026145427461?ref_src=twsrc%5Etfw">September 15, 2021</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+<p>AWS IAM が OpenID Connect (OIDC) を使った認証 (<code>sts:AssumeRoleWithWebIdentity</code>) に対応しているので、認証プロバイダ(IdP)を用意してあげればシークレットの登録が不要になるということらしいです。
+これは便利！</p>
+<h2 id="セッションタグを渡したい">セッションタグを渡したい</h2>
+<p>これはまさに「<a href="https://shogo82148.github.io/blog/2021/03/24/actions-aws-assume-role/">AWS_SECRET_ACCESS_KEY を GitHub Actions secrets へ突っ込むのに疲れた俺達は</a>」で実現したかったことですね。
+<del>このままだとせっかく作ったアクションが不要になりそうで悔しいので</del> このアクションにずっと追加したかった機能があるのですが、OIDCトークンを使うと簡単に実装できそうだったので、お試しで追加してみました。</p>
+<p><code>actions-aws-assume-role</code> アクションは<a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_session-tags.html#id_session-tags_adding-assume-role">セッションタギング</a>に対応しています。
+これを利用するとアクションを実行したレポジトリ、ブランチ、実行したユーザー等がわかります。</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GitHub</td>
+<td>&ldquo;Actions&rdquo;</td>
+</tr>
+<tr>
+<td>Repository</td>
+<td><code>GITHUB_REPOSITORY</code></td>
+</tr>
+<tr>
+<td>Workflow</td>
+<td><code>GITHUB_WORKFLOW</code></td>
+</tr>
+<tr>
+<td>RunId</td>
+<td><code>GITHUB_RUN_ID</code></td>
+</tr>
+<tr>
+<td>Actor</td>
+<td><code>GITHUB_ACTOR</code></td>
+</tr>
+<tr>
+<td>Branch</td>
+<td><code>GITHUB_REF</code></td>
+</tr>
+<tr>
+<td>Commit</td>
+<td><code>GITHUB_SHA</code></td>
+</tr>
+</tbody>
+</table>
+<p>しかしこれらの情報は、レポジトリへの書き込み権限を持っているユーザーであれば容易に偽装可能です。
+そのため100%正しい情報が入っているとは言えない状態でした。</p>
+<p>OIDC が利用可能になるとこれが変わります。
+以下はOIDCのIDトークンの Claim 部分をデコードしたものです。
+ここにもレポジトリ、ブランチ、実行したユーザー等が入っていますね。</p>
+<div class="highlight"><pre class="chroma"><code class="language-json" data-lang="json"><span class="p">{</span>
+  <span class="nt">&#34;jti&#34;</span><span class="p">:</span> <span class="s2">&#34;73e91482-a3d5-408a-98ea-b91de4733605&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;sub&#34;</span><span class="p">:</span> <span class="s2">&#34;repo:shogo82148/github-action-test:ref:refs/heads/main&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;aud&#34;</span><span class="p">:</span> <span class="s2">&#34;https://github.com/shogo82148/github-action-test&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;ref&#34;</span><span class="p">:</span> <span class="s2">&#34;refs/heads/main&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;sha&#34;</span><span class="p">:</span> <span class="s2">&#34;6dfcf89b39ebf8046a9e72d93eda07c22214dde9&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;repository&#34;</span><span class="p">:</span> <span class="s2">&#34;shogo82148/github-action-test&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;repository_owner&#34;</span><span class="p">:</span> <span class="s2">&#34;shogo82148&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;run_id&#34;</span><span class="p">:</span> <span class="s2">&#34;1250487318&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;run_number&#34;</span><span class="p">:</span> <span class="s2">&#34;32&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;run_attempt&#34;</span><span class="p">:</span> <span class="s2">&#34;1&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;actor&#34;</span><span class="p">:</span> <span class="s2">&#34;shogo82148&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;workflow&#34;</span><span class="p">:</span> <span class="s2">&#34;token permission&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;head_ref&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;base_ref&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;event_name&#34;</span><span class="p">:</span> <span class="s2">&#34;workflow_dispatch&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;ref_type&#34;</span><span class="p">:</span> <span class="s2">&#34;branch&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;job_workflow_ref&#34;</span><span class="p">:</span> <span class="s2">&#34;shogo82148/github-action-test/.github/workflows/workflow_dispatch.yml@refs/heads/main&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;iss&#34;</span><span class="p">:</span> <span class="s2">&#34;https://vstoken.actions.githubusercontent.com&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;nbf&#34;</span><span class="p">:</span> <span class="mi">1632045829</span><span class="p">,</span>
+  <span class="nt">&#34;exp&#34;</span><span class="p">:</span> <span class="mi">1632046729</span><span class="p">,</span>
+  <span class="nt">&#34;iat&#34;</span><span class="p">:</span> <span class="mi">1632046429</span>
+<span class="p">}</span>
+</code></pre></div><p>GitHub Actions 上の環境変数と違うのは、これらの情報が <strong>電子署名によって保護されているという点</strong> です。
+改ざんしても署名でバレてしまうので、信頼できる情報として扱うことができます。</p>
+<p>セッションタグは IAM Role の信頼ポリシーの <code>Condition</code> に設定する条件として使用可能です。
+例えば以下のように <code>&quot;aws:RequestTag/Branch&quot;: &quot;refs/heads/main&quot;</code> を追加することで、
+<code>actions-aws-assume-role</code> アクションの使用を main ブランチに制限することができます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-json" data-lang="json"><span class="p">{</span>
+  <span class="nt">&#34;Version&#34;</span><span class="p">:</span> <span class="s2">&#34;2012-10-17&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;Statement&#34;</span><span class="p">:</span> <span class="p">[</span>
+    <span class="p">{</span>
+      <span class="nt">&#34;Effect&#34;</span><span class="p">:</span> <span class="s2">&#34;Allow&#34;</span><span class="p">,</span>
+      <span class="nt">&#34;Principal&#34;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="nt">&#34;AWS&#34;</span><span class="p">:</span> <span class="s2">&#34;arn:aws:iam::053160724612:root&#34;</span>
+      <span class="p">},</span>
+      <span class="nt">&#34;Action&#34;</span><span class="p">:</span> <span class="s2">&#34;sts:AssumeRole&#34;</span><span class="p">,</span>
+      <span class="nt">&#34;Condition&#34;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="nt">&#34;StringEquals&#34;</span><span class="p">:</span> <span class="p">{</span>
+          <span class="nt">&#34;sts:ExternalId&#34;</span><span class="p">:</span> <span class="s2">&#34;shogo82148/github-action-test&#34;</span><span class="p">,</span>
+          <span class="nt">&#34;aws:RequestTag/IdToken&#34;</span><span class="p">:</span> <span class="s2">&#34;true&#34;</span><span class="p">,</span>
+          <span class="nt">&#34;aws:RequestTag/GitHub&#34;</span><span class="p">:</span> <span class="s2">&#34;Actions&#34;</span><span class="p">,</span>
+          <span class="nt">&#34;aws:RequestTag/Branch&#34;</span><span class="p">:</span> <span class="s2">&#34;refs/heads/main&#34;</span>
+        <span class="p">}</span>
+      <span class="p">}</span>
+    <span class="p">},</span>
+    <span class="p">{</span>
+      <span class="nt">&#34;Effect&#34;</span><span class="p">:</span> <span class="s2">&#34;Allow&#34;</span><span class="p">,</span>
+      <span class="nt">&#34;Principal&#34;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="nt">&#34;AWS&#34;</span><span class="p">:</span> <span class="s2">&#34;arn:aws:iam::053160724612:root&#34;</span>
+      <span class="p">},</span>
+      <span class="nt">&#34;Action&#34;</span><span class="p">:</span> <span class="s2">&#34;sts:TagSession&#34;</span>
+    <span class="p">}</span>
+  <span class="p">]</span>
+<span class="p">}</span>
+</code></pre></div><h2 id="environment-が取得できる">Environment が取得できる</h2>
+<p>OIDCの利用にはもうひとつ嬉しい点があって、<a href="https://docs.github.com/en/actions/deployment/environments">Environments</a> を指定すると、IDトークンに Environment に関する情報が入ります。</p>
+<div class="highlight"><pre class="chroma"><code class="language-json" data-lang="json"><span class="p">{</span>
+  <span class="nt">&#34;jti&#34;</span><span class="p">:</span> <span class="s2">&#34;f409168e-6bec-42bb-9cef-73d86a0a01da&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;sub&#34;</span><span class="p">:</span> <span class="s2">&#34;repo:shogo82148/github-action-test:environment:test&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;aud&#34;</span><span class="p">:</span> <span class="s2">&#34;https://github.com/shogo82148/github-action-test&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;ref&#34;</span><span class="p">:</span> <span class="s2">&#34;refs/heads/main&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;sha&#34;</span><span class="p">:</span> <span class="s2">&#34;edbf00b96304d9ce2434f3daed59dd847ffd449b&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;repository&#34;</span><span class="p">:</span> <span class="s2">&#34;shogo82148/github-action-test&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;repository_owner&#34;</span><span class="p">:</span> <span class="s2">&#34;shogo82148&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;run_id&#34;</span><span class="p">:</span> <span class="s2">&#34;1268676048&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;run_number&#34;</span><span class="p">:</span> <span class="s2">&#34;34&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;run_attempt&#34;</span><span class="p">:</span> <span class="s2">&#34;1&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;actor&#34;</span><span class="p">:</span> <span class="s2">&#34;shogo82148&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;workflow&#34;</span><span class="p">:</span> <span class="s2">&#34;token permission&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;head_ref&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;base_ref&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;event_name&#34;</span><span class="p">:</span> <span class="s2">&#34;workflow_dispatch&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;ref_type&#34;</span><span class="p">:</span> <span class="s2">&#34;branch&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;environment&#34;</span><span class="p">:</span> <span class="s2">&#34;test&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;job_workflow_ref&#34;</span><span class="p">:</span> <span class="s2">&#34;shogo82148/github-action-test/.github/workflows/workflow_dispatch.yml@refs/heads/main&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;iss&#34;</span><span class="p">:</span> <span class="s2">&#34;https://vstoken.actions.githubusercontent.com&#34;</span><span class="p">,</span>
+  <span class="nt">&#34;nbf&#34;</span><span class="p">:</span> <span class="mi">1632462508</span><span class="p">,</span>
+  <span class="nt">&#34;exp&#34;</span><span class="p">:</span> <span class="mi">1632463407</span><span class="p">,</span>
+  <span class="nt">&#34;iat&#34;</span><span class="p">:</span> <span class="mi">1632463108</span>
+<span class="p">}</span>
+</code></pre></div><p>GitHub Actions のジョブの中からこの情報が取れなくて困ってたんですよね。
+これが使えると <a href="https://docs.github.com/en/actions/managing-workflow-runs/reviewing-deployments">デプロイ内容のレビュー</a> を受けて Approve されたワークフローにのみ権限を付与する、
+などといった高度なアクセス制御か可能となります。</p>
+<h2 id="各社へのお願い">各社へのお願い</h2>
+<h3 id="aws">AWS</h3>
+<p>実は <code>sts:AssumeRoleWithWebIdentity</code> でもIDトークンの情報を信頼ポリシーの条件とすることが可能です。</p>
+<ul>
+<li><a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_iam-condition-keys.html#condition-keys-wif">Available keys for AWS web identity federation</a></li>
+</ul>
+<p>しかし、簡単に試してみた限り <code>vstoken.actions.githubusercontent.com:aud</code> や <code>vstoken.actions.githubusercontent.com:sub</code> といった OIDC の一般的なキーしか参照できないようです。</p>
+<p>一方、Google や Facebook は設定済みのIdPが用意されており、<code>graph.facebook.com:app_id</code>, <code>accounts.google.com:oaud</code> といったプロバイダ特有のキーが利用できるようです。</p>
+<p>設定済みのIdPに GitHub Actions を追加して、利用可能なキーを追加してもらうことってできないですかね・・・？</p>
+<h3 id="github">GitHub</h3>
+<p><code>sts:AssumeRoleWithWebIdentity</code> でも一応セッションタグを利用することはできるのですが、
+IDトークンの Claim に <code>&quot;https://aws.amazon.com/tags&quot;</code> という特殊なキーを埋め込む必要があります。</p>
+<div class="highlight"><pre class="chroma"><code class="language-json" data-lang="json"><span class="p">{</span>
+    <span class="nt">&#34;sub&#34;</span><span class="p">:</span> <span class="s2">&#34;johndoe&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;aud&#34;</span><span class="p">:</span> <span class="s2">&#34;ac_oic_client&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;jti&#34;</span><span class="p">:</span> <span class="s2">&#34;ZYUCeRMQVtqHypVPWAN3VB&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;iss&#34;</span><span class="p">:</span> <span class="s2">&#34;https://xyz.com&#34;</span><span class="p">,</span>
+    <span class="nt">&#34;iat&#34;</span><span class="p">:</span> <span class="mi">1566583294</span><span class="p">,</span>
+    <span class="nt">&#34;exp&#34;</span><span class="p">:</span> <span class="mi">1566583354</span><span class="p">,</span>
+    <span class="nt">&#34;auth_time&#34;</span><span class="p">:</span> <span class="mi">1566583292</span><span class="p">,</span>
+    <span class="nt">&#34;https://aws.amazon.com/tags&#34;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="nt">&#34;principal_tags&#34;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="nt">&#34;Project&#34;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&#34;Automation&#34;</span><span class="p">],</span>
+            <span class="nt">&#34;CostCenter&#34;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&#34;987654&#34;</span><span class="p">],</span>
+            <span class="nt">&#34;Department&#34;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&#34;Engineering&#34;</span><span class="p">]</span>
+        <span class="p">},</span>
+        <span class="nt">&#34;transitive_tag_keys&#34;</span><span class="p">:</span> <span class="p">[</span>
+            <span class="s2">&#34;Project&#34;</span><span class="p">,</span>
+            <span class="s2">&#34;CostCenter&#34;</span>
+        <span class="p">]</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div><p>これを使えば GitHub 側でも対応可能だと思うので、何卒・・・</p>
+<h2 id="まとめ">まとめ</h2>
+<p>GitHub Actions の ID Token の情報を AWSのセッションタグに設定してみました。
+<code>actions-aws-assume-role</code> アクションにも組み込んでみましたが、 <strong>マーケットへの公開はしていません。</strong></p>
+<p>というのも、2021-09-24時点 <strong>OpenID Connect に関して GitHub の公式ドキュメントには一切記載がなく</strong>、
+今後どうなるのか全くわからないからです。
+非常に便利そうな機能なので、公開されるのが待ち遠しいですね。</p>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://github.com/github/roadmap/issues/249">Actions: Secure cloud deployments with Open ID Connect</a>
+<ul>
+<li>GitHub の公開ロードマップ</li>
+</ul>
+</li>
+<li><a href="https://github.com/actions/toolkit/pull/887">Added OIDC client functionality in core package #887</a></li>
+<li><a href="https://awsteele.com/blog/2021/09/15/aws-federation-comes-to-github-actions.html">AWS federation comes to GitHub Actions - Aidan Steele&rsquo;s blog (usually about AWS)</a></li>
+<li><a href="https://github.com/glassechidna/ghaoidc">glassechidna/ghaoidc</a></li>
+<li><a href="https://github.com/zarnovican/aws-oidc-login-action">zarnovican/aws-oidc-login-action</a>
+<ul>
+<li>先に紹介したブログ記事では Bash Script だったものを JavaScript Action として書き直したもの</li>
+</ul>
+</li>
+<li><a href="https://dev.classmethod.jp/articles/github-actions-without-permanent-credential/">GitHub ActionsでAWSの永続的なクレデンシャルを渡すことなくIAM Roleが利用できるようになったようです - DevelopersIO</a></li>
+<li><a href="https://ryotarai.hatenablog.com/entry/github-acitons-id-token-gcp">GitHub ActionsのOIDC id tokenでGCPにアクセスしてみた - ryotarai&rsquo;s blog</a></li>
+<li><a href="https://github.com/google-github-actions/auth">google-github-actions/auth</a>
+<ul>
+<li>GCP でも同じことができるよ！という記事を見かけたなと思ったら、もうGCP公式が Action 作り始めていた&hellip;</li>
+</ul>
+</li>
+<li><a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_iam-condition-keys.html#condition-keys-wif">Available keys for AWS web identity federation</a></li>
+<li><a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_session-tags.html#id_session-tags_adding-assume-role-idp">Passing session tags using AssumeRoleWithWebIdentity</a></li>
+<li><a href="https://speakerdeck.com/fujiwara3/aws-credentials-on-actions">GitHub Actionsに「強い」AWSの権限を渡したい / AWS credentials on Actions</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>Sep 24, 2021</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2021/09/04/holidays-api-is-released/" title="祝日APIを公開しました">祝日APIを公開しました</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2021/09/24/github-actions-oidc/">GitHub Actions &#43; OIDC Token の情報をAWSのセッションタグに設定してみた</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/09/04/holidays-api-is-released/">祝日APIを公開しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/08/30/ipv6-metadata-endpoint-and-ntp-are-available/">EC2 Instance Metadata Service と Amazon Time Sync Service で IPv6 エンドポイントが利用可能になりました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/08/26/confused-deputy-problem-on-mackerelio/">Mackerelにおける「混乱した代理」問題に対応しよう</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/06/13/aws-lambada-efs-and-perl/">AWS Lambda に EFS をマウントして Perl CGI 完全復活</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/06/06/perl-on-aws-app-runner/">AWS App Runner に Perl をデプロイしてみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/05/22/perl-5.34-is-released/">Perl 5.34 がリリースされました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/05/18/hello-maven-central/">Gradle Ribbonizer Plugin を Maven Central へ移行してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/03/24/actions-aws-assume-role/">AWS_SECRET_ACCESS_KEY を GitHub Actions secrets へ突っ込むのに疲れた俺達は</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2021 Shogo Ichinose - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['\\(','\\)'], ['{% m %}', '{% em %}']],
+    displayMath: [['\\[','\\]'], ['{% math %}', '{% endmath %}']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+  </script>
+
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+</html>
+
