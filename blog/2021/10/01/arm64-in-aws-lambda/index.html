@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+    
+    
+      <link href="/css/fonts.css" rel="stylesheet" type="text/css">
+    
+  
+
+  
+  <title>AWS Lambda の Arm64 対応試してみた</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+    <link rel="stylesheet" href="/css/fork-awesome.min.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.75.1" />
+
+  
+  
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Oct 1, 2021
+     - 2 minute read 
+     - <a href="https://shogo82148.github.io/blog/2021/10/01/arm64-in-aws-lambda/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/aws/">aws </a>
+    
+  </p>
+  <h1 class="entry-title">
+     AWS Lambda の Arm64 対応試してみた 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>AWS Lambda の ARM サポートが発表されましたね。</p>
+<ul>
+<li><a href="https://aws.amazon.com/jp/about-aws/whats-new/2021/09/better-price-performance-aws-lambda-functions-aws-graviton2-processor/">Achieve up to 34% better price/performance with AWS Lambda Functions powered by AWS Graviton2 processor</a></li>
+</ul>
+<p>というわけで早速触ってみました。</p>
+<h2 id="祝日-api-で試してみる">祝日 API で試してみる</h2>
+<p><a href="https://shogo82148.github.io/blog/2021/09/04/holidays-api-is-released/">先日公開した祝日API</a> で試してみました。</p>
+<ul>
+<li><a href="https://github.com/shogo82148/holidays-jp/pull/22">https://github.com/shogo82148/holidays-jp/pull/22</a></li>
+</ul>
+<p>変更は実質2行です。簡単ですね！</p>
+<div class="highlight"><pre class="chroma"><code class="language-diff" data-lang="diff"><span class="gh">diff --git a/holidays-api/Makefile b/holidays-api/Makefile
+</span><span class="gh">index a39a3fa..0908902 100644
+</span><span class="gh"></span><span class="gd">--- a/holidays-api/Makefile
+</span><span class="gd"></span><span class="gi">+++ b/holidays-api/Makefile
+</span><span class="gi"></span><span class="gu">@@ -1,6 +1,6 @@
+</span><span class="gu"></span> .PHONY: build-HolidaysFunction
+ build-HolidaysFunction:
+<span class="gd">-	GOOS=linux GOARCH=amd64 go build -o $(ARTIFACTS_DIR)/bootstrap -tags lambda.norpc ./cmd/bootstrap
+</span><span class="gd"></span><span class="gi">+	GOOS=linux GOARCH=arm64 go build -o $(ARTIFACTS_DIR)/bootstrap -tags lambda.norpc ./cmd/bootstrap
+</span><span class="gi"></span> 
+ .PHONY: test
+ test:
+<span class="gh">diff --git a/template.yaml b/template.yaml
+</span><span class="gh">index 73fe7bb..06db749 100644
+</span><span class="gh"></span><span class="gd">--- a/template.yaml
+</span><span class="gd"></span><span class="gi">+++ b/template.yaml
+</span><span class="gi"></span><span class="gu">@@ -16,6 +16,7 @@ Resources:
+</span><span class="gu"></span>       CodeUri: holidays-api/
+       Handler: holidays-api
+       Runtime: provided.al2
+<span class="gi">+      Architectures: [ arm64 ]
+</span><span class="gi"></span>       Events:
+         CatchAll:
+           Type: HttpApi
+</code></pre></div><p>APIを叩いてみましたが、問題なく動いているようですね。</p>
+<pre><code>% curl https://holidays-jp.shogo82148.com/2021/10/ | jq .
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100    15  100    15    0     0     90      0 --:--:-- --:--:-- --:--:--    90
+{
+  &quot;holidays&quot;: []
+}
+</code></pre><p>・・・今年の10月は祝日がないだと・・・？</p>
+<h2 id="aws-sam-でのやり方">AWS SAM でのやり方</h2>
+<p>2021-10-01 21:37 現在、最新の AWS SAM CLI で ARM が追加されています。</p>
+<ul>
+<li><a href="https://github.com/aws/aws-sam-cli/releases/tag/v1.33.0">Release 1.33.0 - AWS Lambda ARM Support</a></li>
+</ul>
+<blockquote>
+<p>aws-sam-cli-bot released this 17 hours ago</p>
+</blockquote>
+<p>リリースから 17 時間とできたてホヤホヤなので、今の所 CPUアーキテクチャーの指定方法は Undocumented でした・・・。</p>
+<ul>
+<li><a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html">AWS::Serverless::Function - AWS Serverless Application Model</a></li>
+</ul>
+<p>困ったので、 AWS Lambda の API ドキュメントを見ると、それっぽい項目がすでに追加されていますね。</p>
+<ul>
+<li><a href="https://docs.aws.amazon.com/lambda/latest/dg/API_CreateFunction.html#SSS-CreateFunction-request-Architectures">CreateFunction - AWS Lambda API</a></li>
+</ul>
+<blockquote>
+<p>Architectures</p>
+<p>The instruction set architecture that the function supports. Enter a string array with one of the valid values. The default value is x86_64.</p>
+<p>Type: Array of strings</p>
+<p>Array Members: Fixed number of 1 item.</p>
+<p>Valid Values: x86_64 | arm64</p>
+<p>Required: No</p>
+</blockquote>
+<p>AWS SAM の基盤となっている CloudFormation のテンプレートは、ほとんど API のリクエスト形式を流用しているので、ドキュメント通り <code>Architectures</code> に &ldquo;Array of strings&rdquo; を渡せば行けるんじゃ？とやってみたら行けました！</p>
+<div class="highlight"><pre class="chroma"><code class="language-diff" data-lang="diff"><span class="gh">diff --git a/template.yaml b/template.yaml
+</span><span class="gh">index 73fe7bb..06db749 100644
+</span><span class="gh"></span><span class="gd">--- a/template.yaml
+</span><span class="gd"></span><span class="gi">+++ b/template.yaml
+</span><span class="gi"></span><span class="gu">@@ -16,6 +16,7 @@ Resources:
+</span><span class="gu"></span>       CodeUri: holidays-api/
+       Handler: holidays-api
+       Runtime: provided.al2
+<span class="gi">+      Architectures: [ arm64 ]
+</span><span class="gi"></span>       Events:
+         CatchAll:
+           Type: HttpApi
+</code></pre></div><p>スクリプト言語だとソースコードに変更がなく面白みに欠けるので、Go のバイナリをデプロイしてみました。
+<code>GOARCH=arm64</code> を指定して ARM64 のバイナリにクロスコンパイルします。</p>
+<div class="highlight"><pre class="chroma"><code class="language-diff" data-lang="diff"><span class="gh">diff --git a/holidays-api/Makefile b/holidays-api/Makefile
+</span><span class="gh">index a39a3fa..0908902 100644
+</span><span class="gh"></span><span class="gd">--- a/holidays-api/Makefile
+</span><span class="gd"></span><span class="gi">+++ b/holidays-api/Makefile
+</span><span class="gi"></span><span class="gu">@@ -1,6 +1,6 @@
+</span><span class="gu"></span> .PHONY: build-HolidaysFunction
+ build-HolidaysFunction:
+<span class="gd">-	GOOS=linux GOARCH=amd64 go build -o $(ARTIFACTS_DIR)/bootstrap -tags lambda.norpc ./cmd/bootstrap
+</span><span class="gd"></span><span class="gi">+	GOOS=linux GOARCH=arm64 go build -o $(ARTIFACTS_DIR)/bootstrap -tags lambda.norpc ./cmd/bootstrap
+</span><span class="gi"></span> 
+ .PHONY: test
+ test:
+</code></pre></div><h2 id="まとめ">まとめ</h2>
+<p>祝日を返して</p>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://aws.amazon.com/jp/about-aws/whats-new/2021/09/better-price-performance-aws-lambda-functions-aws-graviton2-processor/">Achieve up to 34% better price/performance with AWS Lambda Functions powered by AWS Graviton2 processor</a></li>
+<li><a href="https://github.com/aws/aws-sam-cli/releases/tag/v1.33.0">Release 1.33.0 - AWS Lambda ARM Support</a></li>
+<li><a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html">AWS::Serverless::Function - AWS Serverless Application Model</a></li>
+<li><a href="https://docs.aws.amazon.com/lambda/latest/dg/API_CreateFunction.html#SSS-CreateFunction-request-Architectures">CreateFunction - AWS Lambda API</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>Oct 1, 2021</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2021/09/24/github-actions-oidc/" title="GitHub Actions &#43; OIDC Token の情報をAWSのセッションタグに設定してみた">GitHub Actions &#43; OIDC Token の情報をAWSのセッションタグに設定してみた</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2021/10/01/arm64-in-aws-lambda/">AWS Lambda の Arm64 対応試してみた</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/09/24/github-actions-oidc/">GitHub Actions &#43; OIDC Token の情報をAWSのセッションタグに設定してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/09/04/holidays-api-is-released/">祝日APIを公開しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/08/30/ipv6-metadata-endpoint-and-ntp-are-available/">EC2 Instance Metadata Service と Amazon Time Sync Service で IPv6 エンドポイントが利用可能になりました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/08/26/confused-deputy-problem-on-mackerelio/">Mackerelにおける「混乱した代理」問題に対応しよう</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/06/13/aws-lambada-efs-and-perl/">AWS Lambda に EFS をマウントして Perl CGI 完全復活</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/06/06/perl-on-aws-app-runner/">AWS App Runner に Perl をデプロイしてみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/05/22/perl-5.34-is-released/">Perl 5.34 がリリースされました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/05/18/hello-maven-central/">Gradle Ribbonizer Plugin を Maven Central へ移行してみた</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2021 Shogo Ichinose - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['\\(','\\)'], ['{% m %}', '{% em %}']],
+    displayMath: [['\\[','\\]'], ['{% math %}', '{% endmath %}']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+  </script>
+
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+</html>
+
