@@ -64,6 +64,32 @@ APIを叩いてみましたが、問題なく動いているようですね。
 
 ## AWS SAM でのやり方
 
+**2021-10-02 9:38 追記**
+
+今朝確認したらドキュメントに追加されてました。
+
+- https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-architectures
+
+> Architectures
+>
+> The instruction set architecture for the function.
+>
+> For more information about this property, see Lambda instruction set architectures in the AWS Lambda Developer Guide.
+>
+> Valid values: One of x86_64 or arm64
+>
+> Type: List
+>
+> Required: No
+>
+> Default: x86_64
+>
+> AWS CloudFormation compatibility: This property is passed directly to the Architectures property of an AWS::Lambda::Function resource.
+
+なお日本語版はまだない。
+
+**追記ここまで**
+
 2021-10-01 21:37 現在、最新の AWS SAM CLI で ARM が追加されています。
 
 - [Release 1.33.0 - AWS Lambda ARM Support](https://github.com/aws/aws-sam-cli/releases/tag/v1.33.0)
