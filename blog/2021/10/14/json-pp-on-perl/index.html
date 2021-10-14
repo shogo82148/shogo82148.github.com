@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+    
+    
+      <link href="/css/fonts.css" rel="stylesheet" type="text/css">
+    
+  
+
+  
+  <title>Perl の JSON::PP での数値の扱いが変わっていた件</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+    <link rel="stylesheet" href="/css/fork-awesome.min.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.75.1" />
+
+  
+  
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Oct 14, 2021
+     - 5 minute read 
+     - <a href="https://shogo82148.github.io/blog/2021/10/14/json-pp-on-perl/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/aws/">aws </a><a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2021/10/14/json-pp-on-perl/">Perl の JSON::PP での数値の扱いが変わっていた件</a>
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p><a href="https://github.com/marketplace/actions/setup-perl-environment">Setup Perl environment</a> の開発中は、
+いろんなバージョンのPerlをビルドして、いろんなバージョンのPerlでコードを実行します。
+そんな中でPerlのコアモジュールのひとつである <a href="https://metacpan.org/pod/JSON::PP">JSON::PP</a> の挙動が変わっていることに気が付きました。
+なんでだろう？とずっと気になったまま放置してたんですが、ちょっと調べてみました。</p>
+<h2 id="jsonpp-の挙動の変化">JSON::PP の挙動の変化</h2>
+<p>Perl 5.26 と Perl 5.28 で以下のコードを実行してみます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">feature</span> <span class="n">say</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">JSON::PP</span> <span class="sx">qw/encode_json/</span><span class="p">;</span>
+
+<span class="k">my</span> <span class="nv">$answer</span> <span class="o">=</span> <span class="mi">42</span><span class="p">;</span>
+
+<span class="n">say</span> <span class="n">encode_json</span><span class="p">({</span> <span class="n">answer</span> <span class="o">=&gt;</span> <span class="nv">$answer</span> <span class="p">});</span>
+
+<span class="n">say</span> <span class="s">&#34;Answer to the Ultimate Question of Life, the Universe, and Everything: $answer&#34;</span><span class="p">;</span>
+
+<span class="n">say</span> <span class="n">encode_json</span><span class="p">({</span> <span class="n">answer</span> <span class="o">=&gt;</span> <span class="nv">$answer</span> <span class="p">});</span>
+</code></pre></div><p>Perl 5.26 で実行した場合: [Wandbox]三へ( へ՞ਊ ՞)へ ﾊｯﾊｯ <a href="https://wandbox.org/permlink/tEJxPrlX8oaMbj6o">https://wandbox.org/permlink/tEJxPrlX8oaMbj6o</a></p>
+<pre><code>{&quot;answer&quot;:42}
+Answer to the Ultimate Question of Life, the Universe, and Everything: 42
+{&quot;answer&quot;:&quot;42&quot;}
+</code></pre><p>Perl 5.28 で実行した場合: [Wandbox]三へ( へ՞ਊ ՞)へ ﾊｯﾊｯ <a href="https://wandbox.org/permlink/qs2SQBwuQR6K8Jd4">https://wandbox.org/permlink/qs2SQBwuQR6K8Jd4</a></p>
+<pre><code>{&quot;answer&quot;:42}
+Answer to the Ultimate Question of Life, the Universe, and Everything: 42
+{&quot;answer&quot;:42}
+</code></pre><p>出力結果の3行目にご注目ください。Perl 5.26 で実行した場合は <code>&quot;42&quot;</code> となっていたのが、Perl 5.28 では <code>42</code> になっています。
+何が変わったのか、変更点を調べてみました。</p>
+<p>結論だけ簡単に書いておくと Perl 5.28 以降を使う場合であっても <strong>この挙動を前提としたコードは書かないほうがいいです</strong>。</p>
+<h2 id="そもそもなんで-42-になってたの">そもそもなんで <code>&quot;42&quot;</code> になってたの</h2>
+<h3 id="数値コンテキスト文字列コンテキストの話">数値コンテキスト・文字列コンテキストの話</h3>
+<p>Perl に馴染みの無い方はそもそもさっきのコードで <code>&quot;42&quot;</code> が出力されたことに疑問を持つのでは無いでしょうか？
+<code>$answer</code> に代入をしているのは <code>my $answer = 42;</code> の行だけなので、 <code>$answer</code> の中身は変わりようが無いですよね？</p>
+<p>これにはPerlにおける「コンテキスト」という概念が深く絡んできます。
+詳しい解説は僕の手に余るので、詳しく知りたい方は「<a href="https://www.slideshare.net/KondoYoshiyuki/yapc2012-20120929">Perlの勘所をマスターしよう! コンテキストとリファレンスを我が物に!</a>」を参考にしてください。</p>
+<p>概要だけ説明しておくと、Perl は前後の文脈によって変数を「数値として扱う」のか「文字列として扱う」のかが決まります。
+例えば以下のコードで、最初の <code>$answer</code> は数値加算の文脈で使われているので数値として扱われます。
+二番目の <code>$answer</code> は文字列連結の文脈で使われているので文字列として扱われます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="c1"># $answer を数値として扱う</span>
+<span class="n">say</span> <span class="nv">$answer</span> <span class="o">+</span> <span class="mi">1</span><span class="p">;</span>
+
+<span class="c1"># $answer を文字列として扱う</span>
+<span class="n">say</span> <span class="s">&#34;The answer is $answer&#34;</span><span class="p">;</span>
+</code></pre></div><h3 id="sv-のアップグレード">SV のアップグレード</h3>
+<p>このように同じ変数でも文脈によって数値として扱われたり文字列として扱われたりするのですが、
+毎回毎回数値と文字列の変換を行うのは性能的に不利です。
+そこでPerlは気を利かせて変換結果をキャッシュしてくれます。
+これは以下のようなコードで確認できます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">feature</span> <span class="n">say</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">Devel::Peek</span><span class="p">;</span>
+
+<span class="k">my</span> <span class="nv">$answer</span> <span class="o">=</span> <span class="mi">42</span><span class="p">;</span>
+
+<span class="n">Dump</span> <span class="nv">$answer</span><span class="p">;</span>
+
+<span class="n">say</span> <span class="s">&#34;Answer to the Ultimate Question of Life, the Universe, and Everything: $answer&#34;</span><span class="p">;</span>
+
+<span class="n">Dump</span> <span class="nv">$answer</span><span class="p">;</span>
+</code></pre></div><pre><code>SV = IV(0x7f9b81817420) at 0x7f9b81817430
+  REFCNT = 1
+  FLAGS = (IOK,pIOK)
+  IV = 42
+Answer to the Ultimate Question of Life, the Universe, and Everything: 42
+SV = PVIV(0x7f9b81817e20) at 0x7f9b81817430
+  REFCNT = 1
+  FLAGS = (IOK,POK,pIOK,pPOK)
+  IV = 42
+  PV = 0x7f9b80d0f760 &quot;42&quot;\0
+  CUR = 2
+  LEN = 10
+</code></pre><p>これを <strong>SVのアップグレード</strong> と言います。
+これについても僕が説明するよりちゃんとした解説があるので、出力の具体的な意味を知りたい方はこちらをどうぞ。</p>
+<ul>
+<li><a href="https://gihyo.jp/dev/serial/01/perl-hackers-hub/001601">Perl Hackers Hub 第16回　Perl内部構造の深遠に迫る（1）</a></li>
+</ul>
+<p>このSVのアップグレードは文字列を数値として扱った場合にも発生します。
+そして厄介なのが一度SVのアップグレードが起きると、<strong>アップグレード前の型がわからなくなる</strong> ということです。
+元が数値だったか文字列だったか判断がつかないので、Perl 5.26 以前は一律文字列としてエンコードするようになってます。</p>
+<h2 id="perl-528-での変更">Perl 5.28 での変更</h2>
+<p><a href="https://metacpan.org/pod/JSON::PP#simple-scalars">JSON::PPのドキュメント</a> にしっかり書いてありました。</p>
+<blockquote>
+<p>Since version 2.91_01, JSON::PP uses a different number detection logic that converts a scalar that is possible to turn into a number safely. The new logic is slightly faster, and tends to help people who use older perl or who want to encode complicated data structure. However, this may results in a different JSON text from the one JSON::XS encodes (and thus may break tests that compare entire JSON texts). If you do need the previous behavior for compatibility or for finer control, set PERL_JSON_PP_USE_B environmental variable to true before you use JSON::PP (or JSON.pm).</p>
+</blockquote>
+<p>日本語訳 (Powered by DeepL)</p>
+<blockquote>
+<p>バージョン2.91_01以降、JSON::PPは、数値に変えることが可能なスカラを安全に変換する、異なる数値検出ロジックを使用しています。この新しいロジックはわずかに高速で、古いPerlを使っている人や複雑なデータ構造をエンコードしたい人には役立つ傾向があります。しかし、この方法では、JSON::XS がエンコードするものとは異なる JSON テキストになる可能性があります（したがって、JSON テキスト全体を比較するテストが壊れる可能性があります）。互換性や細かい制御のために以前の動作が必要な場合は、JSON::PP（またはJSON.pm）を使用する前に、環境変数PERL_JSON_PP_USE_Bをtrueに設定してください。</p>
+</blockquote>
+<p><a href="https://metacpan.org/dist/Module-CoreList/view/corelist">corelist</a> で調べてみると、Perl 5.28 で同梱されている JSON::PP のバージョンが v2.27300 → v2.97001 に上がったようです。
+そのため違いが生まれたんですね。</p>
+<h2 id="jsonpp-と-jsonxs-の比較">JSON::PP と JSON::XS の比較</h2>
+<p>さてここで気になるのは以下の記述。</p>
+<blockquote>
+<p>しかし、この方法では、JSON::XS がエンコードするものとは異なる JSON テキストになる可能性があります</p>
+</blockquote>
+<p>どうやら挙動が変更になったのは JSON::PP (JSONエンコーダー/デコーダーの Pure Perl 実装) だけで、
+JSON::XS (JSONエンコーダー/デコーダーのC言語実装) は変わっていないようです。</p>
+<h3 id="数値からアップグレードした値のエンコード">数値からアップグレードした値のエンコード</h3>
+<p>実際に比較してみましょう。
+記事の最初に書いた例を JSON::PP と JSON::XS で試してみます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">feature</span> <span class="n">say</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">JSON::XS</span> <span class="p">();</span>
+<span class="k">use</span> <span class="nn">JSON::PP</span> <span class="p">();</span>
+
+<span class="k">my</span> <span class="nv">$answer</span> <span class="o">=</span> <span class="mi">42</span><span class="p">;</span>
+
+<span class="n">say</span> <span class="s">&#34;JSON::PP: &#34;</span><span class="p">,</span> <span class="nn">JSON::PP::</span><span class="n">encode_json</span><span class="p">({</span> <span class="n">answer</span> <span class="o">=&gt;</span> <span class="nv">$answer</span> <span class="p">});</span>
+<span class="n">say</span> <span class="s">&#34;JSON::XS: &#34;</span><span class="p">,</span> <span class="nn">JSON::XS::</span><span class="n">encode_json</span><span class="p">({</span> <span class="n">answer</span> <span class="o">=&gt;</span> <span class="nv">$answer</span> <span class="p">});</span>
+
+<span class="n">say</span> <span class="s">&#34;Answer to the Ultimate Question of Life, the Universe, and Everything: $answer&#34;</span><span class="p">;</span>
+
+<span class="n">say</span> <span class="s">&#34;JSON::PP: &#34;</span><span class="p">,</span> <span class="nn">JSON::PP::</span><span class="n">encode_json</span><span class="p">({</span> <span class="n">answer</span> <span class="o">=&gt;</span> <span class="nv">$answer</span> <span class="p">});</span>
+<span class="n">say</span> <span class="s">&#34;JSON::XS: &#34;</span><span class="p">,</span> <span class="nn">JSON::XS::</span><span class="n">encode_json</span><span class="p">({</span> <span class="n">answer</span> <span class="o">=&gt;</span> <span class="nv">$answer</span> <span class="p">});</span>
+</code></pre></div><pre><code>JSON::PP: {&quot;answer&quot;:42}
+JSON::XS: {&quot;answer&quot;:42}
+Answer to the Ultimate Question of Life, the Universe, and Everything: 42
+JSON::PP: {&quot;answer&quot;:42}
+JSON::XS: {&quot;answer&quot;:&quot;42&quot;}
+</code></pre><p>JSON::XS は文字列に変わってしまいました。</p>
+<h3 id="文字列からアップグレードした値のエンコード">文字列からアップグレードした値のエンコード</h3>
+<p>ここまでの結果だけ見ると、元の型に正しく変換している <code>JSON::PP</code> のほうが優れているような気がしてきます。
+しかし、元の型を誤って判定してしまう場合もあります。
+SVのアップグレードが起こったあとでは Perl の内部表現上全く違いはなく、
+元の型を知ることは不可能なので仕方ないことです。</p>
+<p>例えば以下の例では、元は文字列だったのに <code>JSON::PP</code> は数値に変換してしまいました。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">feature</span> <span class="n">say</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">JSON::XS</span> <span class="p">();</span>
+<span class="k">use</span> <span class="nn">JSON::PP</span> <span class="p">();</span>
+
+<span class="k">my</span> <span class="nv">$answer</span> <span class="o">=</span> <span class="s">&#34;42&#34;</span><span class="p">;</span>
+
+<span class="n">say</span> <span class="s">&#34;JSON::PP: &#34;</span><span class="p">,</span> <span class="nn">JSON::PP::</span><span class="n">encode_json</span><span class="p">({</span> <span class="n">answer</span> <span class="o">=&gt;</span> <span class="nv">$answer</span> <span class="p">});</span>
+<span class="n">say</span> <span class="s">&#34;JSON::XS: &#34;</span><span class="p">,</span> <span class="nn">JSON::XS::</span><span class="n">encode_json</span><span class="p">({</span> <span class="n">answer</span> <span class="o">=&gt;</span> <span class="nv">$answer</span> <span class="p">});</span>
+
+<span class="c1"># 0 と加算しているので $answer は数値として扱われる</span>
+<span class="n">say</span> <span class="s">&#34;Answer to the Ultimate Question of Life, the Universe, and Everything &#34;</span><span class="p">,</span> <span class="mi">0</span><span class="o">+</span><span class="nv">$answer</span><span class="p">;</span>
+
+<span class="n">say</span> <span class="s">&#34;JSON::PP: &#34;</span><span class="p">,</span> <span class="nn">JSON::PP::</span><span class="n">encode_json</span><span class="p">({</span> <span class="n">answer</span> <span class="o">=&gt;</span> <span class="nv">$answer</span> <span class="p">});</span>
+<span class="n">say</span> <span class="s">&#34;JSON::XS: &#34;</span><span class="p">,</span> <span class="nn">JSON::XS::</span><span class="n">encode_json</span><span class="p">({</span> <span class="n">answer</span> <span class="o">=&gt;</span> <span class="nv">$answer</span> <span class="p">});</span>
+</code></pre></div><pre><code>JSON::PP: {&quot;answer&quot;:&quot;42&quot;}
+JSON::XS: {&quot;answer&quot;:&quot;42&quot;}
+Answer to the Ultimate Question of Life, the Universe, and Everything 42
+JSON::PP: {&quot;answer&quot;:42}
+JSON::XS: {&quot;answer&quot;:&quot;42&quot;}
+</code></pre><h2 id="実装を追ってみる">実装を追ってみる</h2>
+<p>実装を追ってみると以下の部分で型の判定を行っています。(JSON::PP v4.06)</p>
+<p><a href="https://github.com/makamaka/JSON-PP/blob/3173bc24b4089b34a33da3d30e4e8ceb9fb48b36/lib/JSON/PP.pm#L457-L467">https://github.com/makamaka/JSON-PP/blob/3173bc24b4089b34a33da3d30e4e8ceb9fb48b36/lib/JSON/PP.pm#L457-L467</a></p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">no</span> <span class="nn">warnings</span> <span class="s">&#39;numeric&#39;</span><span class="p">;</span>
+<span class="c1"># if the utf8 flag is on, it almost certainly started as a string</span>
+<span class="k">return</span> <span class="k">if</span> <span class="nn">utf8::</span><span class="n">is_utf8</span><span class="p">(</span><span class="nv">$value</span><span class="p">);</span>
+<span class="c1"># detect numbers</span>
+<span class="c1"># string &amp; &#34;&#34; -&gt; &#34;&#34;</span>
+<span class="c1"># number &amp; &#34;&#34; -&gt; 0 (with warning)</span>
+<span class="c1"># nan and inf can detect as numbers, so check with * 0</span>
+<span class="k">return</span> <span class="k">unless</span> <span class="nb">length</span><span class="p">((</span><span class="k">my</span> <span class="nv">$dummy</span> <span class="o">=</span> <span class="s">&#34;&#34;</span><span class="p">)</span> <span class="o">&amp;</span> <span class="nv">$value</span><span class="p">);</span>
+<span class="k">return</span> <span class="k">unless</span> <span class="mi">0</span> <span class="o">+</span> <span class="nv">$value</span> <span class="ow">eq</span> <span class="nv">$value</span><span class="p">;</span>
+<span class="k">return</span> <span class="mi">1</span> <span class="k">if</span> <span class="nv">$value</span> <span class="o">*</span> <span class="mi">0</span> <span class="o">==</span> <span class="mi">0</span><span class="p">;</span>
+<span class="k">return</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span> <span class="c1"># inf/nan</span>
+</code></pre></div><p>なにかたくさん条件がありますね。
+一個ずつ見ていきましょう。</p>
+<h3 id="utf8-フラグのチェック">utf8 フラグのチェック</h3>
+<p>utf8 フラグは値が utf8 でエンコードされていることを表すフラグです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="c1"># if the utf8 flag is on, it almost certainly started as a string</span>
+<span class="k">return</span> <span class="k">if</span> <span class="nn">utf8::</span><span class="n">is_utf8</span><span class="p">(</span><span class="nv">$value</span><span class="p">);</span>
+</code></pre></div><p>utf8 フラグが立っていればテキスト文字列として扱われているということなので、そのまま JSON の文字列として扱います。</p>
+<ul>
+<li><a href="https://perldoc.jp/docs/perl/5.34.0/perlunifaq.pod#What32is32the32UTF832flag63">「UTF8 フラグ」って何? perlunifaq - Perl Unicode FAQ</a></li>
+</ul>
+<h3 id="ビット演算子を使った判定">ビット演算子を使った判定</h3>
+<p>Perl はほとんどの演算子に「文字列用」と「数値用」が用意されています。
+例えば文字列の等価性を調べたければ <code>eq</code>、数値の等価性を調べたければ <code>==</code> といった具合です。
+これらの演算子は <code>eq</code> なら両辺を文字列に、<code>==</code> であれば両辺を数値に変換してから比較を行います。</p>
+<p>しかしビット演算子 <code>&amp;</code>, <code>|</code>, <code>^</code> だけは文字列と数値で同じ演算子を使います。
+そのためコメントに記載されているように、型に応じて結果が変わります。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="c1"># detect numbers</span>
+<span class="c1"># string &amp; &#34;&#34; -&gt; &#34;&#34;</span>
+<span class="c1"># number &amp; &#34;&#34; -&gt; 0 (with warning)</span>
+<span class="k">return</span> <span class="k">unless</span> <span class="nb">length</span><span class="p">((</span><span class="k">my</span> <span class="nv">$dummy</span> <span class="o">=</span> <span class="s">&#34;&#34;</span><span class="p">)</span> <span class="o">&amp;</span> <span class="nv">$value</span><span class="p">);</span>
+</code></pre></div><p>一度も数値として扱われたことが無い場合はJSONの文字列として扱います。</p>
+<p>ビット演算子だけ「文字列用」と「数値用」に分かれていないのは変だろうということで、
+新し目の Perl では文字列用のビット演算子として <code>&amp;.</code>, <code>|.</code>, <code>^.</code> が使えます。
+これらの演算子は互換性維持のためデフォルトでは無効になっているので、明示的な有効化が必要です。</p>
+<ul>
+<li><a href="https://qiita.com/xtetsuji/items/a21c718ca37799d11c7c#bitwise---%E3%83%93%E3%83%83%E3%83%88%E6%BC%94%E7%AE%97%E5%AD%90%E3%82%92%E6%95%B0%E5%80%A4%E5%B0%82%E7%94%A8%E3%81%A8%E6%96%87%E5%AD%97%E5%88%97%E5%B0%82%E7%94%A8%E3%81%AB%E5%88%86%E3%81%91%E3%82%8B">bitwise - ビット演算子を数値専用と文字列専用に分ける</a></li>
+<li><a href="https://perldoc.perl.org/perlop#Bitwise-String-Operators">perlop Bitwise String Operators</a></li>
+</ul>
+<h3 id="文字列比較">文字列比較</h3>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">return</span> <span class="k">unless</span> <span class="mi">0</span> <span class="o">+</span> <span class="nv">$value</span> <span class="ow">eq</span> <span class="nv">$value</span><span class="p">;</span>
+</code></pre></div><p>ちょっと慣れないと分かりづらいですが <code>0 + $value</code> は 「<code>$value</code> を数値に変換する」というイディオムです。
+また <code>eq</code> は両辺を文字列に変換してから比較を行う演算子です。
+この行全体としては「<code>$value</code>を一度数値に変換してから、もう一度文字列に戻してみてもとに戻るか」を確かめているわけです。</p>
+<h3 id="nan-inf-のチェック">NaN, Inf のチェック</h3>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="c1"># nan and inf can detect as numbers, so check with * 0</span>
+<span class="k">return</span> <span class="mi">1</span> <span class="k">if</span> <span class="nv">$value</span> <span class="o">*</span> <span class="mi">0</span> <span class="o">==</span> <span class="mi">0</span><span class="p">;</span>
+<span class="k">return</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span> <span class="c1"># inf/nan</span>
+</code></pre></div><p>数学的には <code>$value</code> に何が入っていようと 0 をかけたら 0 になるわけですが、
+浮動小数点数の場合には例外があります。
+それが <code>Inf</code> と <code>NaN</code> です。 <code>Inf * 0 = NaN</code>、 <code>NaN * 0 = NaN</code> になります。</p>
+<p>ただよくわからないのは、チェックは入っているのにも関わらず、特に <code>Inf</code> <code>NaN</code> を特別扱いしてないんですよね。
+<code>Inf</code> と <code>NaN</code> はそのまま <code>Inf</code> と <code>NaN</code> として出力されます。JSONとしては不正な表現です。</p>
+<h2 id="数値の0と等しいのに数値になったり文字列になるケース">数値の0と等しいのに数値になったり文字列になるケース</h2>
+<p>この実装をよく読んでみたら「数値の0と等しいのに数値になったり文字列になるケース」があるということに気が付きました。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">feature</span> <span class="n">say</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">JSON::XS</span> <span class="p">();</span>
+<span class="k">use</span> <span class="nn">JSON::PP</span> <span class="p">();</span>
+
+<span class="k">sub</span> <span class="nf">encode</span> <span class="p">{</span>
+    <span class="k">my</span> <span class="nv">$answer</span> <span class="o">=</span> <span class="nb">shift</span><span class="p">;</span>
+
+    <span class="n">say</span> <span class="s">&#34;JSON::PP: &#34;</span><span class="p">,</span> <span class="nn">JSON::PP::</span><span class="n">encode_json</span><span class="p">({</span> <span class="n">answer</span> <span class="o">=&gt;</span> <span class="nv">$answer</span> <span class="p">});</span>
+    <span class="n">say</span> <span class="s">&#34;JSON::XS: &#34;</span><span class="p">,</span> <span class="nn">JSON::XS::</span><span class="n">encode_json</span><span class="p">({</span> <span class="n">answer</span> <span class="o">=&gt;</span> <span class="nv">$answer</span> <span class="p">});</span>
+
+    <span class="k">if</span> <span class="p">(</span><span class="nv">$answer</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">say</span> <span class="s">&#34;answer is 0.&#34;</span>
+    <span class="p">}</span>
+
+    <span class="n">say</span> <span class="s">&#34;JSON::PP: &#34;</span><span class="p">,</span> <span class="nn">JSON::PP::</span><span class="n">encode_json</span><span class="p">({</span> <span class="n">answer</span> <span class="o">=&gt;</span> <span class="nv">$answer</span> <span class="p">});</span>
+    <span class="n">say</span> <span class="s">&#34;JSON::XS: &#34;</span><span class="p">,</span> <span class="nn">JSON::XS::</span><span class="n">encode_json</span><span class="p">({</span> <span class="n">answer</span> <span class="o">=&gt;</span> <span class="nv">$answer</span> <span class="p">});</span>
+<span class="p">}</span>
+
+<span class="n">say</span> <span class="s">&#39;encode &#34;0&#34;&#39;</span><span class="p">;</span>
+<span class="n">encode</span> <span class="s">&#34;0&#34;</span><span class="p">;</span>
+<span class="n">say</span> <span class="s">&#39;&#39;</span><span class="p">;</span>
+
+<span class="n">say</span> <span class="s">&#39;encode &#34;0e0&#34;&#39;</span><span class="p">;</span>
+<span class="n">encode</span> <span class="s">&#34;0e0&#34;</span><span class="p">;</span>
+</code></pre></div><pre><code>encode &quot;0&quot;
+JSON::PP: {&quot;answer&quot;:&quot;0&quot;}
+JSON::XS: {&quot;answer&quot;:&quot;0&quot;}
+answer is 0.
+JSON::PP: {&quot;answer&quot;:0}
+JSON::XS: {&quot;answer&quot;:&quot;0&quot;}
+
+encode &quot;0e0&quot;
+JSON::PP: {&quot;answer&quot;:&quot;0e0&quot;}
+JSON::XS: {&quot;answer&quot;:&quot;0e0&quot;}
+answer is 0.
+JSON::PP: {&quot;answer&quot;:&quot;0e0&quot;}
+JSON::XS: {&quot;answer&quot;:&quot;0e0&quot;}
+</code></pre><p><code>0e0</code>は0の指数表記、つまり「0かける10のゼロ乗」です。
+<code>JSON::PP</code> は数値として扱えるものをすべて数値に変換するわけではなく、こんなふうな例外もあります。</p>
+<p>しかもこの例外、Perl界での超有名モジュールで使われているという・・・。</p>
+<ul>
+<li><a href="https://stackoverflow.com/questions/13358793/why-does-dbis-do-method-return-0e0-if-zero-rows-were-affected">Why does DBI&rsquo;s do method return &ldquo;0E0&rdquo; if zero rows were affected?</a></li>
+</ul>
+<h2 id="まとめ">まとめ</h2>
+<ul>
+<li>Perl 5.28 以降に同梱されている <code>JSON::PP</code> は、それより前のバージョンと数値のエンコード方法が変わっている</li>
+<li>この変更により <code>JSON::XS</code> と結果が一致しない場合がある</li>
+</ul>
+<p>気が付かない間にJSONエンコード改善された？と思ったのですが、蓋を開けてみると想像以上に闇の深い実装になっていました。</p>
+<p>Perlをめったに触ることがなくなった僕が言うのもおこがましいですが、 <code>JSON::XS</code> との互換性を壊してまで変更するほどのメリットがあったのかとちょっと疑問です。
+(十分初心者泣かせだけど) 内部フラグを元に数値か文字列かを決定する <code>JSON::XS</code> のエンコードルールのほうがまだわかりやすい気もします。</p>
+<p>そんなわけで、以下のCPANモジュールたちはまだまだ現役のようです。</p>
+<ul>
+<li><a href="https://metacpan.org/pod/JSON::Types">JSON::Types</a></li>
+<li><a href="https://metacpan.org/pod/Cpanel::JSON::XS::Type">Cpanel::JSON::XS::Type</a></li>
+</ul>
+<p>JSONにエンコードするときには、これらのモジュールを使って型を明示しましょう。
+エンコーダーが古い <code>JSON::PP</code> か、新しい <code>JSON::PP</code> か、それとも <code>JSON::XS</code> か、といった些細なことで悩む必要はなくなります。</p>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://www.slideshare.net/KondoYoshiyuki/yapc2012-20120929">Perlの勘所をマスターしよう! コンテキストとリファレンスを我が物に!</a></li>
+<li><a href="https://gihyo.jp/dev/serial/01/perl-hackers-hub/001601">Perl Hackers Hub 第16回　Perl内部構造の深遠に迫る（1）</a></li>
+<li><a href="https://metacpan.org/pod/JSON::PP">JSON::PP</a></li>
+<li><a href="https://metacpan.org/pod/JSON::Types">JSON::Types</a></li>
+<li><a href="https://metacpan.org/pod/Cpanel::JSON::XS::Type">Cpanel::JSON::XS::Type</a></li>
+<li><a href="https://perldoc.perl.org/perlop#Bitwise-String-Operators">perlop Bitwise String Operators</a></li>
+<li><a href="https://qiita.com/xtetsuji/items/a21c718ca37799d11c7c">Perl の文法上の新機能が使える feature プラグマ詳解</a></li>
+<li><a href="https://perldoc.jp/docs/perl/5.34.0/perlunifaq.pod#What32is32the32UTF832flag63">「UTF8 フラグ」って何? perlunifaq - Perl Unicode FAQ</a></li>
+<li><a href="https://stackoverflow.com/questions/13358793/why-does-dbis-do-method-return-0e0-if-zero-rows-were-affected">Why does DBI&rsquo;s do method return &ldquo;0E0&rdquo; if zero rows were affected?</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>Oct 14, 2021</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2021/10/06/aws-lambda-perl-runtime-on-arm64/" title="AWS Lambda Perl Runtime の Arm64 互換レイヤーを公開しました">AWS Lambda Perl Runtime の Arm64 互換レイヤーを公開しました</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2021/10/14/json-pp-on-perl/">Perl の JSON::PP での数値の扱いが変わっていた件</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/10/06/aws-lambda-perl-runtime-on-arm64/">AWS Lambda Perl Runtime の Arm64 互換レイヤーを公開しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/10/01/arm64-in-aws-lambda/">AWS Lambda の Arm64 対応試してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/09/24/github-actions-oidc/">GitHub Actions &#43; OIDC Token の情報をAWSのセッションタグに設定してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/09/04/holidays-api-is-released/">祝日APIを公開しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/08/30/ipv6-metadata-endpoint-and-ntp-are-available/">EC2 Instance Metadata Service と Amazon Time Sync Service で IPv6 エンドポイントが利用可能になりました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/08/26/confused-deputy-problem-on-mackerelio/">Mackerelにおける「混乱した代理」問題に対応しよう</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/06/13/aws-lambada-efs-and-perl/">AWS Lambda に EFS をマウントして Perl CGI 完全復活</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/06/06/perl-on-aws-app-runner/">AWS App Runner に Perl をデプロイしてみた</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2021 Shogo Ichinose - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['\\(','\\)'], ['{% m %}', '{% em %}']],
+    displayMath: [['\\[','\\]'], ['{% math %}', '{% endmath %}']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+  </script>
+
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+</html>
+
