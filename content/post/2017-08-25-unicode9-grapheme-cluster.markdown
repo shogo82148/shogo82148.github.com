@@ -136,7 +136,7 @@ Ruby 2.4.0は2016年12月25日に正式リリースされているので、こ�
 ### Python
 
 残念ながら標準の正規表現ライブラリ [re](https://docs.python.jp/3/library/re.html) は書記素クラスタに対応していません。
-サードパーティーの[reqex](https://pypi.python.org/pypi/regex/)がUnicode 10に対応しているらしいので、
+サードパーティーの[regex](https://pypi.python.org/pypi/regex/)がUnicode 10に対応しているらしいので、
 そちらを使うと書記素クラスタを扱えるようです。
 
 ### Golang
