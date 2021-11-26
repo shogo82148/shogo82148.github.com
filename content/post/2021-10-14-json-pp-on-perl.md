@@ -4,7 +4,7 @@ title: "Perl の JSON::PP での数値の扱いが変わっていた件"
 slug: json-pp-on-perl
 date: 2021-10-14 20:58:00 +0900
 comments: true
-categories: [aws, perl]
+categories: [perl]
 ---
 
 [Setup Perl environment](https://github.com/marketplace/actions/setup-perl-environment) の開発中は、
