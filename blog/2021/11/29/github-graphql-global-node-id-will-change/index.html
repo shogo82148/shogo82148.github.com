@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+    
+    
+      <link href="/css/fonts.css" rel="stylesheet" type="text/css">
+    
+  
+
+  
+  <title>GitHub GraphQL のノードIDフォーマットが変わるらしい</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+    <link rel="stylesheet" href="/css/fork-awesome.min.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.75.1" />
+
+  
+  
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Nov 29, 2021
+     - 2 minute read 
+     - <a href="https://shogo82148.github.io/blog/2021/11/29/github-graphql-global-node-id-will-change/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/github/">github </a>
+    
+  </p>
+  <h1 class="entry-title">
+     GitHub GraphQL のノードIDフォーマットが変わるらしい 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>弊社では <a href="https://registry.terraform.io/providers/integrations/github/latest/docs">Terraform GitHub Provider</a> を使って
+GitHub のレポジトリ管理・権限管理などを行っているのですが、
+プロバイダーが <code>repository_id</code> を認識してくれない問題に遭遇しました。
+原因を探ってみると GitHub GraphQL API に <strong>かなり大きな変更が入ること</strong> を知ったので、メモとして残しておきます。</p>
+<h2 id="グローバルノードid">グローバルノードID</h2>
+<p>GraphQL API から扱えるすべてのオブジェクト (レポジトリ、ユーザー、etc) にはIDが振ってあります。</p>
+<ul>
+<li><a href="https://docs.github.com/en/graphql/guides/using-global-node-ids">Using global node IDs</a></li>
+</ul>
+<p>例えば僕 (<a href="https://github.com/shogo82148">@shogo82148</a>) のノードIDは <code>MDQ6VXNlcjExNTczNDQ=</code> です。</p>
+<pre><code>$ curl https://api.github.com/users/shogo82148 | jq .node_id
+&quot;MDQ6VXNlcjExNTczNDQ=&quot;
+</code></pre><p>このノードIDを使って GraphQL のクエリを書くことが出来ます。</p>
+<pre><code>$ gh api graphql -f query='query {
+  node(id: &quot;MDQ6VXNlcjExNTczNDQ=&quot;) {
+    ... on User {
+      name
+      login
+    }
+  }
+}'
+{
+  &quot;data&quot;: {
+    &quot;node&quot;: {
+      &quot;name&quot;: &quot;Ichinose Shogo&quot;,
+      &quot;login&quot;: &quot;shogo82148&quot;
+    }
+  }
+}
+</code></pre><p>ノードIDにはオブジェクトの種類の情報 (<code>MDQ6VXNlcjExNTczNDQ=</code> の例では「ユーザー」) も含まれているので、
+GitHub が管理している全オブジェクトの中から一意に目的のノードを特定することが出来ます。</p>
+<h2 id="フォーマット変更">フォーマット変更</h2>
+<p>いろんなニュースに埋もれて全く気がついていなかったのですが、 2021-02-10 にこのノードIDのフォーマット変更のお知らせがありました。</p>
+<ul>
+<li><a href="https://github.blog/2021-02-10-new-global-id-format-coming-to-graphql/">New global ID format coming to GraphQL</a></li>
+</ul>
+<p>例えば、先に上げた僕のユーザーのノードIDは以下のように変更になります。</p>
+<ul>
+<li>Before: <code>MDQ6VXNlcjExNTczNDQ=</code></li>
+<li>After: <code>U_kgDOABGo4A</code></li>
+</ul>
+<p>なんだか短くコンパクトになりましたね。</p>
+<h3 id="github-プロバイダーの不具合の原因">GitHub プロバイダーの不具合の原因</h3>
+<p>さて、移行前の <code>MDQ6VXNlcjExNTczNDQ=</code> というノードIDですが、
+「<code>=</code> によるパディング」「現れるのは英数字のみ」という特徴から、感のいい人はピンと来るのでは無いでしょうか？
+そう、このフォーマットは <strong>Base64</strong> ですね。</p>
+<p>気がついてしまったらデコードしたくなるのが人間の性というものです。やってみましょう。</p>
+<pre><code>$ echo MDQ6VXNlcjExNTczNDQ= | base64 -d
+04:User1157344
+</code></pre><p>なんだかそれっぽい文字列になりました。
+レポジトリのノードID(e.g. <code>MDEwOlJlcG9zaXRvcnkzMDgyNDI5</code>) をデコードすると <code>010:Repository3082429</code> となったので、
+最初の <code>04</code> は <code>:</code> のあとに続くノードタイプの字数(<code>User</code>: 4文字, <code>Repository</code>: 10文字) でしょう。
+<code>:</code> のあとの <code>User</code> はノードの種類、その後の数字は内部的なユーザーIDだと思います。
+実際この数字は User Rest API の <code>id</code> フィールドに対応します。</p>
+<pre><code>$ curl https://api.github.com/users/shogo82148 | jq .id
+1157344
+</code></pre><hr>
+<p>同じ要領で移行後のノードID <code>U_kgDOABGo4A</code> をデコードしてみましょう。</p>
+<pre><code>$ echo U_kgDOABGo4A | base64 -d
+S�
+   ��
+</code></pre><p>はい、うまくいきませんね。
+GitHub プロバイダーの不具合の原因はこれです。
+<strong>ノードIDを Base64 としてデコードしていたため、新IDのデコードに失敗してしまい認識できなかったのです</strong>。</p>
+<p>そもそも「ノードIDはBase64エンコードされている」とはドキュメントのどこにも書いてないので、
+Base64っぽいなあ〜と思ってもそれを前提としてコードを書くのは良くないですね。</p>
+<h3 id="移行スケジュール">移行スケジュール</h3>
+<p>移行のスケジュールについては<a href="https://github.blog/2021-02-10-new-global-id-format-coming-to-graphql/#how-will-this-be-rolled-out">公式の案内</a>を参照してもらいたいのですが、
+概ね以下のようなステップで新フォーマットに移行します。</p>
+<ol>
+<li>新フォーマットの導入: この期間中に作成された新規オブジェクトのみ新フォーマットのIDが割り振られます。既存のオブジェクトに変更はありません。およそ3ヶ月で完了の予定です。</li>
+<li>マイグレート: 既存のオブジェクトについて新旧どちらのフォーマットでもリクエストが可能になります。
+レスポンスに含まれるIDに関しては、HTTPヘッダーを使って新旧を切り替えることが可能です。およそ3ヶ月で完了の予定です。</li>
+<li>旧フォーマットの廃止 レスポンスに含まれるIDがすべて新フォーマットに切り替わります。およそ3ヶ月で完了の予定です。</li>
+</ol>
+<p>具体的に何月に行うのか明記はされていないですが、
+新規レポジトリにも新フォーマットのノードIDが割り振られるようになったので、
+今はちょうどフェーズ1が終わる前後の時期なのでしょう。</p>
+<h3 id="新方式への移行">新方式への移行</h3>
+<p>フェーズ2の期間中はリクエストの <code>X-Github-Next-Global-ID</code> ヘッダーを使って、新旧のIDフォーマットを切り替えることができます。</p>
+<ul>
+<li><a href="https://github.blog/2021-11-16-graphql-global-id-migration-update/">GraphQL global ID migration update</a></li>
+</ul>
+<p><code>X-Github-Next-Global-ID: 1</code> を指定すると旧フォーマットのノードIDが割り振られたオブジェクトについても、
+新フォーマットに変換されたIDが返ってきます。
+例えば僕の新フォーマットのノードIDは 2021-11-30 現在以下のようにして取得可能です。</p>
+<pre><code>$ curl -H &quot;X-Github-Next-Global-ID: 1&quot; https://api.github.com/users/shogo82148 | jq .node_id
+&quot;U_kgDOABGo4A&quot;
+</code></pre><p>もちろんこの新フォーマットのノードIDは GraphQL のクエリとして使うことができます。</p>
+<pre><code>gh api graphql -f query='query {
+  node(id: &quot;U_kgDOABGo4A&quot;) {
+    ... on User {
+      name
+      login
+    }
+  }
+}'
+{
+  &quot;data&quot;: {
+    &quot;node&quot;: {
+      &quot;name&quot;: &quot;Ichinose Shogo&quot;,
+      &quot;login&quot;: &quot;shogo82148&quot;
+    }
+  }
+}
+</code></pre><p>ノードIDをデーターベースなどに保存しているGitHubユーザーは、この期間中に頑張って新IDフォーマットに移行しましょう。</p>
+<h3 id="github-プロバイダーの場合">GitHub プロバイダーの場合</h3>
+<p><code>tfstate</code> に思いっきりノードIDが記載されている気がするんですが、どう対応すれば良いんですかね？
+誰か詳しい人教えて・・・。</p>
+<h2 id="新フォーマットの詳細">新フォーマットの詳細</h2>
+<blockquote>
+<p><a href="https://github.blog/2021-11-16-graphql-global-id-migration-update/#do-i-need-to-do-anything">Do I need to do anything?</a>
+We suggest you migrate your service to treat these IDs as opaque strings.
+We guarantee the IDs will be unique, therefore you can rely on them directly as references.</p>
+<p>(筆者訳) これらのIDはただの無意味な文字列としてサービスを移行することをおすすめします。
+GitHubがIDの一意性を保証するので、これらを直接参照として用いることができます。</p>
+</blockquote>
+<p>言いたいことはわかる。わかるけど <code>U_kgDOABGo4A</code> の意味気になりません？
+レポジトリのノードIDが <code>R_kgDOAC8IvQ</code> となるので、先頭の <code>U_</code>, <code>R_</code> はノードの種類でしょう。</p>
+<p>残りの <code>kgDOABGo4A</code> は何でしょう？
+旧フォーマットが Base64 だったので、きっとこれも Base64 だと予想してデコードしてみます。
+長さが4の倍数ではないのでパディングを追加してデコードしてみましょう。</p>
+<pre><code>$ echo kgDOABGo4A== | base64 -d
+����
+</code></pre><p>どうやら結果はASCII文字列ではないようですね。
+どんなバイナリになっているのでしょう。</p>
+<pre><code>$ echo kgDOABGo4A== | base64 -d | hexdump
+0000000 92 00 ce 00 11 a8 e0
+0000007
+</code></pre><p>ちょっとずつ見えてきました。最後の4バイト <code>00 11 a8 e0</code> はユーザーID 1157344 を16進数にしたものです。</p>
+<pre><code>$ printf &quot;%x\n&quot; 1157344
+11a8e0
+</code></pre><p>全体で7バイトなので4バイト固定の数値というわけではなさそうです。
+おそらく <code>ce</code> が 4バイト整数を表しているのでしょう。</p>
+<p>ここまでくればきっと分かる人にはわかる。これは <a href="https://msgpack.org/ja.html">MessagePack</a> です。
+以下のJSONをメッセージに変換したものが <code>92 00 ce 00 11 a8 e0</code> です。</p>
+<div class="highlight"><pre class="chroma"><code class="language-json" data-lang="json"><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1157344</span><span class="p">]</span>
+</code></pre></div><h2 id="まとめ">まとめ</h2>
+<ul>
+<li><strong>GitHub GraphQL のノードIDの形式が変わります</strong>。
+<ul>
+<li>IDというのはずっと変わらないものだと思っていた時期が僕にもありました。</li>
+<li>ノードIDをデーターベースに保存している場合はマイグレーションが必要です。頑張ってください。</li>
+<li>Terraform GitHub Provider もなんか移行作業が必要が気がするんですが、やり方が全くわからない。誰か助けて。</li>
+</ul>
+</li>
+<li><strong>Base64っぽいからと片っ端からデコードするのはやめましょう</strong></li>
+</ul>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://registry.terraform.io/providers/integrations/github/latest/docs">Terraform GitHub Provider</a></li>
+<li><a href="https://github.com/integrations/terraform-provider-github/issues/908">Branch protection rule failed to be created with new format Github repository node_id #908</a></li>
+<li><a href="https://github.com/integrations/terraform-provider-github/pull/914">Properly handle the new style of Node IDs in the GitHub GraphQL API #914</a></li>
+<li><a href="https://docs.github.com/en/graphql/guides/using-global-node-ids">Using global node IDs</a></li>
+<li><a href="https://github.blog/2021-11-16-graphql-global-id-migration-update/">GraphQL global ID migration update</a></li>
+<li><a href="https://github.blog/2021-02-10-new-global-id-format-coming-to-graphql/">New global ID format coming to GraphQL</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>Nov 29, 2021</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2021/10/14/json-pp-on-perl/" title="Perl の JSON::PP での数値の扱いが変わっていた件">Perl の JSON::PP での数値の扱いが変わっていた件</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2021/11/29/github-graphql-global-node-id-will-change/">GitHub GraphQL のノードIDフォーマットが変わるらしい</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/10/14/json-pp-on-perl/">Perl の JSON::PP での数値の扱いが変わっていた件</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/10/06/aws-lambda-perl-runtime-on-arm64/">AWS Lambda Perl Runtime の Arm64 互換レイヤーを公開しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/10/01/arm64-in-aws-lambda/">AWS Lambda の Arm64 対応試してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/09/24/github-actions-oidc/">GitHub Actions &#43; OIDC Token の情報をAWSのセッションタグに設定してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/09/04/holidays-api-is-released/">祝日APIを公開しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/08/30/ipv6-metadata-endpoint-and-ntp-are-available/">EC2 Instance Metadata Service と Amazon Time Sync Service で IPv6 エンドポイントが利用可能になりました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/08/26/confused-deputy-problem-on-mackerelio/">Mackerelにおける「混乱した代理」問題に対応しよう</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/06/13/aws-lambada-efs-and-perl/">AWS Lambda に EFS をマウントして Perl CGI 完全復活</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2021 Shogo Ichinose - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['\\(','\\)'], ['{% m %}', '{% em %}']],
+    displayMath: [['\\[','\\]'], ['{% math %}', '{% endmath %}']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+  </script>
+
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+</html>
+
