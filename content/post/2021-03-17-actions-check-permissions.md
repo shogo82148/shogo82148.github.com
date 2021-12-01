@@ -20,6 +20,41 @@ categories: [github]
 - プルリクエストにラベルをつけるような、レポジトリに対して write パーミッションが必要なワークフロー
 - 外部サービスとのインテグレーションテストをやっていて、連携のためにシークレットを読む必要があるワークフロー
 
+## 2021-12-01 追記
+
+その後のアップデートで GitHub Token のパーミッションをワークフロー中に明示できるようになり、 dependabot もこれに従うようになりました。
+
+- [GitHub Actions: Workflows triggered by Dependabot PRs will respect permissions key in workflows](https://github.blog/changelog/2021-10-06-github-actions-workflows-triggered-by-dependabot-prs-will-respect-permissions-key-in-workflows/)
+
+以下のような設定を追加すれば、GitHub Token を使ってレポジトリへの書き込みも可能です。
+
+```yaml
+# Set the access for individual scopes, or use permissions: write-all
+permissions:
+  pull-requests: write
+  issues: write
+  repository-projects: write
+```
+
+またこの記事中で以下のように書いていますが、
+
+> これに関しては Dependabot によってトリガーされたワークフローを re-run したら write パーミッションで走り出した (2021-03-17 現在) ので、面倒だけどまあ毎回 re-run するか・・・と現状なってます。
+> (そもそもこれって意図した挙動なんだろうか？)
+
+公式のドキュメントに re-run の際は read/write パーミッションが割り当てられると明記されているので、意図的な挙動のようです。
+
+- [Manually re-running a workflow](https://docs.github.com/en/code-security/supply-chain-security/keeping-your-dependencies-updated-automatically/automating-dependabot-with-github-actions#manually-re-running-a-workflow)
+
+> You can also manually re-run a failed Dependabot workflow, and it will run with a read-write token and access to secrets.
+> Before manually re-running a failed workflow, you should always check the dependency being updated to ensure that the change doesn't introduce any malicious or unintended behavior.
+
+公式日本語訳:
+
+> 失敗したDependabotワークフローを手動で再実行することもできます。これは、読み書きできるトークンを持ち、シークレットにアクセスできる状態で実行されます。
+> 失敗したワークフローを手動で再実行する前には、更新される依存関係を常にチェックし、その変更によって悪意ある、あるいは意図しない動作が入り込むことがないようにすべきです。
+
+**追記ここまで**
+
 ## 対応
 
 [pull_request_target](https://docs.github.com/en/actions/reference/events-that-trigger-workflows#pull_request_target) トリガーを使うと、
