@@ -4,7 +4,7 @@ title: "Go1.9から使える Monotonic Clocks を試してみた"
 slug: go19-monotonic-clock
 date: 2017-06-26 09:21:42 +0900
 comments: true
-categories: [go, golang, leapsecond]
+categories: [go, golang, time, leapsecond]
 ---
 
 先日Go1.9beta1がリリースされました。

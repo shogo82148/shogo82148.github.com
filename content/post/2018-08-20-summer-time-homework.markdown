@@ -4,7 +4,7 @@ title: "〜夏休みの自由研究〜 電波時計のサマータイム対応�
 slug: summer-time-homework
 date: 2018-08-20 09:29:00 +0900
 comments: true
-categories: [javacript]
+categories: [javascript, time]
 ---
 
 僕は知っています。

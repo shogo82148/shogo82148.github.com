@@ -4,7 +4,7 @@ title: "サーバーの時刻を伝える time wellknown uri を実装してみ�
 slug: time-over-https
 date: 2019-05-27 12:10:00 +0900
 comments: true
-categories: [go, golang]
+categories: [go, golang, time]
 ---
 
 インターネットをさまよっていたら、 `/.well-known/time` の存在を知ったので、雑に実装してみました。

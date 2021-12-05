@@ -4,7 +4,7 @@ title: "Web JJY が夏時間に対応しました"
 slug: web-jjy-summer-time-support
 date: 2018-08-11 07:29:00 +0900
 comments: true
-categories: [javacript]
+categories: [javascript, time]
 ---
 
 サマータイムなんて日本人には関係ないと思っていた時期が僕にもありました。
