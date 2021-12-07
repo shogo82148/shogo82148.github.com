@@ -14,6 +14,10 @@ ImageMagikでいいじゃん説もあるけど、最終的にツールとして�
 
 <!-- More -->
 
+**2021-12-07修正**
+
+昨今のアレコレ([LOSING LENA](https://www.losinglena.com/))の関係で記事中の Lenna さんの画像をマンドリルに置き換えました。
+
 ## 何はともあれ実装してみる
 
 以前、「[ターミナル操作の記録(ttyrec)からGIFアニメを生成するツールを作った](http://d.hatena.ne.jp/sugyan/20140719/1405729672)」という記事を見たので、
@@ -31,7 +35,7 @@ import (
 )
 
 func main() {
-	reader, err := os.Open("Lenna.png")
+	reader, err := os.Open("Mandrill.png")
 	if err != nil {
 		return
 	}
@@ -63,10 +67,10 @@ func main() {
 
 画像用意するの面倒だったので静止画になちゃったけど、
 `gif.GIF.Image` に複数枚画像を渡すとアニメーションGIFになります。
-みんなだいすきLenaさんをGIFに変換してみます。
+みんなだいすき ~~Lenaさん~~ マンドリルさんをGIFに変換してみます。
 
 元画像:
-![Lena](http://upload.wikimedia.org/wikipedia/en/2/24/Lenna.png)
+![Mandrill](/images/2015-04-25-mandrill.gif)
 
 変換後:
 ![naive.gif](/images/2015-04-25-naive.gif)
@@ -97,7 +101,7 @@ import (
 )
 
 func main() {
-	reader, err := os.Open("Lenna.png")
+	reader, err := os.Open("Mandrill.png")
 	if err != nil {
 		return
 	}
@@ -152,7 +156,7 @@ import (
 )
 
 func main() {
-	reader, err := os.Open("Lenna.png")
+	reader, err := os.Open("Mandrill.png")
 	if err != nil {
 		return
 	}
@@ -204,7 +208,7 @@ import (
 )
 
 func main() {
-	reader, err := os.Open("Lenna.png")
+	reader, err := os.Open("Mandrill.png")
 	if err != nil {
 		return
 	}
