@@ -70,7 +70,7 @@ func main() {
 みんなだいすき ~~Lenaさん~~ マンドリルさんをGIFに変換してみます。
 
 元画像:
-![Mandrill](/images/2015-04-25-mandrill.gif)
+![Mandrill](/images/2015-04-25-mandrill.png)
 
 変換後:
 ![naive.gif](/images/2015-04-25-naive.gif)
