@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+    
+    
+      <link href="/css/fonts.css" rel="stylesheet" type="text/css">
+    
+  
+
+  
+  <title>Perl 5.34.0 の try-catch を触ってみる</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+    <link rel="stylesheet" href="/css/fork-awesome.min.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.75.1" />
+
+  
+  
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Dec 9, 2021
+     - 3 minute read 
+     - <a href="https://shogo82148.github.io/blog/2021/12/09/perl-try-catch/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2021/12/09/perl-try-catch/">Perl 5.34.0 の try-catch を触ってみる</a>
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>この記事は、<a href="https://qiita.com/advent-calendar/2021/perl">Perl Advent Calendar 2021</a> の9日目の記事です。
+8日目は <a href="https://qiita.com/doikoji">@doikoji</a> で「<a href="https://qiita.com/doikoji/items/af959825991346092245">Getopt::Longのスペルが覚えられない俺はとうとう覚える努力を放棄してラッパーを作った</a>」でした。</p>
+<hr>
+<p>アドベントカレンダー25日もあると疲れてくるので、今日はかる～く行きましょう。
+<a href="https://metacpan.org/release/XSAWYERX/perl-5.34.0/view/pod/perldelta.pod#Experimental-Try/Catch-Syntax">Perl 5.34.0 から利用可能になった try-catch 構文</a>を触ってみたというお話です。</p>
+<p>特に断りのない限り 2021-12-09 現在の最新安定版 Perl 5.34.0 で動作確認をしています。</p>
+<h2 id="とりあえず使ってみる">とりあえず使ってみる</h2>
+<p>使い方は簡単です。
+<code>use feature</code> プラグマで有効化し、
+<code>try BLOCK catch (VAR) BLOCK</code> とするだけ。
+最初の <code>try</code> ブロックの中で <code>die</code> すると <code>catch</code> ブロックが実行されます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">strict</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">warnings</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">feature</span> <span class="sx">qw(try)</span><span class="p">;</span>
+
+<span class="n">try</span> <span class="p">{</span>
+    <span class="nb">die</span> <span class="s">&#34;dead&#34;</span><span class="p">;</span>
+<span class="p">}</span> <span class="n">catch</span><span class="p">(</span><span class="nv">$e</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">print</span> <span class="s">&#34;catch: $e&#34;</span><span class="p">;</span>
+<span class="p">}</span> <span class="c1"># no more &#34;;&#34; here !!!</span>
+
+<span class="mi">1</span><span class="p">;</span>
+</code></pre></div><p>出力:</p>
+<pre><code>try/catch is experimental at try-catch.pl line 5.
+try/catch is experimental at try-catch.pl line 7.
+catch: dead at try-catch.pl line 6.
+</code></pre><p>Perl 5.34.0 ではまだ実験的な機能扱いなので警告がでます。
+<code>no warnings</code> プラグマで抑制が可能です。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">strict</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">warnings</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">feature</span> <span class="sx">qw(try)</span><span class="p">;</span>
+<span class="k">no</span> <span class="nn">warnings</span> <span class="s">&#34;experimental::try&#34;</span><span class="p">;</span> <span class="c1"># 警告の抑制</span>
+
+<span class="n">try</span> <span class="p">{</span>
+    <span class="nb">die</span> <span class="s">&#34;dead&#34;</span><span class="p">;</span>
+<span class="p">}</span> <span class="n">catch</span><span class="p">(</span><span class="nv">$e</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">print</span> <span class="s">&#34;catch: $e&#34;</span><span class="p">;</span>
+<span class="p">}</span> <span class="c1"># no more &#34;;&#34; here !!!</span>
+
+<span class="mi">1</span><span class="p">;</span>
+</code></pre></div><p>出力:</p>
+<pre><code>catch: dead at try-catch.pl line 6.
+</code></pre><h2 id="これまでの例外処理">これまでの例外処理</h2>
+<p>これまでは例外という概念がなかったので、Perl Monger たちはいろんな方法で「例外っぽいもの」を作り出してきました。</p>
+<h3 id="eval">eval</h3>
+<p>言語の組み込み機能で例外を作り出すには <code>die</code> と <code>eval</code> を使います。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">strict</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">warnings</span><span class="p">;</span>
+
+<span class="nb">eval</span> <span class="p">{</span>
+    <span class="nb">die</span> <span class="s">&#34;dead&#34;</span><span class="p">;</span>
+<span class="p">};</span> <span class="c1"># &#34;;&#34; is required !!!</span>
+<span class="k">if</span> <span class="p">(</span><span class="vg">$@</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">print</span> <span class="s">&#34;catch: $@&#34;</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="mi">1</span><span class="p">;</span>
+</code></pre></div><p><code>&quot;;&quot; is required !!!</code> と書いたところのセミコロン忘れるというのがよくあるミスです。
+また <code>$@</code> という特殊変数の扱いが少し厄介です。
+覚えにくいというのもそうなんですが、グローバル変数なので意図せず書き換わってしまう場合があるそうです。
+正直自分も詳しくないので詳細は <a href="https://metacpan.org/pod/Try::Tiny#BACKGROUND">Try::Tiny#BACKGROUND</a> をどうぞ。</p>
+<h3 id="trytiny-モジュール">Try::Tiny モジュール</h3>
+<p>3rd-party のモジュールを使う方法です。
+<a href="https://metacpan.org/pod/Try::Tiny">Try::Tiny</a> はたぶん僕が一番お世話になったモジュールです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">strict</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">warnings</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">Try::Tiny</span><span class="p">;</span>
+
+<span class="n">try</span> <span class="p">{</span>
+    <span class="nb">die</span> <span class="s">&#34;dead&#34;</span><span class="p">;</span>
+<span class="p">}</span> <span class="n">catch</span> <span class="p">{</span>
+    <span class="k">print</span> <span class="s">&#34;catch: $_&#34;</span><span class="p">;</span>
+<span class="p">};</span> <span class="c1"># &#34;;&#34; is required !!!</span>
+
+<span class="mi">1</span><span class="p">;</span>
+</code></pre></div><p>だいぶ try-catch 構文に近くなりますが、<code>&quot;;&quot; is required !!!</code> と書いたところにやっぱりセミコロンが必要です。</p>
+<p>また <code>{ ... }</code> はブロックではなく無名関数の省略記法だというのもよくある罠です。
+省略せずに書くとこうなります。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">strict</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">warnings</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">Try::Tiny</span><span class="p">;</span>
+
+<span class="n">try</span><span class="p">(</span>
+    <span class="k">sub</span> <span class="p">{</span>
+        <span class="nb">die</span> <span class="s">&#34;dead&#34;</span><span class="p">;</span>
+    <span class="p">},</span>
+    <span class="n">catch</span><span class="p">(</span>
+        <span class="k">sub</span> <span class="p">{</span>
+            <span class="k">print</span> <span class="s">&#34;catch: $_&#34;</span><span class="p">;</span>
+        <span class="p">},</span>
+    <span class="p">),</span>
+<span class="p">);</span>
+
+<span class="mi">1</span><span class="p">;</span>
+</code></pre></div><p>この違いがどんな罠を生むかというと、ブロックと関数では制御構文の挙動がことなるという点です。
+例えば <code>return</code> の場合、<code>do_something</code> 関数を抜けるつもりで <code>return</code> を書いても抜けることは出来ません。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">strict</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">warnings</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">Try::Tiny</span><span class="p">;</span>
+
+<span class="k">sub</span> <span class="nf">do_something</span> <span class="p">{</span>
+    <span class="n">try</span> <span class="p">{</span>
+        <span class="k">return</span><span class="p">;</span> <span class="c1"># do_something を抜けたい</span>
+    <span class="p">}</span> <span class="n">catch</span> <span class="p">{</span>
+        <span class="k">print</span> <span class="s">&#34;catch: $_&#34;</span><span class="p">;</span>
+    <span class="p">};</span>
+    <span class="k">print</span> <span class="s">&#34;この行は実行されてしまう\n&#34;</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="n">do_something</span><span class="p">();</span>
+
+<span class="mi">1</span><span class="p">;</span>
+</code></pre></div><p>一方 5.34.0 で導入された <code>try</code> はブロックなので関数を抜けることができます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">strict</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">warnings</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">feature</span> <span class="sx">qw(try)</span><span class="p">;</span>
+<span class="k">no</span> <span class="nn">warnings</span> <span class="s">&#34;experimental::try&#34;</span><span class="p">;</span>
+
+<span class="k">sub</span> <span class="nf">do_something</span> <span class="p">{</span>
+    <span class="n">try</span> <span class="p">{</span>
+        <span class="k">return</span><span class="p">;</span> <span class="c1"># do_something を抜けたい</span>
+    <span class="p">}</span> <span class="n">catch</span> <span class="p">(</span><span class="nv">$e</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">print</span> <span class="s">&#34;catch: $e&#34;</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="k">print</span> <span class="s">&#34;この行は実行されない！！\n&#34;</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="n">do_something</span><span class="p">();</span>
+
+<span class="mi">1</span><span class="p">;</span>
+</code></pre></div><hr>
+<p>また <code>caller</code> 関数の戻り値が変化するという罠も潜んでいます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">strict</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">warnings</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">Try::Tiny</span><span class="p">;</span>
+
+<span class="k">sub</span> <span class="nf">do_something</span> <span class="p">{</span>
+    <span class="n">try</span> <span class="p">{</span>
+        <span class="k">my</span> <span class="p">(</span><span class="nv">$package</span><span class="p">,</span> <span class="nv">$filename</span><span class="p">,</span> <span class="nv">$line</span><span class="p">)</span> <span class="o">=</span> <span class="nb">caller</span><span class="p">;</span>
+        <span class="k">print</span> <span class="s">&#34;$package, $filename, $line\n&#34;</span><span class="p">;</span>
+    <span class="p">}</span> <span class="n">catch</span> <span class="p">{</span>
+        <span class="k">print</span> <span class="s">&#34;catch: $_&#34;</span><span class="p">;</span>
+    <span class="p">};</span>
+<span class="p">}</span>
+
+<span class="n">do_something</span><span class="p">();</span>
+
+<span class="mi">1</span><span class="p">;</span>
+</code></pre></div><p>実行結果:</p>
+<pre><code>Try::Tiny, /Users/shogo.ichinose/.plenv/versions/5.34.0/lib/perl5/site_perl/5.34.0/Try/Tiny.pm, 102
+</code></pre><p>組み込みの <code>die</code> はスタックトーレスを埋め込んでくれないので、 <code>caller</code> 関数を使ったヘルパーを時々書くのですが、
+この挙動を把握しておかないと痛い目にあいます。
+エラーが起きたからログを調査しよう！といったときに <code>Try/Tiny.pm line 102</code> という文字列だけ残されていて何度絶望したことか・・・</p>
+<p>一方 5.34.0 で導入された <code>try</code> はブロックなので <code>caller</code> は変化しません。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">strict</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">warnings</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">feature</span> <span class="sx">qw(try)</span><span class="p">;</span>
+<span class="k">no</span> <span class="nn">warnings</span> <span class="s">&#34;experimental::try&#34;</span><span class="p">;</span>
+
+<span class="k">sub</span> <span class="nf">do_something</span> <span class="p">{</span>
+    <span class="n">try</span> <span class="p">{</span>
+        <span class="k">my</span> <span class="p">(</span><span class="nv">$package</span><span class="p">,</span> <span class="nv">$filename</span><span class="p">,</span> <span class="nv">$line</span><span class="p">)</span> <span class="o">=</span> <span class="nb">caller</span><span class="p">;</span>
+        <span class="k">print</span> <span class="s">&#34;$package, $filename, $line\n&#34;</span><span class="p">;</span>
+    <span class="p">}</span> <span class="n">catch</span> <span class="p">(</span><span class="nv">$e</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">print</span> <span class="s">&#34;catch: $e&#34;</span><span class="p">;</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="n">do_something</span><span class="p">();</span>
+
+<span class="mi">1</span><span class="p">;</span>
+</code></pre></div><p>実行結果:</p>
+<pre><code>main, try-caller.pl, 15
+</code></pre><h3 id="syntaxkeywordtry-モジュール">Syntax::Keyword::Try モジュール</h3>
+<p><a href="https://metacpan.org/pod/Syntax::Keyword::Try">Syntax::Keyword::Try</a> はキーワードプラグインという仕組みで
+Perl の構文自体を書き換えてしまうモジュールです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">strict</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">warnings</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">Syntax::Keyword::Try</span><span class="p">;</span>
+
+<span class="n">try</span> <span class="p">{</span>
+    <span class="nb">die</span> <span class="s">&#34;dead&#34;</span><span class="p">;</span>
+<span class="p">}</span> <span class="n">catch</span><span class="p">(</span><span class="nv">$e</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">print</span> <span class="s">&#34;catch: $e&#34;</span><span class="p">;</span>
+<span class="p">}</span> <span class="c1"># no more &#34;;&#34; here !!!</span>
+
+<span class="mi">1</span><span class="p">;</span>
+</code></pre></div><p><code>{ ... }</code> はれっきとしたブロックなので <code>return</code> で <code>do_something</code> 関数を抜けることができます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">strict</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">warnings</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">Syntax::Keyword::Try</span><span class="p">;</span>
+
+<span class="k">sub</span> <span class="nf">do_something</span> <span class="p">{</span>
+    <span class="n">try</span> <span class="p">{</span>
+        <span class="k">return</span><span class="p">;</span> <span class="c1"># do_something を抜けたい</span>
+    <span class="p">}</span> <span class="n">catch</span> <span class="p">(</span><span class="nv">$e</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">print</span> <span class="s">&#34;catch: $e&#34;</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="k">print</span> <span class="s">&#34;この行は実行されない！！\n&#34;</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="n">do_something</span><span class="p">();</span>
+
+<span class="mi">1</span><span class="p">;</span>
+</code></pre></div><hr>
+<p>5.34.0 で導入された try-catch とほぼ互換性があるのですが、 <code>caller</code> 関数の挙動だけ少し違います。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">strict</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">warnings</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">Syntax::Keyword::Try</span><span class="p">;</span>
+
+<span class="k">sub</span> <span class="nf">do_something</span> <span class="p">{</span>
+    <span class="n">try</span> <span class="p">{</span>
+        <span class="k">my</span> <span class="p">(</span><span class="nv">$package</span><span class="p">,</span> <span class="nv">$filename</span><span class="p">,</span> <span class="nv">$line</span><span class="p">)</span> <span class="o">=</span> <span class="nb">caller</span><span class="p">;</span>
+        <span class="k">print</span> <span class="s">&#34;$package, $filename, $line\n&#34;</span><span class="p">;</span>
+    <span class="p">}</span> <span class="n">catch</span> <span class="p">(</span><span class="nv">$e</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">print</span> <span class="s">&#34;catch: $e&#34;</span><span class="p">;</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="n">do_something</span><span class="p">();</span>
+
+<span class="mi">1</span><span class="p">;</span>
+</code></pre></div><pre><code>main, syntax-keyword-try-caller.pl, 9
+</code></pre><h2 id="今後について">今後について</h2>
+<h3 id="featurecompattry-モジュール">Feature::Compat::Try モジュール</h3>
+<p>Perl 組み込みの try-catch を使いたいけど古い Perl を切りたくない、という欲張りな人は
+<a href="https://metacpan.org/pod/Feature::Compat::Try">Feature::Compat::Try</a> モジュールが使えます。
+Perl のバージョンに応じて <code>feature</code> プラグマと <code>Syntax::Keyword::Try</code> モジュールを切り替えてくれます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">strict</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">warnings</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">Feature::Compat::Try</span><span class="p">;</span>
+
+<span class="n">try</span> <span class="p">{</span>
+    <span class="nb">die</span> <span class="s">&#34;dead&#34;</span><span class="p">;</span>
+<span class="p">}</span> <span class="n">catch</span><span class="p">(</span><span class="nv">$e</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">print</span> <span class="s">&#34;catch: $e&#34;</span><span class="p">;</span>
+<span class="p">}</span> <span class="c1"># no more &#34;;&#34; here !!!</span>
+
+<span class="mi">1</span><span class="p">;</span>
+</code></pre></div><p>ただし先に書いたように 5.34.0 で導入された try-catch と <code>Syntax::Keyword::Try</code> モジュールでは <code>caller</code> 関数の挙動が違う点に注意が必要です。</p>
+<h3 id="finally-ブロック">finally ブロック</h3>
+<p>try-catch の導入によって近代化への一歩を踏み出した (？) かのように思える Perl ですが、
+なんと多くの言語に存在する <code>finally</code> ブロックには対応していません。</p>
+<p>まあ、まだ「実験的な機能」ですからね。
+先に紹介した <code>Feature::Compat::Try</code> でも、 <code>Syntax::Keyword::Try</code> へフォールバックする際はご丁寧に <code>finally</code> を無効化しています。</p>
+<p>&ldquo;Pre-RFC&rdquo; として議論されているのは見つけたけど、どういう形で実装されるのかは未定のようです。</p>
+<ul>
+<li><a href="https://www.nntp.perl.org/group/perl.perl5.porters/2021/10/msg261757.html">Pre-RFC: try/catch/finally and generic finally blocks</a></li>
+</ul>
+<h2 id="まとめ">まとめ</h2>
+<ul>
+<li>Perl 5.34.0 から <code>use feature qw(try);</code> で try-catch 構文が使えます</li>
+<li><code>Feature::Compat::Try</code> モジュールを使うと古い Perl でも使えるよ</li>
+<li>罠が少ないので便利</li>
+</ul>
+<hr>
+<p>明日10日は hogehoge で「fugafuga」です。お楽しみに！ # TODO: 後で埋める</p>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://metacpan.org/release/XSAWYERX/perl-5.34.0/view/pod/perldelta.pod#Experimental-Try/Catch-Syntax">Experimental Try/Catch Syntax - perldelta</a></li>
+<li><a href="https://blog.outer-inside.net/2021/03/perl-5.34-delta.html">Perl 7 より先に Perl 5.34 が出るぞという話</a></li>
+<li><a href="https://metacpan.org/pod/Try::Tiny">Try::Tiny</a></li>
+<li><a href="https://papix.hatenablog.com/entry/2019/12/02/170611">Syntax::Keyword::TryとPerlのキーワードプラグイン (その1)</a></li>
+<li><a href="https://metacpan.org/pod/perlsyn#Try-Catch-Exception-Handling">Try Catch Exception Handling</a></li>
+<li><a href="https://metacpan.org/pod/perlfunc#caller-EXPR">caller EXPR</a></li>
+<li><a href="https://metacpan.org/pod/Syntax::Keyword::Try">Syntax::Keyword::Try</a></li>
+<li><a href="https://metacpan.org/pod/Feature::Compat::Try">Feature::Compat::Try</a></li>
+<li><a href="https://qiita.com/xtetsuji/items/a21c718ca37799d11c7c#try---trycatch%E6%A7%8B%E6%96%87%E3%81%AE%E5%B0%8E%E5%85%A5">try - try/catch構文の導入</a></li>
+<li><a href="https://www.nntp.perl.org/group/perl.perl5.porters/2021/10/msg261757.html">Pre-RFC: try/catch/finally and generic finally blocks</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>Dec 9, 2021</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2021/11/29/github-graphql-global-node-id-will-change/" title="GitHub GraphQL のノードIDフォーマットが変わるらしい">GitHub GraphQL のノードIDフォーマットが変わるらしい</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2021/12/09/perl-try-catch/">Perl 5.34.0 の try-catch を触ってみる</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/11/29/github-graphql-global-node-id-will-change/">GitHub GraphQL のノードIDフォーマットが変わるらしい</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/10/14/json-pp-on-perl/">Perl の JSON::PP での数値の扱いが変わっていた件</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/10/06/aws-lambda-perl-runtime-on-arm64/">AWS Lambda Perl Runtime の Arm64 互換レイヤーを公開しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/10/01/arm64-in-aws-lambda/">AWS Lambda の Arm64 対応試してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/09/24/github-actions-oidc/">GitHub Actions &#43; OIDC Token の情報をAWSのセッションタグに設定してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/09/04/holidays-api-is-released/">祝日APIを公開しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/08/30/ipv6-metadata-endpoint-and-ntp-are-available/">EC2 Instance Metadata Service と Amazon Time Sync Service で IPv6 エンドポイントが利用可能になりました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/08/26/confused-deputy-problem-on-mackerelio/">Mackerelにおける「混乱した代理」問題に対応しよう</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2021 Shogo Ichinose - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['\\(','\\)'], ['{% m %}', '{% em %}']],
+    displayMath: [['\\[','\\]'], ['{% math %}', '{% endmath %}']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+  </script>
+
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+</html>
+
