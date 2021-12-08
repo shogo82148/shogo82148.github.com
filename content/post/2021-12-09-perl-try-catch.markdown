@@ -312,6 +312,8 @@ do_something();
 main, syntax-keyword-try-caller.pl, 9
 ```
 
+まあ結果を見る限り `Try/Tiny.pm line 102` よりは100倍マシ・・・。
+
 ## 今後について
 
 ### Feature::Compat::Try モジュール
