@@ -8,7 +8,7 @@ categories: [perl]
 ---
 
 この記事は、[Perl Advent Calendar 2021](https://qiita.com/advent-calendar/2021/perl) の10日目の記事です。
-8日目は [@shogo82148](https://twitter.com/shogo82148) で「[Perl 5.34.0 の try-catch を触ってみる](https://shogo82148.github.io/blog/2021/12/09/perl-try-catch/)」でした。
+9日目は [@shogo82148](https://twitter.com/shogo82148) で「[Perl 5.34.0 の try-catch を触ってみる](https://shogo82148.github.io/blog/2021/12/09/perl-try-catch/)」でした。
 
 -----
 
