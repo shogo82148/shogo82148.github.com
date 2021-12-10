@@ -358,7 +358,7 @@ try-catch の導入によって近代化への一歩を踏み出した (？) か
 
 -----
 
-明日10日は hogehoge で「fugafuga」です。お楽しみに！ # TODO: 後で埋める
+明日10日は [@shogo82148](https://twitter.com/shogo82148) で「[Perl 5.35.4 の defer を先取り](https://shogo82148.github.io/blog/2021/12/10/perl-defer/)」です。お楽しみに！
 
 ## 参考
 
