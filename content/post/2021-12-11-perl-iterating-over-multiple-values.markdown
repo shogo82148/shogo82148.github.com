@@ -2,7 +2,7 @@
 layout: post
 title: "Perl 5.35.5 の iterating over multiple values at a time を先取り"
 slug: perl-iterating-over-multiple-values
-date: 2021-12-10 00:00:00 +0900
+date: 2021-12-11 13:46:00 +0900
 comments: true
 categories: [perl]
 ---
