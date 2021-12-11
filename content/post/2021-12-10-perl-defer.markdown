@@ -273,7 +273,7 @@ Hello, 世界
 
 -----
 
-明日11日は hogehoge で「fugafuga」です。お楽しみに！ # TODO: 後で埋める
+明日10日は [@shogo82148](https://twitter.com/shogo82148) で「[Perl 5.35.5 の iterating over multiple values at a time を先取り](https://shogo82148.github.io/blog/2021/12/11/perl-iterating-over-multiple-values/)」です。お楽しみに！
 
 ## 参考
 
