@@ -104,6 +104,40 @@
         
 
 <header>
+  <p class="meta">Feb 6, 2016
+     - 2 minute read 
+     - <a href="https://shogo82148.github.io/blog/2016/02/06/redis-leader-board-multi/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a><a class="label" href="https://shogo82148.github.io/categories/redis/">redis </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2016/02/06/redis-leader-board-multi/">Redisでスコアを複数設定できるランキングを作ってみた</a>
+  </h1>
+</header>
+
+        
+          <p>ランキングを作っているとスコアを複数設定したいことがよくあると思います。 例えば「得点が同じだったら早くその得点を出した人優先」とか「勝ち点が同じだったら得失点差が大きい方優先」とかのように、 最初の基準で順位を決められなかった場合の第二基準が欲しいみたいな場合です。
+ランキングを作るのにはRedisのSorted Setを使うのが便利ですが、残念ながらSorted Setはひとつしかスコアを設定できません。 少し前にどうやったら実装できるかと社内チャットで話題に上ったので、試しにRedis::LeaderBoardMulti(仮名)という名前で書いてみました。
+ shogo82148/p5-Redis-LeaderBoardMulti  使い方 メソッドの名前はRedis::LeaderBoardにあわせてありますが、 スコアが複数指定できるようになった関係でちょっと変わってます。
+use Redis; use Redis::LeaderBoard; my $redis = Redis-&gt;new; my $lb = Redis::LeaderBoardMulti-&gt;new( redis =&gt; $redis, key =&gt; &#39;leader_board:1&#39;, order =&gt; [&#39;asc&#39;, &#39;desc&#39;], # asc/desc, desc as default ); $lb-&gt;set_score(&#39;one&#39; =&gt; 100, time); # 第二基準は時間=得点が同じだったら早くその得点を出した人優先 $lb-&gt;set_score(&#39;two&#39; =&gt; 50, time); my ($rank, $score, $time) = $lb-&gt;get_rank_with_score(&#39;one&#39;); set_scoreの第二引数以降はすべてスコアとして扱われます。(そのためRedis::LeaderBoardと互換性はない) 上の例では「得点が同じだったら早くその得点を出した人優先」になってます。
+制限事項 実装の都合により、以下のような制限があります。
+ スコアはすべて64bit符号付き整数です  Redis::LeaderBoardのスコアは倍精度浮動小数点型なので小数も扱えるが、Redis::LeaderBoardMultiは整数だけ   Redis 2.8.9以降のみで動きます  実装の仕組み Sorted Setの同じスコアを持つメンバーは辞書順にソートされます(zaddの同じスコアを持つ要素の項を参照)。 例えば以下の様にメンバー「a」「b」「c」を追加すると、必ず「abc」の順番になることが保証されています。</p>
+          
+            <footer>
+              <a href="https://shogo82148.github.io/blog/2016/02/06/redis-leader-board-multi/" rel="full-article">Read On &rarr;</a>
+            </footer>
+          
+        
+      </article>
+      
+      <article>
+        
+        
+
+<header>
   <p class="meta">Jan 23, 2016
      - 1 minute read 
      - <a href="https://shogo82148.github.io/blog/2016/01/23/redis-fast-0-dot-17-released/#disqus_thread">Comments</a>
@@ -400,40 +434,6 @@ KAYACではいろんなGoプロダクトが動いているのでこちらもど�
         
       </article>
       
-      <article>
-        
-        
-
-<header>
-  <p class="meta">Sep 28, 2015
-     - 1 minute read 
-     - <a href="https://shogo82148.github.io/blog/2015/09/28/anysan-provider-slack-and-ape-slack/#disqus_thread">Comments</a>
-
-    
-    
-      - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a><a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
-    
-  </p>
-  <h1 class="entry-title">
-    <a href="https://shogo82148.github.io/blog/2015/09/28/anysan-provider-slack-and-ape-slack/">AnySan::Provider::Slackとape-slackを書いた</a>
-  </h1>
-</header>
-
-        
-          <p>先週、今のプロジェクトでのメインのコミュニケーションツールをIRCからSlack切り替えました。 それにともないIRCに済んでいたボットたちもお引越しする必要があったので、 ボットとSlackをつなぐためのライブラリを書きました。
- AnySan::Provider::Slack ape-slack  Perlとgoのボットが住んでいるのでそれぞれの言語で実装してあります。
-AnySan::Provider::Slack PerlのAnySan用のモジュールです。
-use AnySan; use AnySan::Provider::Slack; my $slack = slack token =&gt; &#39;YOUR SLACK API TOKEN&#39;, channels =&gt; { &#39;general&#39; =&gt; {}, }; $slack-&gt;send_message(&#39;slack message&#39;, channel =&gt; &#39;C024BE91L&#39;); AnySan-&gt;run; AnySanを使うだけでも便利なんですが、 今のプロジェクトではAnySanを対話形式で使いやすくするようにUnazuSanを使っています。 UnazuSanはIRC前提で書かれていて、AnySan::Provider::Slackをインストールしてもそのままは使えません。
-UnazuSanを置き換えるもの面倒なので、イベントの名前を書き換えて投げ直すことで、 SlackのメッセージをIRCに見せかける方法をとっています。 またSlackのOutgoing Webhookで@つきのmentionを捕まえるにもあるように、 Slackのメンションは &lt;@U08DGJVJ7&gt;のような形式になってしまい、UnazuSanは自分へのメッセージとして扱ってくれません。 これをUnazuSanが解釈できる形式に置き換えるのがポイントです。
-use 5.010; use warnings; use utf8; use Encode qw/encode_utf8/; use UnazuSan; use AnySan; use AnySan::Provider::Slack; my $unazu_san = UnazuSan-&gt;new( host =&gt; &#39;example.com&#39;, password =&gt; &#39;xxxxxxxxxxx&#39;, enable_ssl =&gt; 1, join_channels =&gt; [qw/arcade/], respond_all =&gt; 1, ); my $slack = slack( token =&gt; &#39;YOUR SLACK TOKEN&#39;, channels =&gt; {}, as_user =&gt; 1, ); AnySan-&gt;register_listener( slack =&gt; { event =&gt; &#39;message&#39;, cb =&gt; sub { my $receive = shift; # fake irc privmsg $receive-&gt;{event} = &#39;privmsg&#39;; $receive-&gt;{message} =~ s/&lt;\@xxxxx&gt;:/unazusan:/; AnySan-&gt;broadcast_message($receive); }, } ); $unazu_san-&gt;on_command( help =&gt; sub { my ($receive, @args) = @_; $receive-&gt;reply(&#39;help &#39;.</p>
-          
-            <footer>
-              <a href="https://shogo82148.github.io/blog/2015/09/28/anysan-provider-slack-and-ape-slack/" rel="full-article">Read On &rarr;</a>
-            </footer>
-          
-        
-      </article>
-      
       
       
 
@@ -568,10 +568,16 @@ use 5.010; use warnings; use utf8; use Encode qw/encode_utf8/; use UnazuSan; use
           
             
               <li class="post">
-                <a href="/blog/2021/12/10/perl-defer/">Perl 5.35.4 の defer を先取り</a>
+                <a href="/blog/2021/12/11/aws-cloud-bound/">AWS ClockBound で遊んでみた</a>
               </li>
             
           
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/12/10/perl-defer/">Perl 5.35.4 の defer を先取り</a>
+              </li>
             
           
             
@@ -613,12 +619,6 @@ use 5.010; use warnings; use utf8; use Encode qw/encode_utf8/; use UnazuSan; use
             
               <li class="post">
                 <a href="/blog/2021/09/04/holidays-api-is-released/">祝日APIを公開しました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2021/08/30/ipv6-metadata-endpoint-and-ntp-are-available/">EC2 Instance Metadata Service と Amazon Time Sync Service で IPv6 エンドポイントが利用可能になりました</a>
               </li>
             
           
