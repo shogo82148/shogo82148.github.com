@@ -8,7 +8,7 @@ categories: [aws, go, golang, time]
 ---
 
 この記事は、[フラー株式会社 Advent Calendar 2021](https://qiita.com/advent-calendar/2021/fuller-inc) の11日目の記事です。
-10日目は [@nobux42](https://qiita.com/nobux42) で「なんか書くか」でした。
+10日目は [@nobux42](https://qiita.com/nobux42) で「[再読：リファクタリング・ウェットウェア](https://qiita.com/nobux42/items/ae679f00dc11bbf0b640)」でした。
 
 もう一ヶ月前になりますが、AWS から [ClockBound](https://github.com/aws/clock-bound) という時間を扱うとても ~~地味な~~ 有益なソフトウェアがリリースされました。
 
