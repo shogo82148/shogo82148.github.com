@@ -186,7 +186,7 @@ for my ($x, $y, $z) (@cube) {
 
 -----
 
-明日12日は [@AnaTofuZ](https://qiita.com/AnaTofuZ) で「何かしら書きます」です。お楽しみに！
+明日12日は [@AnaTofuZ](https://qiita.com/AnaTofuZ) で「[いい感じにuseするのを助けてくれるApp::perlimportsのご紹介](https://anatofuz.hatenablog.com/entry/2021/12/12/162347)」です。お楽しみに！
 
 ## 参考
 
