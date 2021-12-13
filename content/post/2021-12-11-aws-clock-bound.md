@@ -268,7 +268,7 @@ ClockBound を試してみました。
 
 ----
 
-明日12日は [@seto_inugami](https://qiita.com/seto_inugami)で「なんか書くよ」です。お楽しみに！
+明日12日は [@seto_inugami](https://qiita.com/seto_inugami)で「[技術選定を疎かにしたツケを払ったお話し](https://qiita.com/seto_inugami/items/776f79f0b4f153d17bd8)」です。お楽しみに！
 
 ## 参考
 
