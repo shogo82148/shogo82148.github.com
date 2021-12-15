@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+    
+    
+      <link href="/css/fonts.css" rel="stylesheet" type="text/css">
+    
+  
+
+  
+  <title>Perl の文字列用ビット操作演算子を使ってみる</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+    <link rel="stylesheet" href="/css/fork-awesome.min.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.75.1" />
+
+  
+  
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Dec 15, 2021
+     - 2 minute read 
+     - <a href="https://shogo82148.github.io/blog/2021/12/15/perl-bitwise-operator/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a>
+    
+  </p>
+  <h1 class="entry-title">
+     Perl の文字列用ビット操作演算子を使ってみる 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>この記事は、<a href="https://qiita.com/advent-calendar/2021/perl">Perl Advent Calendar 2021</a> の15日目の記事です。
+14日目は <a href="https://qiita.com/yoku0825">@yoku0825</a> で「<a href="https://yoku0825.blogspot.com/2021/12/jqperlmysql.html">jqの代わりにperlを使ったり、mysqlを使ったり(できなかった)</a>」でした。</p>
+<hr>
+<p>今日はちょっと前から使えるようになってたけど滅多にお世話になることのない、「文字列用ビット操作演算子」を触ってみたというお話です。</p>
+<p>特に断りのない限り 2021-12-15 現在の最新安定版 Perl 5.34.0 で動作確認をしています。</p>
+<h2 id="旧来のビット演算子">旧来のビット演算子</h2>
+<p>Perl の多くの演算子には「数値用」と「文字列用」があります。
+例えば比較演算子であれば <code>==</code>, <code>!=</code> は数値用、 <code>eq</code>, <code>ne</code> は文字列用といった具合です。</p>
+<p>しかし、ビット操作用の演算子だけには、なぜかその区別がなかったのです。
+以下は <a href="https://metacpan.org/dist/perl/view/pod/perlop.pod#Bitwise-String-Operators">perlop Bitwise String Operators</a> から引っ張ってきた例です。
+<code>|</code> は論理和を求める演算子ですが、両辺の型に応じて結果が変わります。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">warnings</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">strict</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">feature</span> <span class="sx">qw/say/</span><span class="p">;</span>
+
+<span class="n">say</span>  <span class="mi">150</span>  <span class="o">|</span>  <span class="mi">105</span><span class="p">;</span>  <span class="c1"># = 255  (0x96 | 0x69 = 0xFF)</span>
+<span class="n">say</span> <span class="s">&#39;150&#39;</span> <span class="o">|</span>  <span class="mi">105</span><span class="p">;</span>  <span class="c1"># = 255</span>
+<span class="n">say</span>  <span class="mi">150</span>  <span class="o">|</span> <span class="s">&#39;105&#39;</span><span class="p">;</span> <span class="c1"># = 255</span>
+<span class="n">say</span> <span class="s">&#39;150&#39;</span> <span class="o">|</span> <span class="s">&#39;105&#39;</span><span class="p">;</span> <span class="c1"># = 文字列の &#39;155&#39; (ASCII)</span>
+</code></pre></div><p>結果:</p>
+<pre><code>255
+255
+255
+155
+</code></pre><p>最後の文字列同士の計算だけ結果が違うのは、文字列同士の場合はバイト毎に論理和の計算が行われるためです。</p>
+<pre><code>0x31 ('1') | 0x31 ('1') = 0x31 ('1')
+0x35 ('5') | 0x30 ('0') = 0x31 ('5')
+0x30 ('0') | 0x35 ('5') = 0x31 ('5')
+</code></pre><p>このちょっと面白い(面白くはない)挙動については、<a href="https://shogo82148.github.io/blog/2021/10/14/json-pp-on-perl/">Perl の JSON::PP での数値の扱いが変わっていた件</a>でも簡単に触れました。</p>
+<h2 id="bitwise-feature">bitwise feature</h2>
+<p>「これはちょっと分かりにくいよね」ということで Perl 5.22 から「数値用」「文字列用」の演算子を分けることができるようになりました。
+後方互換性のためにデフォルトでは無効化されているので、 <code>feature</code> プラグマで明示的に有効化する必要があります。</p>
+<p><code>bitwise</code> を有効化すると、今までのビット演算子は「数値用」になります。
+両辺が両方とも文字列であった場合も、数値に変換されてから演算されます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">warnings</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">strict</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">feature</span> <span class="sx">qw/say bitwise/</span><span class="p">;</span>
+
+<span class="n">say</span>  <span class="mi">150</span>  <span class="o">|</span>  <span class="mi">105</span><span class="p">;</span>  <span class="c1"># = 255  (0x96 | 0x69 is 0xFF)</span>
+<span class="n">say</span> <span class="s">&#39;150&#39;</span> <span class="o">|</span>  <span class="mi">105</span><span class="p">;</span>  <span class="c1"># = 255</span>
+<span class="n">say</span>  <span class="mi">150</span>  <span class="o">|</span> <span class="s">&#39;105&#39;</span><span class="p">;</span> <span class="c1"># = 255</span>
+<span class="n">say</span> <span class="s">&#39;150&#39;</span> <span class="o">|</span> <span class="s">&#39;105&#39;</span><span class="p">;</span> <span class="c1"># = 255</span>
+</code></pre></div><p>結果:</p>
+<pre><code>255
+255
+255
+255
+</code></pre><p>「文字列用」にはドット付きの <code>&amp;. |. ^. ~.</code> を使います。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">warnings</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">strict</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">feature</span> <span class="sx">qw/say bitwise/</span><span class="p">;</span>
+
+<span class="n">say</span>  <span class="mi">150</span>  <span class="o">|.</span> <span class="mi">105</span><span class="p">;</span>  <span class="c1"># = &#39;155&#39;</span>
+<span class="n">say</span> <span class="s">&#39;150&#39;</span> <span class="o">|.</span> <span class="mi">105</span><span class="p">;</span>  <span class="c1"># = &#39;155&#39;</span>
+<span class="n">say</span>  <span class="mi">150</span>  <span class="o">|.</span><span class="s">&#39;105&#39;</span><span class="p">;</span> <span class="c1"># = &#39;155&#39;</span>
+<span class="n">say</span> <span class="s">&#39;150&#39;</span> <span class="o">|.</span><span class="s">&#39;105&#39;</span><span class="p">;</span> <span class="c1"># = &#39;155&#39;</span>
+</code></pre></div><p>結果:</p>
+<pre><code>155
+155
+155
+155
+</code></pre><p>Perl 5.22 から Perl 5.26 までは「実験的機能」扱いなので警告がでます。
+Perl 5.28 からは警告なしで使えます。</p>
+<h2 id="feature-bundle-経由で使ってみる">feature bundle 経由で使ってみる</h2>
+<p>Perl 5.28 から正式な機能として扱われるようになったので、
+最小バージョンを明示することでも有効化できます。</p>
+<div class="highlight"><pre class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">warnings</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">v5</span><span class="mf">.28</span><span class="p">;</span> <span class="c1"># Perl 5.28 以降で使える機能を有効化</span>
+
+<span class="c1"># 以下は use v5.28 に含まれるので省略可</span>
+<span class="c1"># use strict; </span>
+<span class="c1"># use feature qw/say bitwise/;</span>
+
+<span class="n">say</span>  <span class="mi">150</span>  <span class="o">|.</span> <span class="mi">105</span><span class="p">;</span>  <span class="c1"># = &#39;155&#39;</span>
+<span class="n">say</span> <span class="s">&#39;150&#39;</span> <span class="o">|.</span> <span class="mi">105</span><span class="p">;</span>  <span class="c1"># = &#39;155&#39;</span>
+<span class="n">say</span>  <span class="mi">150</span>  <span class="o">|.</span><span class="s">&#39;105&#39;</span><span class="p">;</span> <span class="c1"># = &#39;155&#39;</span>
+<span class="n">say</span> <span class="s">&#39;150&#39;</span> <span class="o">|.</span><span class="s">&#39;105&#39;</span><span class="p">;</span> <span class="c1"># = &#39;155&#39;</span>
+</code></pre></div><p>有効化される機能は <code>say</code> <code>bitwise</code> だけではありません。
+完全な一覧は <a href="https://perldoc.perl.org/feature#FEATURE-BUNDLES">FEATURE BUNDLES</a> を参照してください。</p>
+<h2 id="まとめ">まとめ</h2>
+<ul>
+<li>文字列専用ビット演算子 <code>&amp;. |. ^. ~.</code> を使ってみました</li>
+<li>Perl 5.28 から正式に採用</li>
+<li><code>use v5.28</code> or <code>use feature 'bitwise'</code> で使えます</li>
+</ul>
+<p>正直こんな演算子が追加されていたなんて、最近まで知らなかった・・・。</p>
+<hr>
+<p>明日16日は FooBar で「HogeHoge」です。お楽しみに！ # TODO: 後で埋める</p>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://qiita.com/xtetsuji/items/a21c718ca37799d11c7c#bitwise---%E3%83%93%E3%83%83%E3%83%88%E6%BC%94%E7%AE%97%E5%AD%90%E3%82%92%E6%95%B0%E5%80%A4%E5%B0%82%E7%94%A8%E3%81%A8%E6%96%87%E5%AD%97%E5%88%97%E5%B0%82%E7%94%A8%E3%81%AB%E5%88%86%E3%81%91%E3%82%8B">bitwise - ビット演算子を数値専用と文字列専用に分ける</a></li>
+<li><a href="https://metacpan.org/dist/perl/view/pod/perlop.pod#Bitwise-String-Operators">perlop Bitwise String Operators</a></li>
+<li><a href="https://shogo82148.github.io/blog/2021/10/14/json-pp-on-perl/">Perl の JSON::PP での数値の扱いが変わっていた件</a></li>
+<li><a href="https://perldoc.perl.org/feature#FEATURE-BUNDLES">FEATURE BUNDLES</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>Dec 15, 2021</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2021/12/11/perl-iterating-over-multiple-values/" title="Perl 5.35.5 の iterating over multiple values at a time を先取り">Perl 5.35.5 の iterating over multiple values at a time を先取り</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2021/12/15/perl-bitwise-operator/">Perl の文字列用ビット操作演算子を使ってみる</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/12/11/perl-iterating-over-multiple-values/">Perl 5.35.5 の iterating over multiple values at a time を先取り</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/12/11/aws-cloud-bound/">AWS ClockBound で遊んでみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/12/10/perl-defer/">Perl 5.35.4 の defer を先取り</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/12/09/perl-try-catch/">Perl 5.34.0 の try-catch を触ってみる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/11/29/github-graphql-global-node-id-will-change/">GitHub GraphQL のノードIDフォーマットが変わるらしい</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/10/14/json-pp-on-perl/">Perl の JSON::PP での数値の扱いが変わっていた件</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/10/06/aws-lambda-perl-runtime-on-arm64/">AWS Lambda Perl Runtime の Arm64 互換レイヤーを公開しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/10/01/arm64-in-aws-lambda/">AWS Lambda の Arm64 対応試してみた</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2021 Shogo Ichinose - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['\\(','\\)'], ['{% m %}', '{% em %}']],
+    displayMath: [['\\[','\\]'], ['{% math %}', '{% endmath %}']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+  </script>
+
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+</html>
+
