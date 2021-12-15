@@ -104,42 +104,6 @@
         
 
 <header>
-  <p class="meta">Jul 24, 2019
-     - 2 minute read 
-     - <a href="https://shogo82148.github.io/blog/2019/07/24/assets-life/#disqus_thread">Comments</a>
-
-    
-    
-      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
-    
-  </p>
-  <h1 class="entry-title">
-    <a href="https://shogo82148.github.io/blog/2019/07/24/assets-life/">Goのバイナリに静的ファイルを埋め込むツール assets-life を書いた</a>
-  </h1>
-</header>
-
-        
-          <p>日本語の Go コミュニティだと go-bindata (なんか乗っ取り騒動とか色々あってメンテナンスされてない), go-assets (最近メンテナンス滞りがち) が有名(要出典)なやつです。 これらのライブラリに関してたくさん日本語記事が書かれて、今もたくさん検索に引っかかるのですが、残念ながら最近はメンテナンスが滞っています。
-最近は statik の名前もよく見るようになりました。 その他は Resource Embedding - Awesome Go からどうぞ。
-で、まあ、今回も完全に車輪の再発明なんですが、他の実装には色々と思うところがあり書いてみました。
- shogo82148/assets-life  USAGE なにはともあれ、まずは go get してきます。
-$ go get github.com/shogo82148/assets-life assets-life というコマンドがインストールされるので、 バイナリに組み込みたいディレクトリと出力先を指定します。
-$ assets-life /path/to/your/project/public public 出力先のディレクトリは Go のパッケージとしてインポートできるようになってます。 Root という変数のなかにファイルが埋め込まれており、http.FileSystem インターフェースを介してアクセスできます。
-import ( &#34;net/http&#34; &#34;example.com/your/project/public&#34; ) func main() { http.Handle(&#34;/&#34;, http.FileServer(public.Root)) http.ListenAndServe(&#34;:8080&#34;, nil) } 特長 コードの再生成にコマンドのインストールが不要 これが一番の特長です。 バイナリにファイルを埋め込む都合上、静的ファイルを修正した場合にコードの再生成が必要です。 assets-life は go:generate ディレクティブを埋め込んだコードを出力するので、コードの再生成は go generate でできます。
-# /path/to/your/project/public に修正を加える # コードの再生を行う $ go generate example.</p>
-          
-            <footer>
-              <a href="https://shogo82148.github.io/blog/2019/07/24/assets-life/" rel="full-article">Read On &rarr;</a>
-            </footer>
-          
-        
-      </article>
-      
-      <article>
-        
-        
-
-<header>
   <p class="meta">Jul 22, 2019
      - 3 minute read 
      - <a href="https://shogo82148.github.io/blog/2019/07/22/go-retry/#disqus_thread">Comments</a>
@@ -448,6 +412,41 @@ Let&rsquo;s Encrypt で発行できる証明書は期間が90日と短く、60�
         
       </article>
       
+      <article>
+        
+        
+
+<header>
+  <p class="meta">Jan 30, 2019
+     - 3 minute read 
+     - <a href="https://shogo82148.github.io/blog/2019/01/30/drain-ecs-task-with-cloudformation/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a><a class="label" href="https://shogo82148.github.io/categories/mysql/">mysql </a><a class="label" href="https://shogo82148.github.io/categories/aws/">aws </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2019/01/30/drain-ecs-task-with-cloudformation/">CloudFormationでECSタスクのドレインをやる</a>
+  </h1>
+</header>
+
+        
+          <p>やってみたはいいものの、1年後には仕組みを忘れていそうなのでメモ。
+背景 昔はサービス毎にポコポコEC2インスタンスを立てていたのですが、 幸か不幸かインスタンスのリソースが余り気味でした。 そこで、最近流行りのコンテナ技術に乗っかって Amazon ECS (Amazon Elastic Container Service) を使って、 ひとつのインスタンスに複数のサービスを載せようと目論みました。
+ちょうどその頃、Spot Fleetというものを使うと、 スポットインスタンスをお手軽に借りられるという話を聞いたので、 Spot Fleet + ECS で格安クラスターを作ってみよう！と手を出してみました。
+ (・・・もちろん、Fargateが東京リージョンで使えるようになったことは知っているけれど、スポットインスタンスの価格に負けてしまった・・・)
+ AWS Fargate 東京リージョン サービス開始のお知らせ AWS Fargate で最大 50% の値下げを発表  ECS最適化インスタンスの更新問題 クラスターを作るだけなら、そう難しくはなく、インスタンス起動時にAmazon ECS-Optimized Amazon Linux AMIを使うだけです。 問題はこのイメージは定期的に更新される、ということです。 更新情報を流しているSNSトピックがあるので、これをサブスクライブしておくと、時たま更新通知が来ます。
+ Amazon ECS-Optimized Amazon Linux AMI の更新の通知のサブスクライブ  この更新には機能追加はもちろん、セキュリティーフィックスも含まれているので、 なるべく早く新しいイメージに移行する必要があります。 移行は大まかに以下の手順で進めます。
+ 新しいAMIイメージに更新した Spot Fleet を作成する 古いインスタンスに残っているタスクをいい感じに終了する(ドレイン)   突然殺すとユーザーにエラーが見えてしまうので、受付中のリクエストを捌き切ってから終了しないといけない ドレインが始まるとECSがタスク数を調整するために、新しいインスタンスにタスクをお引越ししてくれる  ドレインが終了したら、古いインスタンスをシャットダウンする  ここで問題になってくるのが「古いインスタンスに残っているタスクをいい感じに終了する(ドレイン)」の部分。 コンソールからポチポチするのも面倒なので、自動化したいところ。 しかし、いろいろとドキュメントをあさってみたのですが、「APIかawscliを叩く」「SNSとAWS Lambda をうまいこと組み合わせて頑張る」みたいな方法しか見当たらない・・・ しかもAWSの公式ブログ</p>
+          
+            <footer>
+              <a href="https://shogo82148.github.io/blog/2019/01/30/drain-ecs-task-with-cloudformation/" rel="full-article">Read On &rarr;</a>
+            </footer>
+          
+        
+      </article>
+      
       
       
 
@@ -582,16 +581,10 @@ Let&rsquo;s Encrypt で発行できる証明書は期間が90日と短く、60�
           
             
               <li class="post">
-                <a href="/blog/2021/12/15/perl-bitwise-operator/">Perl の文字列用ビット操作演算子を使ってみる</a>
-              </li>
-            
-          
-            
-          
-            
-              <li class="post">
                 <a href="/blog/2021/12/11/perl-iterating-over-multiple-values/">Perl 5.35.5 の iterating over multiple values at a time を先取り</a>
               </li>
+            
+          
             
           
             
@@ -633,6 +626,12 @@ Let&rsquo;s Encrypt で発行できる証明書は期間が90日と短く、60�
             
               <li class="post">
                 <a href="/blog/2021/10/01/arm64-in-aws-lambda/">AWS Lambda の Arm64 対応試してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/09/24/github-actions-oidc/">GitHub Actions &#43; OIDC Token の情報をAWSのセッションタグに設定してみた</a>
               </li>
             
           
