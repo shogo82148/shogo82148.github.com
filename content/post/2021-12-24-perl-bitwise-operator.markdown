@@ -2,19 +2,19 @@
 layout: post
 title: "Perl の文字列用ビット操作演算子を使ってみる"
 slug: perl-bitwise-operator
-date: 2021-12-19 20:48:00 +0900
+date: 2021-12-24 09:56:00 +0900
 comments: true
 categories: [perl]
 ---
 
-この記事は、[Perl Advent Calendar 2021](https://qiita.com/advent-calendar/2021/perl) の19日目の記事です。
-18日目は [@xtetsuji](https://qiita.com/xtetsuji) で「正規表現で複数行テキストを片付ける方法（仮）」でした。
+この記事は、[Perl Advent Calendar 2021](https://qiita.com/advent-calendar/2021/perl) の24日目の記事です。
+23日目は [@hitode909](https://qiita.com/hitode909) で「[リポジトリ内のソースコードを機械的にリファクタリングし続けるスクリプトを作る](https://blog.sushi.money/entry/2021/12/23/112211)」でした。
 
 -----
 
 今日はちょっと前から使えるようになってたけど滅多にお世話になることのない、「文字列用ビット操作演算子」を触ってみたというお話です。
 
-特に断りのない限り 2021-12-16 現在の最新安定版 Perl 5.34.0 で動作確認をしています。
+特に断りのない限り 2021-12-24 現在の最新安定版 Perl 5.34.0 で動作確認をしています。
 
 ## 旧来のビット演算子
 
@@ -140,7 +140,7 @@ say '150' |.'105'; # = '155'
 
 -----
 
-明日17日は FooBar で「HogeHoge」です。お楽しみに！ # TODO: 後で埋める
+明日25日は [@karupanerura](https://qiita.com/karupanerura) で「 Perlと型とコンテキスト 」です。お楽しみに！
 
 ## 参考
 
