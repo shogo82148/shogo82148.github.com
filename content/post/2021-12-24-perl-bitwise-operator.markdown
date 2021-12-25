@@ -140,7 +140,7 @@ say '150' |.'105'; # = '155'
 
 -----
 
-明日25日は [@karupanerura](https://qiita.com/karupanerura) で「 Perlと型とコンテキスト 」です。お楽しみに！
+明日25日は [@karupanerura](https://qiita.com/karupanerura) で「[Perlと型とコンテキスト](https://qiita.com/karupanerura/items/361b620a123d80ad9fbe)」です。お楽しみに！
 
 ## 参考
 
