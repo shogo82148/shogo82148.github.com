@@ -4,7 +4,7 @@ title: "Bash と PowerShell の Polyglot を作る"
 slug: polyglot-of-bash-and-powershell
 date: 2021-12-30 21:12:00 +0900
 comments: true
-categories: [bash, powershell]
+categories: [polyglot, bash, powershell]
 ---
 
 以前 Bash と PowerShell の Polyglot を書いたことがあったんですが、

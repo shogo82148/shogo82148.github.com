@@ -4,7 +4,7 @@ title: "PerlとGolangで実行できるPolyglot書いてみた"
 slug: polyglot-of-perl-and-golang
 date: 2016-04-05T12:27:00+09:00
 comments: true
-categories: [perl, go, golang]
+categories: [polyglot, perl, go, golang]
 ---
 
 Rubyの会社をPerlの会社に変えてしまおう計画。

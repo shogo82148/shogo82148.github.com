@@ -4,7 +4,7 @@ title: "改: PerlとGolangで実行できるPolyglot書いてみた"
 slug: improve-go-and-perl-polyglot
 date: 2021-02-23 18:00:00 +0900
 comments: true
-categories: [go, golang, perl]
+categories: [polyglot, go, golang, perl]
 ---
 
 仕事をしているときにふとひらめいた。

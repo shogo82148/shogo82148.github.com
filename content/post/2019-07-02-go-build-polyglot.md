@@ -4,7 +4,7 @@ title: "GoのバイナリをRubyスクリプトとしても扱う"
 slug: go-build-polyglot
 date: 2019-07-02 21:55:00 +0900
 comments: true
-categories: [go, golang, perl, php, ruby]
+categories: [polyglot, go, golang, perl, php, ruby]
 ---
 
 <iframe src="https://hatenablog-parts.com/embed?url=https%3A%2F%2Fcodehex.hateblo.jp%2Fentry%2F2019%2F07%2F02%2F090000" title="Go のバイナリを Perl スクリプトとしても扱う - アルパカ三銃士" class="embed-card embed-blogcard" scrolling="no" frameborder="0" style="display: block; width: 100%; height: 190px; max-width: 500px; margin: 10px 0px;"></iframe>
