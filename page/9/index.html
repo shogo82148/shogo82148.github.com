@@ -104,6 +104,40 @@
         
 
 <header>
+  <p class="meta">Mar 5, 2017
+     - 3 minute read 
+     - <a href="https://shogo82148.github.io/blog/2017/03/05/tune-up-go-jsonstore/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2017/03/05/tune-up-go-jsonstore/">go-JSONStoreの高速化と機能追加</a>
+  </h1>
+</header>
+
+        
+          <p>以前mattnさんが紹介していたschollz/jsonstore。 時間が経ってしまいましたが「ここは高速化できそうだなー」といじってみたので、 やってみたことをメモ。
+本来は上流にフィードバックしたほうがよいのですが、 本家のほうも修正が入ってコンフリクトして面倒になったので、 フォーク版をそのまま置いておきます。
+ shogo82148/jsonstore  高速化 まだまだ高速化できそうなところがあったので、いじってみた部分です。
+ロックの範囲を最小にする ロックの範囲を小さくすることで、並列処理時の性能が上がります。 例えば、jsonstoreに値を入れるSetメソッドは、 以下のようにSet全体がロックの対象になっていました。
+func (s *JSONStore) Set(key string, value interface{}) error { // Set の中全体がロックの対象になっている 	s.Lock() defer s.Unlock() b, err := json.Marshal(value) if err != nil { return err } if s.data == nil { s.data = make(map[string]*json.RawMessage) } s.data[key] = (*json.RawMessage)(&amp;b) return nil } jsonのエンコード処理はjsonstoreの中身を触らないので並列実行可能です。 次のように s.data だけをロックの対象にすれば十分です。
+func (s *JSONStore) Set(key string, value interface{}) error { // json.</p>
+          
+            <footer>
+              <a href="https://shogo82148.github.io/blog/2017/03/05/tune-up-go-jsonstore/" rel="full-article">Read On &rarr;</a>
+            </footer>
+          
+        
+      </article>
+      
+      <article>
+        
+        
+
+<header>
   <p class="meta">Feb 26, 2017
      - 2 minute read 
      - <a href="https://shogo82148.github.io/blog/2017/02/26/unique-id-supplier-using-redis/#disqus_thread">Comments</a>
@@ -423,46 +457,6 @@ diff --git a/lib/DateTime/LeapSecond.pm b/lib/DateTime/LeapSecond.pm index 66e1b
         
       </article>
       
-      <article>
-        
-        
-
-<header>
-  <p class="meta">Nov 23, 2016
-     - 1 minute read 
-     - <a href="https://shogo82148.github.io/blog/2016/11/23/qr-code/#disqus_thread">Comments</a>
-
-    
-    
-      - <a class="label" href="https://shogo82148.github.io/categories/qrcode/">qrcode </a>
-    
-  </p>
-  <h1 class="entry-title">
-    <a href="https://shogo82148.github.io/blog/2016/11/23/qr-code/">Twitterの二次元コード問題と、QRコード・フレームQRの見分け方</a>
-  </h1>
-</header>
-
-        
-          <p>先日Twitterの公式アプリがQRコード® (お店やお友達を簡単にフォローするために) の作成と読み取りに対応しました。 しかし、生成されるQRコードが標準規格に準拠していないため、 「他のリーダーで読めない」「法的に問題があるのでは？」等々の指摘が出ていました。 人事ながらTwitterさんのことが心配になったので少し調べてみました。
-なお、僕は法律の専門家ではないため、本記事の正確性は保証できません。 あくまで個人的な見解なので、 実際にQRコード®を使用するさいは各自の判断でお願いします。
-指摘ツイート Twitterが生成するQRコード、規格(JIS X 0510・ISO/IEC 18004)を大幅に逸脱しているので「QRコード®」を名乗ること自体に法的なリスクがある。
-&mdash; 祥太(4/15レイフレ18 C19+20) (@shota_) 2016年11月17日  「デンソーウェーブは、JIS、ISOの規格に沿ったQRコードに限っては特許権を行使しませんが、規格を逸脱したQRコードについてはこの限りではございませんので、特許権を行使させていただくこともございます。」
-(出典: https://t.co/SKXgBGSb8E )
-&mdash; 祥太(4/15レイフレ18 C19+20) (@shota_) 2016年11月17日  明暗暗転で読み取らないという話を多数見かけますけど、そちらについては「ISO/IEC 18004からは逸脱」「JIS X 0510には準拠」(規格票7.3.8参照)という微妙な状況なのです。多分ISOには準拠しているのでアプリは悪くないと思います。
-&mdash; 祥太(4/15レイフレ18 C19+20) (@shota_) 2016年11月17日  たしかに qrcode.comのFAQには 特許について以下の記述があります。
- 色を付けたりイラストを入れるような使い方をしても問題ありませんか？ (中略) また、QRコードにイラストを重ねたりデザインを乗せるということは、QRコードの規格から外れ「QRコードではないもの」となってしまう可能性がございます。 デンソーウェーブは、JIS、ISOの規格に沿ったQRコードに限っては特許権を行使しませんが、規格を逸脱したQRコードについてはこの限りではございませんので、特許権を行使させていただくこともございます。
- 問題点 公式アプリの生成する二次元コードは以下のような問題があります。
- データパターンの20%近くがアイコンで上書きされている 「アライメントパターン」がTwitterのロゴで欠けている 明暗暗転している(一応JISには沿っているらしい)  法的リスク以前に、 読み取り性能/互換性が劣化するので使わない方が無難でしょう。
-自分のプロフィールのURL (僕の場合は https://twitter.com/shogo82148 )を QRコードに変換すれば公式アプリのリーダーでも読めるので、 こちらの方がオススメです。
-QRコード関連の権利 特許 QRコード®のJIS規格JIS X 0510には、 関連する特許として特許第2938338号「二次元コード」があげられています。 ただし、特許の保護期間は20年なので、1994年に出願されたこの特許は2014年で消滅しています。 したがってこの特許を理由に訴えられることはなさそうです。</p>
-          
-            <footer>
-              <a href="https://shogo82148.github.io/blog/2016/11/23/qr-code/" rel="full-article">Read On &rarr;</a>
-            </footer>
-          
-        
-      </article>
-      
       
       
 
@@ -597,10 +591,16 @@ QRコード関連の権利 特許 QRコード®のJIS規格JIS X 0510には、 �
           
             
               <li class="post">
-                <a href="/blog/2021/12/24/perl-bitwise-operator/">Perl の文字列用ビット操作演算子を使ってみる</a>
+                <a href="/blog/2021/12/30/polyglot-of-bash-and-powershell/">Bash と PowerShell の Polyglot を作る</a>
               </li>
             
           
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/12/24/perl-bitwise-operator/">Perl の文字列用ビット操作演算子を使ってみる</a>
+              </li>
             
           
             
@@ -642,12 +642,6 @@ QRコード関連の権利 特許 QRコード®のJIS規格JIS X 0510には、 �
             
               <li class="post">
                 <a href="/blog/2021/10/14/json-pp-on-perl/">Perl の JSON::PP での数値の扱いが変わっていた件</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2021/10/06/aws-lambda-perl-runtime-on-arm64/">AWS Lambda Perl Runtime の Arm64 互換レイヤーを公開しました</a>
               </li>
             
           

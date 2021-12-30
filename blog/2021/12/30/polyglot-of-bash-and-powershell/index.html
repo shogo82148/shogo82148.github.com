@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+    
+    
+      <link href="/css/fonts.css" rel="stylesheet" type="text/css">
+    
+  
+
+  
+  <title>Bash と PowerShell の Polyglot を作る</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+    <link rel="stylesheet" href="/css/fork-awesome.min.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.75.1" />
+
+  
+  
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Dec 30, 2021
+     - 3 minute read 
+     - <a href="https://shogo82148.github.io/blog/2021/12/30/polyglot-of-bash-and-powershell/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/bash/">bash </a><a class="label" href="https://shogo82148.github.io/categories/powershell/">powershell </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2021/12/30/polyglot-of-bash-and-powershell/">Bash と PowerShell の Polyglot を作る</a>
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>以前 Bash と PowerShell の Polyglot を書いたことがあったんですが、
+「そういえば、どこにもメモってないな〜」と思い出したので、記録として残しておきます。</p>
+<h2 id="背景目的">背景・目的</h2>
+<p>GitHub Actions には <a href="https://docs.github.com/en/actions/learn-github-actions/workflow-syntax-for-github-actions#jobsjob_idstepsrun"><code>run</code></a> というステップがあります。
+任意のシェルスクリプトをかける便利なステップなんですが、
+マトリックスビルドでマルチプラットフォームなワークフローを書いていると罠があります。</p>
+<p>例えば以下のワークフローは 「Hello GitHub Actions!」とログに表示するだけの簡単なものです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml"><span class="nt">on</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span><span class="nt">push</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span><span class="nt">pull_request</span><span class="p">:</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="nt">jobs</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span><span class="nt">job</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="nt">strategy</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span><span class="nt">fail-fast</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="w">
+</span><span class="w">      </span><span class="nt">matrix</span><span class="p">:</span><span class="w">
+</span><span class="w">        </span><span class="nt">os</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="l">ubuntu-latest, windows-latest, macos-latest]</span><span class="w">
+</span><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l">${{ matrix.os }}</span><span class="w">
+</span><span class="w">    </span><span class="nt">steps</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span>- <span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">Ubuntu, macOS, Windows で実行する</span><span class="w">
+</span><span class="w">        </span><span class="c"># shell: bash # Ubuntu, macOS でのデフォルト</span><span class="w">
+</span><span class="w">        </span><span class="c"># shell: pwsh # Windows でのデフォルト</span><span class="w">
+</span><span class="w">        </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="sd">|
+</span><span class="sd">          echo &#34;Hello GitHub Actions!&#34;
+</span></code></pre></div><p>コメントに書いたとおり Ubuntu, macOS では bash、Windows では PowerShell Core と
+デフォルトのシェルが環境によって異なります。
+bash にも PowerShell にも <code>echo</code> コマンドが存在するので、この例はなぜか動いてしまうのですが、
+もっと複雑な処理ではこうも行きません。</p>
+<p>なるほどこれを一般化すると <strong>bash と PowerShell の Polyglot だ！</strong> と気がついたので、やってみたというお話です。</p>
+<h2 id="最終案">最終案</h2>
+<p>気の短い人のための最終案。
+試行錯誤の末たどり着いたのが以下のスクリプトです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">echo &#34; \`&#34; &gt; /dev/null # &#34; &lt;#
+echo &#34;Hello Bash!&#34;
+
+exit #&gt; &gt; $null
+Write-Output &#34;Hello PowerShell!&#34;
+</code></pre></div><p>以下はこれにたどり着くまでのメモです。</p>
+<h2 id="初期案">初期案</h2>
+<p>最初に思いついたのは以下のようなものです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">echo `# &lt;#` &gt; /dev/null
+echo &#34;Hello Bash!&#34;
+
+exit #&gt; &gt; $null
+Write-Output &#34;Hello PowerShell!&#34;
+</code></pre></div><p>ポイントは bash と PowerShell におけるバッククオート(<code>`</code>)の扱いの違いです。</p>
+<h3 id="bash-として解釈した場合">bash として解釈した場合</h3>
+<p>bash でのバッククオートの役割は、バッククオートで囲まれた文字列をコマンドとして解釈し、展開することです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash"><span class="nb">echo</span> <span class="sb">`</span><span class="c1"># &lt;#` &gt; /dev/null</span>
+<span class="nb">echo</span> <span class="s2">&#34;Hello Bash!&#34;</span>
+
+<span class="nb">exit</span> <span class="c1">#&gt; &gt; $null</span>
+Write-Output <span class="s2">&#34;Hello PowerShell!&#34;</span>
+</code></pre></div><p><code>#</code> は行末までコメントアウトする記法ですが、バッククオートで囲われている場合影響範囲はバッククオートの中に閉じるようです。
+普通やらない変な記法を使ってシンタックスハイライトが混乱しているかもしれませんが、
+<code># &lt;#</code> がコメント、 <code> &gt; /dev/null</code> はコメント外と認識されます。
+つまり bash のコメントを取り除くとこうなります。</p>
+<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash"><span class="nb">echo</span> <span class="sb">``</span> &gt; /dev/null
+<span class="nb">echo</span> <span class="s2">&#34;Hello Bash!&#34;</span>
+
+<span class="nb">exit</span>
+Write-Output <span class="s2">&#34;Hello PowerShell!&#34;</span>
+</code></pre></div><p>一行目は虚無(<code>``</code>)を実行して、出力結果を <code>/dev/null</code> に捨てています。
+つまり「何もしない」ということです。</p>
+<p>bash の実行が終わった後は <code>exit</code> コマンドで実行を終了し、その後の PowerShell のスクリプトの解釈をスキップします。</p>
+<h3 id="powershell-として解釈した場合">PowerShell として解釈した場合</h3>
+<p>PowerShell でのバッククオートの役割はエスケープです。
+bash におけるバックスラッシュですね。</p>
+<div class="highlight"><pre class="chroma"><code class="language-powershell" data-lang="powershell"><span class="nb">echo </span><span class="p">`</span><span class="c"># &lt;#` &gt; /dev/null</span>
+<span class="nb">echo </span><span class="s2">&#34;Hello Bash!&#34;</span>
+
+<span class="n">exit</span> <span class="c">#&gt; &gt; $null</span>
+<span class="nb">Write-Output</span> <span class="s2">&#34;Hello PowerShell!&#34;</span>
+</code></pre></div><p><code>#</code> は PowerShell でも行コメントの意味を持ちますが、
+バッククオートによってエスケープされて通常の文字として解釈されます。</p>
+<p>その後の <code>&lt;#</code> は PowerShell の複数行コメントの開始です。
+対応する <code>#&gt;</code> までをコメントアウトします。
+ちょっと見づらいのでコメントを削除してみましょう。</p>
+<div class="highlight"><pre class="chroma"><code class="language-powershell" data-lang="powershell"><span class="nb">echo </span><span class="p">`</span><span class="c"># &gt; $null</span>
+<span class="nb">Write-Output</span> <span class="s2">&#34;Hello PowerShell!&#34;</span>
+</code></pre></div><p>その結果一行目は「<code>#</code>を出力するコマンド」として解釈されます。
+結果は <code>$null</code> に捨てるので、行全体では何もしません。</p>
+<p>その後の行は通常の PowerShell スクリプトとして解釈されます。</p>
+<h2 id="別解その1">別解その1</h2>
+<p>もともと GitHub Actions デフォルトのシェルがOSによって違うのが問題なんだら、
+シェルを明示的に指定すれば良くないかって？</p>
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml"><span class="nt">on</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span><span class="nt">push</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span><span class="nt">pull_request</span><span class="p">:</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="nt">jobs</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span><span class="nt">job</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="nt">strategy</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span><span class="nt">fail-fast</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="w">
+</span><span class="w">      </span><span class="nt">matrix</span><span class="p">:</span><span class="w">
+</span><span class="w">        </span><span class="nt">os</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="l">ubuntu-latest, windows-latest, macos-latest]</span><span class="w">
+</span><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l">${{ matrix.os }}</span><span class="w">
+</span><span class="w">    </span><span class="nt">steps</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span>- <span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">Ubuntu, macOS, Windows で実行する</span><span class="w">
+</span><span class="w">        </span><span class="nt">shell</span><span class="p">:</span><span class="w"> </span><span class="l">bash # 明示的にシェルを指定する</span><span class="w">
+</span><span class="w">        </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="sd">|
+</span><span class="sd">          echo &#34;Hello GitHub Actions!&#34;
+</span></code></pre></div><p>いや、それはそうなんですが、 PowerShell のほうが楽にかける処理もあるんですよ。
+Windowsの bash は Git for Windows に付属する bash なので、 git を使うのに最低限必要なコマンドしか入っていません。
+例えば <code>df -h</code> でディスク容量を調べようと思ってもそんなコマンドはありません。
+PowerShell なら <code>Get-PSDrive</code> コマンドレットで一発です。</p>
+<h2 id="別解その2">別解その2</h2>
+<p><code>if</code> を使って環境毎に実行するステップを変えるのは？</p>
+<div class="highlight"><pre class="chroma"><code class="language-yaml" data-lang="yaml"><span class="nt">on</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span><span class="nt">push</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span><span class="nt">pull_request</span><span class="p">:</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="nt">jobs</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span><span class="nt">job</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="nt">strategy</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span><span class="nt">fail-fast</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="w">
+</span><span class="w">      </span><span class="nt">matrix</span><span class="p">:</span><span class="w">
+</span><span class="w">        </span><span class="nt">os</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="l">ubuntu-latest, windows-latest, macos-latest]</span><span class="w">
+</span><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l">${{ matrix.os }}</span><span class="w">
+</span><span class="w">    </span><span class="nt">steps</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span>- <span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">Ubuntu, macOS で実行する</span><span class="w">
+</span><span class="w">        </span><span class="nt">if</span><span class="p">:</span><span class="w"> </span><span class="l">runner.os != &#39;Windows&#39;</span><span class="w">
+</span><span class="w">        </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="sd">|
+</span><span class="sd">          echo &#34;Hello GitHub Actions!&#34;
+</span><span class="sd">      - name: Windows で実行する
+</span><span class="sd">        if: runner.os == &#39;Windows&#39;
+</span><span class="sd">        run: |
+</span><span class="sd">          echo &#34;Hello GitHub Actions!&#34;
+</span></code></pre></div><p>・・・何も言うことがない・・・</p>
+<h2 id="別解その3">別解その3</h2>
+<p>この記事を書くきっかけになったのが、
+今年もアドベントカレンダーを眺めていたときに見つけた「<a href="https://zenn.dev/zakuro9715/articles/mitou-2021-cotowali">静的型付きスクリプト言語 Cotowali</a>」です。
+<a href="https://github.com/cotowali/cotowali">cotowali</a> は一言で言えば「静的型付け言語からシェルスクリプトへのトランスパイラ」です。</p>
+<p>この中で「<a href="https://zenn.dev/zakuro9715/articles/mitou-2021-cotowali#universal-%E3%83%90%E3%83%83%E3%82%AF%E3%82%A8%E3%83%B3%E3%83%89">Universal バックエンド</a>」
+というものが紹介されています。
+これは bash でも PowerShell でも実行できるスクリプトを出力するバックエンドです。
+まさしく Polyglot ですね！
+この記事をよんで、自分も書いていたなと思い出し、今書いているこの記事を書いたのでした。</p>
+<p>さて、この Universal バックエンドではちょっと違った手法が使われているので、覗いてみましょう。</p>
+<pre><code>echo &quot; \`&quot; &gt; /dev/null # &quot; @&quot;
+
+hello() {
+  echo 'hello'
+}
+
+hello
+
+: &lt;&lt; '__END_HEREDOC__'
+&quot;@ &gt; $null
+
+function hello() {
+  'hello' | write-output
+}
+
+hello
+
+function __END_HEREDOC__() {}
+__END_HEREDOC__
+</code></pre><h3 id="bash-として解釈した場合-1">bash として解釈した場合</h3>
+<p>ここでもバッククオートの扱いが鍵になってきます。
+bash として解釈した場合は「バックスラッシュがバッククオートをエスケープ」します。</p>
+<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash"><span class="nb">echo</span> <span class="s2">&#34; \`&#34;</span> &gt; /dev/null <span class="c1"># &#34; @&#34;</span>
+
+hello<span class="o">()</span> <span class="o">{</span>
+  <span class="nb">echo</span> <span class="s1">&#39;hello&#39;</span>
+<span class="o">}</span>
+
+hello
+
+: <span class="s">&lt;&lt; &#39;__END_HEREDOC__&#39;
+</span><span class="s">&#34;@ &gt; $null
+</span><span class="s">
+</span><span class="s">function hello() {
+</span><span class="s">  &#39;hello&#39; | write-output
+</span><span class="s">}
+</span><span class="s">
+</span><span class="s">hello
+</span><span class="s">
+</span><span class="s">function __END_HEREDOC__</span><span class="o">()</span> <span class="o">{}</span>
+__END_HEREDOC__
+</code></pre></div><p>結果一行目はバッククオートを出力するコマンドになります。
+出力は <code>/dev/null</code> に捨てているので、結果何もしません。</p>
+<p>PowerShell のスクリプト実行防止にはヒアドキュメントを使っていますね。
+コロン(<code>:</code>) は「何もしないコマンド」です。標準入力を無視するために使っています。</p>
+<h3 id="powershell-として解釈した場合-1">PowerShell として解釈した場合</h3>
+<p>PowerShell として解釈した場合は「バッククオートがダブルクオーテーションをエスケープ」します。</p>
+<div class="highlight"><pre class="chroma"><code class="language-powershell" data-lang="powershell"><span class="nb">echo </span><span class="s2">&#34; \</span><span class="se">`&#34;</span><span class="s2"> &gt; /dev/null # &#34;</span> <span class="sh">@&#34;
+</span><span class="sh">
+</span><span class="sh">hello() {
+</span><span class="sh">  echo &#39;hello&#39;
+</span><span class="sh">}
+</span><span class="sh">
+</span><span class="sh">hello
+</span><span class="sh">
+</span><span class="sh">: &lt;&lt; &#39;__END_HEREDOC__&#39;
+</span><span class="sh">&#34;@</span> <span class="p">&gt;</span> <span class="nv">$null</span>
+
+<span class="k">function</span> <span class="n">hello</span><span class="p">()</span> <span class="p">{</span>
+  <span class="s1">&#39;hello&#39;</span> <span class="p">|</span> <span class="nb">write-output</span>
+<span class="p">}</span>
+
+<span class="n">hello</span>
+
+<span class="k">function</span> <span class="n">__END_HEREDOC__</span><span class="p">()</span> <span class="p">{}</span>
+<span class="n">__END_HEREDOC__</span>
+</code></pre></div><p>結果一行目は 「<code>\&quot; &gt; /dev/null #</code>」という文字列になります。
+行末の <code>@&quot;</code> は PowerShell で複数行文字列を入力する書式です。対応する <code>&quot;@</code> までが文字列として解釈されます。
+全体を通してみると「bash スクリプトを出力するコマンド(ちょっと先頭にゴミが付いてるけど)」になっていることがわかります。
+まあ結局これも <code>$null</code> に捨てるので、最終的には何も起きません。</p>
+<p>あとは bash のヒアドキュメントの残党がスクリプト末尾にいるので、「何もしない関数」を定義することで無害化しています。</p>
+<div class="highlight"><pre class="chroma"><code class="language-powershell" data-lang="powershell"><span class="k">function</span> <span class="n">__END_HEREDOC__</span><span class="p">()</span> <span class="p">{}</span>
+<span class="n">__END_HEREDOC__</span>
+</code></pre></div><h2 id="最終案-1">最終案</h2>
+<p>初期案はトリッキーなコメントの使い方をしているので、シンタックスハイライトを混乱させてしまうのが問題です。
+別解その3のコメントアウトは行末までコメントアウトしているので、ほとんどのエディタでシンタックスハイライトは問題にならないでしょう。</p>
+<p>一方別解その3の <code>@&quot; ... &quot;@</code> は PowerShell で文字列として解釈されますが、
+文字列内の変数を展開してしまうという機能があります。
+変数展開のための記号は <code>$</code> なので、 bash のスクリプト中でうっかり使ってしまうこともあるでしょう。</p>
+<p>というわけで、初期案と別解その3のハイブリッド案です。
+一方別解その3の「複数行文字列 <code>@&quot; ... &quot;@</code>」を、初期案で使った「複数行コメント <code>&lt;# ... #&gt;</code>」に置き換えます。
+これでお互い意図しない変数展開に怯えずにスクリプトを書くことができます。</p>
+<p>bash スクリプト中で PowerShell を無視するのは、初期案の <code>exit</code> のほうがシンプルなので、こちらを採用します。</p>
+<p>まとめるとこうです！</p>
+<div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">echo &#34; \`&#34; &gt; /dev/null # &#34; &lt;#
+echo &#34;Hello Bash!&#34;
+
+exit #&gt; &gt; $null
+Write-Output &#34;Hello PowerShell!&#34;
+</code></pre></div><div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash"><span class="nb">echo</span> <span class="s2">&#34; \`&#34;</span> &gt; /dev/null <span class="c1"># &#34; &lt;#</span>
+<span class="nb">echo</span> <span class="s2">&#34;Hello Bash!&#34;</span>
+
+<span class="nb">exit</span> <span class="c1">#&gt; &gt; $null</span>
+Write-Output <span class="s2">&#34;Hello PowerShell!&#34;</span>
+</code></pre></div><div class="highlight"><pre class="chroma"><code class="language-powershell" data-lang="powershell"><span class="nb">echo </span><span class="s2">&#34; \</span><span class="se">`&#34;</span><span class="s2"> &gt; /dev/null # &#34;</span> <span class="cm">&lt;#
+</span><span class="cm">echo &#34;Hello Bash!&#34;
+</span><span class="cm">
+</span><span class="cm">exit #&gt;</span> <span class="p">&gt;</span> <span class="nv">$null</span>
+<span class="nb">Write-Output</span> <span class="s2">&#34;Hello PowerShell!&#34;</span>
+</code></pre></div><h2 id="まとめ">まとめ</h2>
+<p>Bash と PowerShell の Polyglot を作る方法を考えてみました。
+最終案はこれです。</p>
+<div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">echo &#34; \`&#34; &gt; /dev/null # &#34; &lt;#
+echo &#34;Hello Bash!&#34;
+
+exit #&gt; &gt; $null
+Write-Output &#34;Hello PowerShell!&#34;
+</code></pre></div><p>是非活用してみてください！
+GitHub Actions で使える・・・かもしれない。</p>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://docs.github.com/en/actions/learn-github-actions/workflow-syntax-for-github-actions#jobsjob_idstepsrun"><code>jobs.&lt;job_id&gt;.steps[*].run</code></a></li>
+<li><a href="https://docs.github.com/en/actions/learn-github-actions/workflow-syntax-for-github-actions#jobsjob_idstepsshell"><code>jobs.&lt;job_id&gt;.steps[*].shell</code></a></li>
+<li><a href="https://github.com/cotowali/cotowali">cotowali</a></li>
+<li><a href="https://zenn.dev/zakuro9715/articles/mitou-2021-cotowali">静的型付きスクリプト言語 Cotowali</a></li>
+<li><a href="https://qiita.com/advent-calendar/2021/mitou-2021">未踏2021採択者アドカレ！ Advent Calendar 2021</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>Dec 30, 2021</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2021/12/24/perl-bitwise-operator/" title="Perl の文字列用ビット操作演算子を使ってみる">Perl の文字列用ビット操作演算子を使ってみる</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2021/12/30/polyglot-of-bash-and-powershell/">Bash と PowerShell の Polyglot を作る</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/12/24/perl-bitwise-operator/">Perl の文字列用ビット操作演算子を使ってみる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/12/16/aws-lambda-is-available-in-ap-southeast-3/">AWSジャカルタリージョンでPerlランタイムが利用可能になりました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/12/11/perl-iterating-over-multiple-values/">Perl 5.35.5 の iterating over multiple values at a time を先取り</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/12/11/aws-cloud-bound/">AWS ClockBound で遊んでみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/12/10/perl-defer/">Perl 5.35.4 の defer を先取り</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/12/09/perl-try-catch/">Perl 5.34.0 の try-catch を触ってみる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/11/29/github-graphql-global-node-id-will-change/">GitHub GraphQL のノードIDフォーマットが変わるらしい</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/10/14/json-pp-on-perl/">Perl の JSON::PP での数値の扱いが変わっていた件</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2021 Shogo Ichinose - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['\\(','\\)'], ['{% m %}', '{% em %}']],
+    displayMath: [['\\[','\\]'], ['{% math %}', '{% endmath %}']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+  </script>
+
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+</html>
+
