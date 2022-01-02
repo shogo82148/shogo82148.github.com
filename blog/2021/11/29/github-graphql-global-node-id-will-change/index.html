@@ -40,7 +40,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.75.1" />
+  <meta name="generator" content="Hugo 0.91.2" />
 
   
   
@@ -129,10 +129,10 @@ GitHub のレポジトリ管理・権限管理などを行っているのです�
 <li><a href="https://docs.github.com/en/graphql/guides/using-global-node-ids">Using global node IDs</a></li>
 </ul>
 <p>例えば僕 (<a href="https://github.com/shogo82148">@shogo82148</a>) のノードIDは <code>MDQ6VXNlcjExNTczNDQ=</code> です。</p>
-<pre><code>$ curl https://api.github.com/users/shogo82148 | jq .node_id
+<pre tabindex="0"><code>$ curl https://api.github.com/users/shogo82148 | jq .node_id
 &quot;MDQ6VXNlcjExNTczNDQ=&quot;
 </code></pre><p>このノードIDを使って GraphQL のクエリを書くことが出来ます。</p>
-<pre><code>$ gh api graphql -f query='query {
+<pre tabindex="0"><code>$ gh api graphql -f query='query {
   node(id: &quot;MDQ6VXNlcjExNTczNDQ=&quot;) {
     ... on User {
       name
@@ -166,18 +166,18 @@ GitHub が管理している全オブジェクトの中から一意に目的の�
 「<code>=</code> によるパディング」「現れるのは英数字のみ」という特徴から、感のいい人はピンと来るのでは無いでしょうか？
 そう、このフォーマットは <strong>Base64</strong> ですね。</p>
 <p>気がついてしまったらデコードしたくなるのが人間の性というものです。やってみましょう。</p>
-<pre><code>$ echo MDQ6VXNlcjExNTczNDQ= | base64 -d
+<pre tabindex="0"><code>$ echo MDQ6VXNlcjExNTczNDQ= | base64 -d
 04:User1157344
 </code></pre><p>なんだかそれっぽい文字列になりました。
 レポジトリのノードID(e.g. <code>MDEwOlJlcG9zaXRvcnkzMDgyNDI5</code>) をデコードすると <code>010:Repository3082429</code> となったので、
 最初の <code>04</code> は <code>:</code> のあとに続くノードタイプの字数(<code>User</code>: 4文字, <code>Repository</code>: 10文字) でしょう。
 <code>:</code> のあとの <code>User</code> はノードの種類、その後の数字は内部的なユーザーIDだと思います。
 実際この数字は User Rest API の <code>id</code> フィールドに対応します。</p>
-<pre><code>$ curl https://api.github.com/users/shogo82148 | jq .id
+<pre tabindex="0"><code>$ curl https://api.github.com/users/shogo82148 | jq .id
 1157344
 </code></pre><hr>
 <p>同じ要領で移行後のノードID <code>U_kgDOABGo4A</code> をデコードしてみましょう。</p>
-<pre><code>$ echo U_kgDOABGo4A | base64 -d
+<pre tabindex="0"><code>$ echo U_kgDOABGo4A | base64 -d
 S�
    ��
 </code></pre><p>はい、うまくいきませんね。
@@ -205,10 +205,10 @@ Base64っぽいなあ〜と思ってもそれを前提としてコードを書�
 <p><code>X-Github-Next-Global-ID: 1</code> を指定すると旧フォーマットのノードIDが割り振られたオブジェクトについても、
 新フォーマットに変換されたIDが返ってきます。
 例えば僕の新フォーマットのノードIDは 2021-11-30 現在以下のようにして取得可能です。</p>
-<pre><code>$ curl -H &quot;X-Github-Next-Global-ID: 1&quot; https://api.github.com/users/shogo82148 | jq .node_id
+<pre tabindex="0"><code>$ curl -H &quot;X-Github-Next-Global-ID: 1&quot; https://api.github.com/users/shogo82148 | jq .node_id
 &quot;U_kgDOABGo4A&quot;
 </code></pre><p>もちろんこの新フォーマットのノードIDは GraphQL のクエリとして使うことができます。</p>
-<pre><code>gh api graphql -f query='query {
+<pre tabindex="0"><code>gh api graphql -f query='query {
   node(id: &quot;U_kgDOABGo4A&quot;) {
     ... on User {
       name
@@ -241,21 +241,21 @@ GitHubがIDの一意性を保証するので、これらを直接参照として
 <p>残りの <code>kgDOABGo4A</code> は何でしょう？
 旧フォーマットが Base64 だったので、きっとこれも Base64 だと予想してデコードしてみます。
 長さが4の倍数ではないのでパディングを追加してデコードしてみましょう。</p>
-<pre><code>$ echo kgDOABGo4A== | base64 -d
+<pre tabindex="0"><code>$ echo kgDOABGo4A== | base64 -d
 ����
 </code></pre><p>どうやら結果はASCII文字列ではないようですね。
 どんなバイナリになっているのでしょう。</p>
-<pre><code>$ echo kgDOABGo4A== | base64 -d | hexdump
+<pre tabindex="0"><code>$ echo kgDOABGo4A== | base64 -d | hexdump
 0000000 92 00 ce 00 11 a8 e0
 0000007
 </code></pre><p>ちょっとずつ見えてきました。最後の4バイト <code>00 11 a8 e0</code> はユーザーID 1157344 を16進数にしたものです。</p>
-<pre><code>$ printf &quot;%x\n&quot; 1157344
+<pre tabindex="0"><code>$ printf &quot;%x\n&quot; 1157344
 11a8e0
 </code></pre><p>全体で7バイトなので4バイト固定の数値というわけではなさそうです。
 おそらく <code>ce</code> が 4バイト整数を表しているのでしょう。</p>
 <p>ここまでくればきっと分かる人にはわかる。これは <a href="https://msgpack.org/ja.html">MessagePack</a> です。
 以下のJSONをメッセージに変換したものが <code>92 00 ce 00 11 a8 e0</code> です。</p>
-<div class="highlight"><pre class="chroma"><code class="language-json" data-lang="json"><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1157344</span><span class="p">]</span>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1157344</span><span class="p">]</span>
 </code></pre></div><h2 id="まとめ">まとめ</h2>
 <ul>
 <li><strong>GitHub GraphQL のノードIDの形式が変わります</strong>。
@@ -442,7 +442,7 @@ GitHubがIDの一意性を保証するので、これらを直接参照として
 </div>
 
 <footer role="contentinfo">
-  <p>Copyright &copy; 2021 Shogo Ichinose - <a
+  <p>Copyright &copy; 2022 Shogo Ichinose - <a
       href="https://shogo82148.github.io/license/">License</a> -
     <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
         href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.

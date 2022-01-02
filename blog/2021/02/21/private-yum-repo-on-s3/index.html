@@ -40,7 +40,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.75.1" />
+  <meta name="generator" content="Hugo 0.91.2" />
 
   
   
@@ -139,7 +139,7 @@ yum レポジトリを AWS S3 上に移行した、というお話です。</p>
 Bintray だろうが S3 だろうが、rpm 作成の手順は一緒なので省略します。</p>
 <p>rpm さえできてしまえば、レポジトリの作成は非常に簡単です。
 <code>createrepo</code> コマンドをインストールして実行するだけ。</p>
-<pre><code>yum install createrepo
+<pre tabindex="0"><code>yum install createrepo
 createrepo /PATH/TO/REPOSITORY
 </code></pre><p><code>/PATH/TO/REPOSITORY</code> の中を自動的に検索して、
 メタデータを作成してくれます。
@@ -157,7 +157,7 @@ yum レポジトリが落ちると、利用しているサービスにクリテ�
 <li><a href="https://so-wh.at/entry/2015/08/08/S3%2BLambda%2BCloudFormation%E3%81%A7%E3%82%B5%E3%83%BC%E3%83%90%E3%83%AC%E3%82%B9yum%E3%83%AA%E3%83%9D%E3%82%B8%E3%83%88%E3%83%AA">S3+Lambda+CloudFormation でサーバレス yum リポジトリ</a></li>
 </ul>
 <p>EC2 インスタンス上では大まかに以下のようなスクリプトを実行します。</p>
-<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash">yum install -y createrepo
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash">yum install -y createrepo
 
 <span class="c1"># S3上のパッケージをすべてダウンロード</span>
 aws s3 sync s3://my-yum-repository/ /repo
@@ -180,7 +180,7 @@ yum レポジトリの規模にもよりますが、全ファイル転送は時�
 <li><a href="https://aws.amazon.com/jp/blogs/news/new-for-aws-lambda-container-image-support/">AWS Lambda の新機能 – コンテナイメージのサポート</a></li>
 </ul>
 <p>Lambda 用のベースイメージには yum コマンドが含まれているので、普通に <code>yum install</code> するだけです。</p>
-<div class="highlight"><pre class="chroma"><code class="language-dockerfile" data-lang="dockerfile"><span class="k">FROM</span><span class="s"> amazon/aws-lambda-provided:al2</span><span class="err">
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-dockerfile" data-lang="dockerfile"><span class="k">FROM</span><span class="s"> amazon/aws-lambda-provided:al2</span><span class="err">
 </span><span class="err">
 </span><span class="err"></span><span class="k">RUN</span> yum update -y <span class="o">&amp;&amp;</span> yum install -y createrepo_c <span class="o">&amp;&amp;</span> rm -rf /var/cache/yum/* <span class="o">&amp;&amp;</span> yum clean all<span class="err">
 </span></code></pre></div><p>これまでは <code>/var/task</code> 以下にインストールする必要があったので、
@@ -194,13 +194,13 @@ yum のようなパッケージマネージャーが使えず、自前でビル�
 <p>先行事例では rpm パッケージを含んだレポジトリの全データーをダウンロードしてきていました。
 AWS Lambda で自由に使えるディスク容量は <code>/tmp</code> の 512MB のみで、全データーダウンロードするには心もとないです。
 そこでここではメタデータのみをダウンロードします。</p>
-<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash">aws s3 sync s3://my-yum-repository/repodata /tmp/repo/repodata
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash">aws s3 sync s3://my-yum-repository/repodata /tmp/repo/repodata
 </code></pre></div><p>メタデータは <code>repodata</code> ディレクトリに入っているので、このディレクトリだけダウンロードしてきます。</p>
 <h3 id="新しい-rpm-だけの-yum-レポジトリを構築する">新しい rpm だけの yum レポジトリを構築する</h3>
 <p>新しくアップロードされた rpm パッケージのみダウンロードして、そのパッケージのみを含んだ yum レポジトリを構築します。
 ここでは例として <code>new-package.rpm</code> がアップロードされたとしましょう。
 この場合、以下のような処理を実行します。</p>
-<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash">mkdir -p /tmp/new-repo
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash">mkdir -p /tmp/new-repo
 aws s3 cp s3://my-yum-repository/new-package.rpm /tmp/new-repo
 createrepo /tmp/new-repo
 </code></pre></div><h3 id="レポジトリのマージを行う">レポジトリのマージを行う</h3>
@@ -215,14 +215,14 @@ createrepo /tmp/new-repo
 その際、rpm パッケージのチェックは行われないので、メタデータしかない不完全なレポジトリ (<code>/tmp/repo</code>) も扱うことができます。</p>
 <p>現在のレポジトリ <code>/tmp/repo</code> に、 新しい rpm を含んだレポジトリ <code>/tmp/new-repo</code> をマージして、<code>/tmp/merged-repo</code> に出力する場合の例は
 以下のようになります。</p>
-<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash">mergerepo --database --omit-baseurl --all --repo /tmp/new-repo --repo /tmp/repo --outputdir /tmp/merged-repo
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash">mergerepo --database --omit-baseurl --all --repo /tmp/new-repo --repo /tmp/repo --outputdir /tmp/merged-repo
 </code></pre></div><p><code>mergerepo</code> はマージの際に、パッケージがどのレポジトリ由来のものかという情報をメタデータに追加します。
 ここではマージ元にローカルレポジトリを指定しているため、そのまま公開しても外部からはアクセスできません。
 そのため <code>--omit-baseurl</code> でこの挙動を抑制しています。</p>
 <p>これで <code>/tmp/merged-repo</code> に必要なパッケージの情報が全て入ったレポジトリができました。</p>
 <h3 id="s3-上のメタデータを更新する">S3 上のメタデータを更新する</h3>
 <p><code>/tmp/merged-repo</code> のメタデータには必要なパッケージの情報がすべて入っているので、これを S3 にアップロードします。</p>
-<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash">aws s3 sync /tmp/merged-repo/repodata s3://my-yum-repository/repodata
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash">aws s3 sync /tmp/merged-repo/repodata s3://my-yum-repository/repodata
 </code></pre></div><p>これで <code>new-package.rpm</code> のレポジトリへの追加完了です。</p>
 <h2 id="実装">実装</h2>
 <p>これを実装したものを以下で公開しています。</p>
@@ -432,7 +432,7 @@ S3 へアップロードするだけで rpm の追加が行えます。</p>
 </div>
 
 <footer role="contentinfo">
-  <p>Copyright &copy; 2021 Shogo Ichinose - <a
+  <p>Copyright &copy; 2022 Shogo Ichinose - <a
       href="https://shogo82148.github.io/license/">License</a> -
     <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
         href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.

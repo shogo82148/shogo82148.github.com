@@ -40,7 +40,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.75.1" />
+  <meta name="generator" content="Hugo 0.91.2" />
 
   
   
@@ -182,14 +182,14 @@ Contextってタイムアウトをうまく処理するための仕組みなの�
 <p>処理が複数に分割できる場合、セグメントが複数のサブセグメント含む場合があります。
 ここで注意が必要なのは、セグメントの作成とサブセグメントの作成との挙動の違いです。</p>
 <p>サブセグメントを作るときは <strong>親になるセグメントが必須</strong> です。</p>
-<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="c1">// 親セグメントが見つからないので panic
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="c1">// 親セグメントが見つからないので panic
 </span><span class="c1"></span><span class="nx">ctx</span><span class="p">,</span> <span class="nx">seg</span> <span class="o">:=</span> <span class="nx">xray</span><span class="p">.</span><span class="nf">BeginSubsegment</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nf">Background</span><span class="p">(),</span> <span class="s">&#34;subsegment-name&#34;</span><span class="p">)</span>
 
 <span class="c1">// サブセグメントを作るにはセグメントが必要
 </span><span class="c1"></span><span class="nx">ctx</span><span class="p">,</span> <span class="nx">seg</span> <span class="o">:=</span> <span class="nx">xray</span><span class="p">.</span><span class="nf">BeginSegment</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nf">Background</span><span class="p">(),</span> <span class="s">&#34;service-name&#34;</span><span class="p">)</span>
 <span class="nx">ctx</span><span class="p">,</span> <span class="nx">subseg</span> <span class="o">:=</span> <span class="nx">xray</span><span class="p">.</span><span class="nf">BeginSubsegment</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span> <span class="s">&#34;subsegment-name&#34;</span><span class="p">)</span>
 </code></pre></div><p>セグメント同士には親子関係を設定できません。例えば以下のコードで <code>seg1</code> と <code>seg2</code> は無関係な別のセグメントです。</p>
-<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="c1">// seg1 と seg2 は関連のない別のセグメントとして扱われる
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="c1">// seg1 と seg2 は関連のない別のセグメントとして扱われる
 </span><span class="c1"></span><span class="nx">ctx</span><span class="p">,</span> <span class="nx">seg1</span> <span class="o">:=</span> <span class="nx">xray</span><span class="p">.</span><span class="nf">BeginSegment</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nf">Background</span><span class="p">(),</span> <span class="s">&#34;service-name&#34;</span><span class="p">)</span>
 <span class="nx">ctx</span><span class="p">,</span> <span class="nx">seg2</span> <span class="o">:=</span> <span class="nx">xray</span><span class="p">.</span><span class="nf">BeginSegment</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span> <span class="s">&#34;subsegment-name&#34;</span><span class="p">)</span>
 </code></pre></div><p>SDKにはいくつかユーティリティ関数が用意されていますが、こういった理由から作成するのがセグメントなのかサブセグメントなのかが重要です。
@@ -197,7 +197,7 @@ Contextってタイムアウトをうまく処理するための仕組みなの�
 サブセグメントを作るユーティリティ関数を使うときは、必ず親セグメントが存在しなければなりません。</p>
 <p>ここで問題になってくるのが <strong>親セグメントが設定されていない場合はデフォルトでpanicする</strong> ということです。
 もちろん、この動作は変更可能で、 <code>AWS_XRAY_CONTEXT_MISSING</code> 環境変数でログを吐くだけにできます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash"><span class="nb">export</span> <span class="nv">AWS_XRAY_CONTEXT_MISSING</span><span class="o">=</span>LOG_ERROR
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="nb">export</span> <span class="nv">AWS_XRAY_CONTEXT_MISSING</span><span class="o">=</span>LOG_ERROR
 <span class="c1"># default: RUNTIME_ERROR</span>
 </code></pre></div><p>うっかり <code>context.Background()</code> なんかを使って AWS API を叩く箇所があると、容赦なく <code>panic</code> します。
 <code>panic</code> するとスタックトレースが表示されるのでデバッグには便利ですが、未設定のまま本番環境にあげないようにしましょう。</p>
@@ -221,7 +221,7 @@ Contextってタイムアウトをうまく処理するための仕組みなの�
 <p>今の所 <code>panic</code> を避けるには、 <code>AWS_XRAY_CONTEXT_MISSING</code> でログに吐くようにするしか無いようです。</p>
 <h2 id="環境変数の設定が常に最優先">環境変数の設定が常に最優先</h2>
 <p><code>AWS_XRAY_CONTEXT_MISSING</code> はアプリケーションからも変更可能です。</p>
-<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="nx">xray</span><span class="p">.</span><span class="nf">Configure</span><span class="p">(</span><span class="nx">xray</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="nx">xray</span><span class="p">.</span><span class="nf">Configure</span><span class="p">(</span><span class="nx">xray</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span>
     <span class="nx">ContextMissingStrategy</span><span class="p">:</span> <span class="nx">ctxmissing</span><span class="p">.</span><span class="nx">LogErrorStrategy</span><span class="p">,</span>
 <span class="p">})</span>
 </code></pre></div><p>しかし、 <strong>環境変数が設定されている場合、この設定は無視されます</strong> 。
@@ -242,7 +242,7 @@ Goと同様に環境変数が最優先でした。</p>
 しかし、v1.0.0-rc14 以前の X-Ray SDK を使っている場合は忘れてください。
 親セグメントが見つからなかった場合、AWS Lambda 上で実行していたとしても <code>panic</code> します。</p>
 <p>アプリケーション内で明示的に <code>LOG_ERROR</code> を指定しましょう。</p>
-<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="nx">xray</span><span class="p">.</span><span class="nf">Configure</span><span class="p">(</span><span class="nx">xray</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="nx">xray</span><span class="p">.</span><span class="nf">Configure</span><span class="p">(</span><span class="nx">xray</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span>
     <span class="nx">ContextMissingStrategy</span><span class="p">:</span> <span class="nx">ctxmissing</span><span class="p">.</span><span class="nx">LogErrorStrategy</span><span class="p">,</span>
 <span class="p">})</span>
 </code></pre></div><p>ややこしいのは <code>xray.Configure</code> を呼び出したときは「環境変数の設定が常に最優先」のルールが発動するという点です。
@@ -251,10 +251,10 @@ Goと同様に環境変数が最優先でした。</p>
 次のリリースには取り込まれる、はず。</p>
 <h2 id="まとめ">まとめ</h2>
 <p>AWS X-Ray SDK Go のインストールは以下のコマンドで。</p>
-<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash">$ go get github.com/aws/aws-xray-sdk-go@v1.0.0-rc.14
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash">$ go get github.com/aws/aws-xray-sdk-go@v1.0.0-rc.14
 $ <span class="nb">export</span> <span class="nv">AWS_XRAY_CONTEXT_MISSING</span><span class="o">=</span>LOG_ERROR
 </code></pre></div><p>main関数の最初の方で、以下の設定をいれること。</p>
-<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="nx">xray</span><span class="p">.</span><span class="nf">Configure</span><span class="p">(</span><span class="nx">xray</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="nx">xray</span><span class="p">.</span><span class="nf">Configure</span><span class="p">(</span><span class="nx">xray</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span>
     <span class="nx">ContextMissingStrategy</span><span class="p">:</span> <span class="nx">ctxmissing</span><span class="p">.</span><span class="nx">LogErrorStrategy</span><span class="p">,</span>
 <span class="p">})</span>
 </code></pre></div><p>プルリクエスト送るためにザッとSDK全体をみたのですが、 <code>gofmt</code> すらかかっていない状態だったり、グローバル変数を多用していたり、
@@ -263,7 +263,7 @@ Goに慣れていない人が別言語の実装を移植した雰囲気がある
 <hr>
 <p>以下チラシの裏</p>
 <p><a href="https://github.com/aws/aws-xray-sdk-go/blob/16d917bfd8d13242ae4f03807a10773a5e9cd468/xray/default_streaming_strategy.go#L59-L83">この辺</a> とか意図がわからなくて困ってる。</p>
-<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go">	<span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="p">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="nx">seg</span><span class="p">.</span><span class="nx">rawSubsegments</span><span class="p">);</span> <span class="nx">i</span><span class="o">++</span> <span class="p">{</span>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go">	<span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="p">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="nx">seg</span><span class="p">.</span><span class="nx">rawSubsegments</span><span class="p">);</span> <span class="nx">i</span><span class="o">++</span> <span class="p">{</span>
 		<span class="nx">child</span> <span class="o">:=</span> <span class="nx">seg</span><span class="p">.</span><span class="nx">rawSubsegments</span><span class="p">[</span><span class="nx">i</span><span class="p">]</span>
 		<span class="nx">seg</span><span class="p">.</span><span class="nx">rawSubsegments</span><span class="p">[</span><span class="nx">i</span><span class="p">]</span> <span class="p">=</span> <span class="nx">seg</span><span class="p">.</span><span class="nx">rawSubsegments</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="nx">seg</span><span class="p">.</span><span class="nx">rawSubsegments</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
 		<span class="nx">seg</span><span class="p">.</span><span class="nx">rawSubsegments</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="nx">seg</span><span class="p">.</span><span class="nx">rawSubsegments</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="p">=</span> <span class="kc">nil</span>
@@ -455,7 +455,7 @@ Goに慣れていない人が別言語の実装を移植した雰囲気がある
 </div>
 
 <footer role="contentinfo">
-  <p>Copyright &copy; 2021 Shogo Ichinose - <a
+  <p>Copyright &copy; 2022 Shogo Ichinose - <a
       href="https://shogo82148.github.io/license/">License</a> -
     <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
         href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.

@@ -40,7 +40,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.75.1" />
+  <meta name="generator" content="Hugo 0.91.2" />
 
   
   
@@ -128,7 +128,7 @@
 <p>どうやら Go 1.11 から判定基準が 「<a href="https://golang.org/pkg/sync/#Locker">sync.Locker</a> を実装しているか」に変わっていたようです。
 (修正コミット: <a href="https://github.com/golang/go/commit/c2eba53e7f80df21d51285879d51ab81bcfbf6bc">c2eba53</a>, Issue: <a href="https://github.com/golang/go/issues/26165">#26165</a>)</p>
 <p>というわけで、 macopy 構造体を以下のように変更する必要があります。</p>
-<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">type</span> <span class="nx">macopy</span> <span class="kd">struct</span><span class="p">{}</span>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kd">type</span> <span class="nx">macopy</span> <span class="kd">struct</span><span class="p">{}</span>
 
 <span class="kd">func</span> <span class="p">(</span><span class="o">*</span><span class="nx">macopy</span><span class="p">)</span> <span class="nf">Lock</span><span class="p">()</span> <span class="p">{}</span>
 <span class="kd">func</span> <span class="p">(</span><span class="o">*</span><span class="nx">macopy</span><span class="p">)</span> <span class="nf">Unlock</span><span class="p">()</span> <span class="p">{}</span>
@@ -138,7 +138,7 @@
 kuiperbelt のケースでは、<a href="https://golang.org/pkg/sync/atomic/">sync/atomic パッケージ</a>を使ってフィールドを更新しているので、
 フィールドへの読み書きは必ず sync/atomic パッケージを使わなければなりません。
 sync/atomic パッケージを使わずに構造体をコピーするとレースコンディションが発生してしまうので、コピーを禁止する必要がありました。</p>
-<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="c1">// https://github.com/kuiperbelt/kuiperbelt/blob/e3c1432ed798716c8e88183518f9126951c227f3/stats.go#L20-L28
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="c1">// https://github.com/kuiperbelt/kuiperbelt/blob/e3c1432ed798716c8e88183518f9126951c227f3/stats.go#L20-L28
 </span><span class="c1"></span><span class="kd">type</span> <span class="nx">Stats</span> <span class="kd">struct</span> <span class="p">{</span>
 	<span class="nx">connections</span>        <span class="kt">int64</span>
 	<span class="nx">totalConnections</span>   <span class="kt">int64</span>
@@ -161,7 +161,7 @@ sync/atomic パッケージを使わずに構造体をコピーするとレー�
 <span class="p">}</span>
 </code></pre></div><h2 id="macopy-構造体の使い方">macopy 構造体の使い方</h2>
 <p>そこで登場するのが macopy 構造体です(いや、もちろん別の名前でもいいんですが)。</p>
-<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="c1">// https://github.com/kuiperbelt/kuiperbelt/blob/e3c1432ed798716c8e88183518f9126951c227f3/stats.go#L12-L18
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="c1">// https://github.com/kuiperbelt/kuiperbelt/blob/e3c1432ed798716c8e88183518f9126951c227f3/stats.go#L12-L18
 </span><span class="c1"></span>
 <span class="c1">// macopy may be embedded into structs which must not be copied
 </span><span class="c1">// after the first use.
@@ -171,14 +171,14 @@ sync/atomic パッケージを使わずに構造体をコピーするとレー�
 
 <span class="kd">func</span> <span class="p">(</span><span class="o">*</span><span class="nx">macopy</span><span class="p">)</span> <span class="nf">Lock</span><span class="p">()</span> <span class="p">{}</span>
 </code></pre></div><p>ここで例えば以下のようなコードを書いてしまったとします。</p>
-<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">kuiperbelt</span>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">kuiperbelt</span>
 
 <span class="kd">func</span> <span class="nf">hoge</span><span class="p">()</span> <span class="p">{</span>
 	<span class="kd">var</span> <span class="nx">noCopy</span> <span class="nx">macopy</span>
 	<span class="nx">_</span> <span class="p">=</span> <span class="nx">noCopy</span>
 <span class="p">}</span>
 </code></pre></div><p>このコードを <code>go vet</code> でチェックすると、誤ってコピーしていることを指摘してくれます。</p>
-<pre><code>$ go vet
+<pre tabindex="0"><code>$ go vet
 # github.com/kuiperbelt/kuiperbelt
 ./test.go:5: assignment copies lock value to _: kuiperbelt.macopy
 </code></pre><p>コンパイル自体はできてしまうので完全に禁止することはできませんが、
@@ -188,7 +188,7 @@ Gopher なみなさんなら <code>go vet</code> は CI とかエディターの
 <h2 id="原理">原理</h2>
 <p>これはもともと <a href="https://golang.org/pkg/sync/#Mutex">sync.Mutex</a>構造体のコピーを防ぐための機能です。
 この機能がどうやって実装されているか <code>go vet</code> のコードをあさっていくと・・・</p>
-<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="c1">// https://github.com/golang/go/blob/3868a371a85f2edbf2132d0bd5a6ed9193310dd7/src/cmd/vet/copylock.go#L240-L244
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="c1">// https://github.com/golang/go/blob/3868a371a85f2edbf2132d0bd5a6ed9193310dd7/src/cmd/vet/copylock.go#L240-L244
 </span><span class="c1"></span>
 	<span class="k">if</span> <span class="nx">plock</span> <span class="o">:=</span> <span class="nx">types</span><span class="p">.</span><span class="nf">NewMethodSet</span><span class="p">(</span><span class="nx">types</span><span class="p">.</span><span class="nf">NewPointer</span><span class="p">(</span><span class="nx">typ</span><span class="p">)).</span><span class="nf">Lookup</span><span class="p">(</span><span class="nx">tpkg</span><span class="p">,</span> <span class="s">&#34;Lock&#34;</span><span class="p">);</span> <span class="nx">plock</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
 		<span class="k">if</span> <span class="nx">lock</span> <span class="o">:=</span> <span class="nx">types</span><span class="p">.</span><span class="nf">NewMethodSet</span><span class="p">(</span><span class="nx">typ</span><span class="p">).</span><span class="nf">Lookup</span><span class="p">(</span><span class="nx">tpkg</span><span class="p">,</span> <span class="s">&#34;Lock&#34;</span><span class="p">);</span> <span class="nx">lock</span> <span class="o">==</span> <span class="kc">nil</span> <span class="p">{</span>
@@ -368,7 +368,7 @@ Gopher なみなさんなら <code>go vet</code> は CI とかエディターの
 </div>
 
 <footer role="contentinfo">
-  <p>Copyright &copy; 2021 Shogo Ichinose - <a
+  <p>Copyright &copy; 2022 Shogo Ichinose - <a
       href="https://shogo82148.github.io/license/">License</a> -
     <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
         href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.

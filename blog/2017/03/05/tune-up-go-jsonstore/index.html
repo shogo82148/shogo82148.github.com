@@ -40,7 +40,7 @@
   <meta name="author" content="Shogo Ichinose">
 
   
-  <meta name="generator" content="Hugo 0.75.1" />
+  <meta name="generator" content="Hugo 0.91.2" />
 
   
   
@@ -135,7 +135,7 @@
 <p>ロックの範囲を小さくすることで、並列処理時の性能が上がります。
 例えば、jsonstoreに値を入れる<code>Set</code>メソッドは、
 以下のように<code>Set</code>全体がロックの対象になっていました。</p>
-<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="p">(</span><span class="nx">s</span> <span class="o">*</span><span class="nx">JSONStore</span><span class="p">)</span> <span class="nf">Set</span><span class="p">(</span><span class="nx">key</span> <span class="kt">string</span><span class="p">,</span> <span class="nx">value</span> <span class="kd">interface</span><span class="p">{})</span> <span class="kt">error</span> <span class="p">{</span>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="p">(</span><span class="nx">s</span> <span class="o">*</span><span class="nx">JSONStore</span><span class="p">)</span> <span class="nf">Set</span><span class="p">(</span><span class="nx">key</span> <span class="kt">string</span><span class="p">,</span> <span class="nx">value</span> <span class="kd">interface</span><span class="p">{})</span> <span class="kt">error</span> <span class="p">{</span>
 	<span class="c1">// Set の中全体がロックの対象になっている
 </span><span class="c1"></span>	<span class="nx">s</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
 	<span class="k">defer</span> <span class="nx">s</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
@@ -153,7 +153,7 @@
 <span class="p">}</span>
 </code></pre></div><p>jsonのエンコード処理はjsonstoreの中身を触らないので並列実行可能です。
 次のように <code>s.data</code> だけをロックの対象にすれば十分です。</p>
-<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="p">(</span><span class="nx">s</span> <span class="o">*</span><span class="nx">JSONStore</span><span class="p">)</span> <span class="nf">Set</span><span class="p">(</span><span class="nx">key</span> <span class="kt">string</span><span class="p">,</span> <span class="nx">value</span> <span class="kd">interface</span><span class="p">{})</span> <span class="kt">error</span> <span class="p">{</span>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="p">(</span><span class="nx">s</span> <span class="o">*</span><span class="nx">JSONStore</span><span class="p">)</span> <span class="nf">Set</span><span class="p">(</span><span class="nx">key</span> <span class="kt">string</span><span class="p">,</span> <span class="nx">value</span> <span class="kd">interface</span><span class="p">{})</span> <span class="kt">error</span> <span class="p">{</span>
 	<span class="c1">// json.Marshal は並列実行可能
 </span><span class="c1"></span>	<span class="nx">b</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">Marshal</span><span class="p">(</span><span class="nx">value</span><span class="p">)</span>
 	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
@@ -172,7 +172,7 @@
 <span class="p">}</span>
 </code></pre></div><p>デコード処理も同様に並列化が可能なので、<code>Get</code>にも同じ修正をいれました。
 修正前後でベンチを取ってみたところ以下のようになりました。</p>
-<div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">Before:
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain">Before:
 BenchmarkGet-4            	 1000000	      1923 ns/op	     272 B/op	       5 allocs/op
 BenchmarkParaGet-4        	 1000000	      1000 ns/op	     272 B/op	       5 allocs/op
 BenchmarkSet-4            	 1000000	      1159 ns/op	     216 B/op	       3 allocs/op
@@ -193,14 +193,14 @@ BenchmarkParaSet-4       	 2000000	       686 ns/op	     248 B/op	       4 alloc
 <code>json.MarshalIndent</code>は結果をメモリ上に出力するので、
 メモリの消費量が増え、そのメモリをアロケーションする分だけ性能が劣化します。</p>
 <p><code>io.Writer</code>に書き込むだけなら、以下のように<code>json.NewEncoder</code>を利用するのが効率的です。</p>
-<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="nx">enc</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">NewEncoder</span><span class="p">(</span><span class="nx">w</span><span class="p">)</span>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="nx">enc</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">NewEncoder</span><span class="p">(</span><span class="nx">w</span><span class="p">)</span>
 <span class="k">return</span> <span class="nx">enc</span><span class="p">.</span><span class="nf">Encode</span><span class="p">(</span><span class="nx">data</span><span class="p">)</span>
 </code></pre></div><h3 id="不要な再エンコードを避ける">不要な再エンコードを避ける</h3>
 <p>元のコードでは一度jsonに変換した値を、ファイル保存時に<code>string</code>にキャストしていました。
 そのため、出力されたjsonは以下のように文字列の中にjsonが入っている形になります。
 この形式だと<code>&quot;</code>のエスケープが必要になるので、
 処理性能的にも、ファイル容量的にも不利です。</p>
-<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
 
 <span class="kn">import</span> <span class="p">(</span>
 	<span class="s">&#34;encoding/json&#34;</span>
@@ -215,11 +215,11 @@ BenchmarkParaSet-4       	 2000000	       686 ns/op	     248 B/op	       4 alloc
 	<span class="nx">enc</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">NewEncoder</span><span class="p">(</span><span class="nx">os</span><span class="p">.</span><span class="nx">Stdout</span><span class="p">)</span>
 	<span class="nx">enc</span><span class="p">.</span><span class="nf">Encode</span><span class="p">(</span><span class="nx">data</span><span class="p">)</span>
 <span class="p">}</span>
-</code></pre></div><div class="highlight"><pre class="chroma"><code class="language-json" data-lang="json"><span class="p">{</span><span class="nt">&#34;human:1&#34;</span><span class="p">:</span> <span class="s2">&#34;{\&#34;Name\&#34;:\&#34;Dante\&#34;,\&#34;Height\&#34;:5.4}&#34;</span><span class="p">}</span>
+</code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="p">{</span><span class="nt">&#34;human:1&#34;</span><span class="p">:</span> <span class="s2">&#34;{\&#34;Name\&#34;:\&#34;Dante\&#34;,\&#34;Height\&#34;:5.4}&#34;</span><span class="p">}</span>
 </code></pre></div><p>値は既にjsonエンコード済みなので、ファイル出力時に手を加える必要はありません。
 以下のように<code>*json.RawMessage</code>型に変換することで、
 余計な再エンコードを避けることができます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
 
 <span class="kn">import</span> <span class="p">(</span>
 	<span class="s">&#34;encoding/json&#34;</span>
@@ -234,10 +234,10 @@ BenchmarkParaSet-4       	 2000000	       686 ns/op	     248 B/op	       4 alloc
 	<span class="nx">enc</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">NewEncoder</span><span class="p">(</span><span class="nx">os</span><span class="p">.</span><span class="nx">Stdout</span><span class="p">)</span>
 	<span class="nx">enc</span><span class="p">.</span><span class="nf">Encode</span><span class="p">(</span><span class="nx">data</span><span class="p">)</span>
 <span class="p">}</span>
-</code></pre></div><div class="highlight"><pre class="chroma"><code class="language-json" data-lang="json"><span class="p">{</span><span class="nt">&#34;human:1&#34;</span><span class="p">:{</span><span class="nt">&#34;Name&#34;</span><span class="p">:</span><span class="s2">&#34;Dante&#34;</span><span class="p">,</span><span class="nt">&#34;Height&#34;</span><span class="p">:</span><span class="mf">5.4</span><span class="p">}}</span>
+</code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="p">{</span><span class="nt">&#34;human:1&#34;</span><span class="p">:{</span><span class="nt">&#34;Name&#34;</span><span class="p">:</span><span class="s2">&#34;Dante&#34;</span><span class="p">,</span><span class="nt">&#34;Height&#34;</span><span class="p">:</span><span class="mf">5.4</span><span class="p">}}</span>
 </code></pre></div><p><code>json.RawMessage</code>でなく<code>*json.RawMessage</code>とポインタを使っているのがポイントです。
 <code>json.RawMessage</code>だと<code>[]byte</code>とみなされてbase64エンコーディングされてしまうのです・・・。</p>
-<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
 
 <span class="kn">import</span> <span class="p">(</span>
 	<span class="s">&#34;encoding/json&#34;</span>
@@ -252,15 +252,15 @@ BenchmarkParaSet-4       	 2000000	       686 ns/op	     248 B/op	       4 alloc
 	<span class="nx">enc</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">NewEncoder</span><span class="p">(</span><span class="nx">os</span><span class="p">.</span><span class="nx">Stdout</span><span class="p">)</span>
 	<span class="nx">enc</span><span class="p">.</span><span class="nf">Encode</span><span class="p">(</span><span class="nx">data</span><span class="p">)</span>
 <span class="p">}</span>
-</code></pre></div><div class="highlight"><pre class="chroma"><code class="language-json" data-lang="json"><span class="err">//</span> <span class="err">Go</span><span class="mf">1.7</span><span class="err">以下で実行時</span>
-<span class="p">{</span><span class="nt">&#34;human:1&#34;</span><span class="p">:</span><span class="s2">&#34;eyJOYW1lIjoiRGFudGUiLCJIZWlnaHQiOjUuNH0=&#34;</span><span class="p">}</span>
+</code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="c1">// Go1.7以下で実行時
+</span><span class="c1"></span><span class="p">{</span><span class="nt">&#34;human:1&#34;</span><span class="p">:</span><span class="s2">&#34;eyJOYW1lIjoiRGFudGUiLCJIZWlnaHQiOjUuNH0=&#34;</span><span class="p">}</span>
 
-<span class="err">//</span> <span class="err">Go</span><span class="mf">1.8</span><span class="err">で実行時</span>
-<span class="p">{</span><span class="nt">&#34;human:1&#34;</span><span class="p">:{</span><span class="nt">&#34;Name&#34;</span><span class="p">:</span><span class="s2">&#34;Dante&#34;</span><span class="p">,</span><span class="nt">&#34;Height&#34;</span><span class="p">:</span><span class="mf">5.4</span><span class="p">}}</span>
+<span class="c1">// Go1.8で実行時
+</span><span class="c1"></span><span class="p">{</span><span class="nt">&#34;human:1&#34;</span><span class="p">:{</span><span class="nt">&#34;Name&#34;</span><span class="p">:</span><span class="s2">&#34;Dante&#34;</span><span class="p">,</span><span class="nt">&#34;Height&#34;</span><span class="p">:</span><span class="mf">5.4</span><span class="p">}}</span>
 </code></pre></div><p>ちなみにこの挙動、1.8で<code>json.RawMessage</code>も<code>*json.RawMessage</code>と同じ結果になる修正されたようです(この記事を書いていて気がついた)。
 1.7以下を切り捨てるなら<code>json.RawMessage</code>の方が良さそうですね。</p>
 <p>「ストリーミングAPIを利用する」「不要な再エンコードを避ける」をやった結果は以下のとおりです。</p>
-<div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">Before:
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain">Before:
 BenchmarkSave-4           	     500	   3324647 ns/op	 1418718 B/op	    3121 allocs/op
 
 After:
@@ -268,7 +268,7 @@ BenchmarkSave-4          	     500	   2455853 ns/op	 1127372 B/op	    3094 alloc
 </code></pre></div><h3 id="浅いコピーで並列処理性能を上げる">浅いコピーで並列処理性能を上げる</h3>
 <p>一度<code>Set</code>で<code>json.RawMessage</code>に変換されたデータは書き換えられることがないので、
 浅いコピーをするだけでスナップショットが簡単にとれます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="p">(</span><span class="nx">s</span> <span class="o">*</span><span class="nx">JSONStore</span><span class="p">)</span> <span class="nf">Snapshot</span><span class="p">()</span> <span class="o">*</span><span class="nx">JSONStore</span> <span class="p">{</span>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="p">(</span><span class="nx">s</span> <span class="o">*</span><span class="nx">JSONStore</span><span class="p">)</span> <span class="nf">Snapshot</span><span class="p">()</span> <span class="o">*</span><span class="nx">JSONStore</span> <span class="p">{</span>
 	<span class="nx">s</span><span class="p">.</span><span class="nf">RLock</span><span class="p">()</span>
 	<span class="k">defer</span> <span class="nx">s</span><span class="p">.</span><span class="nf">RUnlock</span><span class="p">()</span>
 	<span class="nx">results</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="o">*</span><span class="nx">json</span><span class="p">.</span><span class="nx">RawMessage</span><span class="p">)</span>
@@ -282,7 +282,7 @@ BenchmarkSave-4          	     500	   2455853 ns/op	 1127372 B/op	    3094 alloc
 </code></pre></div><p>一度スナップショットを取ってしまえば、ファイルへの書き込み時にはロックが不要になります。
 ファイルの書き込みはI/Oを伴うとても重い処理なので、
 この部分をロックの外側に出せるのは非常に効果大です。</p>
-<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="p">(</span><span class="nx">s</span> <span class="o">*</span><span class="nx">JSONStore</span><span class="p">)</span> <span class="nf">Save</span><span class="p">()</span> <span class="p">{</span>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="p">(</span><span class="nx">s</span> <span class="o">*</span><span class="nx">JSONStore</span><span class="p">)</span> <span class="nf">Save</span><span class="p">()</span> <span class="p">{</span>
 	<span class="nx">snapshot</span> <span class="o">:=</span> <span class="nx">s</span><span class="p">.</span><span class="nf">Snapshot</span><span class="p">()</span>
 
 	<span class="c1">// snapshotを取ったあとはLock不要
@@ -292,21 +292,21 @@ BenchmarkSave-4          	     500	   2455853 ns/op	 1127372 B/op	    3094 alloc
 </code></pre></div><p>別gorotineでひたすらSaveを繰り返しながらSetのベンチを取ってみた結果です。
 修正前はSaveがほとんどの時間ロックを獲得していまうので、Saveと同程度の性能しか出ません。
 修正後はSaveとSetを並列実行できるようになるので、大幅に性能が改善します。</p>
-<div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">Before:
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain">Before:
 BenchmarkSaveSet-4        	     500	   3260143 ns/op	 1382516 B/op	    3047 allocs/op
 
 After:
 BenchmarkSaveSet-4       	 1000000	      1948 ns/op	     914 B/op	       5 allocs/op
 </code></pre></div><h3 id="正規表現をなるべく避ける">正規表現をなるべく避ける</h3>
 <p>元のjsonstoreには正規表現でキーを指定して値を取ってくる機能があります。</p>
-<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="nf">GetAll</span><span class="p">(</span><span class="nx">re</span> <span class="o">*</span><span class="nx">regexp</span><span class="p">.</span><span class="nx">Regexp</span><span class="p">)</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="nx">json</span><span class="p">.</span><span class="nx">RawMessage</span>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="nf">GetAll</span><span class="p">(</span><span class="nx">re</span> <span class="o">*</span><span class="nx">regexp</span><span class="p">.</span><span class="nx">Regexp</span><span class="p">)</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="nx">json</span><span class="p">.</span><span class="nx">RawMessage</span>
 </code></pre></div><p>Gopherのみなさんなら御存知の通り、Goの正規表現はとても遅いです。
 stringsパッケージなどを使えるよう、関数を受け取るインターフェースの方がよいでしょう。</p>
-<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="nf">GetAll</span><span class="p">(</span><span class="nx">matcher</span> <span class="kd">func</span><span class="p">(</span><span class="nx">key</span> <span class="kt">string</span><span class="p">)</span> <span class="kt">bool</span><span class="p">)</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="nx">json</span><span class="p">.</span><span class="nx">RawMessage</span>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="nf">GetAll</span><span class="p">(</span><span class="nx">matcher</span> <span class="kd">func</span><span class="p">(</span><span class="nx">key</span> <span class="kt">string</span><span class="p">)</span> <span class="kt">bool</span><span class="p">)</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="nx">json</span><span class="p">.</span><span class="nx">RawMessage</span>
 </code></pre></div><p>このインターフェースなら簡単なものであれば自分で関数をかけば良いし、
 どうしても正規表現が必要な場合は<code>s.GetAll(re.MatchString)</code>とやればいいので大きな問題にはなりません。</p>
 <p>以下ベンチマークの結果です。Afterの方は正規表現ではなくstringsパッケージを使用しています。</p>
-<div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">Before:
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain">Before:
 BenchmarkRegex-4          	    3000	    449209 ns/op	  206954 B/op	      67 allocs/op
 
 After:
@@ -317,7 +317,7 @@ BenchmarkRegex-4         	    5000	    251788 ns/op	  124483 B/op	      68 alloc
 <h3 id="アトミックなデータ保存">アトミックなデータ保存</h3>
 <p>例えば<code>humans.json.gz</code>に保存されたデータを書き換えることを考えます。
 単純に書くと以下のようになるでしょう。</p>
-<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="nx">ks</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">jsonstore</span><span class="p">.</span><span class="nf">Open</span><span class="p">(</span><span class="s">&#34;humans.json.gz&#34;</span><span class="p">)</span>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="nx">ks</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">jsonstore</span><span class="p">.</span><span class="nf">Open</span><span class="p">(</span><span class="s">&#34;humans.json.gz&#34;</span><span class="p">)</span>
 
 <span class="c1">// ksに何か操作を行う
 </span><span class="c1"></span>
@@ -329,7 +329,7 @@ BenchmarkRegex-4         	    5000	    251788 ns/op	  124483 B/op	      68 alloc
 書きかけの<code>humans.json.gz</code>だけが残り、元のデータが失われてしまう可能性があります。</p>
 <p>それを避けるために、一度テンポラリファイルに書き出し、Renameするのが安全です。
 たとえ途中でクラッシュしてしまっても、最悪変更前のデータは残ります。</p>
-<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="nx">ks</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">jsonstore</span><span class="p">.</span><span class="nf">Open</span><span class="p">(</span><span class="s">&#34;humans.json.gz&#34;</span><span class="p">)</span>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="nx">ks</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">jsonstore</span><span class="p">.</span><span class="nf">Open</span><span class="p">(</span><span class="s">&#34;humans.json.gz&#34;</span><span class="p">)</span>
 
 <span class="c1">// ksに何か操作を行う
 </span><span class="c1"></span>
@@ -350,7 +350,7 @@ BenchmarkRegex-4         	    5000	    251788 ns/op	  124483 B/op	      68 alloc
 適当なタイミングで自動保存してくれる機能を追加しました。
 次のようにすることで、1000回変更があるたびに保存、
 変更回数が1000回に満たなくても最低60秒毎に保存してくれます。</p>
-<div class="highlight"><pre class="chroma"><code class="language-go" data-lang="go"><span class="nx">ks</span> <span class="o">:=</span> <span class="nb">new</span><span class="p">(</span><span class="nx">jsonstore</span><span class="p">.</span><span class="nx">JSONStore</span><span class="p">)</span>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="nx">ks</span> <span class="o">:=</span> <span class="nb">new</span><span class="p">(</span><span class="nx">jsonstore</span><span class="p">.</span><span class="nx">JSONStore</span><span class="p">)</span>
 <span class="nx">ks</span><span class="p">.</span><span class="nf">StartAutoSave</span><span class="p">(</span><span class="s">&#34;db.json.gz&#34;</span><span class="p">,</span> <span class="mi">60</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span> <span class="mi">1000</span><span class="p">)</span>
 <span class="k">defer</span> <span class="nx">ks</span><span class="p">.</span><span class="nf">StopAutoSave</span><span class="p">()</span>
 </code></pre></div><h2 id="まとめ">まとめ</h2>
@@ -536,7 +536,7 @@ BenchmarkRegex-4         	    5000	    251788 ns/op	  124483 B/op	      68 alloc
 </div>
 
 <footer role="contentinfo">
-  <p>Copyright &copy; 2021 Shogo Ichinose - <a
+  <p>Copyright &copy; 2022 Shogo Ichinose - <a
       href="https://shogo82148.github.io/license/">License</a> -
     <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
         href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
