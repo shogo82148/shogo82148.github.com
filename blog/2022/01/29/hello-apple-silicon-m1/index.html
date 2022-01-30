@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+    
+    
+      <link href="/css/fonts.css" rel="stylesheet" type="text/css">
+    
+  
+
+  
+  <title>M1 Apple Silicon 移行記</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+    <link rel="stylesheet" href="/css/fork-awesome.min.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="Shogo Ichinose">
+
+  
+  <meta name="generator" content="Hugo 0.91.2" />
+
+  
+  
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Jan 29, 2022
+     - 3 minute read 
+     - <a href="https://shogo82148.github.io/blog/2022/01/29/hello-apple-silicon-m1/#disqus_thread">Comments</a>
+
+    
+    
+      - 
+    
+  </p>
+  <h1 class="entry-title">
+     M1 Apple Silicon 移行記 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p><a href="https://ja.wikipedia.org/wiki/Apple_M1">Apple M1</a> が登場してはや一年。
+昨年末にはその強化版の M1 Pro / M1 Max が発表され、 Mac Book Pro / Air のラインナップも全て M1 に置き換わってしまいました。
+使用しているツールが未対応だったこともあり、弊社ではインテル版を使い続けていたのですが、
+今ではツールの M1 対応も進んできたので、徐々にM1への移行を進めています。</p>
+<p>僕の手元にもようやく M1 Mac Book が回ってきたので、
+何周か遅れている気はしますが、インテルからM1への移行やってみたよ(2022年1月版)ということで記録を残しておきます。</p>
+<hr>
+<h2 id="homebrew">Homebrew</h2>
+<p><a href="https://docs.brew.sh/Installation">公式ドキュメントのインストール手順</a> に従って以下のコマンドを実行すればOKです。
+インテルもM1も特に変わりはありません。</p>
+<pre tabindex="0"><code>/bin/bash -c &quot;$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)&quot;
+</code></pre><p>ただしドキュメントの冒頭に記載がある通り、インテルとM1とではインストール先が異なります。</p>
+<blockquote>
+<p>This script installs Homebrew to its preferred prefix (<code>/usr/local</code> for macOS Intel, <code>/opt/homebrew</code> for Apple Silicon and <code>/home/linuxbrew/.linuxbrew</code> for Linux) so that you don’t need sudo when you <code>brew install</code>.</p>
+</blockquote>
+<p>どうやら <code>/usr/local</code> への書き込みに root 権限が必要になったので、 <code>/opt/homebrew</code> へ移動したようです(要出典)。
+<code>/usr/local/bin</code> にはデフォルトでパスが通ってますが、<code>/opt/homebrew/bin</code> には通っていないので、明示的に追加する必要があります。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="nb">export</span> <span class="nv">PATH</span><span class="o">=</span>/opt/homebrew/bin:<span class="nv">$PATH</span>
+</code></pre></div><h2 id="github-release-からバイナリ落として使うツール">GitHub Release からバイナリ落として使うツール</h2>
+<p>GitHub Release からバイナリ落として使うツール、例えば弊社では <a href="https://github.com/itamae-kitchen/mitamae">itamae-kitchen/mitamae</a> などがあります。
+バイナリをダウンロードするだけで使えて便利なのですが、プロセッサのアーキテクチャに合わせてダウンロードのURLを変えなければいけません。</p>
+<p>以下のようなシェルスクリプトを書いて対応しました。
+<code>uname -m</code> でプロセッサのアーキテクチャを判定して、適切なバイナリを落としてくれます。</p>
+<ul>
+<li><a href="https://github.com/shogo82148/dotfiles/blob/c4e75bea088f15751d46eba1f67ea6c3b43e8630/bootstrap.sh">/bootstrap.sh</a></li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="cp">#!/bin/bash
+</span><span class="cp"></span>
+<span class="c1"># bootstrap script.</span>
+
+<span class="nb">set</span> -uxe
+
+<span class="nv">TMPDIR</span><span class="o">=</span><span class="k">$(</span>mktemp -d<span class="k">)</span>
+<span class="nb">trap</span> <span class="s1">&#39;rm -rfv &#34;$TMPDIR&#34;&#39;</span> EXIT
+
+<span class="k">case</span> <span class="s2">&#34;</span><span class="k">$(</span>uname<span class="k">)</span><span class="s2">&#34;</span> in
+    <span class="s2">&#34;Darwin&#34;</span><span class="o">)</span>
+        <span class="nv">mitamae_os</span><span class="o">=</span><span class="s2">&#34;darwin&#34;</span>
+        <span class="p">;;</span>
+    *<span class="o">)</span>
+        <span class="nb">echo</span> <span class="s2">&#34;unknown uname: </span><span class="k">$(</span>uname<span class="k">)</span><span class="s2">&#34;</span>
+        <span class="nb">exit</span> <span class="m">1</span>
+        <span class="p">;;</span>
+<span class="k">esac</span>
+
+<span class="k">case</span> <span class="s2">&#34;</span><span class="k">$(</span>uname -m<span class="k">)</span><span class="s2">&#34;</span> in
+    <span class="s2">&#34;x86_64&#34;</span><span class="o">)</span>
+        <span class="nv">mitamae_arch</span><span class="o">=</span><span class="s2">&#34;x86_64&#34;</span>
+        <span class="p">;;</span>
+    <span class="s2">&#34;arm64&#34;</span><span class="o">)</span>
+        <span class="nv">mitamae_arch</span><span class="o">=</span><span class="s2">&#34;aarch64&#34;</span>
+        <span class="p">;;</span>
+    *<span class="o">)</span>
+        <span class="nb">echo</span> <span class="s2">&#34;unsupported architecture: </span><span class="k">$(</span>uname -m<span class="k">)</span><span class="s2">&#34;</span>
+        <span class="nb">exit</span> <span class="m">1</span>
+        <span class="p">;;</span>
+<span class="k">esac</span>
+<span class="nv">MITAMAE</span><span class="o">=</span><span class="s2">&#34;mitamae-</span><span class="si">${</span><span class="nv">mitamae_arch</span><span class="si">}</span><span class="s2">-</span><span class="si">${</span><span class="nv">mitamae_os</span><span class="si">}</span><span class="s2">&#34;</span>
+
+<span class="c1"># install mitamae</span>
+<span class="nv">VERSION</span><span class="o">=</span>1.12.8
+<span class="nb">cd</span> <span class="s2">&#34;</span><span class="nv">$TMPDIR</span><span class="s2">&#34;</span>
+curl -sSL <span class="s2">&#34;https://github.com/itamae-kitchen/mitamae/releases/download/v</span><span class="nv">$VERSION</span><span class="s2">/</span><span class="nv">$MITAMAE</span><span class="s2">.tar.gz&#34;</span> -o mitamae.tar.gz
+tar xzvf mitamae.tar.gz
+mkdir -p ~/bin/
+install -m <span class="m">0755</span> <span class="s2">&#34;</span><span class="nv">$MITAMAE</span><span class="s2">&#34;</span> ~/bin/mitamae
+</code></pre></div><p>既存のスクリプトの中には <code>/usr/local/bin</code> へバイナリをインストールするものがあったのですが、
+M1 Mac では <code>/usr/local</code> への書き込みにルート権限が必要です。
+(プロセッサによってパーミッションが変わる意味とは？)
+毎回 <code>sudo</code> するのも面倒なので、ログイン済みのユーザーしか使わないツールはインストール先を <code>~/bin</code> へ変更しました。</p>
+<h2 id="docker">Docker</h2>
+<p>2022年1月29日現在 Docker Desktop は M1 に正式対応しています。
+Docker 自体は特に問題なく動作しました。</p>
+<ul>
+<li><a href="https://www.docker.com/blog/released-docker-desktop-for-mac-apple-silicon/">Released: Docker Desktop for Mac [Apple Silicon]</a></li>
+</ul>
+<h3 id="mysql-のイメージ動かない問題">MySQL のイメージ動かない問題</h3>
+<p>しかし Docker が M1 に対応していても、その上で動くイメージが arm64 に対応していないパターンがあります。
+例えば <a href="https://hub.docker.com/_/mysql">MySQLの公式イメージ</a>は arm64 に対応していません。</p>
+<p>ワークアラウンドとしては、以下のドキュメントにあるように <code>--platform linux/amd64</code> オプションをつけて起動します。</p>
+<blockquote>
+<p>Not all images are available for ARM64 architecture. You can add <code>--platform linux/amd64</code> to run an Intel image under emulation. In particular, the mysql image is not available for ARM64. You can work around this issue by using a mariadb image.</p>
+</blockquote>
+<ul>
+<li><a href="https://docs.docker.com/desktop/mac/apple-silicon/">Docker Desktop for Apple silicon</a></li>
+</ul>
+<pre tabindex="0"><code>docker run --name some-mysql -e MYSQL_ROOT_PASSWORD=my-secret-pw -d --platform linux/amd64 mysql:5.7
+</code></pre><p>この方法は QEMU でのエミュレーションになるのでパフォーマンスはあまり良くありません。
+MySQL 8.0 であれば Oracle の MySQL チームがメンテナンスしているイメージを使うのが簡単です。
+どちらのイメージでも MySQL 5.7 は arm64 未対応なのでエミュレーションする必要があります。</p>
+<pre tabindex="0"><code>docker run --name some-mysql -e MYSQL_ROOT_PASSWORD=my-secret-pw -d mysql/mysql-server:8.0
+</code></pre><p>Docker Compose を利用している場合でも <code>platform</code> を指定すればエミュレーション可能です。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="c"># docker-compose.yml</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;3.8&#34;</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="nt">services</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span><span class="c"># amd64 エミュレーション</span><span class="w">
+</span><span class="w">  </span><span class="nt">db1</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l">mysql:5.7</span><span class="w">
+</span><span class="w">    </span><span class="nt">environment</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span>- <span class="l">MYSQL_ROOT_PASSWORD=secret</span><span class="w">
+</span><span class="w">    </span><span class="nt">platform</span><span class="p">:</span><span class="w"> </span><span class="l">linux/amd64</span><span class="w">
+</span><span class="w">
+</span><span class="w">  </span><span class="c"># amd64/arm64 両対応</span><span class="w">
+</span><span class="w">  </span><span class="nt">db2</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l">mysql/mysql-server:8.0</span><span class="w">
+</span><span class="w">    </span><span class="nt">environment</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span>- <span class="l">MYSQL_ROOT_PASSWORD=secret</span><span class="w">
+</span></code></pre></div><h3 id="マルチアーキテクチャ対応のイメージを作る">マルチアーキテクチャ対応のイメージを作る</h3>
+<p>デプロイにDockerを使っているけど、デプロイ先は x86_64 ということはまだまだあると思います。
+いつも通り <code>docker build .</code> でビルドしてしまうと M1 Mac 上では ARM64 のイメージが作成されてしまうため、
+デプロイにそのまま使うことはできません。</p>
+<p>また、AWSもARM64アーキテクチャを採用した <a href="https://aws.amazon.com/jp/ec2/graviton/">AWS Graviton プロセッサ</a> の導入に積極的です。
+今は x86_64 だけど今後 ARM64 に移行したい、といった要望もあるかも知れません。
+というわけでこの機会に x86_64 でも ARM64 でも動くマルチアーキテクチャ対応のイメージを作ってみました。</p>
+<p>buildx を使うとマルチアーキテクチャ対応のイメージを簡単に作ることができます。</p>
+<ul>
+<li><a href="https://dev.classmethod.jp/articles/docker-multi-architecture-image-build/">Dockerの「マルチCPUアーキテクチャ」に対応したイメージをビルドする</a></li>
+<li><a href="https://docs.docker.com/buildx/working-with-buildx/">Docker Buildx</a></li>
+</ul>
+<p>Classmethodさんのブログでは「実験的機能」を有効化していますが、2022年1月31日現在、buildx は正式にリリースされているので、
+デフォルトで使えます。
+デフォルトのビルダーインスタンスはエミュレーションに対応していないので、
+ビルダーインスタンスの追加は必要みたい(？) (要出典)</p>
+<pre tabindex="0"><code>docker buildx create --name mybuilder
+docker buildx use mybuilder
+docker buildx inspect --bootstrap
+</code></pre><p><code>docker build</code> コマンドの代わりに <code>docker buildx build</code> を使えば、マルチアーキテクチャ対応のイメージを作成できます。</p>
+<pre tabindex="0"><code>docker buildx build --platform linux/amd64,linux/arm64 .
+</code></pre><h3 id="dockerでgoのクロスコンパイルを行う">DockerでGoのクロスコンパイルを行う</h3>
+<p>Go はクロスコンパイルが簡単なので、コンパイル時はCPUエミュレーションを行わない、という選択肢も可能です。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-dockerfile" data-lang="dockerfile"><span class="c"># Go はクロスコンパイルが簡単なので、コンパイルはエミュレーションを行わない</span><span class="err">
+</span><span class="err"></span><span class="k">FROM</span><span class="s"> --platform=$BUILDPLATFORM golang:1.17 as builder</span><span class="err">
+</span><span class="err">
+</span><span class="err"></span><span class="k">ENV</span> <span class="nv">ROOT</span><span class="o">=</span>/go/src/app<span class="err">
+</span><span class="err"></span><span class="k">WORKDIR</span><span class="s"> ${ROOT}</span><span class="err">
+</span><span class="err">
+</span><span class="err"></span><span class="c"># ここの順番は割と大事</span><span class="err">
+</span><span class="err"></span><span class="c"># 変更頻度の低いものから高いものの順番に並べる</span><span class="err">
+</span><span class="err"></span><span class="k">COPY</span> go.mod go.sum ./<span class="err">
+</span><span class="err"></span><span class="k">RUN</span> go mod download<span class="err">
+</span><span class="err"></span><span class="k">COPY</span> ./ <span class="si">${</span><span class="nv">ROOT</span><span class="si">}</span><span class="err">
+</span><span class="err">
+</span><span class="err"></span><span class="c"># なくても動いちゃうんだけど、これがないと誤ったアーキテクチャのキャッシュを使ってしまう場合がある</span><span class="err">
+</span><span class="err"></span><span class="k">ARG</span> TARGETOS<span class="err">
+</span><span class="err"></span><span class="k">ARG</span> TARGETARCH<span class="err">
+</span><span class="err">
+</span><span class="err"></span><span class="c"># ターゲットのCPUアーキテクチャを明示してビルド</span><span class="err">
+</span><span class="err"></span><span class="k">RUN</span> <span class="nv">CGO_ENABLED</span><span class="o">=</span><span class="m">0</span> <span class="nv">GOOS</span><span class="o">=</span><span class="si">${</span><span class="nv">TARGETOS</span><span class="si">}</span> <span class="nv">GOARCH</span><span class="o">=</span><span class="si">${</span><span class="nv">TARGETARCH</span><span class="si">}</span> go build -o /go/bin/app .<span class="err">
+</span><span class="err">
+</span><span class="err"></span><span class="c"># 最終的に出力するイメージ</span><span class="err">
+</span><span class="err"></span><span class="k">FROM</span><span class="s"> gcr.io/distroless/static-debian11:latest</span><span class="err">
+</span><span class="err"></span><span class="k">COPY</span> --from<span class="o">=</span>builder /go/bin/app /<span class="err">
+</span><span class="err"></span><span class="k">CMD</span> <span class="p">[</span><span class="s2">&#34;/app&#34;</span><span class="p">]</span><span class="err">
+</span></code></pre></div><p>これと同等のことを Docker 無しで実現する <a href="https://github.com/xo/xo">xo/xo</a> があるという話を聞いたので、
+そっちも試してみたい気持ちもあるけどまた今度。</p>
+<h2 id="まとめ">まとめ</h2>
+<ul>
+<li>登場から一年経ったこともあり大体のものは動く</li>
+<li>Docker で x86_64 イメージを扱わないといけなくなったときも、 <code>--platform</code> オプションを付けておけば大抵どうにかなる</li>
+</ul>
+<p>以上、VS Code on M1 Apple からお伝えしました。</p>
+<h2 id="参考文献">参考文献</h2>
+<ul>
+<li><a href="https://ja.wikipedia.org/wiki/Apple_M1">Apple M1</a></li>
+<li><a href="https://docs.brew.sh/Installation">Homebrew Documentation</a></li>
+<li><a href="https://github.com/itamae-kitchen/mitamae">itamae-kitchen/mitamae</a></li>
+<li><a href="https://www.docker.com/blog/released-docker-desktop-for-mac-apple-silicon/">Released: Docker Desktop for Mac [Apple Silicon]</a></li>
+<li><a href="https://docs.docker.com/desktop/mac/apple-silicon/">Docker Desktop for Apple silicon</a></li>
+<li><a href="https://hub.docker.com/_/mysql">mysql - dockerhub</a></li>
+<li><a href="https://hub.docker.com/r/mysql/mysql-server">mysql/mysql-server - dockerhub</a></li>
+<li><a href="https://dev.classmethod.jp/articles/docker-multi-architecture-image-build/">Dockerの「マルチCPUアーキテクチャ」に対応したイメージをビルドする</a></li>
+<li><a href="https://docs.docker.com/buildx/working-with-buildx/">Docker Buildx</a></li>
+<li><a href="https://github.com/xo/xo">xo/xo</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>Jan 29, 2022</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2022/01/02/deploy-aws-sam-with-github-actions/" title="GitHub Actions を使って AWS SAM をデプロイしてみる">GitHub Actions を使って AWS SAM をデプロイしてみる</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2022/01/29/hello-apple-silicon-m1/">M1 Apple Silicon 移行記</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/01/02/deploy-aws-sam-with-github-actions/">GitHub Actions を使って AWS SAM をデプロイしてみる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/01/02/perlfunc-fc/">Perl の fc で遊んでみる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/12/30/polyglot-of-bash-and-powershell/">Bash と PowerShell の Polyglot を作る</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/12/24/perl-bitwise-operator/">Perl の文字列用ビット操作演算子を使ってみる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/12/16/aws-lambda-is-available-in-ap-southeast-3/">AWSジャカルタリージョンでPerlランタイムが利用可能になりました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/12/11/perl-iterating-over-multiple-values/">Perl 5.35.5 の iterating over multiple values at a time を先取り</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/12/11/aws-cloud-bound/">AWS ClockBound で遊んでみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2021/12/10/perl-defer/">Perl 5.35.4 の defer を先取り</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2022 Shogo Ichinose - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['\\(','\\)'], ['{% m %}', '{% em %}']],
+    displayMath: [['\\[','\\]'], ['{% math %}', '{% endmath %}']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+  </script>
+
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+</html>
+
