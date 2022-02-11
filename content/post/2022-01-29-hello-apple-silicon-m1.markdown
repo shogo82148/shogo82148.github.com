@@ -209,7 +209,7 @@ COPY --from=builder /go/bin/app /
 CMD ["/app"]
 ```
 
-これと同等のことを Docker 無しで実現する [xo/xo](https://github.com/xo/xo) があるという話を聞いたので、
+これと同等のことを Docker 無しで実現する [google/ko](https://github.com/google/ko) があるという話を聞いたので、
 そっちも試してみたい気持ちもあるけどまた今度。
 
 ## まとめ
@@ -230,4 +230,4 @@ CMD ["/app"]
 - [mysql/mysql-server - dockerhub](https://hub.docker.com/r/mysql/mysql-server)
 - [Dockerの「マルチCPUアーキテクチャ」に対応したイメージをビルドする](https://dev.classmethod.jp/articles/docker-multi-architecture-image-build/)
 - [Docker Buildx](https://docs.docker.com/buildx/working-with-buildx/)
-- [xo/xo](https://github.com/xo/xo)
+- [google/ko](https://github.com/google/ko)
