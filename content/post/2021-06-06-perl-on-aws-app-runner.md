@@ -16,6 +16,12 @@ categories: [perl, aws]
 
 ソースコードは [shogo82148/perl-on-aws-app-runner](https://github.com/shogo82148/perl-on-aws-app-runner) においてあります。
 
+**2022-02-13追加**
+
+NEW!! VPC への接続がサポートされ RDS へもつながるようになりました！！！
+
+- [AWS App Runner に Perl をデプロイして RDS につなげてみた](https://shogo82148.github.io/blog/2022/02/13/perl-on-aws-app-runner-connecting-vpc)
+
 ## PSGI アプリを用意する
 
 [Wikipedia の PSGI のページ](https://ja.wikipedia.org/wiki/PSGI)に書いてあった例をそのまま使います。
