@@ -20,7 +20,7 @@ categories: [perl, aws]
 
 NEW!! VPC への接続がサポートされ RDS へもつながるようになりました！！！
 
-- [AWS App Runner に Perl をデプロイして RDS につなげてみた](https://shogo82148.github.io/blog/2022/02/13/perl-on-aws-app-runner-connecting-vpc)
+- [AWS App Runner に Perl をデプロイして RDS につなげてみた](https://shogo82148.github.io/blog/2022/02/13/2022-02-13-perl-on-aws-app-runner-connecting-vpc/)
 
 ## PSGI アプリを用意する
 
