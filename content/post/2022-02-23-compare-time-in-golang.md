@@ -7,7 +7,7 @@ comments: true
 categories: [go, golang]
 ---
 
-`time.Time` 型の比較は比較演算子が使えず、
+Go言語の `time.Time` 型の比較は比較演算子が使えず、
 [Time.Before](https://pkg.go.dev/time#Time.Before)
 と [Time.After](https://pkg.go.dev/time#Time.After)
 を使う必要があります。
