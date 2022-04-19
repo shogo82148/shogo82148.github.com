@@ -1,6 +1,3 @@
-
-
-
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
 <head>
@@ -17,7 +14,7 @@
   
 
   
-  <title>CaboCha</title>
+  <title>EOL間近の AWS Lambda Runtimes を探すスクリプト</title>
 
   
   
@@ -36,7 +33,7 @@
   <link href="https://shogo82148.github.io/favicon.png" rel="icon">
 
   
-  <link href="/categories/cabocha/index.xml" rel="alternate" type="application/rss+xml" title="Shogo&#39;s Blog" />
+  
 
   <meta name="description" content="" />
   <meta name="keywords" content="">
@@ -96,41 +93,124 @@
 <div id="main">
   <div id="content">
     <div>
-      <article role="article">
-        <header>
-          <h1 class="entry-title">
-            Category: CaboCha
-          </h1>
-        </header>
-        <div id="blog-archives" class="category">
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Apr 19, 2022
+     - 1 minute read 
+     - <a href="https://shogo82148.github.io/blog/2022/04/19/2022-04-19-check-your-aws-lambda-runtimes/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/aws/">aws </a><a class="label" href="https://shogo82148.github.io/categories/lambda/">lambda </a>
+    
+  </p>
+  <h1 class="entry-title">
+     EOL間近の AWS Lambda Runtimes を探すスクリプト 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
           
-          <h2>
-            2012
-          </h2>
-          <article>
-            <h1>
-              <a href="https://shogo82148.github.io/blog/2012/11/01/cabocha/" title="PythonでCaboChaを美味しくいただく">PythonでCaboChaを美味しくいただく</a>
-            </h1>
-            <time>
-              <span class="month">Nov</span>
-              <span class="day">1</span>
-            </time>
-            <footer>
-              <span class="categories"> 
-                tags:
-                
-                
-                
-                
-                
-              </span>
-            </footer>
-          </article>
           
+          
+          
+          <p>「[要対応] AWS Lambda における Python 3.6 のサポート終了 | [Action Required] AWS Lambda end of support for Python 3.6」というメールを受け取ったので、その対応メモ。</p>
+<h2 id="背景">背景</h2>
+<p>調査自体は簡単です。親切なことに送られてきたメールにやり方がバッチリ記載されています。</p>
+<blockquote>
+<p>次のコマンドは、AWS CLI [3] を使用して、特定のリージョン内の Python 3.6 を使用しているすべての関数を一覧表示する方法を示しています。お客様のアカウント内のこうした関数すべてを確認するには、リージョンごとに次のコマンドを繰り返してください。</p>
+</blockquote>
+<p>以下のコマンドを叩くだけ。</p>
+<pre tabindex="0"><code>aws lambda list-functions \
+    --function-version ALL \
+    --region us-east-1 \
+    --output text \
+    --query &quot;Functions[?Runtime=='python3.6'].FunctionArn&quot;
+</code></pre><p>ただ、「リージョンごとに次のコマンドを繰り返してください」とあるんですよね。
+えっと・・・AWSって一体いくつリージョンあるんだっけ・・・？
+このメールを書いた人は自社のリージョン数を把握しているんでしょうか？
+管理しているAWSアカウントも複数あるので、全リージョン分繰り返すなんて不毛です。</p>
+<h2 id="調査方法">調査方法</h2>
+<p>そういうわけで簡単なシェルスクリプトを書きました。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="cp">#!/bin/bash
+</span><span class="cp"></span>​
+<span class="k">for</span> ACCOUNT in <span class="k">$(</span>perl -nle <span class="s1">&#39;print $1 if /^[[](?:profile\s+)?([^]]+)/&#39;</span> ~/.aws/config<span class="k">)</span><span class="p">;</span> <span class="k">do</span>
+    <span class="k">for</span> REGION in <span class="k">$(</span>aws ec2 describe-regions --region us-east-1 --profile <span class="s2">&#34;</span><span class="nv">$ACCOUNT</span><span class="s2">&#34;</span> --output text --query <span class="s2">&#34;Regions[].{Name:RegionName}&#34;</span><span class="k">)</span><span class="p">;</span> <span class="k">do</span>
+        <span class="nb">echo</span> <span class="s2">&#34;</span><span class="nv">$ACCOUNT</span><span class="s2">, </span><span class="nv">$REGION</span><span class="s2">:&#34;</span> &gt;<span class="p">&amp;</span><span class="m">2</span>
+        aws lambda list-functions <span class="se">\
+</span><span class="se"></span>            --function-version ALL <span class="se">\
+</span><span class="se"></span>            --region <span class="s2">&#34;</span><span class="nv">$REGION</span><span class="s2">&#34;</span> <span class="se">\
+</span><span class="se"></span>            --profile <span class="s2">&#34;</span><span class="nv">$ACCOUNT</span><span class="s2">&#34;</span> <span class="se">\
+</span><span class="se"></span>            --output text <span class="se">\
+</span><span class="se"></span>            --query <span class="s2">&#34;Functions[?Runtime==&#39;python3.6&#39;].FunctionArn&#34;</span>
+    <span class="k">done</span>
+<span class="k">done</span>
+</code></pre></div><p>見つけたらランタイムを Python 3.9 にアップグレードしましょう。
+多くの場合単純にランタイムの設定を変えるだけだと思いますが、
+必要に応じてコードを書き換えてください。</p>
+<h2 id="まとめ">まとめ</h2>
+<p>次のランタイムサポート終了のときに困らないようメモっておきました。
+Python 3.9 のEOLは2025年10月なので、そのころにまた活躍することでしょう。
+Queryの python3.6 の部分は適宜書き換えてください。</p>
+<p>ちなみに2022-04-19現在、利用可能なリージョン数は22ありました(GovCloudのような特殊なリージョンを除く)。</p>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://docs.aws.amazon.com/lambda/latest/dg/runtime-support-policy.html">Runtime deprecation policy</a></li>
+<li><a href="https://aws.amazon.com/jp/about-aws/global-infrastructure/regional-product-services/?p=ngi&amp;loc=4">「AWS リージョン別のサービス」</a></li>
+</ul>
+
         </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Shogo Ichinose</span></span>
+    
+    <time>Apr 19, 2022</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2022/04/15/2022-04-15-implement-bioctal/" title="RFC9226 Bioctal: Hexadecimal 2.0 の Go 実装を書いてみた">RFC9226 Bioctal: Hexadecimal 2.0 の Go 実装を書いてみた</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
       </article>
     </div>
-
     
 
 <aside class="sidebar thirds">
