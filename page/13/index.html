@@ -112,6 +112,38 @@
         
 
 <header>
+  <p class="meta">Dec 9, 2015
+     - 4 minute read 
+     - <a href="https://shogo82148.github.io/blog/2015/12/09/perl-datetime/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a><a class="label" href="https://shogo82148.github.io/categories/time/">time </a><a class="label" href="https://shogo82148.github.io/categories/leapsecond/">leapsecond </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2015/12/09/perl-datetime/">Perl の DateTime 利用上の注意点</a>
+  </h1>
+</header>
+
+        
+          <p>この投稿は Perl 5 Advent Calendar 2015 の 9日目の記事です。
+Perl の Time::Piece 利用上の注意点 という記事の最後にDateTimeへの言及があったのですが、 DateTimeはDateTimeでいろいろとハマりどころがあるんですよね・・・。 僕も今年いくつか罠にハマりました。ちょうどアドベントカレンダーの季節ですし、この機会にハマりどころをまとめてみることにします。
+遅い いろんなところで言われていることですが 遅い です。 試しに代表的な日付を扱うモジュールでベンチをとってみました。 (比較のために時間をとるためのPerlの組み込み関数も入れてあります)
+# いろんな形式で今の時間を取得する use Benchmark qw/ cmpthese /; use Time::HiRes (); use Time::Moment; use Time::Piece (); use DateTime; cmpthese 0, { &#39;time&#39; =&gt; sub { time }, &#39;Time::HiRes&#39; =&gt; sub { Time::HiRes::time }, &#39;localtime&#39; =&gt; sub { () = localtime }, &#39;Time::Moment&#39; =&gt; sub { Time::Moment-&gt;now }, &#39;Time::Piece&#39; =&gt; sub { Time::Piece-&gt;localtime }, &#39;DateTime&#39; =&gt; sub { DateTime-&gt;now( time_zone=&gt;&#39;Asia/Tokyo&#39; ) }, }; Rate DateTime Time::Piece Time::Moment localtime Time::HiRes time DateTime 5303/s -- -95% -98% -99% -100% -100% Time::Piece 103765/s 1857% -- -67% -71% -98% -99% Time::Moment 313599/s 5814% 202% -- -11% -93% -98% localtime 354215/s 6580% 241% 13% -- -92% -98% Time::HiRes 4706723/s 88658% 4436% 1401% 1229% -- -72% time 16536995/s 311751% 15837% 5173% 4569% 251% -- それにしてもTime::Moment速いですね。組み込みのlocaltimeと互角とは。</p>
+          
+            <footer>
+              <a href="https://shogo82148.github.io/blog/2015/12/09/perl-datetime/" rel="full-article">Read On &rarr;</a>
+            </footer>
+          
+        
+      </article>
+      
+      <article>
+        
+        
+
+<header>
   <p class="meta">Nov 23, 2015
      - 2 minute read 
      - <a href="https://shogo82148.github.io/blog/2015/11/23/golang-graceful-restart-2nd/#disqus_thread">Comments</a>
@@ -415,38 +447,6 @@ ADD webtail / CMD ./docker_run.sh 2&gt;&amp;1 | /webtail --prefix webtail # ブ�
         
       </article>
       
-      <article>
-        
-        
-
-<header>
-  <p class="meta">Jun 20, 2015
-     - 1 minute read 
-     - <a href="https://shogo82148.github.io/blog/2015/06/20/test-mysqld-multi/#disqus_thread">Comments</a>
-
-    
-    
-      - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a>
-    
-  </p>
-  <h1 class="entry-title">
-    <a href="https://shogo82148.github.io/blog/2015/06/20/test-mysqld-multi/">Test::mysqld::Multiというモジュールを書いてみた</a>
-  </h1>
-</header>
-
-        
-          <p>Test::mysqldのインスタンスを一度に大量に作りたい人向けに Test::mysqld::Multiというモジュールを書いてみました。
-2016/12/22追記: Test::mysqld::MultiはTest::mysqld 0.20 の一部として取り込まれました (p5-Test::mysqld#13)。 APIは少し変わっているので、詳しくはPODを参照してください。 合わせてApp::Prove::Plugin::MySQLPool 0.06 より、 本記事で紹介した高速化が利用できます。
-背景 先日Jenkins EC2 Plugin で Spot Instance を使ってテストを回すというのを、 tkuchikiさんにお願いして僕の関わっているプロジェクトでやっていただきました。 CPUのたくさん載ったインスタンスを安く使えるようになったので、 8並列で動いてたテストを24並列で動かせるようになりました。やった3倍速だ！！！ 9分程かかってたテストが7分で終わるようになりました！！！ あれ・・・思ったほど早くなってない・・・。
-ログを眺めているとproveコマンドが立ち上がってから、実際にテストが走り始めるまで数分の時間がありました。 App::Prove::Plugin::MySQLPoolを使っているのですが、 ここで時間がかかっているようです。
-App::Prove::Plugin::MySQLPoolはテストの並列度分だけMySQLのインスタンスを立ち上げますが、 一個インスタンスを立ち上げたら、それにアクセスできるようになるまでずっと待っているようです。 MySQLの起動に5秒かかるとして24並列で動かしたら2分かかるわけで無視できない長さになります。
-作ったもの n個一度に立ち上げて全部にアクセスできるまで待つ実装にすれば速くなるのでは！ってことでTest::mysqld::Multiというのを書いて、 App::Prove::Plugin::MySQLPoolからそれを使うようにしました。 とりあえずtest-mysql-multiブランチにコミットしてあります。 App::Prove::Plugin::MySQLPoolに取り込んでもらうか別のモジュールとして分離するか、後々のことは未定。 今のプロジェクトで使ってみてちょっとの間様子見してみます。 7分かかってたテストが5分程度で終わるようになったので、効果はあるようです。
-ちなみに、並列度が24と半端なのはそれ以上並列度を上げても速くならなかったため。 32コアあるマシンなんだけど使い切れてません。 どこにボトルネックがあるんだろうな・・・。
-まとめ プロセス一覧にmysqldが24個並ぶの楽しい</p>
-          
-        
-      </article>
-      
       
       
 
@@ -583,10 +583,16 @@ App::Prove::Plugin::MySQLPoolはテストの並列度分だけMySQLのインス�
           
             
               <li class="post">
-                <a href="/blog/2022/04/19/2022-04-19-check-your-aws-lambda-runtimes/">EOL間近の AWS Lambda Runtimes を探すスクリプト</a>
+                <a href="/blog/2022/04/25/2022-04-25-jq-program/">jq の引数を省略したときの挙動が違う件</a>
               </li>
             
           
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/04/19/2022-04-19-check-your-aws-lambda-runtimes/">EOL間近の AWS Lambda Runtimes を探すスクリプト</a>
+              </li>
             
           
             
@@ -628,12 +634,6 @@ App::Prove::Plugin::MySQLPoolはテストの並列度分だけMySQLのインス�
             
               <li class="post">
                 <a href="/blog/2022/01/02/perlfunc-fc/">Perl の fc で遊んでみる</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2021/12/30/polyglot-of-bash-and-powershell/">Bash と PowerShell の Polyglot を作る</a>
               </li>
             
           

@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono&display=swap" rel="stylesheet"> 
+
+  
+  <title>jq の引数を省略したときの挙動が違う件</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+    <link rel="stylesheet" href="/css/fork-awesome.min.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="ICHINOSE Shogo">
+
+  
+  <meta name="generator" content="Hugo 0.91.2" />
+
+  
+  
+  
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-40R0PCLKVF');
+</script>
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Apr 25, 2022
+     - 2 minute read 
+     - <a href="https://shogo82148.github.io/blog/2022/04/25/2022-04-25-jq-program/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/jq/">jq </a>
+    
+  </p>
+  <h1 class="entry-title">
+     jq の引数を省略したときの挙動が違う件 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>JSONを加工するときに <a href="https://github.com/stedolan/jq">jq</a> は必須の存在になりました。
+<a href="www.amazon.co.jp/dp/4877834915">jqハンドブック</a> なんてものが発売されるくらいですからね。</p>
+<p>そんな jq なんですが、<a href="https://twitter.com/Gaku07jp">@Gaku07jp</a> が <a href="https://docs.aws.amazon.com/cloudshell/latest/userguide/welcome.html">AWS CloudShell</a> 上で
+期待どおりに動かない、と困ってました。
+なんでこんな挙動になるのかなーと気になったので、調査してみたメモです。</p>
+<h2 id="症状">症状</h2>
+<p>問題となったのはこんな感じのシェルスクリプトです。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="nv">FOO</span><span class="o">=</span><span class="k">$(</span><span class="nb">echo</span> <span class="s1">&#39;{}&#39;</span> <span class="p">|</span> jq<span class="k">)</span>
+</code></pre></div><p>普段開発で使用している macOS 上では <code>FOO={}</code> と展開されるのですが、 CloudShell 上では jq のヘルプメッセージが表示されます (2022-04-25現在)。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="c1"># CloudShell 上</span>
+$ <span class="nv">FOO</span><span class="o">=</span><span class="k">$(</span><span class="nb">echo</span> <span class="s1">&#39;{}&#39;</span> <span class="p">|</span> jq<span class="k">)</span>
+jq - commandline JSON processor <span class="o">[</span>version 1.5<span class="o">]</span>
+Usage: jq <span class="o">[</span>options<span class="o">]</span> &lt;jq filter&gt; <span class="o">[</span>file...<span class="o">]</span>
+
+<span class="o">(</span>...snip...<span class="o">)</span>
+</code></pre></div><h2 id="原因">原因</h2>
+<p>直接の原因は引数を省略してしまったことです。
+jq の第一引数には jq の式が必要です。単に整形したい場合は <code>jq .</code> とすればOKです。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="nv">FOO</span><span class="o">=</span><span class="k">$(</span><span class="nb">echo</span> <span class="s1">&#39;{}&#39;</span> <span class="p">|</span> jq .<span class="k">)</span>
+</code></pre></div><h2 id="macos-と-cloudshell-の違い">macOS と CloudShell の違い</h2>
+<p>スクリプトが動かない直接の原因はわかったものの、同じ jq なのに、なぜこのような違いが生まれるのか気になりますよね？
+というわけでソースコードを追ってみました。</p>
+<p>ヒントは問題のシェルスクリプトを実行したときに表示された、ヘルプメッセージにあります。
+CloudShell の jq は version 1.5 と少し古いバージョンです。
+一方、弊社では macOS の jq は brew 経由でインストールしているので、最新版の version 1.6 がインストールされています。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="c1"># macOS 上</span>
+$ jq
+jq - commandline JSON processor <span class="o">[</span>version 1.6<span class="o">]</span>
+
+Usage:	jq <span class="o">[</span>options<span class="o">]</span> &lt;jq filter&gt; <span class="o">[</span>file...<span class="o">]</span>
+	jq <span class="o">[</span>options<span class="o">]</span> --args &lt;jq filter&gt; <span class="o">[</span>strings...<span class="o">]</span>
+	jq <span class="o">[</span>options<span class="o">]</span> --jsonargs &lt;jq filter&gt; <span class="o">[</span>JSON_TEXTS...<span class="o">]</span>
+
+<span class="o">(</span>...snip...<span class="o">)</span>
+</code></pre></div><p>なるほど、この間になにか修正が入ったんだな？と、差分を確認してみました。</p>
+<ul>
+<li><a href="https://github.com/stedolan/jq/compare/jq-1.5...jq-1.6">jq-1.5&hellip;jq-1.6</a></li>
+</ul>
+<p>挙動から推測するに「入出力が TTY か」で条件分岐しているんだろうなと当たりをつけ、差分をザーッと眺めてみると、ありました！
+usage を表示する部分が以下のように変更されていました。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-diff" data-lang="diff"><span class="gu">@@ -457,18 +558,12 @@ int main(int argc, char* argv[]) {
+</span><span class="gu"></span>   else
+     jq_set_attr(jq, jv_string(&#34;VERSION_DIR&#34;), jv_string_fmt(&#34;%.*s-master&#34;, (int)(strchr(JQ_VERSION, &#39;-&#39;) - JQ_VERSION), JQ_VERSION));
+ 
+<span class="gd">-#if (!defined(WIN32) &amp;&amp; defined(HAVE_ISATTY)) || defined(HAVE__ISATTY)
+</span><span class="gd">-
+</span><span class="gd">-#if defined(HAVE__ISATTY) &amp;&amp; defined(isatty)
+</span><span class="gd">-#undef isatty
+</span><span class="gd">-#define isatty _isatty
+</span><span class="gd">-#endif
+</span><span class="gd">-
+</span><span class="gd">-  if (!program &amp;&amp; isatty(STDOUT_FILENO) &amp;&amp; !isatty(STDIN_FILENO))
+</span><span class="gd"></span><span class="gi">+#ifdef USE_ISATTY
+</span><span class="gi">+  if (!program &amp;&amp; (!isatty(STDOUT_FILENO) || !isatty(STDIN_FILENO)))
+</span><span class="gi"></span>     program = &#34;.&#34;;
+ #endif
+ 
+<span class="gd">-  if (!program) usage(2);
+</span><span class="gd"></span><span class="gi">+  if (!program) usage(2, 1);
+</span><span class="gi"></span> 
+   if (options &amp; FROM_FILE) {
+     char *program_origin = strdup(program);
+</code></pre></div><p><a href="https://github.com/stedolan/jq/blame/f9afa950e26f5d548d955f92e83e6b8e10cc8438/src/main.c#L608-L613">git blame して</a> この変更が入ったコミットを見てみると、
+以下のプルリクエストで取り込まれたものでした。</p>
+<ul>
+<li><a href="https://github.com/stedolan/jq/pull/1030">Assume . if either stdin/on isatty() (fix #1028) #1030</a></li>
+<li><a href="https://github.com/stedolan/jq/issues/1028">Redirecting or piping output has different behaviour #1028</a></li>
+</ul>
+<p>version 1.5 と version 1.6 の違いをまとめると、こんな感じになります。</p>
+<ul>
+<li><code>echo '{}' | jq &gt; foo</code> → version 1.5 では usage が表示される。version 1.6 では、ファイル <code>foo</code> にJSONのパース結果が保存される</li>
+<li><code>jq &gt; foo</code> → version 1.5 では usage が表示される。 version 1.6 では jq が入力待ち状態になり、ファイル <code>foo</code> にJSONのパース結果が保存される</li>
+<li><code>echo '{}' | jq</code> → version 1.5, 1.6 ともにJSONのパース結果が出力される</li>
+<li><code>jq</code> → version 1.5, 1.6 ともに usage が表示される</li>
+</ul>
+<h2 id="まとめ">まとめ</h2>
+<p>macOS 上と CloudShell 上で jq の挙動が違うのは、 jq のバージョンの違いが原因でした。
+jq version 1.5 と version 1.6 では、入出力が TTY の場合の挙動が少し変わっています。</p>
+<p>さて、標準で jq version 1.5 がインストールされる主要な Linux ディストリビューションとして、 Ubuntu 18.04 LTS と RHEL7 があります。
+Ubuntu 18.04 LTSのサポート期限は2023年4月、RHEL7のサポート期限が2024年6月30日なので、
+あと 1〜2年は jq version 1.5 がインストールされた環境が残るわけですね(その後なくなるとは言っていない)。
+ちょっとした違いですが注意しましょう。</p>
+<p>個人的には <code>jq .</code> と必ず引数を渡すのが良いと思います。
+「この場合は省略できるんだけっけ・・・？」と考える必要がないので、楽ちんです。</p>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://github.com/stedolan/jq">stedolan/jq</a></li>
+<li><a href="https://github.com/stedolan/jq/releases/tag/jq-1.6">jq 1.6</a></li>
+<li><a href="https://github.com/stedolan/jq/pull/1030">Assume . if either stdin/on isatty() (fix #1028) #1030</a></li>
+<li><a href="https://github.com/stedolan/jq/issues/1028">Redirecting or piping output has different behaviour #1028</a></li>
+<li><a href="www.amazon.co.jp/dp/4877834915">jqハンドブック</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">ICHINOSE Shogo</span></span>
+    
+    <time>Apr 25, 2022</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2022/04/19/2022-04-19-check-your-aws-lambda-runtimes/" title="EOL間近の AWS Lambda Runtimes を探すスクリプト">EOL間近の AWS Lambda Runtimes を探すスクリプト</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2022/04/25/2022-04-25-jq-program/">jq の引数を省略したときの挙動が違う件</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/04/19/2022-04-19-check-your-aws-lambda-runtimes/">EOL間近の AWS Lambda Runtimes を探すスクリプト</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/04/15/2022-04-15-implement-bioctal/">RFC9226 Bioctal: Hexadecimal 2.0 の Go 実装を書いてみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/03/19/2022-03-19-change-address-of-individual-number-card/">マイナンバーカードの住所変更したときの備忘録</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/02/23/2022-02-23-compare-time-in-golang/">Goの日時比較が覚えられない件</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/02/13/2022-02-13-perl-on-aws-app-runner-connecting-vpc/">AWS App Runner に Perl をデプロイして RDS につなげてみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/01/29/hello-apple-silicon-m1/">M1 Apple Silicon 移行記</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/01/02/deploy-aws-sam-with-github-actions/">GitHub Actions を使って AWS SAM をデプロイしてみる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/01/02/perlfunc-fc/">Perl の fc で遊んでみる</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2022 ICHINOSE Shogo - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['\\(','\\)'], ['{% m %}', '{% em %}']],
+    displayMath: [['\\[','\\]'], ['{% math %}', '{% endmath %}']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+  </script>
+
+
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+</html>
+
