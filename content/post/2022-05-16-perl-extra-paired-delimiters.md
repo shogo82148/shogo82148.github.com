@@ -2,7 +2,7 @@
 layout: post
 title: "Perl の extra_paired_delimiters を先取り！"
 slug: 2022-05-16-perl-extra-paired-delimiters
-date: 2022-05-16 23:36:00 +0900
+date: 2022-05-16 23:30:00 +0900
 comments: true
 categories: [perl]
 ---
