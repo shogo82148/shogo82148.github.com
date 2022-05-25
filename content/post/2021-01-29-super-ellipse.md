@@ -32,7 +32,7 @@ n が大きいほど四角形に近づいていきます。
 Illustrator のようなベクターツールではおなじみのベジェ曲線です。
 ベジェ曲線は任意の次数に拡張することができますが、コンピューターグラフィックスで多く用いられるのは 3 次ベジェ曲線です。
 
-制御点を {% m %} \boldsymbol{B}\_0, \boldsymbol{B}\_1, \boldsymbol{B}\_2, \boldsymbol{B}\_3 {% em %} とした場合の
+制御点を $ \boldsymbol{B}\_0, \boldsymbol{B}\_1, \boldsymbol{B}\_2, \boldsymbol{B}\_3 $ とした場合の
 3 次ベジェ曲線の数式を具体的に書き下すと以下のようになります。
 
 $$
