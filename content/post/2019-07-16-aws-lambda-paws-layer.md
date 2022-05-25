@@ -21,7 +21,7 @@ categories: [perl, aws, lambda]
 
 AWS公式ではPerl用のSDKは提供していないので、[Paws](https://metacpan.org/pod/Paws)という非公式SDKを使いました。
 何も考えずにテキトウにインストールしてみたらSDKだけで121MBありました。
-Perl本体が85MBなのでSDKのほうがでかい。
+Perl本体が85MBなのでSDKのほうがでかい。
 AWS Lambdaで作成できる関数は250MBが上限なので、流石に半分SDKに持っていかれるのはつらかろうと、Perl本体とは別のレイヤーに分けてあります。
 
 レイヤーは最大5つまで登録できるので、Perl本体(例: `arn:aws:lambda:ap-northeast-1:445285296882:layer:perl-5-30-runtime:2` )に加えて

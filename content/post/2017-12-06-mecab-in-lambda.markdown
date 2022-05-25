@@ -136,21 +136,21 @@ def get_base_form(feature):
 
 ### 環境変数 LD_LIBRARY_PATH の設定に依存
 
-これについては2017年12月現在ドキュメントに明示されています。
+これについては2017年12月現在ドキュメントに明示されています。
 
 - [Lambda 関数で使用できる環境変数](http://docs.aws.amazon.com/ja_jp/lambda/latest/dg/current-supported-versions.html#lambda-environment-variables)
 
 > /lib64、/usr/lib64、LAMBDA_TASK_ROOT、LAMBDA_TASK_ROOT/lib が含まれます。ヘルパーライブラリおよび関数コードの保存に使用されます。
 
-「zip ファイルが展開されるパス」と「zip ファイルが展開されるパス/lib」が含まれているので問題ありません。
+「zip ファイルが展開されるパス」と「zip ファイルが展開されるパス/lib」が含まれているので問題ありません。
 
-また、[前回の記事](https://shogo82148.github.io/blog/2016/02/10/mecab-in-lambda/)を書いたときは環境変数の上書きは出来ませんでしたが、現在では可能になっています。
+また、[前回の記事](https://shogo82148.github.io/blog/2016/02/10/mecab-in-lambda/)を書いたときは環境変数の上書きは出来ませんでしたが、現在では可能になっています。
 
 - [【アップデート】AWS Lambdaで環境変数を使えるようになりました！！！](https://dev.classmethod.jp/cloud/aws/aws-lambda-env-variables/)
 
 ### .zip ファイルが展開されるパスを決め打ち
 
-これに関してはドキュメントに明示的な記載を見つけることが出来ませんでした。
+これに関してはドキュメントに明示的な記載を見つけることが出来ませんでした。
 決め打ちが怖い人は `LAMBDA_TASK_ROOT` 環境変数を参照することをオススメします。
 
 ``` python lambda_function.py
@@ -164,7 +164,7 @@ unk_tagger = MeCab.Tagger("-d{} -r{} --unk-feature 未知語,*,*,*,*,*,*,*,*".fo
 ## まとめ
 
 MeCabをAWS Lambdaで動かす(2017年版)最新版をお伝えしました。
-通常のインストール方法との差はprefixの指定だけなので、
+通常のインストール方法との差はprefixの指定だけなので、
 今までMeCabを利用していた人にとってはさほど高いハードルではないと思います。
 
 とはいえ、依然としてLambda関数ビルド専用のLinux環境を用意する煩雑さはあります。
@@ -176,7 +176,7 @@ Goのクロスコンパイルの簡単さはやはり魅力的ですね・・・
 
 [グロンギ語語翻訳機](https://shogo82148.github.io/Grongish/) はこの方法でMeCabをLambda上で動かし、
 API Gateway を用いてAPIとして公開しています。
-実装例として遊んでみて下さい。
+実装例として遊んでみて下さい。
 
 ## 参考
 

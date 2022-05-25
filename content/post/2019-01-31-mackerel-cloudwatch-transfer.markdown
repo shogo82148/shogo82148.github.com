@@ -14,10 +14,10 @@ categories: [go, golang, aws, mackerel]
 [Mackerel Agent Plugins](https://github.com/mackerelio/mackerel-agent-plugins)を利用すればメトリクスを増やすこと自体は簡単なのですが、
 Agentを設置するインスタンスが増えるので、サーバー保守の手間が増えてしまいます。
 
-僕のユースケースでは監視対象はたいていAWSのマネージド・サービスなので、
+僕のユースケースでは監視対象はたいていAWSのマネージド・サービスなので、
 AWS CloudWatch に投稿されたメトリクスが Mackerel で見れれば十分なことが多いです。
 
-そこで、以下の記事を参考に AWS Lambda と CloudWatch Events を組み合わせて、Mackerelへメトリクスを転送するスクリプトを書いてみました。
+そこで、以下の記事を参考に AWS Lambda と CloudWatch Events を組み合わせて、Mackerelへメトリクスを転送するスクリプトを書いてみました。
 
 - [Amazon LambdaでCloudWatchのメトリクスをMackerelに監視させる](https://blog.jicoman.info/2016/11/cloudwatch_mackerel/)
 
@@ -32,7 +32,7 @@ AWS CloudWatch に投稿されたメトリクスが Mackerel で見れれば十�
 MackerelのダッシュボードからAPIキーをコピーしてきて、
 [AWS Systems Manager パラメータストア](https://docs.aws.amazon.com/ja_jp/systems-manager/latest/userguide/systems-manager-paramstore.html)に
 Secure String として登録しておきます。
-スクショでは Mackerel のものだと分かりやすいよう `/development/api.mackerelio.com/headers/X-Api-Key` という名前をつけました。
+スクショでは Mackerel のものだと分かりやすいよう `/development/api.mackerelio.com/headers/X-Api-Key` という名前をつけました。
 この名前を後で使うので覚えておきましょう。
 
 ![パラメーターストア](/images/2019-01-31-parameter-store.png)
@@ -53,7 +53,7 @@ Secure String として登録しておきます。
 「ParameterName」にパラメーターストアに登録したパラメーター名を入れましょう。
 スクショの例では「`/development/api.mackerelio.com/headers/X-Api-Key`」を入力します。
 
-![内容を確認してデプロイ](/images/2019-01-31-deploy.png)
+![内容を確認してデプロイ](/images/2019-01-31-deploy.png)
 
 「カスタムIAMロールを作成することに同意」のチェックボックスを選択したあと、デプロイ！
 
