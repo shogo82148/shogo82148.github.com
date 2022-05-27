@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono&display=swap" rel="stylesheet"> 
+
+  
+  <title>動的ライブラリの検索パスに、実行バイナリからの相対パスを入れたい</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+    <link rel="stylesheet" href="/css/fork-awesome.min.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="ICHINOSE Shogo">
+
+  
+  <meta name="generator" content="Hugo 0.91.2" />
+
+  
+  
+  
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-40R0PCLKVF');
+</script>
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">May 27, 2022
+     - 2 minute read 
+     - <a href="https://shogo82148.github.io/blog/2022/05/27/2022-05-27-configure-rpath-via-ldflags/#disqus_thread">Comments</a>
+
+    
+    
+      - 
+    
+  </p>
+  <h1 class="entry-title">
+     動的ライブラリの検索パスに、実行バイナリからの相対パスを入れたい 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>C や C++ で普通にコンパイルしたバイナリを実行すると、
+<code>/lib</code> や <code>/usr/lib</code> といったディレクトリから動的ライブラリを検索して来ます。
+この検索パスは <code>LD_LIBRARY_PATH</code> 環境変数や <code>/etc/ld.so.conf</code> 設定ファイルで設定可能です。</p>
+<p>しかし、これらの方法ではすべての実行コマンドの設定が上書きされてしまいます。
+「自分がコンパイルしたバイナリ」のみ、検索パスをいじりたい。
+できれば実行バイナリの相対パスを指定したい。</p>
+<p>そんな場面に遭遇したので、備忘録として残しておきます。</p>
+<h2 id="背景">背景</h2>
+<p>以前 Redis をインストールしてセットアップする GitHub Action <a href="https://github.com/marketplace/actions/actions-setup-redis">actions-setup-redis</a> を公開しました。
+「Redis くらい Docker でシュッとたちあがるやろ」という話もありますが、
+Workflow の中で <code>redis-cli</code> を使いたい場合や、 macOS で実行したい場合 Docker は使えません。
+これを解決するために、<a href="https://github.com/marketplace/actions/actions-setup-redis">actions-setup-redis</a> では
+プラットフォームに合わせてビルド済みのバイナリをダウンロードする、という手法をとっています。</p>
+<p>Redis は v6.2.0 から OpenSSL を使った SSL/TLS 通信をサポートしています。
+せっかくなので SSL/TLS 通信したいですよね (というか<a href="https://github.com/shogo82148/actions-setup-redis/issues/375">そういう要望がきた</a>)。
+そうすると当然 Redis と OpenSSL のリンクが必要です。</p>
+<p>別のプロジェクトですが、過去に <a href="https://github.com/shogo82148/actions-setup-perl/issues/523">リンクしていた OpenSSL が OS イメージから削除される</a> という経験をしていたので、
+<strong>Redis に OpenSSL をバンドルして配布することにしました</strong>。</p>
+<p>バンドルした OpenSSL と プリインストールされている OpenSSL のバージョンがあっている保証はありません
+(そもそもそういう場合に備えてバンドルしてる)。
+グローバルな設定を書き換えてしまっては、既存の OpenSSL に依存しているコマンドが壊れてしまいます。
+でも <code>redis-cli</code> を使うときだけはバンドルした OpenSSL を動的ロードしたい。</p>
+<p>そんなわけで <strong>「自分がコンパイルしたバイナリ」のみ、動的ライブラリの検索パスをいじりたい</strong> ということをしたくなったわけです。</p>
+<h2 id="rpath-で検索パスをバイナリに埋め込む"><code>RPATH</code> で検索パスをバイナリに埋め込む</h2>
+<p>やはり「バンドルした動的ライブラリを使いたい」という要望はあるようで、
+ちゃんとその仕組が用意されていました。
+リンカ (<code>ld</code>) に <code>-rpath directory</code> というオプションを渡してやります。
+すると、バイナリに <code>directory</code> のパスが埋め込まれ、実行時に動的ライブラリを <code>directory</code> から探してくれます。</p>
+<p>多くの場合、リンカを直接呼び出すのではなく、 <code>gcc</code> を経由してリンクすることでしょう。
+その場合は <code>-Wl,linker-options</code> でリンカに渡すオプションを指定できます。
+例えば <code>/opt/awesome/lib</code> を検索パスとして埋め込む場合はこうです。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash">gcc -Wl,-rpath,/opt/awesome/lib main.c
+</code></pre></div><h2 id="origin-を使って相対パスを指定する"><code>$ORIGIN</code> を使って相対パスを指定する</h2>
+<p>先の例では絶対パスを埋め込みました。
+<code>$ORIGIN</code> というキーワードを使うと、実行バイナリからの相対パスを指定できます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash">gcc -Wl,-rpath,<span class="s1">&#39;$ORIGIN/../lib&#39;</span> main.c
+</code></pre></div><p><code>$ORIGIN/../lib</code> をシングルクォーテーションでくくっているのがポイントです。
+単に <code>$ORIGIN</code> と書いてしまうと、シェルに環境変数展開としてみなされてしまい、
+<code>/../lib</code> が埋め込まれるという悲しい事故が起こります (たいてい <code>ORIGIN</code> なんていう環境変数は定義していないので)。
+シングルクォーテーションでくくることで、<code>$ORIGIN</code> という文字列自体を埋め込むことができます。</p>
+<h2 id="ldflags環境変数"><code>LDFLAGS</code>　環境変数</h2>
+<p>伝統的な Makefile を使ったビルドシステムでは、 <code>LDFLAGS</code> 環境変数で、リンカにわたすオプションをカスタマイズできます。
+<code>/opt/awesome/lib</code> を検索パスに埋め込むには、事前に以下のように設定しておけば OK です。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="nb">export</span> <span class="nv">LDFLAGS</span><span class="o">=</span>-Wl,-rpath,/opt/awesome/lib
+</code></pre></div><p>さて、面倒なのがここからですよ・・・。</p>
+<p><code>$ORIGIN/../lib</code> を埋め込むにはこうです。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="nb">export</span> <span class="nv">LDFLAGS</span><span class="o">=</span>-Wl,-rpath,<span class="s1">&#39;\$$ORIGIN/../lib&#39;</span>
+</code></pre></div><p>最終的に得たいのは <code>$ORIGIN/../lib</code> なのに、
+<code>'\$$ORIGIN/../lib'</code> となんだかたくさん記号が増えています。
+なぜこんなことになるのか、簡単な Makefile で試してみましょう。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-makefile" data-lang="makefile"><span class="nf">all</span><span class="o">:</span>
+	<span class="nb">echo</span> <span class="k">$(</span>LDFLAGS<span class="k">)</span>
+</code></pre></div><p><code>LDFLAGS</code> 環境変数を設定して <code>make</code> してみます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash">$ <span class="nb">export</span> <span class="nv">LDFLAGS</span><span class="o">=</span>-Wl,-rpath,<span class="s1">&#39;\$$ORIGIN/../lib&#39;</span>
+$ <span class="nb">echo</span> <span class="nv">$LDFLAGS</span>
+-Wl,-rpath,<span class="se">\$</span><span class="nv">$ORIGIN</span>/../lib
+$ make
+<span class="nb">echo</span> -Wl,-rpath,<span class="se">\$</span>ORIGIN/../lib
+-Wl,-rpath,<span class="nv">$ORIGIN</span>/../lib
+</code></pre></div><p>何が起こっているかというと、</p>
+<ul>
+<li><code>export LDFLAGS=-Wl,-rpath,'\$$ORIGIN/../lib'</code></li>
+<li>→ bash → <code>-Wl,-rpath,\$$ORIGIN/../lib</code> (環境変数の設定時に bash が変数展開)</li>
+<li>→ make → <code>-Wl,-rpath,\$ORIGIN/../lib</code> (make が変数展開して、 bash に渡す)</li>
+<li>→ bash → <code>-Wl,-rpath,$ORIGIN/../lib</code> (bash が変数展開)</li>
+</ul>
+<p>という感じで <code>LDFLAGS</code> は bash と make によって何度も変数展開が行われます。
+そのため <code>$</code> のエスケープを何重も行わなければならないのです。</p>
+<h2 id="まとめ">まとめ</h2>
+<ul>
+<li>動的ライブラリをバンドルしたい場合に、 <code>-rpath</code> というオプションを使うと、バイナリに検索パスを埋め込めます。</li>
+<li><code>$ORIGIN</code> で実行バイナリからの相対パスも指定できるよ。</li>
+<li><code>LDFLAGS</code> 環境変数で指定しようとすると、そこは魔境だった。</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="nb">export</span> <span class="nv">LDFLAGS</span><span class="o">=</span>-Wl,-rpath,<span class="s1">&#39;\$$ORIGIN/../lib&#39;</span>
+</code></pre></div><h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://github.com/marketplace/actions/actions-setup-redis">actions-setup-redis</a></li>
+<li><a href="https://github.com/shogo82148/actions-setup-redis/issues/375">Add support for building redis with TLS support #375</a></li>
+<li><a href="https://github.com/shogo82148/actions-setup-redis/issues/555">Post setup failing on Github #555</a></li>
+<li><a href="https://github.com/shogo82148/actions-setup-perl/issues/523">Cannot load Net::SSLeay on macOS #523</a></li>
+<li><a href="https://qiita.com/koara-local/items/2c26e249e02994230324">バイナリの RPATH の状態を確認する</a></li>
+<li><a href="http://www.linux-cmd.com/ld.so.html">ld.so のヘルプ・マニュアル</a></li>
+<li><a href="https://docs.oracle.com/cd/E19455-01/806-2734/appendixc-20/index.html">$ORIGIN の紹介</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">ICHINOSE Shogo</span></span>
+    
+    <time>May 27, 2022</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2022/05/16/2022-05-16-perl-extra-paired-delimiters/" title="Perl の extra_paired_delimiters を先取り！">Perl の extra_paired_delimiters を先取り！</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/05/27/2022-05-27-configure-rpath-via-ldflags/">動的ライブラリの検索パスに、実行バイナリからの相対パスを入れたい</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/05/16/2022-05-16-perl-extra-paired-delimiters/">Perl の extra_paired_delimiters を先取り！</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/05/06/2022-05-06-canonicalizing-my-name/">本名の英語表記を姓名の順に統一していくぞという話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/04/25/2022-04-25-jq-program/">jq の引数を省略したときの挙動が違う件</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/04/19/2022-04-19-check-your-aws-lambda-runtimes/">EOL間近の AWS Lambda Runtimes を探すスクリプト</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/04/15/2022-04-15-implement-bioctal/">RFC9226 Bioctal: Hexadecimal 2.0 の Go 実装を書いてみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/03/19/2022-03-19-change-address-of-individual-number-card/">マイナンバーカードの住所変更したときの備忘録</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/02/23/2022-02-23-compare-time-in-golang/">Goの日時比較が覚えられない件</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/02/13/2022-02-13-perl-on-aws-app-runner-connecting-vpc/">AWS App Runner に Perl をデプロイして RDS につなげてみた</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2022 ICHINOSE Shogo - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$']],
+    displayMath: [['$$','$$']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+</html>
+
