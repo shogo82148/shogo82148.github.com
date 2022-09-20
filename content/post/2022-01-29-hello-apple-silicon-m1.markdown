@@ -121,6 +121,14 @@ docker run --name some-mysql -e MYSQL_ROOT_PASSWORD=my-secret-pw -d --platform l
 MySQL 8.0 であれば Oracle の MySQL チームがメンテナンスしているイメージを使うのが簡単です。
 どちらのイメージでも MySQL 5.7 は arm64 未対応なのでエミュレーションする必要があります。
 
+**2022-09-20追記**
+
+[MySQL 8.0.29(sha256:12cf01a51f803d0ad49ee0dbbb3025a6eef3341e24757c2ed8150b6654c3fb07)](https://hub.docker.com/layers/library/mysql/8.0.29/images/sha256-12cf01a51f803d0ad49ee0dbbb3025a6eef3341e24757c2ed8150b6654c3fb07?context=explore)から、
+MySQLの公式イメージも `arm64` に対応しました。
+5.7以前はあいかわらず `amd64` のイメージのみです。
+
+**追記ここまで**
+
 ```
 docker run --name some-mysql -e MYSQL_ROOT_PASSWORD=my-secret-pw -d mysql/mysql-server:8.0
 ```
