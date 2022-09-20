@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono&display=swap" rel="stylesheet"> 
+
+  
+  <title>AWS SDK v2 for Goが壊れた、Googleお前もか</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+    <link rel="stylesheet" href="/css/fork-awesome.min.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="ICHINOSE Shogo">
+
+  
+  <meta name="generator" content="Hugo 0.91.2" />
+
+  
+  
+  
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-40R0PCLKVF');
+</script>
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Sep 20, 2022
+     - 2 minute read 
+     - <a href="https://shogo82148.github.io/blog/2022/09/20/2022-09-20-aws-sdk-v2-and-googleapi-break-my-code/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/aws/">aws </a><a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a><a class="label" href="https://shogo82148.github.io/categories/gcp/">gcp </a>
+    
+  </p>
+  <h1 class="entry-title">
+     AWS SDK v2 for Goが壊れた、Googleお前もか 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>何もしていないのに壊れました。（ライブラリのアップデートはした）</p>
+<h2 id="aws-sdk-v2-for-goが壊れた">AWS SDK v2 for Goが壊れた</h2>
+<p>該当のプルリクエストはこちら:</p>
+<ul>
+<li><a href="https://github.com/shogo82148/private-rpm-repo/pull/87"> Bump github.com/aws/aws-sdk-go-v2/service/ssm from 1.27.13 to 1.28.0 in /lambda/metadata-updater shogo82148/private-rpm-repo#87</a></li>
+</ul>
+<p><code>true</code> を <code>*bool</code> 型に変換できないと怒られてしまいました。</p>
+<pre tabindex="0"><code>./main.go:305:19: cannot use true (untyped bool constant) as *bool value in struct literal
+</code></pre><p>どうやらAWS SDK v2のこのコミットの影響でビルドが通らなくなったようです: <a href="https://github.com/aws/aws-sdk-go-v2/commit/a13b7a41c97b08941717ca0bd16388d52618c1a9#diff-24d0fec0e2431250a13e5e8a8ac54cbbfc7d8bb55677c10795955b6d07c30edc">aws/aws-sdk-go-v2@a13b7a4</a></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-diff" data-lang="diff"><span class="gh">diff --git a/service/ssm/api_op_GetParameter.go b/service/ssm/api_op_GetParameter.go
+</span><span class="gh">index c7617dcfd0e..f58354b6528 100644
+</span><span class="gh"></span><span class="gd">--- a/service/ssm/api_op_GetParameter.go
+</span><span class="gd"></span><span class="gi">+++ b/service/ssm/api_op_GetParameter.go
+</span><span class="gi"></span><span class="gu">@@ -39,7 +39,7 @@ type GetParameterInput struct {
+</span><span class="gu"></span> 
+ 	// Return decrypted values for secure string parameters. This flag is ignored for
+ 	// String and StringList parameter types.
+<span class="gd">-	WithDecryption bool
+</span><span class="gd"></span><span class="gi">+	WithDecryption *bool
+</span><span class="gi"></span> 
+ 	noSmithyDocumentSerde
+ }
+</code></pre></div><p>なんでこんなひどいことするの 😭</p>
+<p>公開している構造体の <code>bool</code> を <code>*bool</code> に変えたら、そりゃ壊れます。
+これだからAWS SDK v2は・・・。</p>
+<p>修正自体は簡単で <code>true</code> と書いていたところを <code>aws.Bool(true)</code> に変えるだけです。</p>
+<h2 id="google-apiも壊れた">Google APIも壊れた</h2>
+<p>別件で<a href="https://pkg.go.dev/google.golang.org/api">google.golang.org/api</a>を<a href="https://pkg.go.dev/google.golang.org/api@v0.93.0">v0.93.0</a>から<a href="https://pkg.go.dev/google.golang.org/api@v0.96.0">v0.96.0</a>
+にあげたところ、こちらも見事に壊れました。</p>
+<pre tabindex="0"><code># cloud.google.com/go/storage
+Error: ../../../../go/pkg/mod/cloud.google.com/go/storage@v1.22.1/bucket.go:1504:30: cannot use r.Condition.AgeInDays (variable of type int64) as type *int64 in struct literal
+Error: ../../../../go/pkg/mod/cloud.google.com/go/storage@v1.22.1/bucket.go:1592:30: cannot use rr.Condition.Age (variable of type *int64) as type int64 in struct literal
+</code></pre><p>Google&hellip; お前もか。</p>
+<ul>
+<li><a href="https://github.com/googleapis/google-api-go-client/pull/1598">fix(storage): *int64 instead of int64 for Age cond googleapis/google-api-go-client#1598</a></li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-diff" data-lang="diff">From 5d5097861f632634915858d88a0cb8c9c4fe4b05 Mon Sep 17 00:00:00 2001
+From: Frank Natividad &lt;franknatividad@google.com&gt;
+Date: Wed, 22 Jun 2022 12:44:00 -0700
+Subject: [PATCH] fix(storage): *int64 instead of int64 for Age cond
+
+<span class="gd">---
+</span><span class="gd"></span> google-api-go-generator/gen.go | 1 +
+ storage/v1/storage-gen.go      | 2 +-
+ 2 files changed, 2 insertions(+), 1 deletion(-)
+
+<span class="gh">diff --git a/google-api-go-generator/gen.go b/google-api-go-generator/gen.go
+</span><span class="gh">index 3dc26090268..4e26623dcb1 100644
+</span><span class="gh"></span><span class="gd">--- a/google-api-go-generator/gen.go
+</span><span class="gd"></span><span class="gi">+++ b/google-api-go-generator/gen.go
+</span><span class="gi"></span><span class="gu">@@ -1011,6 +1011,7 @@ var pointerFields = []fieldName{
+</span><span class="gu"></span> 	{api: &#34;sqladmin:v1beta4&#34;, schema: &#34;Settings&#34;, field: &#34;StorageAutoResize&#34;},
+ 	{api: &#34;sqladmin:v1&#34;, schema: &#34;Settings&#34;, field: &#34;StorageAutoResize&#34;},
+ 	{api: &#34;storage:v1&#34;, schema: &#34;BucketLifecycleRuleCondition&#34;, field: &#34;IsLive&#34;},
+<span class="gi">+	{api: &#34;storage:v1&#34;, schema: &#34;BucketLifecycleRuleCondition&#34;, field: &#34;Age&#34;},
+</span><span class="gi"></span> 	{api: &#34;storage:v1beta2&#34;, schema: &#34;BucketLifecycleRuleCondition&#34;, field: &#34;IsLive&#34;},
+ 	{api: &#34;tasks:v1&#34;, schema: &#34;Task&#34;, field: &#34;Completed&#34;},
+ 	{api: &#34;youtube:v3&#34;, schema: &#34;ChannelSectionSnippet&#34;, field: &#34;Position&#34;},
+<span class="gh">diff --git a/storage/v1/storage-gen.go b/storage/v1/storage-gen.go
+</span><span class="gh">index 0b01f8557c3..37930cd5e16 100644
+</span><span class="gh"></span><span class="gd">--- a/storage/v1/storage-gen.go
+</span><span class="gd"></span><span class="gi">+++ b/storage/v1/storage-gen.go
+</span><span class="gi"></span><span class="gu">@@ -822,7 +822,7 @@ func (s *BucketLifecycleRuleAction) MarshalJSON() ([]byte, error) {
+</span><span class="gu"></span> type BucketLifecycleRuleCondition struct {
+ 	// Age: Age of an object (in days). This condition is satisfied when an
+ 	// object reaches the specified age.
+<span class="gd">-	Age int64 `json:&#34;age,omitempty&#34;`
+</span><span class="gd"></span><span class="gi">+	Age *int64 `json:&#34;age,omitempty&#34;`
+</span><span class="gi"></span> 
+ 	// CreatedBefore: A date in RFC 3339 format with only the date part (for
+ 	// instance, &#34;2013-01-15&#34;). This condition is satisfied when an object
+</code></pre></div><p>こちらは <a href="https://github.com/googleapis/google-cloud-go/releases/tag/storage%2Fv1.23.0">cloud.google.com/go/storage@v1.23.0</a> で修正されたようです。</p>
+<ul>
+<li><a href="https://github.com/googleapis/google-cloud-go/pull/6230">fix(storage): allow for Age int64* type and int64 type googleapis/google-cloud-go#6230</a></li>
+</ul>
+<h2 id="まとめ">まとめ</h2>
+<p>いずれも<a href="https://docs.github.com/en/code-security/dependabot">dependabot</a>の作成したプルリクエストで気が付きました。
+壊れないような安定したライブラリを使う＆自分のライブラリでは互換性を壊さないようにするのがベターですが、残念ながら、まれによく壊れます。
+こういう修正がまとめてどかっとくると心が折れるので、dependabotのようなツールを使って、定期的に依存パッケージを更新するようにしておくと安心ですね。</p>
+<blockquote>
+<p><a href="https://twitter.com/furusax/">@furusax</a>「Why do you do sonna hidoi koto ?」</p>
+</blockquote>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">ICHINOSE Shogo</span></span>
+    
+    <time>Sep 20, 2022</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2022/08/11/2022-08-11-git-push-auto-setup-remote/" title="git push のときに自動的にリモートブランチを作成する設定">git push のときに自動的にリモートブランチを作成する設定</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2022/09/20/2022-09-20-aws-sdk-v2-and-googleapi-break-my-code/">AWS SDK v2 for Goが壊れた、Googleお前もか</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/08/11/2022-08-11-git-push-auto-setup-remote/">git push のときに自動的にリモートブランチを作成する設定</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/06/11/2022-06-11-wild-iphone-appeared/">落とし物の iPhone を交番に届けた話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/05/27/2022-05-27-configure-rpath-via-ldflags/">動的ライブラリの検索パスに、実行バイナリからの相対パスを入れたい</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/05/16/2022-05-16-perl-extra-paired-delimiters/">Perl の extra_paired_delimiters を先取り！</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/05/06/2022-05-06-canonicalizing-my-name/">本名の英語表記を姓名の順に統一していくぞという話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/04/25/2022-04-25-jq-program/">jq の引数を省略したときの挙動が違う件</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/04/19/2022-04-19-check-your-aws-lambda-runtimes/">EOL間近の AWS Lambda Runtimes を探すスクリプト</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/04/15/2022-04-15-implement-bioctal/">RFC9226 Bioctal: Hexadecimal 2.0 の Go 実装を書いてみた</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2022 ICHINOSE Shogo - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$']],
+    displayMath: [['$$','$$']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+</html>
+
