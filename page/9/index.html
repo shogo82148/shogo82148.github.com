@@ -112,6 +112,45 @@
         
 
 <header>
+  <p class="meta">May 16, 2018
+     - 2 minute read 
+     - <a href="https://shogo82148.github.io/blog/2018/05/16/macopy-is-struct/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2018/05/16/macopy-is-struct/">Goの構造体のコピーを防止する方法</a>
+  </h1>
+</header>
+
+        
+          <p>去年仕込んだネタが見つかってしまったので、macopy 構造体について一応解説。
+https://t.co/mHq6oWY3rj
+macopyさん構造体だったのか・・・
+&mdash; serinuntius (@_serinuntius) 2018年5月14日  2021-05-25 追記
+今はこの方法では動かないというツイートを見かけました。
+これで出てくる &quot;Goの文法を使った構造体のコピーを防ぐ方法&quot; が動かなかった話ですが https://t.co/FpEnspIfmN このへんに書いてありました.重要なことはその型がstructであること,Lock だけでなく Unlockも実装されていることでした.https://t.co/zQc6T058Ip このように変更すると検知されました
+&mdash; おりさの (@orisano) May 25, 2021  どうやら Go 1.11 から判定基準が 「sync.Locker を実装しているか」に変わっていたようです。 (修正コミット: c2eba53, Issue: #26165)
+というわけで、 macopy 構造体を以下のように変更する必要があります。
+type macopy struct{} func (*macopy) Lock() {} func (*macopy) Unlock() {} 追記ここまで
+目的 深淵な理由で Go の構造体のコピーを禁止したい場合があると思います。 kuiperbelt のケースでは、sync/atomic パッケージを使ってフィールドを更新しているので、 フィールドへの読み書きは必ず sync/atomic パッケージを使わなければなりません。 sync/atomic パッケージを使わずに構造体をコピーするとレースコンディションが発生してしまうので、コピーを禁止する必要がありました。
+// https://github.com/kuiperbelt/kuiperbelt/blob/e3c1432ed798716c8e88183518f9126951c227f3/stats.go#L20-L28 type Stats struct { connections int64 totalConnections int64 totalMessages int64 connectErrors int64 messageErrors int64 closingConnections int64 noCopy macopy } // atomic.</p>
+          
+            <footer>
+              <a href="https://shogo82148.github.io/blog/2018/05/16/macopy-is-struct/" rel="full-article">Read On &rarr;</a>
+            </footer>
+          
+        
+      </article>
+      
+      <article>
+        
+        
+
+<header>
   <p class="meta">Apr 10, 2018
      - 2 minute read 
      - <a href="https://shogo82148.github.io/blog/2018/04/10/migrate-to-hugo/#disqus_thread">Comments</a>
@@ -435,39 +474,6 @@ export PATH=$HOME/.pyenv/versions/2.7.13/bin:$PATH モンテカルロ法を並�
         
       </article>
       
-      <article>
-        
-        
-
-<header>
-  <p class="meta">May 4, 2017
-     - 3 minute read 
-     - <a href="https://shogo82148.github.io/blog/2017/05/04/go-rerand/#disqus_thread">Comments</a>
-
-    
-    
-      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
-    
-  </p>
-  <h1 class="entry-title">
-    <a href="https://shogo82148.github.io/blog/2017/05/04/go-rerand/">String::RandomのGo移植を書いてみた</a>
-  </h1>
-</header>
-
-        
-          <p>golangkyotoでString::RandomのGo移植についての発表があったと聞き、 これに対抗して以前途中まで書いていたString::RandomのGo移植をちょっといじって公開しました。
- shogo82148/go-rerand  背景 ナイーブな実装の問題点 実はgolangkyoto以前にもGoの正規表現エンジンを使ってランダムな文字列を生成する試みはあって、 たしかにこれは面白そうだと記事を読んでいました。
- 「Goの正規表現エンジンを使ってファジング用ツールを書いてみる」  しかし、gocha同様、この実装では文字列の長さが幾何分布に従うため、短い文字が多めにでてしまいます。
-% gocha -n 100000 &#39;a*&#39; | sort | uniq -c 50054 24894 a 12633 aa 6278 aaa 2994 aaaa 1517 aaaaa 809 aaaaaa 400 aaaaaaa 206 aaaaaaaa 109 aaaaaaaaa 54 aaaaaaaaaa 22 aaaaaaaaaaa 15 aaaaaaaaaaaa 7 aaaaaaaaaaaaa 4 aaaaaaaaaaaaaa 3 aaaaaaaaaaaaaaa 1 aaaaaaaaaaaaaaaa 正規表現のパターンを数え上げとその問題点 この問題を解決するために 「この先何パターンあるかを調べておけば、正規表現が表す文字列の集合からランダムに文字列を取り出せるのでは？」 と考え、golangkyoto以前からちょこちょこ実装を進め、不完全ながらも一応動作するところまでは書いていたのです。 有向グラフの経路数えあげ問題なので、メモ化再帰を使って頑張れば解けます。 少々面倒ですが、おねえさんの問題と比べれば簡単です。
-パターンを数え上げる都合上、組み合わせが無限にある a* ような正規表現は扱えません。 a{1,10} のように明示的に範囲を指定する必要があります。 たとえば a{1,10} は10パターン組み合わせがあるので、20万個ランダムに生成すると、それぞれのパターンがおおよそ2万個ずつ生成されます。 (-d オプションについては後述)</p>
-          
-            <footer>
-              <a href="https://shogo82148.github.io/blog/2017/05/04/go-rerand/" rel="full-article">Read On &rarr;</a>
-            </footer>
-          
-        
-      </article>
-      
       
       
 
@@ -605,11 +611,17 @@ export PATH=$HOME/.pyenv/versions/2.7.13/bin:$PATH モンテカルロ法を並�
           
           
             
+          
+            
               <li class="post">
-                <a href="/blog/2022/10/08/2022-10-08-p5-aws-lambda-v0.0.37-is-released/">AWS::Lambda v0.0.37リリースのお知らせ</a>
+                <a href="/blog/2022/10/19/2022-10-19-perl-webdb-vol131/">WEB&#43;DB PRESS Vol.131にPerlとAWS Lambdaの記事を寄稿しました</a>
               </li>
             
           
+            
+              <li class="post">
+                <a href="/blog/2022/10/08/2022-10-08-p5-aws-lambda-v0.0.37-is-released/">AWS::Lambda v0.0.37リリースのお知らせ</a>
+              </li>
             
           
             
@@ -651,12 +663,6 @@ export PATH=$HOME/.pyenv/versions/2.7.13/bin:$PATH モンテカルロ法を並�
             
               <li class="post">
                 <a href="/blog/2022/04/25/2022-04-25-jq-program/">jq の引数を省略したときの挙動が違う件</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2022/04/19/2022-04-19-check-your-aws-lambda-runtimes/">EOL間近の AWS Lambda Runtimes を探すスクリプト</a>
               </li>
             
           
