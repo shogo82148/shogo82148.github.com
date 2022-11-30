@@ -60,7 +60,7 @@ categories: [ ]
 
 ----
 
-明日12日は [@chooblarin](https://twitter.com/chooblarin)で「何書く」です。お楽しみに！
+明日2日は [@chooblarin](https://twitter.com/chooblarin)で「何書く」です。お楽しみに！
 
 ## 参考
 
