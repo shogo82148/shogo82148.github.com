@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Perlにmodule_trueフラグを試してみた"
+title: "Perlのmodule_trueフラグを試してみた"
 slug: 2022-12-01-feature-module-true
 date: 2022-12-01 00:00:00 +0900
 comments: true
