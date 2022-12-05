@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono&display=swap" rel="stylesheet"> 
+
+  
+  <title>Perlで暗号論的乱数を生成する</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+    <link rel="stylesheet" href="/css/fork-awesome.min.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="ICHINOSE Shogo">
+
+  
+  <meta name="generator" content="Hugo 0.91.2" />
+
+  
+  
+  
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-40R0PCLKVF');
+</script>
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Dec 4, 2022
+     - 2 minute read 
+     - <a href="https://shogo82148.github.io/blog/2022/12/04/2022-12-04-crypt-random-in-perl/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2022/12/04/2022-12-04-crypt-random-in-perl/">Perlで暗号論的乱数を生成する</a>
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>この記事は、<a href="https://qiita.com/advent-calendar/2022/perl">Perl Advent Calendar 2022</a> の4日目の記事です。
+3日目は<a href="https://qiita.com/hitode909">@hitode909</a>で「<a href="https://blog.sushi.money/entry/2022/12/03/124921">encode_jsonとdecode_json、どっちがどっちか覚えられないので、VSCodeのsnippetにjson_stringifyとjson_parseとして登録してしまう</a>」でした。</p>
+<hr>
+<p>とつぜんPerlで暗号論的乱数を作りたくなったことはありませんか？
+僕はあります。
+というわけで実現方法を調べてみました。</p>
+<h2 id="背景">背景</h2>
+<p>ことの発端はGitHub Actionsの<code>save-state</code>と<code>set-output</code>が非推奨になったことです。</p>
+<ul>
+<li><a href="https://github.blog/changelog/2022-10-11-github-actions-deprecating-save-state-and-set-output-commands/">GitHub Actions: Deprecating save-state and set-output commands</a></li>
+</ul>
+<p><a href="https://github.com/marketplace/actions/setup-perl-environment">actions-setup-perl</a>でこのコマンドを使っているので、この変更に対応する必要があります。
+代わりの方法として<code>$GITHUB_STATE</code>, <code>$GITHUB_OUTPUT</code>環境変数が用意されました。
+ここにファイルパスが指定されるので、指定されたファイルへ所定のフォーマットで書き出せ、とのことです。
+この「所定のフォーマット」の要件のひとつに暗号論的乱数があり、Perlで暗号的乱数を生成することになったのです。</p>
+<p>単なる乱数で良ければ組み込み関数に<code>rand</code>関数があります。
+しかしこれはperldocにも書いてあるとおり、セキュリティが重要な場面では使うべきではありません。</p>
+<ul>
+<li><a href="https://perldoc.jp/func/rand">rand - perldoc.jp</a></li>
+</ul>
+<blockquote>
+<p>rand は暗号学的に安全ではありません。 セキュリティ的に重要な状況でこれに頼るべきではありません。</p>
+</blockquote>
+<p>残念なことに今回はセキュリティ的に重要な状況なのです。</p>
+<h2 id="暗号論的乱数を作る">暗号論的乱数を作る</h2>
+<p>あまり依存モジュールを増やしたくなかったので、OSの機能を直接呼び出す方針で考えました。</p>
+<ul>
+<li><code>/dev/urandom</code> を使う</li>
+<li>Windows APIを呼び出す</li>
+<li><code>syscall</code> を使う</li>
+<li>OpenSSLを使う</li>
+</ul>
+<h3 id="devurandom-を使う"><code>/dev/urandom</code> を使う</h3>
+<p>Linuxをちょっとかじった最初に思い浮かぶ方法でしょう。
+Linuxには<code>/dev/urandom</code>という特殊ファイルが用意されており、このファイルを読むことで暗号論的乱数が手に入ります。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">v5</span><span class="mf">.36</span><span class="p">;</span>
+
+<span class="k">my</span> <span class="nv">$n</span> <span class="o">=</span> <span class="mi">32</span><span class="p">;</span>
+<span class="k">my</span> <span class="nv">$buf</span><span class="p">;</span>
+<span class="nb">open</span> <span class="k">my</span> <span class="nv">$fh</span><span class="p">,</span> <span class="s">&#39;&lt;&#39;</span><span class="p">,</span> <span class="s">&#39;/dev/urandom&#39;</span> <span class="ow">or</span> <span class="nb">die</span> <span class="s">&#34;failed to open /dev/urandom: $!&#34;</span><span class="p">;</span>
+<span class="nb">read</span> <span class="nv">$fh</span><span class="p">,</span> <span class="nv">$buf</span><span class="p">,</span> <span class="nv">$n</span> <span class="ow">or</span> <span class="nb">die</span> <span class="s">&#34;failed to read /dev/urandom: $!&#34;</span><span class="p">;</span>
+<span class="nb">close</span> <span class="nv">$fh</span> <span class="ow">or</span> <span class="nb">die</span> <span class="s">&#34;failed to close /dev/urandom: $!&#34;</span><span class="p">;</span>
+
+<span class="n">say</span> <span class="nb">unpack</span> <span class="s">&#39;H*&#39;</span><span class="p">,</span> <span class="nv">$buf</span><span class="p">;</span>
+</code></pre></div><p>利点は移植性の高さ。UNIX-Likeな環境ならたいてい<code>/dev/urandom</code>をサポートしているので、幅広いOSで使えます。
+macOSでも利用可能です。</p>
+<p>欠点はWindowsでは動かないということです。</p>
+<h3 id="windows-apiを呼び出す">Windows APIを呼び出す</h3>
+<p><a href="https://metacpan.org/pod/Crypt::Random::Source::Strong::Win32">Crypt::Random::Source::Strong::Win32</a>を参考にして<code>CryptGenRandom</code> Windows APIを直接叩いてみます。
+Windows 2000以前では動作しないらしいですが、さすがにもう使っているひとはいないよね？</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">v5</span><span class="mf">.36</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">Win32::API</span><span class="p">;</span>
+
+<span class="k">my</span> <span class="nv">$func</span> <span class="o">=</span> <span class="nn">Win32::API</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span><span class="s">&#39;advapi32&#39;</span><span class="p">,</span> <span class="o">&lt;&lt;</span><span class="n">EOF</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">die</span> <span class="s">&#34;Could not import SystemFunction036: $^E&#34;</span><span class="p">;</span>
+<span class="n">INT</span> <span class="n">SytemFunction036</span><span class="p">(</span>
+    <span class="n">PVOID</span> <span class="n">RandomBuffer</span><span class="p">,</span>
+    <span class="n">ULONG</span> <span class="n">RandomBufferLength</span>
+<span class="p">)</span>
+<span class="n">EOF</span>
+
+<span class="k">my</span> <span class="nv">$n</span> <span class="o">=</span> <span class="mi">32</span><span class="p">;</span>
+<span class="k">my</span> <span class="nv">$buf</span> <span class="o">=</span> <span class="s">&#34;\0&#34;</span> <span class="n">x</span> <span class="nv">$n</span><span class="p">;</span>
+<span class="nv">$func</span><span class="o">-&gt;</span><span class="n">Call</span><span class="p">(</span><span class="nv">$buf</span><span class="p">,</span> <span class="nv">$n</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">die</span> <span class="s">&#34;RtlGenRand failed: $^E&#34;</span><span class="p">;</span>
+<span class="n">say</span> <span class="nb">unpack</span> <span class="s">&#39;H*&#39;</span><span class="p">,</span> <span class="nv">$buf</span><span class="p">;</span>
+</code></pre></div><p>しかし困ったことに<a href="https://github.com/marketplace/actions/setup-perl-environment">actions-setup-perl</a>でセットアップしたPerlには<code>Win32::API</code>が含まれておらず、
+この環境では動作しません。</p>
+<h3 id="syscall-を使う"><code>syscall</code> を使う</h3>
+<p>OSのAPIを呼び出す他の手法として<code>syscall</code>関数があります。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">v5</span><span class="mf">.36</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">Config</span><span class="p">;</span>
+
+<span class="k">my</span> <span class="nv">$getrandom</span><span class="p">;</span>
+<span class="k">if</span> <span class="p">(</span><span class="nv">$Config</span><span class="p">{</span><span class="n">d_syscall</span><span class="p">})</span> <span class="p">{</span>
+    <span class="k">if</span> <span class="p">((</span><span class="nv">$Config</span><span class="p">{</span><span class="n">archname</span><span class="p">})</span> <span class="o">=~</span><span class="sr"> /^aarch64-linux/</span><span class="p">)</span> <span class="p">{</span>
+        <span class="nv">$getrandom</span> <span class="o">=</span> <span class="mi">278</span><span class="p">;</span>
+    <span class="p">}</span> <span class="k">elsif</span> <span class="p">((</span><span class="nv">$Config</span><span class="p">{</span><span class="n">archname</span><span class="p">})</span> <span class="o">=~</span><span class="sr"> /^x86_64-linux/</span><span class="p">)</span> <span class="p">{</span>
+        <span class="nv">$getrandom</span> <span class="o">=</span> <span class="mi">318</span><span class="p">;</span>
+    <span class="p">}</span> <span class="k">elsif</span> <span class="p">((</span><span class="nv">$Config</span><span class="p">{</span><span class="n">archname</span><span class="p">})</span> <span class="o">=~</span><span class="sr"> /^i686-linux/</span><span class="p">)</span> <span class="p">{</span>
+        <span class="nv">$getrandom</span> <span class="o">=</span> <span class="mi">355</span><span class="p">;</span>
+    <span class="p">}</span> <span class="k">elsif</span> <span class="p">((</span><span class="nv">$Config</span><span class="p">{</span><span class="n">archname</span><span class="p">})</span> <span class="o">=~</span><span class="sr"> /^arm-linux/</span><span class="p">)</span> <span class="p">{</span>
+        <span class="nv">$getrandom</span> <span class="o">=</span> <span class="mi">384</span><span class="p">;</span>
+    <span class="p">}</span> <span class="k">elsif</span> <span class="p">((</span><span class="nv">$Config</span><span class="p">{</span><span class="n">archname</span><span class="p">})</span> <span class="o">=~</span><span class="sr"> /^mips64el-linux/</span><span class="p">)</span> <span class="p">{</span>
+        <span class="nv">$getrandom</span> <span class="o">=</span> <span class="mi">5313</span><span class="p">;</span>
+    <span class="p">}</span> <span class="k">elsif</span> <span class="p">(</span><span class="nv">$Config</span><span class="p">{</span><span class="n">archname</span><span class="p">}</span> <span class="o">=~</span><span class="sr"> /^powerpc64le-linux/</span><span class="p">)</span> <span class="p">{</span>
+        <span class="nv">$getrandom</span> <span class="o">=</span> <span class="mi">359</span><span class="p">;</span>
+    <span class="p">}</span> <span class="k">elsif</span> <span class="p">(</span><span class="nv">$Config</span><span class="p">{</span><span class="n">archname</span><span class="p">}</span> <span class="o">=~</span><span class="sr"> /^s390x-linux/</span><span class="p">)</span> <span class="p">{</span>
+        <span class="nv">$getrandom</span> <span class="o">=</span> <span class="mi">349</span><span class="p">;</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nv">$getrandom</span><span class="p">)</span> <span class="p">{</span>
+    <span class="nb">die</span> <span class="s">&#34;getrandom is not available&#34;</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="k">my</span> <span class="nv">$n</span> <span class="o">=</span> <span class="mi">32</span><span class="p">;</span>
+<span class="k">my</span> <span class="nv">$buf</span> <span class="o">=</span> <span class="s">&#34;\0&#34;</span> <span class="n">x</span> <span class="nv">$n</span><span class="p">;</span>
+
+<span class="vg">$!</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="k">while</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">if</span> <span class="p">(</span><span class="nb">syscall</span><span class="p">(</span><span class="nv">$getrandom</span><span class="p">,</span> <span class="nv">$buf</span><span class="p">,</span> <span class="nv">$n</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">&lt;</span> <span class="nv">$n</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">if</span> <span class="p">(</span><span class="vg">$!</span><span class="p">{</span><span class="n">EINTR</span><span class="p">})</span> <span class="p">{</span>
+            <span class="k">next</span><span class="p">;</span>
+        <span class="p">}</span>
+        <span class="nb">die</span> <span class="vg">$!</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="k">last</span><span class="p">;</span>
+<span class="p">}</span>
+<span class="n">say</span> <span class="nb">unpack</span> <span class="s">&#39;H*&#39;</span><span class="p">,</span> <span class="nv">$buf</span><span class="p">;</span>
+</code></pre></div><p>しかし肝心のWindowsは非対応です。</p>
+<h3 id="opensslを使う">OpenSSLを使う</h3>
+<p>ここまで調査したところでハッと気が付きました。
+APIひとつ叩くのにもTLS通信による暗号化が必要で、イマドキのプログラミングにおいて暗号はほぼ必須機能です。
+そこで<a href="https://github.com/marketplace/actions/setup-perl-environment">actions-setup-perl</a>にはOpenSSLを同梱してあります。</p>
+<p>暗号化において暗号論的乱数は欠かせない要素です。
+きっとOpenSSLにも暗号論的乱数生成のAPIがあるはずだ、と探してみたらビンゴ！</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="k">use</span> <span class="nn">v5</span><span class="mf">.36</span><span class="p">;</span>
+
+<span class="k">use</span> <span class="nn">Net::SSLeay</span><span class="p">;</span>
+
+<span class="k">my</span> <span class="nv">$n</span> <span class="o">=</span> <span class="mi">32</span><span class="p">;</span>
+<span class="k">my</span> <span class="nv">$buf</span><span class="p">;</span>
+<span class="k">if</span> <span class="p">(</span><span class="nn">Net::SSLeay::</span><span class="n">RAND_bytes</span><span class="p">(</span><span class="nv">$buf</span><span class="p">,</span> <span class="nv">$n</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">my</span> <span class="nv">$rv</span> <span class="o">=</span> <span class="nn">Net::SSLeay::</span><span class="n">ERR_get_error</span><span class="p">();</span>
+    <span class="nb">die</span> <span class="s">&#34;failed to RAND_bytes: $rv&#34;</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="n">say</span> <span class="nb">unpack</span> <span class="s">&#39;H*&#39;</span><span class="p">,</span> <span class="nv">$buf</span><span class="p">;</span>
+</code></pre></div><p>この方法であれば、OpenSSLがサポートするすべてのプラットフォームをカバーできます。</p>
+<h2 id="まとめ">まとめ</h2>
+<p>Perlで暗号論的乱数を生成する方法を調査しました。
+actions-setup-perlでは、プラットフォームのカバー率を考え、以下の優先順位で使えるものを使う実装にしました。</p>
+<ol>
+<li>OpenSSLを使う</li>
+<li>Windows APIを呼び出す</li>
+<li><code>syscall</code> を使う</li>
+<li><code>/dev/urandom</code> を使う</li>
+</ol>
+<hr>
+<p>明日5日は<a href="https://qiita.com/nanto_vi">@nanto_vi</a>で「<a href="https://nanto.asablo.jp/blog/2022/12/05/9545777">Perlで配列の先頭何要素か以外を抜き出す</a>」です。お楽しみに！</p>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://github.blog/changelog/2022-10-11-github-actions-deprecating-save-state-and-set-output-commands/">GitHub Actions: Deprecating save-state and set-output commands</a></li>
+<li><a href="https://metacpan.org/pod/Crypt::Random::Source::Strong::Win32">Crypt::Random::Source::Strong::Win32</a></li>
+<li><a href="https://github.com/marketplace/actions/setup-perl-environment">actions-setup-perl</a></li>
+<li><a href="https://perldoc.jp/func/rand">rand - perldoc.jp</a></li>
+<li><a href="https://metacpan.org/dist/Net-SSLeay/view/lib/Net/SSLeay.pod">Net::SSLeay</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">ICHINOSE Shogo</span></span>
+    
+    <time>Dec 4, 2022</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2022/12/01/2022-12-01-rubber-duck-debugging/" title="ラバーダックデバッグのすゝめ">ラバーダックデバッグのすゝめ</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2022/12/04/2022-12-04-crypt-random-in-perl/">Perlで暗号論的乱数を生成する</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/12/01/2022-12-01-rubber-duck-debugging/">ラバーダックデバッグのすゝめ</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/11/20/2022-11-20-implement-jis-x-4061/">50音順(JIS X 4061)をGoで実装してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/11/16/2022-10-19-perl-webdb-vol131/">GitHub GraphQL のノードIDフォーマットが変わるらしい (続報)</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/10/19/2022-10-19-perl-webdb-vol131/">WEB&#43;DB PRESS Vol.131にPerlとAWS Lambdaの記事を寄稿しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/10/08/2022-10-08-p5-aws-lambda-v0.0.37-is-released/">AWS::Lambda v0.0.37リリースのお知らせ</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/09/20/2022-09-20-aws-sdk-v2-and-googleapi-break-my-code/">AWS SDK v2 for Goが壊れた、Googleお前もか</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/08/11/2022-08-11-git-push-auto-setup-remote/">git push のときに自動的にリモートブランチを作成する設定</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/06/11/2022-06-11-wild-iphone-appeared/">落とし物の iPhone を交番に届けた話</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2022 ICHINOSE Shogo - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$']],
+    displayMath: [['$$','$$']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+</html>
+
