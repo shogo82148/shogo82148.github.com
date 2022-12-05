@@ -1,13 +1,14 @@
 ---
 layout: post
 title: "Perlで暗号論的乱数を生成する"
-slug: 2022-12-01-crypt-random-in-perl
-date: 2022-12-01 00:00:00 +0900
+slug: 2022-12-04-crypt-random-in-perl
+date: 2022-12-04 00:00:00 +0900
 comments: true
 categories: [ perl ]
 ---
 
-この記事は、[Perl Advent Calendar 2022](https://qiita.com/advent-calendar/2022/perl) のn日目の記事です。
+この記事は、[Perl Advent Calendar 2022](https://qiita.com/advent-calendar/2022/perl) の4日目の記事です。
+3日目は[@hitode909](https://qiita.com/hitode909)で「[encode_jsonとdecode_json、どっちがどっちか覚えられないので、VSCodeのsnippetにjson_stringifyとjson_parseとして登録してしまう](https://blog.sushi.money/entry/2022/12/03/124921)」でした。
 
 ----
 
@@ -164,7 +165,7 @@ if (Net::SSLeay::RAND_bytes($buf, $n) != 1) {
 say unpack 'H*', $buf;
 ```
 
-この方法であればほぼすべてのプラットフォームをカバーできます。
+この方法であれば、OpenSSLがサポートするすべてのプラットフォームをカバーできます。
 
 ## まとめ
 
@@ -178,7 +179,7 @@ actions-setup-perlでは、プラットフォームのカバー率を考え、�
 
 ---
 
-明日n+1日はfooで「bar」です。お楽しみに！
+明日5日は[@nanto_vi](https://qiita.com/nanto_vi)で「[Perlで配列の先頭何要素か以外を抜き出す](https://nanto.asablo.jp/blog/2022/12/05/9545777)」です。お楽しみに！
 
 ## 参考
 
