@@ -112,6 +112,81 @@
         
 
 <header>
+  <p class="meta">Jan 14, 2017
+     - 5 minute read 
+     - <a href="https://shogo82148.github.io/blog/2017/01/14/re-golang-dns-cache/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2017/01/14/re-golang-dns-cache/">Re:golang の http.Client を速くする</a>
+  </h1>
+</header>
+
+        
+          <p>先日mattnさんの記事を読みました。
+ golang の http.Client を速くする  nettというパッケージを使って 名前解決の結果をキャッシュすることで、http.Clientを早くするというものです。 この記事に関して、ちょっと疑問に思ったことがあったので、検証してみました。
+疑問 疑問に思ったのは以下の点です。
+名前解決遅すぎでは？ ベンチマークの結果を見ると5億ns(=500ms)ほど速度が改善しています。 3つのURLに対してリクエストを投げているので、初回を除く2回DNSのキャッシュがヒットし、 名前解決2回分の速度改善になるはずです。 と、いうことは、名前解決1回あたり250msかかっている計算になります。 googleのsearchは302でリダイレクトがかかるので、Client.Getの呼び出し1回あたり2回リクエストが飛ぶ、 ということを計算に入れても100msほどかかる計算です。
+Google先生の謎テクノロジーによってかなりの最適化がされているはずですし、 ネットワークプロバイダのDNSキャッシュにヒットする可能性も高いでしょう。 名前解決程度にこんなに時間がかかっていたらスプラトゥーンが出来ない！ (mattnさんがスプラトゥーンをプレイしているかは知らない)
+2017/01/16追記: mattnさんはスプラトゥーンをプレイしていないそうです。残念。
+あとスプラトゥーンしてません。。。
+&mdash; mattn (@mattn_jp) 2017年1月14日  もちろん、ネットワークが混雑していたり、 モバイルネットワークを利用していたり、という可能性もありますが、 ちょっと不自然な印象を受けました。
+Keep-Aliveされてるのでは？ スキーマがhttpsになっているので、Google先生相手ならHTTP2で通信していてもおかしくありません。 HTTP2は基本的にドメイン毎にコネクションを1つだけ張って、それを使いまわします。 もし仮にHTTP1.1で通信していたとしても、http.ClientはデフォルトでKeep-Aliveが有効になっているので、 普通に使うとコネクションを再利用してくれます。
+そういうわけで、名前解決以前にそもそもTCPのコネクション確立もスキップされている可能性が高いのでは？ と思ったわけです。 この予想が正しければ、名前解決は初回リクエストでしか行われないので、ベンチマークに差はでないはずです。
+HTTPリクエストの様子をトレースしてみる これらの疑問を解消するために、HTTPリクエストの様子をさらに詳細に解析してみることにしました。
+DNSキャッシュなし版をトレースする Go1.7からnet/http/httptraceというパッケージが追加され、 名前解決やコネクション確立etcのタイミングにフックを仕込めるようになりました。 これを利用すれば各段階でどの程度時間がかかっているかが具体的に分かるはずです。
+頑張って自前でフックを差し込んでもよいのですが、 deeeetさんのgo-httpstatという便利パッケージがあるので、 これをありがたく利用させていただきます。 go-httpstatを使うと時間計測を行うコードを簡単に差し込むことができます。
+package main import ( &#34;io&#34; &#34;io/ioutil&#34; &#34;log&#34; &#34;net/http&#34; &#34;time&#34; &#34;github.com/tcnksm/go-httpstat&#34; ) var ( urls = []string{ &#34;https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/&#34;, &#34;https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm/&#34;, &#34;https://shogo82148.</p>
+          
+            <footer>
+              <a href="https://shogo82148.github.io/blog/2017/01/14/re-golang-dns-cache/" rel="full-article">Read On &rarr;</a>
+            </footer>
+          
+        
+      </article>
+      
+      <article>
+        
+        
+
+<header>
+  <p class="meta">Dec 20, 2016
+     - 1 minute read 
+     - <a href="https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a><a class="label" href="https://shogo82148.github.io/categories/reids/">reids </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/">Redis::Fast 0.19リリースのお知らせ</a>
+  </h1>
+</header>
+
+        
+          <p>Redis::Fast 0.19 をリリースしました。 主な変更点は以下の通りです。
+ reconnect_on_error オプションの追加 Sentinelのノード一覧が更新されない不具合の修正 IPv6の実験的サポート  reconnect_on_error オプションの追加 @yoheimutaさんからのプルリクエストです。 今まではネットワークエラーが発生した時のみ再接続処理が走っていましたが、 Redisがエラーを返した場合にも再接続を行うようになります。 マスタースレーブ構成をしているときに、 何らかの原因によりRedis::Fastからのコネクションを維持したまま、 マスターがスレーブに降格してしまった場合に対処するための機能です。 以下のように設定することで、新しいマスターに再接続を行うことが可能になります。
+my $r = Redis::Fast-&gt;new( reconnect =&gt; 1, # 0以上で再接続有効 reconnect_on_error =&gt; sub { my ($error, $ret, $command) = @_; if ($error =~/READONLY You can&#39;t write against a read only slave/) { return 1; # 再接続を行う。次の再接続まで最低1秒空ける } return -1; # 再接続は行わない }, ); Sentinelのノード一覧が更新されない不具合の修正 Redis::FastにはどれかひとつのSentinelノードに接続すると、 他のノードの情報を自動的に収集する機能があります。 この機能が最新のRedisでは動いていなかったので修正しました。 具体的にいつからなのかまでは追ってないのですが、 Redisのバージョン3.0.6から3.2.6の間のどこかで ノード一覧の形式が変わってしまったようです。
+(最近Sentinelの話題を聞かないけど、みんな使ってるのかな・・・)
+IPv6の実験的サポート サーバの指定にIPv6のアドレスが使えるようになりました。 Redis::Fast-&gt;new(server =&gt; &quot;[::1]:6379&quot;) のような指定ができます。</p>
+          
+            <footer>
+              <a href="https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/" rel="full-article">Read On &rarr;</a>
+            </footer>
+          
+        
+      </article>
+      
+      <article>
+        
+        
+
+<header>
   <p class="meta">Dec 15, 2016
      - 2 minute read 
      - <a href="https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm/#disqus_thread">Comments</a>
@@ -382,74 +457,6 @@ package main import ( &#34;encoding/json&#34; &#34;fmt&#34; &#34;log&#34; &#34;g
         
       </article>
       
-      <article>
-        
-        
-
-<header>
-  <p class="meta">Mar 18, 2016
-     - 2 minute read 
-     - <a href="https://shogo82148.github.io/blog/2016/03/18/releaes-redis-modules/#disqus_thread">Comments</a>
-
-    
-    
-      - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a><a class="label" href="https://shogo82148.github.io/categories/redis/">redis </a>
-    
-  </p>
-  <h1 class="entry-title">
-    <a href="https://shogo82148.github.io/blog/2016/03/18/releaes-redis-modules/">Redisのトランザクション・スクリプト・ランキングを扱うPerlモジュールを公開しました</a>
-  </h1>
-</header>
-
-        
-          <p>以前Redisでスコアを複数設定できるランキングを作ってみたけど、 Githubの肥やしになっていてもあれなので、CPANizeしました。 あわせて、この実装のために作ったユーティリティモジュールも別モジュールとして公開しました。
- Redis::LeaderBoardMulti Redis::Script Redis::Transaction  Redis::LeaderBoardMulti 最初の基準で順位を決められなかった場合の第二基準が欲しいというときに使うモジュールです。 インターフェースがRedis::LeaderBoard互換になるように調整したので、 前回とインターフェースがちょっと変わっています。
-se Redis; use Redis::LeaderBoard; my $redis = Redis-&gt;new; my $lb = Redis::LeaderBoardMulti-&gt;new( redis =&gt; $redis, key =&gt; &#39;leader_board:1&#39;, order =&gt; [&#39;asc&#39;, &#39;desc&#39;], # asc/desc, desc as default ); # Redis::LeaderBoardに合わせて複数指定できるようになりました $lb-&gt;set_score( &#39;one&#39; =&gt; [100, time], &#39;two&#39; =&gt; [ 50, time], ); my ($rank, $score, $time) = $lb-&gt;get_rank_with_score(&#39;one&#39;); Redis::LeaderBoard互換なのでそのまま入れ替えられるはずですが、以下のような実装上の制限があります。
- スコアはすべて64bit符号付き整数  Redis::LeaderBoardのスコアは倍精度浮動小数点型なので小数も扱えるが、Redis::LeaderBoardMultiは整数だけ   Redis 2.8.9以降のみで動きます 同順の場合の出現順  Redis::LeaderBoard は ZRANK, ZREVRANK を使い分けているので、orderパラメータによって昇順/降順が変わります Redis::LaederBoardMulti は ZRANK しか使わないので、必ず昇順になります    一応 Lua Script を使わないオプションもそのまま残してありますが、特に理由がない限りデフォルト(Lua Script を使う)で使うといいと思います。 どうしてもロックの範囲が広くなってしまう場合があり、楽観的ロックでは効率が悪いケースがあるためです。</p>
-          
-            <footer>
-              <a href="https://shogo82148.github.io/blog/2016/03/18/releaes-redis-modules/" rel="full-article">Read On &rarr;</a>
-            </footer>
-          
-        
-      </article>
-      
-      <article>
-        
-        
-
-<header>
-  <p class="meta">Mar 14, 2016
-     - 2 minute read 
-     - <a href="https://shogo82148.github.io/blog/2016/03/14/http2-over-websocket/#disqus_thread">Comments</a>
-
-    
-    
-      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a><a class="label" href="https://shogo82148.github.io/categories/websocket/">websocket </a>
-    
-  </p>
-  <h1 class="entry-title">
-    <a href="https://shogo82148.github.io/blog/2016/03/14/http2-over-websocket/">ngrokみたいなHTTPプロキシを書いてみた</a>
-  </h1>
-</header>
-
-        
-          <p>開発中のWebアプリをみんなに試してほしいけど、 サーバなんてなくて開発環境がローカルにしか無くて公開できないということは、 開発初期段階だとよくあることだと思います。 もちろん本格的にやるならテスト用にサーバを建てるべきですが、 小さなものならngrokを使うと簡単です。 ngrokの公開サーバへのHTTPリクエストをローカルにリレーして、 ローカルのサーバをお手がるに公開できるサービスです。
-びっくりするほど簡単に公開できて便利ですが、 一応oAuthで制限とかかけたいなーとかカスタマイズしてみたくなってきたので、 似たようなものを自作できないかといろいろ遊んでみました。
-その結果、HTTP2 over Websocketみたいな謎なものが出来上がってしまったというお話です。
-HTTP2 over Websocketというアイデア ngrokっぽいものを実現するためには、 サーバが受け取ったHTTPリクエストをローカルの環境に転送する必要があります。 ご存知のとおり通常のHTTPではサーバ側からのプッシュ配信が難しいので、Websocketを使うのが良さそうです。 しかし、複数のコネクションで並列にやってくるHTTPリクエストを、一本のWebsocketに束ねる必要があり、 上手く制御するのは大変そうです。
-さて、HTTP2は一つのTCPコネクションで複数のリクエストを並行処理する仕様があります。 「複数のリクエストを一本に束ねる」という点ではなんか似ているので、なんだか流用できそうな気がしてきました。 Golangならきっと上手いことinterfaceを実装すれば、なんとかできるのではとやってみました。
-実装 HTTP2は暗号化や複雑なフロー制御を行っていますが、 外から見ればnet.Connインターフェースに読み書きしている何かに過ぎません。 そして、websocket.Connもnet.Connを実装しているので、そのままHTTP2のライブラリに渡せるはずです。
-そうしてできたのが以下のサーバです。
-package main import ( &#34;errors&#34; &#34;log&#34; &#34;net/http&#34; &#34;net/http/httputil&#34; &#34;sync&#34; &#34;golang.org/x/net/http2&#34; &#34;golang.org/x/net/websocket&#34; ) type transport struct { m sync.Mutex t http.RoundTripper closed chan struct{} } var t *transport func main() { t = &amp;transport{} s := websocket.Server{Handler: websocket.Handler(Handler)} http.Handle(&#34;/&#34;, s) go http.ListenAndServe(&#34;:3000&#34;, nil) http.</p>
-          
-            <footer>
-              <a href="https://shogo82148.github.io/blog/2016/03/14/http2-over-websocket/" rel="full-article">Read On &rarr;</a>
-            </footer>
-          
-        
-      </article>
-      
       
       
 
@@ -588,10 +595,22 @@ package main import ( &#34;errors&#34; &#34;log&#34; &#34;net/http&#34; &#34;net
           
             
               <li class="post">
-                <a href="/blog/2022/12/04/2022-12-04-crypt-random-in-perl/">Perlで暗号論的乱数を生成する</a>
+                <a href="/blog/2022/12/25/2022-12-25-feature-module-true/">Perlのmodule_trueフラグを先取り！</a>
               </li>
             
           
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/12/25/2022-12-25-perl-rand-seed/">Perl v5.38のPERL_RAND_SEED環境変数を先取り！</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/12/04/2022-12-04-crypt-random-in-perl/">Perlで暗号論的乱数を生成する</a>
+              </li>
             
           
             
@@ -627,18 +646,6 @@ package main import ( &#34;errors&#34; &#34;log&#34; &#34;net/http&#34; &#34;net
             
               <li class="post">
                 <a href="/blog/2022/09/20/2022-09-20-aws-sdk-v2-and-googleapi-break-my-code/">AWS SDK v2 for Goが壊れた、Googleお前もか</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2022/08/11/2022-08-11-git-push-auto-setup-remote/">git push のときに自動的にリモートブランチを作成する設定</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2022/06/11/2022-06-11-wild-iphone-appeared/">落とし物の iPhone を交番に届けた話</a>
               </li>
             
           
