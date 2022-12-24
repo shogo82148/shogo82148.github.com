@@ -1,13 +1,15 @@
 ---
 layout: post
-title: "Perlのmodule_trueフラグを試してみた"
-slug: 2022-12-01-feature-module-true
-date: 2022-12-01 00:00:00 +0900
+title: "Perlのmodule_trueフラグを先取り！"
+slug: 2022-12-25-feature-module-true
+date: 2022-12-25 04:57:00 +0900
 comments: true
-categories: [ ]
+categories: [ perl ]
 ---
 
-この記事は、[Perl Advent Calendar 2022](https://qiita.com/advent-calendar/2022/perl) のn日目の記事です。 TODO: 埋める
+[Perl Advent Calendar 2022](https://qiita.com/advent-calendar/2022/perl)に穴が空いてしまったときの
+穴埋め用に温めていた記事です。
+無事完走したので公開してしまいます。
 
 ----
 
@@ -113,12 +115,11 @@ sub import {
 
 ## まとめ
 
-----
-
-明日n+1日はfooで「TBD」です。お楽しみに！ TODO: 埋める
+Perl v5.38.0に導入予定の `module_true feature pragma` を試してみました。
+Perlモジュール末尾の`1;`というおまじないが不要になります。
+最近のPerlはこういう罠を防ぐ機能が入って、どんどん便利になってますね！
 
 ## 参考
 
-- [Perl Advent Calendar 2022](https://qiita.com/advent-calendar/2022/perl)
 - [perldelta v5.37.6](https://metacpan.org/release/CORION/perl-5.37.6/view/pod/perldelta.pod)
 - [RFC-18](https://github.com/Perl/RFCs/blob/main/rfcs/rfc0018.md)

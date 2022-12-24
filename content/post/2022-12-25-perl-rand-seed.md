@@ -2,7 +2,7 @@
 layout: post
 title: "Perl v5.38のPERL_RAND_SEED環境変数を先取り！"
 slug: 2022-12-25-perl-rand-seed
-date: 2022-12-25 20:54:00 +0900
+date: 2022-12-25 00:00:00 +0900
 comments: true
 categories: [ perl ]
 ---
