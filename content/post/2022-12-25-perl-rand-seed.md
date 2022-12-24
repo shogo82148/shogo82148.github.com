@@ -1,13 +1,23 @@
 ---
 layout: post
-title: "Perl v5.37.3のPERL_RAND_SEED環境変数を紹介"
-slug: 2022-11-10-perl-rand-seed
-date: 2022-11-10 20:54:00 +0900
+title: "Perl v5.38のPERL_RAND_SEED環境変数を先取り！"
+slug: 2022-12-25-perl-rand-seed
+date: 2022-12-25 20:54:00 +0900
 comments: true
 categories: [ perl ]
 ---
 
+[Perl Advent Calendar 2022](https://qiita.com/advent-calendar/2022/perl)無事完走しました！
+＼( ‘ω’)／ウオオオオオアアアーーーッ！
+参加してくださった皆様ありがとうございました。
+
+じつはAdvent Calendarに穴が空いたときのために、いくつかネタを用意しておきました。
+もう穴埋めは必要なくなったので公開してしまいます。
+
+-----
+
 開発版のPerl 5.37.3に乱数のシード値を固定する機能が入りました。
+来年公開予定のPerl 5.38.0にも導入されるはずです。
 
 今までも`srand()`の引数に数値を渡せばシード値の固定はできます。
 今回入った修正は、これを環境変数経由で行えるようにするものです。
