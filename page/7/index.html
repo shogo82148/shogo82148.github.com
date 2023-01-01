@@ -112,6 +112,42 @@
         
 
 <header>
+  <p class="meta">Feb 11, 2020
+     - 3 minute read 
+     - <a href="https://shogo82148.github.io/blog/2020/02/11/aws-xray-golang/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/aws/">aws </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2020/02/11/aws-xray-golang/">AWS X-Ray Go SDK の地雷処理をしている話</a>
+  </h1>
+</header>
+
+        
+          <p>AWS Lambda Perl Runtime で AWS X-Ray を使えるようになりました で紹介した AWSの分散アプリケーションの分析サービス AWS X-Ray。 Perl から使えるようにしたももの、自分自身は最近 Perl をあまり使っていないことに気がついた！！ので、AWSが提供しているGo実装である aws/aws-xray-sdk-goに 手を出してみることにしました。
+結果、X-Rayのサービスマップやトーレスが見れるようになって便利！・・・にはなったんですが、そこまでの道のりが長かった。 「 @fujiwara さんのYAPC::Tokyo 2019での発表 から1年近く経ってるしそろそろ安定してきているでしょ！」と 軽い気持ちで始めたのが良くない。 色々と地雷(？)を踏んだので、記録として残しておきます。
+依存ライブラリのcontext対応が地味に辛い X-Ray で実行をトレースするには、「今実行している関数がどこから呼ばれたのか？」という情報をうまいこと伝える必要があります。 Perlで使われているような黒魔術はGoでは使えないので、 context.Context を地道に引数に渡していくことになります。
+まあ、こんなこともあろうかと、context.Context にはバッチリ対応してあるからサクッと行けるでしょ！
+と思ってたんですが、現実はそうは甘くなかった。 X-Rayを入れようとしたプロジェクトではWebフレームワークとしてgoadesign/goaを使っています。 GoaのHTTPハンドラーには context.Context が渡ってくるので油断していたのですが、 contextの親をたどっていくと行き着く先は context.Background() (HTTPハンドラーなので request.Context() であってほしい)。 なんとなく context.Context 対応詐欺にあった気分です。
+Goaは現在 v2, v3 の開発がメインで現在使っているのは v1 です。 v1からv3へのアップグレードには大幅な書き換えが必要なこと、アップグレードしたとしても直っている保証がないこと、 最近 Goa v1 のリリースが滞りがちなこと、などなどの理由から結局フォークしてくることにしました。
+ shogo82148/goa-v1  AWS X-Ray Go SDK 自体の問題ではないのですが、 Contextってタイムアウトをうまく処理するための仕組みなので、実装漏れがちですよね。 皆さん実装するときやライブラリの選定には気をつけましょう。
+SQLクエリを実行する関数のシグネチャーが微妙に違う これに関しては @acidlemon 先生の kamakura.</p>
+          
+            <footer>
+              <a href="https://shogo82148.github.io/blog/2020/02/11/aws-xray-golang/" rel="full-article">Read On &rarr;</a>
+            </footer>
+          
+        
+      </article>
+      
+      <article>
+        
+        
+
+<header>
   <p class="meta">Feb 1, 2020
      - 1 minute read 
      - <a href="https://shogo82148.github.io/blog/2020/02/01/goodbye-geocities/#disqus_thread">Comments</a>
@@ -426,40 +462,6 @@ $ go build -o main main.go $ ./main This is Go world!</p>
         
       </article>
       
-      <article>
-        
-        
-
-<header>
-  <p class="meta">May 27, 2019
-     - 1 minute read 
-     - <a href="https://shogo82148.github.io/blog/2019/05/27/time-over-https/#disqus_thread">Comments</a>
-
-    
-    
-      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a><a class="label" href="https://shogo82148.github.io/categories/time/">time </a>
-    
-  </p>
-  <h1 class="entry-title">
-    <a href="https://shogo82148.github.io/blog/2019/05/27/time-over-https/">サーバーの時刻を伝える time wellknown uri を実装してみた</a>
-  </h1>
-</header>
-
-        
-          <p>インターネットをさまよっていたら、 /.well-known/time の存在を知ったので、雑に実装してみました。
-使い方 うまいこと共存できそうだったので、HTTP/WebSocketで時刻同期するWebNTPを書いた で作成した WebNTP の一部として実装してあります。
- shogo82148/go-webntp  $ go get github.com/shogo82148/go-webntp/cmd/webntp $ webntp -serve :8080 $ curl -I localhost:8080/.well-known/time HTTP/1.1 204 No Content X-Httpstime: 1558915632.285965 Date: Mon, 27 May 2019 00:07:12 GMT 仕様 HTTPには「予約済みのURI」というものが定義されています。(RFC5785)。
- Well-Known URIs  Let&rsquo;s Encrypt でドメインの所有権確認に使用される ACMEプロトコル(RFC8555) や、 Mastodon のユーザーディスカバリーに使用する WebFinger(RFC7033)等々、 近年話題になったサービスの裏方で使われています。
- /.well-known/acme-challenge ACMEプロトコル(RFC8555) /.well-known/webfinger WebFinger(RFC7033)  Time over HTTPS も Well-Known URIs を利用するプロトコルのひとつです。
- /.well-known/time Time over HTTPS specification  仕様としては非常に単純で、サーバー側は HTTP の HEAD に対して、 Date ヘッダーをつけたリクエストを返すだけ。 より高精度な時刻を得るために X-HTTPSTIME ヘッダーに秒未満の情報を入れた Unix タイムスタンプ を返すこともできます。</p>
-          
-            <footer>
-              <a href="https://shogo82148.github.io/blog/2019/05/27/time-over-https/" rel="full-article">Read On &rarr;</a>
-            </footer>
-          
-        
-      </article>
-      
       
       
 
@@ -531,6 +533,8 @@ $ go build -o main main.go $ ./main This is Go world!</p>
     
         <a href="/page/24/" class="label-pagination">24</a>
     
+        <a href="/page/25/" class="label-pagination">25</a>
+    
 
     
     
@@ -539,7 +543,7 @@ $ go build -o main main.go $ ./main This is Go world!</p>
 
     
     
-        <a href="/page/24/" aria-label="Last"><i class="fa fa-angle-double-right fa-lg"></i></a>
+        <a href="/page/25/" aria-label="Last"><i class="fa fa-angle-double-right fa-lg"></i></a>
     
 
 </div>
@@ -598,10 +602,16 @@ $ go build -o main main.go $ ./main This is Go world!</p>
           
             
               <li class="post">
-                <a href="/blog/2022/12/25/2022-12-25-feature-module-true/">Perlのmodule_trueフラグを先取り！</a>
+                <a href="/blog/2023/01/01/2023-01-01-rmqr-generator-written-in-golang/">GolangでQRコード、マイクロQRコード、rMQRコードのジェネレーターを作った</a>
               </li>
             
           
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/12/25/2022-12-25-feature-module-true/">Perlのmodule_trueフラグを先取り！</a>
+              </li>
             
           
             
@@ -646,12 +656,6 @@ $ go build -o main main.go $ ./main This is Go world!</p>
               </li>
             
           
-            
-              <li class="post">
-                <a href="/blog/2022/09/20/2022-09-20-aws-sdk-v2-and-googleapi-break-my-code/">AWS SDK v2 for Goが壊れた、Googleお前もか</a>
-              </li>
-            
-          
         </ul>
       </section>
     
@@ -661,7 +665,7 @@ $ go build -o main main.go $ ./main This is Go world!</p>
   </div>
 </div>
 <footer role="contentinfo">
-  <p>Copyright &copy; 2022 ICHINOSE Shogo - <a
+  <p>Copyright &copy; 2023 ICHINOSE Shogo - <a
       href="https://shogo82148.github.io/license/">License</a> -
     <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
         href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
