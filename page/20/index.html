@@ -112,6 +112,40 @@
         
 
 <header>
+  <p class="meta">Oct 18, 2013
+     - 1 minute read 
+     - <a href="https://shogo82148.github.io/blog/2013/10/18/redis-namespace-and-redis-key/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a><a class="label" href="https://shogo82148.github.io/categories/redis/">redis </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2013/10/18/redis-namespace-and-redis-key/">Redis::NamespaceとRedis::Keyをリリースしました</a>
+  </h1>
+</header>
+
+        
+          <p>こんばんは、最近シングルトン恐怖症になっているいっちーです。 Redis::Namespaceと Redis::Keyをリリースしました。
+Redis::Namespace 「Redis::NamespaceのPerl版書いた」 で紹介したモジュールをCPANizeしました。 コマンドのキー名に当たる部分に、自動にプレフィックスをつけてくれる賢い奴です。
+use Redis; use Redis::Namespace; my $redis = Redis-&gt;new; my $ns = Redis::Namespace-&gt;new(redis =&gt; $redis, namespace =&gt; &#39;fugu&#39;); $ns-&gt;set(&#39;foo&#39;, &#39;bar&#39;); # $redis-&gt;set(&#39;fugu:foo&#39;, &#39;bar&#39;); my $foo = $ns-&gt;get(&#39;foo&#39;); # my $foo = $redis-&gt;get(&#39;fugu:foo&#39;); RedisにはKey-Value Storeなんてかっこいい名前が付いているけど、 結局はシステム全体で使えるグローバル変数なわけです。 グローバル変数は駆逐するべきです。 いちいちプレフィックスつけて名前の衝突を回避するなんて人間のやることとは思えません。
+せめてモジュールローカルとか、クラスローカルとかある程度スコープを制限したいですよね。 Redis::Namespaceを使えば簡単に実現できます。
+Redis::Key Redis::Key は Redisのキーの簡単なラッパークラスです。 毎回毎回「接続先のRedisサーバ」と「キーの名前」を指定するのは面倒です。 この2つをセットにして、一つのオブジェクトとして扱うことができます。
+use Redis; use Redis::Key; my $redis = Redis-&gt;new; my $key = Redis::Key-&gt;new(redis =&gt; $redis, key =&gt; &#39;hoge&#39;); $key-&gt;set(&#39;fugu&#39;); # $redis-&gt;set(&#39;hoge&#39;, &#39;fuga&#39;); $key-&gt;get; # $redis-&gt;get(&#39;hoge&#39;); 普通に使っている限りは他のキーにアクセスすることができなくなるので、 Redis::Keyのオブジェクトを他のクラスに渡す、とかしても安心です。</p>
+          
+            <footer>
+              <a href="https://shogo82148.github.io/blog/2013/10/18/redis-namespace-and-redis-key/" rel="full-article">Read On &rarr;</a>
+            </footer>
+          
+        
+      </article>
+      
+      <article>
+        
+        
+
+<header>
   <p class="meta">Oct 13, 2013
      - 1 minute read 
      - <a href="https://shogo82148.github.io/blog/2013/10/13/cpanize-redis-fast/#disqus_thread">Comments</a>
@@ -416,44 +450,6 @@ use strict; use warnings; use List::Util qw(sum); sub linear_search_method { my 
         
       </article>
       
-      <article>
-        
-        
-
-<header>
-  <p class="meta">May 12, 2013
-     - 1 minute read 
-     - <a href="https://shogo82148.github.io/blog/2013/05/12/mail-from-raspberrypi/#disqus_thread">Comments</a>
-
-    
-    
-      - <a class="label" href="https://shogo82148.github.io/categories/raspberrypi/">RaspberryPi </a>
-    
-  </p>
-  <h1 class="entry-title">
-    <a href="https://shogo82148.github.io/blog/2013/05/12/mail-from-raspberrypi/">RaspberryPiからメールを送る</a>
-  </h1>
-</header>
-
-        
-          <p>RaspberryPi に cron を仕込んで定期実行をやってみようと考えました。 cron の設定自体は crontab -e コマンドを実行すれば簡単にできます。 ただ、これだけだとちゃんと動いているか少し心配なので、 エラーが起きた時に何か通知して欲しい。 普通なら設定ファイルに MAILTO=hogehoge@example.com と書いておくと メールが送られるはずなのですが、 メールサーバが動いてないのでうまくいかない・・・。
-そういうわけで、RaspberryPiからメールを送るための設定をしたのでメモ。
-MTAをインストールする Raspberry Pi には標準でMTA(Message Transfer Agent)が入ってないようなのでインストール。 今回はPostfixを採用
-sudo apt-get install postfix 最初、Sendmailも試してみたんだけど、送信者マスカレードがなぜかうまく行かなったので断念。 後述するように、この設定がないとスパムフィルタに引っかかってしまうのです。
-プロバイダのSMTPにリレーしてもらう 実際にメールを送りには以下の条件を満たす必要があるようです。
- 送信元のドメインを引ける 固定IPからのアクセス  固定IPなんて自前で持ってないし、 cron からのメールは送信元が pi@raspberrypi になってしまいドメインを引けません。 そのためそのままではスパムメールとして扱われてしまい、メールが届きません。
-そこで、プロバイダが提供しているSMTPサーバにメールをリレーしてもらいます。 /etc/postfix/main.cfに以下の行を追加します。
-sender_canonical_maps = regexp:/etc/postfix/canonical relayhost = [smtp.example.com]:587 smtp_sasl_auth_enable = yes smtp_sasl_password_maps = hash:/etc/postfix/relay_password smtp_sasl_security_options = noanonymous プロバイダにリレーしてもらうには SMTP-Auth で認証する必要があるので、 ユーザ名とパスワードを設定しておきます。
-smtp.example.com hogehoge:your-password postmapコマンドを使って、Postfixから扱える形式に変換します。
-$ postmap hash:/etc/postfix/relay_password さらに、エンベロープのFromがプロバイダから提供されたメールアドレスでないと メールをリレーしてくれないので、 すべてのメールのFromをすべて書き換えるよう設定します。</p>
-          
-            <footer>
-              <a href="https://shogo82148.github.io/blog/2013/05/12/mail-from-raspberrypi/" rel="full-article">Read On &rarr;</a>
-            </footer>
-          
-        
-      </article>
-      
       
       
 
@@ -593,6 +589,12 @@ $ postmap hash:/etc/postfix/relay_password さらに、エンベロープのFrom
           
           
             
+              <li class="post">
+                <a href="/blog/2023/03/24/2023-03-24-github-identification-has-changed/">GitHubに接続したらWARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!と起こられる件</a>
+              </li>
+            
+          
+            
           
             
               <li class="post">
@@ -639,12 +641,6 @@ $ postmap hash:/etc/postfix/relay_password さらに、エンベロープのFrom
             
               <li class="post">
                 <a href="/blog/2022/11/16/2022-10-19-perl-webdb-vol131/">GitHub GraphQL のノードIDフォーマットが変わるらしい (続報)</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2022/10/19/2022-10-19-perl-webdb-vol131/">WEB&#43;DB PRESS Vol.131にPerlとAWS Lambdaの記事を寄稿しました</a>
               </li>
             
           
