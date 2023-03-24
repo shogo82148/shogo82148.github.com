@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "GitHubに接続したらWARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!と起こられる件"
+title: "GitHubに接続したらWARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!と怒られる件"
 slug: 2023-03-24-github-identification-has-changed
 date: 2023-03-24 17:13:00 +0900
 comments: true
