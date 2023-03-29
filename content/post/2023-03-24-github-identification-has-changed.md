@@ -71,6 +71,14 @@ https://api.github.com/meta からコピーしてきてください。
 
 ## 解説
 
+(2023-03-29追記)
+
+より詳しく解説してくれている人を見つけました。この件についてもっと知りたい人はこちらを参照しましょう。
+
+- [GitHubからfetch/pullできなくなった場合の対処（2023/03/24秘密鍵公開）](https://qiita.com/ktateish/items/c986891e429469c7105c)
+
+(追記ここまで)
+
 WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!というメッセージは
 **中間者攻撃を受けている可能性がある** という警告です。
 今回の場合は「今接続しているサーバーはGitHubではないぞ！！」という意味です。
@@ -139,3 +147,4 @@ https://api.github.com/meta からコピーしてきてください。
 
 - [We updated our RSA SSH host key | The GitHub Blog](https://github.blog/2023-03-23-we-updated-our-rsa-ssh-host-key/)
 - [Add new public key for known_hosts #1237](https://github.com/actions/checkout/pull/1237)
+- [GitHubからfetch/pullできなくなった場合の対処（2023/03/24秘密鍵公開）](https://qiita.com/ktateish/items/c986891e429469c7105c)
