@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono&display=swap" rel="stylesheet"> 
+
+  
+  <title>なぜタイムスタンプをIDとして扱ってはいけないのか</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+    <link rel="stylesheet" href="/css/fork-awesome.min.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="ICHINOSE Shogo">
+
+  
+  <meta name="generator" content="Hugo 0.91.2" />
+
+  
+  
+  
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-40R0PCLKVF');
+</script>
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">May 29, 2023
+     - 2 minute read 
+     - <a href="https://shogo82148.github.io/blog/2023/05/29/2023-05-29-why-you-should-not-use-timestamp-as-id/#disqus_thread">Comments</a>
+
+    
+    
+      - 
+    
+  </p>
+  <h1 class="entry-title">
+     なぜタイムスタンプをIDとして扱ってはいけないのか 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <h2 id="背景">背景</h2>
+<p>マイナンバーカードの導入により、今まで役所で行っていた証明書の発行手続きを、コンビニに行えるようになりました。
+このコンビニ証明書交付サービスにおいて、2023年5月9日誤って他人の戸籍全部事項証明書が発行されてしまうバグが明らかになりました。</p>
+<p>開発元である富士通Japan株式会社は、この原因について以下のように説明しています。</p>
+<ul>
+<li><a href="https://www.fujitsu.com/jp/group/fjj/about/resources/news/topics/2023/0509.html">川崎市様における証明書誤交付ついて（お詫び）</a></li>
+</ul>
+<blockquote>
+<p>本事象の原因は、2か所のコンビニで、2名の住民の方が同一タイミング（時間間隔1秒以内）で証明書の交付申請を行った際に、後続の処理が先行する処理を上書きしてしまうことによるものです。</p>
+</blockquote>
+<p>「時間間隔1秒以内」という条件から、
+Twitterを始めとしたSNSでは「タイムスタンプ（秒）をIDにしているのでは？」という憶測が広まりました。
+（もしくはIDに類するもの）</p>
+<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">ファイル名が秒単位の時刻なので、1秒間に複数申請があれば、後の申請の出力に上書きされてしまう、ということなのか。どうしてこれでうまくいくと思ったのか＞富士通Japan <a href="https://t.co/FOvWWMdqar">https://t.co/FOvWWMdqar</a></p>&mdash; Haruhiko Okumura (@h_okumura) <a href="https://twitter.com/h_okumura/status/1656155148861980674?ref_src=twsrc%5Etfw">May 10, 2023</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+<p>「そんなことやるわけないじゃん」とは思ったのですが、自分自身はともかく周りのひとは・・・？と考えたら心配になってきました。
+そういうわけで、なぜタイムスタンプをIDとして扱ってはいけないのか、注意喚起することにしました。
+もう話のネタとして旬は過ぎた感はあるけど、文章に残しておくことが大事なんだ。</p>
+<h2 id="なぜタイムスタンプをidとして扱ってはいけないのか">なぜタイムスタンプをIDとして扱ってはいけないのか</h2>
+<p>さて、「秒単位のタイムスタンプをIDに使う」という設計がなぜダメなのか考えていきましょう。</p>
+<p>なお、今回の証明書誤交付の原因が「秒単位のタイムスタンプをIDに使ったため」と主張する意図はありません。
+証明書発行システムの実装を例として、秒単位のタイムスタンプをIDに使った場合にどうなるか？という思考実験です。
+実在のシステムとは関係ありません。</p>
+<h3 id="誕生日のパラドックス">誕生日のパラドックス</h3>
+<p>ダメな理由として挙げられるのは誕生日のパラドックスでしょう。</p>
+<ul>
+<li><a href="https://ja.wikipedia.org/wiki/%E8%AA%95%E7%94%9F%E6%97%A5%E3%81%AE%E3%83%91%E3%83%A9%E3%83%89%E3%83%83%E3%82%AF%E3%82%B9">誕生日のパラドックス - Wikipedia</a></li>
+</ul>
+<p>たとえば、小中学校のクラスに同じ誕生日のペアがいたら、珍しいこともあるもんだ！と感じませんか？
+実はそんなに珍しいことではないというのが誕生日のパラドックスです。
+クラスに23人いれば、その中に「同じ誕生日である二人組」が50％以上の確率で存在します。</p>
+<p>誕生日のパラドックスを証明書発行システムに当てはめて考えてみましょう。
+ユーザーがいつ証明書発行を行うかわからないので、ユーザーは一年の中のランダムな時刻に証明書発行を行うと仮定します。
+年間n人のユーザーが利用した場合にIDが重複する確率は、以下のプログラム（雑）で計算できます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="c1"># python</span>
+<span class="n">n</span> <span class="o">=</span> <span class="mi">60</span><span class="o">*</span><span class="mi">60</span><span class="o">*</span><span class="mi">24</span><span class="o">*</span><span class="mi">365</span>
+<span class="n">p</span> <span class="o">=</span> <span class="mf">1.0</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+    <span class="n">p</span> <span class="o">=</span> <span class="n">p</span> <span class="o">*</span> <span class="p">(</span><span class="n">n</span> <span class="o">-</span> <span class="n">i</span><span class="p">)</span> <span class="o">/</span> <span class="n">n</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="mi">1</span><span class="o">-</span><span class="n">p</span><span class="p">)</span>
+</code></pre></div><p>実行してみると年間6612人利用でIDが重複する確率が50%を超えます。
+一年が3153.6万秒あることを考えると随分と少ないことがわかります。</p>
+<pre tabindex="0"><code>...
+6610 0.49986985152463326
+6611 0.49997469552550755
+6612 0.5000795334032722
+6613 0.500184365152562
+6614 0.5002891907680136
+6615 0.5003940102442652
+...
+</code></pre><hr>
+<p>川崎市の年間の証明書発行件数は、令和元年の実績で6000件程度らしいです。</p>
+<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">資料より全国の交付数のうち戸籍の割合（累計:5.6%, 令和3年:6.7%）<br>89000×6.7%=5949<br>コンビニ交付のうち戸籍取り扱い時間（7:30-19:00）：11.5時間<br><br>以上より条件を変更<br>n=60*60*11.5*365<br>k=6000<br>→1.03回/年<br><br>資料：コンビニ交付サービス概要p9<a href="https://t.co/ZqJw3cnlbA">https://t.co/ZqJw3cnlbA</a></p>&mdash; Wataru Inoue (@Wataru__Inoue) <a href="https://twitter.com/Wataru__Inoue/status/1656324806357426179?ref_src=twsrc%5Etfw">May 10, 2023</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+<ul>
+<li><a href="https://www.city.kawasaki.jp/templates/press/250/0000151039.html">コンビニエンスストアでの証明書交付サービスの臨時休止について（最終報）</a></li>
+<li><a href="https://www.city.kawasaki.jp/980/cmsfiles/contents/0000116/116489/021119-12.pdf">令和２年度 文教委員会資料⑩</a></li>
+</ul>
+<p>毎年50%の確率が衝突が起こってしまうので、これでは本番投入できないですね。</p>
+<h2 id="マイクロ秒単位のタイムスタンプで解決しない理由">マイクロ秒単位のタイムスタンプで解決しない理由</h2>
+<p>証明書誤発行の件ですが、バグは修正されたものの再発してしまいます。
+再発の原因について以下のように説明しています。</p>
+<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">【品川区】<br>コンビニ交付障害の対応について<br>5月18日【木】6:30〜23:00まで<br>利用出来ません。<a href="https://twitter.com/hashtag/%E3%83%9E%E3%82%A4%E3%83%8A%E3%83%B3%E3%83%90%E3%83%BC%E3%82%AB%E3%83%BC%E3%83%89?src=hash&amp;ref_src=twsrc%5Etfw">#マイナンバーカード</a><a href="https://twitter.com/hashtag/%E3%82%B3%E3%83%B3%E3%83%93%E3%83%8B%E4%BA%A4%E4%BB%98%E5%81%9C%E6%AD%A2?src=hash&amp;ref_src=twsrc%5Etfw">#コンビニ交付停止</a> <a href="https://t.co/KSKLAnZBtr">pic.twitter.com/KSKLAnZBtr</a></p>&mdash; 松永よしひろ 立憲民主党 品川区政担当 (@Matsunaga_1127) <a href="https://twitter.com/Matsunaga_1127/status/1658302051171053576?ref_src=twsrc%5Etfw">May 16, 2023</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+<blockquote>
+<p>同日同時刻（マイクロ秒） まで同一のタイミングで別人がコンビニ交付を行った際にデータが入れ替わる。</p>
+</blockquote>
+<p>「マイクロ秒」・・・なるほど。
+この文章から「秒」を「マイクロ秒」に修正しただけだったのでは？という憶測が広まることになったのは、また別の話。</p>
+<hr>
+<p>実際どのような修正が行われたのかは不明ですが、
+我々の思考実験でも「秒」を「マイクロ秒」に修正したシステムを考えてみましょう。
+「マイクロ秒単位のタイムスタンプをIDに使う」ことで問題は解決するでしょうか？</p>
+<p>実は解決しません。</p>
+<h3 id="誕生日のパラドックス再び">誕生日のパラドックス再び</h3>
+<p>秒をマイクロ秒に修正したことで、発行できるIDの件数は100万倍になります。
+これなら解決かと思いきや、再び誕生日のパラドックスが現れます。</p>
+<p>秒をマイクロ秒に修正して、さきほどのプログラムを実行してみましょう。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="n">n</span> <span class="o">=</span> <span class="mi">60</span><span class="o">*</span><span class="mi">60</span><span class="o">*</span><span class="mi">24</span><span class="o">*</span><span class="mi">365</span><span class="o">*</span><span class="mi">1000</span><span class="o">*</span><span class="mi">1000</span>
+<span class="n">p</span> <span class="o">=</span> <span class="mf">1.0</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+    <span class="n">p</span> <span class="o">=</span> <span class="n">p</span> <span class="o">*</span> <span class="p">(</span><span class="n">n</span> <span class="o">-</span> <span class="n">i</span><span class="p">)</span> <span class="o">/</span> <span class="n">n</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="mi">1</span><span class="o">-</span><span class="n">p</span><span class="p">)</span>
+</code></pre></div><p>年間661万1972人利用でIDが重複する確率が50%を超えます。
+IDの個数は100万倍になったのに、年間利用者数は1000倍程度にしかなっていません。</p>
+<pre tabindex="0"><code>...
+6611970 0.49999982540584387
+6611971 0.49999993023799294
+6611972 0.5000000350701359
+6611973 0.5000001399022728
+6611974 0.5000002447344034
+6611975 0.5000003495665281
+...
+</code></pre><p>コンビニ証明書の今後の利用者人数推移によっては、まだまだ不安の残る確率です。</p>
+<h3 id="コンピューターの時間精度">コンピューターの時間精度</h3>
+<p>また、コンピューターの時間精度が本当にマイクロ秒まであるのか、という問題もあります。
+たとえばLinuxのタイマーの精度は、カーネルビルド時の設定によります。</p>
+<ul>
+<li><a href="https://linuxjm.osdn.jp/html/LDP_man-pages/man7/time.7.html">Man page of TIME</a></li>
+</ul>
+<blockquote>
+<p>タイムアウトを設定したり (例えば select(2), sigtimedwait(2))、 CPU 時間を計測したり (例えば getrusage(2))する様々なシステムコールの精度は ソフトウェアクロック の分解能 (resolution) に制限される。
+ソフトウェアクロックとは、カーネルが管理する jiffy 単位で時間を計測するクロックのことである。 jiffy の大きさはカーネル定数 HZ の値で決定される。</p>
+</blockquote>
+<p>Linux 2.6.0以降のHZの値は1000らしいので、ミリ秒単位の分解能しかありません。</p>
+<p>もっとも、最近（2022年現在）のOSやデバイスは高精度タイマーをサポートしており、たいていマイクロ秒の分解能を持っていると思います。
+とは思うのですが、すべての機器でマイクロ秒の分解能を持っている保証はありません。
+実際にプログラムを実行する環境で確認することが重要です。</p>
+<h2 id="解決法">解決法</h2>
+<p>秒をマイクロ秒にかえただけでは解決しないことがわかりました。
+ではどうすれば良いでしょう？
+解決方法は他にもたくさんあると思いますが、代表的なものを見てみましょう。</p>
+<h3 id="uuid-v4">UUID v4</h3>
+<p>Twitterでは多くのひとが代替としてUUID v4を挙げていました。
+UUID v4は122ビットのランダムなビット列をIDとして使います。
+衝突が起こるために必要なIDの個数は、期待値で230京回だそうです。</p>
+<ul>
+<li><a href="https://ja.wikipedia.org/wiki/UUID#%E3%83%90%E3%83%BC%E3%82%B8%E3%83%A7%E3%83%B34">UUID v4 - Wikipedia</a></li>
+<li><a href="https://qiita.com/ta_ta_ta_miya/items/1f8f71db3c1bf2dfb7ea">UUID(v4) がぶつかる可能性を考えなくていい理由</a></li>
+</ul>
+<p>これだけあれば衝突は考えなくても良いでしょう。</p>
+<h3 id="snowflake-likeなid">Snowflake-likeなID</h3>
+<p>他によく使われるのは<a href="https://en.wikipedia.org/wiki/Snowflake_ID">TwitterのSnowflake</a>（の変種）でしょうか。
+Snowflakeは63ビットのIDで上位41ビットにミリ秒単位のタイムスタンプを埋め込みます。
+タイムスタンプが重複したときは、下位12ビットに連番を埋め込むのでIDは重複しません。</p>
+<ul>
+<li><a href="https://en.wikipedia.org/wiki/Snowflake_ID">Snowflake ID - Wikipedia</a></li>
+<li><a href="https://github.com/twitter-archive/snowflake/tree/b3f6a3c6ca8e1b6847baa6ff42bf72201e2c2231">Twitter&rsquo;s reference implementation on GitHub</a></li>
+</ul>
+<h3 id="連番">連番</h3>
+<p>川崎市の証明書発行数は年6000件くらいらしいので、この程度の規模なら連番IDも視野に入るでしょう。
+たいていのデータベースシステムには連番ID発行機能がついていると思うので、実装も容易です。</p>
+<h2 id="まとめ">まとめ</h2>
+<p>「秒単位のタイムスタンプをIDに使う」という設計は「誕生日のパラドックス」により容易に重複してしまうことを説明しました。
+UUID v4、Snowflake、連番などを利用し、重複が発生しないよう注意しましょう。</p>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://www.fujitsu.com/jp/group/fjj/about/resources/news/topics/2023/0509.html">川崎市様における証明書誤交付ついて（お詫び）</a></li>
+<li><a href="https://piyolog.hatenadiary.jp/entry/2023/05/22/000742">富士通JapanのMICJETで相次ぎ発生した証明書誤交付についてまとめてみた</a></li>
+<li><a href="https://www.city.kawasaki.jp/templates/press/250/0000151039.html">コンビニエンスストアでの証明書交付サービスの臨時休止について（最終報）</a></li>
+<li><a href="https://ja.wikipedia.org/wiki/%E8%AA%95%E7%94%9F%E6%97%A5%E3%81%AE%E3%83%91%E3%83%A9%E3%83%89%E3%83%83%E3%82%AF%E3%82%B9">誕生日のパラドックス - Wikipedia</a></li>
+<li><a href="https://twitter.com/Matsunaga_1127/status/1658302051171053576">@Matsunaga_1127 on Twitter</a></li>
+<li><a href="https://www.city.kawasaki.jp/980/cmsfiles/contents/0000116/116489/021119-12.pdf">令和２年度 文教委員会資料⑩</a></li>
+<li><a href="https://linuxjm.osdn.jp/html/LDP_man-pages/man7/time.7.html">Man page of TIME</a></li>
+<li><a href="https://man7.org/linux/man-pages/man7/time.7.html">time(7) — Linux manual page</a></li>
+<li><a href="https://ja.wikipedia.org/wiki/UUID#%E3%83%90%E3%83%BC%E3%82%B8%E3%83%A7%E3%83%B34">UUID v4 - Wikipedia</a></li>
+<li><a href="https://qiita.com/ta_ta_ta_miya/items/1f8f71db3c1bf2dfb7ea">UUID(v4) がぶつかる可能性を考えなくていい理由</a></li>
+<li><a href="https://en.wikipedia.org/wiki/Snowflake_ID">Snowflake ID - Wikipedia</a></li>
+<li><a href="https://github.com/twitter-archive/snowflake/tree/b3f6a3c6ca8e1b6847baa6ff42bf72201e2c2231">Twitter&rsquo;s reference implementation on GitHub</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">ICHINOSE Shogo</span></span>
+    
+    <time>May 29, 2023</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2023/04/23/2023-04-23-akamai-peace-for-all/" title="RE: Akamai x UNIQLOコラボTシャツに書かれたプログラムを解読してみる">RE: Akamai x UNIQLOコラボTシャツに書かれたプログラムを解読してみる</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/05/29/2023-05-29-why-you-should-not-use-timestamp-as-id/">なぜタイムスタンプをIDとして扱ってはいけないのか</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/04/23/2023-04-23-akamai-peace-for-all/">RE: Akamai x UNIQLOコラボTシャツに書かれたプログラムを解読してみる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/03/29/2023-03-29-downgrade-homebrew/">Homebrewで過去のバージョンのMySQLクライアントをインストールしたい</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/03/24/2023-03-24-github-identification-has-changed/">GitHubに接続したらWARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!と怒られる件</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/01/02/2023-01-02-rabbit-plan/">「全人類兎化計画」の特設サイトがサブドメインで展開していてエラい</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/01/01/2023-01-01-rmqr-generator-written-in-golang/">GolangでQRコード、マイクロQRコード、rMQRコードのジェネレーターを作った</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/12/25/2022-12-25-feature-module-true/">Perlのmodule_trueフラグを先取り！</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/12/25/2022-12-25-perl-rand-seed/">Perl v5.38のPERL_RAND_SEED環境変数を先取り！</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/12/04/2022-12-04-crypt-random-in-perl/">Perlで暗号論的乱数を生成する</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2023 ICHINOSE Shogo - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$']],
+    displayMath: [['$$','$$']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+</html>
+
