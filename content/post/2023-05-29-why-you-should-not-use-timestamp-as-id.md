@@ -138,8 +138,18 @@ IDの個数は100万倍になったのに、年間利用者数は1000倍程度�
 ### コンピューターの時間精度
 
 また、コンピューターの時間精度が本当にマイクロ秒まであるのか、という問題もあります。
+たとえばLinuxのタイマーの精度は、カーネルビルド時の設定によります。
 
+- [Man page of TIME](https://linuxjm.osdn.jp/html/LDP_man-pages/man7/time.7.html)
 
+> タイムアウトを設定したり (例えば select(2), sigtimedwait(2))、 CPU 時間を計測したり (例えば getrusage(2))する様々なシステムコールの精度は ソフトウェアクロック の分解能 (resolution) に制限される。
+> ソフトウェアクロックとは、カーネルが管理する jiffy 単位で時間を計測するクロックのことである。 jiffy の大きさはカーネル定数 HZ の値で決定される。 
+
+Linux 2.6.0以降のHZの値は1000らしいので、ミリ秒単位の分解能しかありません。
+
+もっとも、最近（2022年現在）のOSやデバイスは高精度タイマーをサポートしており、たいていマイクロ秒の分解能を持っていると思います。
+とは思うのですが、すべての機器でマイクロ秒の分解能を持っている保証はありません。
+実際にプログラムを実行する環境で確認することが重要です。
 
 ## まとめ
 
@@ -151,3 +161,5 @@ IDの個数は100万倍になったのに、年間利用者数は1000倍程度�
 - [誕生日のパラドックス - Wikipedia](https://ja.wikipedia.org/wiki/%E8%AA%95%E7%94%9F%E6%97%A5%E3%81%AE%E3%83%91%E3%83%A9%E3%83%89%E3%83%83%E3%82%AF%E3%82%B9)
 - [@Matsunaga_1127 on Twitter](https://twitter.com/Matsunaga_1127/status/1658302051171053576)
 - [令和２年度 文教委員会資料⑩](https://www.city.kawasaki.jp/980/cmsfiles/contents/0000116/116489/021119-12.pdf)
+- [Man page of TIME](https://linuxjm.osdn.jp/html/LDP_man-pages/man7/time.7.html)
+- [time(7) — Linux manual page](https://man7.org/linux/man-pages/man7/time.7.html)
