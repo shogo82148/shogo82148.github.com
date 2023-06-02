@@ -151,7 +151,41 @@ Linux 2.6.0以降のHZの値は1000らしいので、ミリ秒単位の分解能
 とは思うのですが、すべての機器でマイクロ秒の分解能を持っている保証はありません。
 実際にプログラムを実行する環境で確認することが重要です。
 
+## 解決法
+
+秒をマイクロ秒にかえただけでは解決しないことがわかりました。
+ではどうすれば良いでしょう？
+解決方法は他にもたくさんあると思いますが、代表的なものを見てみましょう。
+
+### UUID v4
+
+Twitterでは多くのひとが代替としてUUID v4を挙げていました。
+UUID v4は122ビットのランダムなビット列をIDとして使います。
+衝突が起こるために必要なIDの個数は、期待値で230京回だそうです。
+
+- [UUID v4 - Wikipedia](https://ja.wikipedia.org/wiki/UUID#%E3%83%90%E3%83%BC%E3%82%B8%E3%83%A7%E3%83%B34)
+- [UUID(v4) がぶつかる可能性を考えなくていい理由](https://qiita.com/ta_ta_ta_miya/items/1f8f71db3c1bf2dfb7ea)
+
+これだけあれば衝突は考えなくても良いでしょう。
+
+### Snowflake-likeなID
+
+他によく使われるのは[TwitterのSnowflake](https://en.wikipedia.org/wiki/Snowflake_ID)（の変種）でしょうか。
+Snowflakeは63ビットのIDで上位41ビットにミリ秒単位のタイムスタンプを埋め込みます。
+タイムスタンプが重複したときは、下位12ビットに連番を埋め込むのでIDは重複しません。
+
+- [Snowflake ID - Wikipedia](https://en.wikipedia.org/wiki/Snowflake_ID)
+- [Twitter's reference implementation on GitHub](https://github.com/twitter-archive/snowflake/tree/b3f6a3c6ca8e1b6847baa6ff42bf72201e2c2231)
+
+### 連番
+
+川崎市の証明書発行数は年6000件くらいらしいので、この程度の規模なら連番IDも視野に入るでしょう。
+たいていのデータベースシステムには連番ID発行機能がついていると思うので、実装も容易です。
+
 ## まとめ
+
+「秒単位のタイムスタンプをIDに使う」という設計は「誕生日のパラドックス」により容易に重複してしまうことを説明しました。
+UUID v4、Snowflake、連番などを利用し、重複が発生しないよう注意しましょう。
 
 ## 参考
 
@@ -163,3 +197,7 @@ Linux 2.6.0以降のHZの値は1000らしいので、ミリ秒単位の分解能
 - [令和２年度 文教委員会資料⑩](https://www.city.kawasaki.jp/980/cmsfiles/contents/0000116/116489/021119-12.pdf)
 - [Man page of TIME](https://linuxjm.osdn.jp/html/LDP_man-pages/man7/time.7.html)
 - [time(7) — Linux manual page](https://man7.org/linux/man-pages/man7/time.7.html)
+- [UUID v4 - Wikipedia](https://ja.wikipedia.org/wiki/UUID#%E3%83%90%E3%83%BC%E3%82%B8%E3%83%A7%E3%83%B34)
+- [UUID(v4) がぶつかる可能性を考えなくていい理由](https://qiita.com/ta_ta_ta_miya/items/1f8f71db3c1bf2dfb7ea)
+- [Snowflake ID - Wikipedia](https://en.wikipedia.org/wiki/Snowflake_ID)
+- [Twitter's reference implementation on GitHub](https://github.com/twitter-archive/snowflake/tree/b3f6a3c6ca8e1b6847baa6ff42bf72201e2c2231)
