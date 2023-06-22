@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono&display=swap" rel="stylesheet"> 
+
+  
+  <title>GitHub Actionsの利用量をまとめる</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+    <link rel="stylesheet" href="/css/fork-awesome.min.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="ICHINOSE Shogo">
+
+  
+  <meta name="generator" content="Hugo 0.91.2" />
+
+  
+  
+  
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-40R0PCLKVF');
+</script>
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Jun 22, 2023
+     - 2 minute read 
+     - <a href="https://shogo82148.github.io/blog/2023/06/22/2023-06-22-github-actions-usage-report/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/github/">github </a>
+    
+  </p>
+  <h1 class="entry-title">
+     GitHub Actionsの利用量をまとめる 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p><a href="https://github.com/features/actions">GitHub Actions</a>の利用量は<a href="https://github.com/settings/billing">settings/billing</a>から確認できます。</p>
+<p><img src="/images/2023-06-22-github-actions-billing.png" alt="今月分のGitHub Actions利用量、今月はあと3000分使える"></p>
+<p>それはいいんですが、問題は<strong>今月分しか確認できないこと！</strong></p>
+<p>「先月は〇〇分使ったから上限いくらに設定しておくか〜〜」ということができません。
+APIは見つけたので、取得スクリプトを組んでみました。</p>
+<ul>
+<li><a href="https://docs.github.com/en/rest/billing?apiVersion=2022-11-28#get-github-actions-billing-for-an-organization">Get GitHub Actions billing for an organization</a></li>
+</ul>
+<h2 id="集計スクリプト">集計スクリプト</h2>
+<p>GitHub REST APIをたたいて、結果をGoogle Spreadsheetにまとめます。
+GitHub REST APIを叩く部分はGitHub CLIを使えばすぐにできるんですが、
+Google Spreadsheetへの書き込みをシェルスクリプトで組むのはちょっと大変です。</p>
+<p>今回はGoで書いてみました。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
+
+<span class="kn">import</span> <span class="p">(</span>
+	<span class="s">&#34;context&#34;</span>
+	<span class="s">&#34;encoding/json&#34;</span>
+	<span class="s">&#34;fmt&#34;</span>
+	<span class="s">&#34;io&#34;</span>
+	<span class="s">&#34;log&#34;</span>
+	<span class="s">&#34;net/http&#34;</span>
+	<span class="s">&#34;os&#34;</span>
+	<span class="s">&#34;time&#34;</span>
+
+	<span class="s">&#34;google.golang.org/api/sheets/v4&#34;</span>
+<span class="p">)</span>
+
+<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+	<span class="nx">ctx</span> <span class="o">:=</span> <span class="nx">context</span><span class="p">.</span><span class="nf">Background</span><span class="p">()</span>
+	<span class="nx">token</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getenv</span><span class="p">(</span><span class="s">&#34;GITHUB_TOKEN&#34;</span><span class="p">)</span>
+	<span class="k">if</span> <span class="nx">token</span> <span class="o">==</span> <span class="s">&#34;&#34;</span> <span class="p">{</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="s">&#34;GITHUB_TOKEN is required&#34;</span><span class="p">)</span>
+	<span class="p">}</span>
+	<span class="nx">sheetID</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getenv</span><span class="p">(</span><span class="s">&#34;SHEET_ID&#34;</span><span class="p">)</span>
+	<span class="k">if</span> <span class="nx">sheetID</span> <span class="o">==</span> <span class="s">&#34;&#34;</span> <span class="p">{</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="s">&#34;SHEET_ID is required&#34;</span><span class="p">)</span>
+	<span class="p">}</span>
+	<span class="nx">org</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getenv</span><span class="p">(</span><span class="s">&#34;GITHUB_REPOSITORY_OWNER&#34;</span><span class="p">)</span>
+	<span class="k">if</span> <span class="nx">org</span> <span class="o">==</span> <span class="s">&#34;&#34;</span> <span class="p">{</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="s">&#34;GITHUB_REPOSITORY_OWNER is required&#34;</span><span class="p">)</span>
+	<span class="p">}</span>
+
+	<span class="nx">now</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+	<span class="nx">usage</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nf">GetGitHubActionsBilling</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span> <span class="nx">token</span><span class="p">,</span> <span class="nx">org</span><span class="p">)</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+	<span class="p">}</span>
+
+	<span class="nx">svc</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">sheets</span><span class="p">.</span><span class="nf">NewService</span><span class="p">(</span><span class="nx">ctx</span><span class="p">)</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+	<span class="p">}</span>
+
+	<span class="nx">tableRange</span> <span class="o">:=</span> <span class="s">&#34;report!A1&#34;</span>
+	<span class="kd">var</span> <span class="nx">reportData</span> <span class="nx">sheets</span><span class="p">.</span><span class="nx">ValueRange</span>
+	<span class="nx">reportData</span><span class="p">.</span><span class="nx">Values</span> <span class="p">=</span> <span class="nb">append</span><span class="p">(</span><span class="nx">reportData</span><span class="p">.</span><span class="nx">Values</span><span class="p">,</span> <span class="p">[]</span><span class="nx">any</span><span class="p">{</span>
+		<span class="nx">now</span><span class="p">,</span>
+		<span class="nx">usage</span><span class="p">.</span><span class="nx">TotalMinutesUsed</span><span class="p">,</span>
+		<span class="nx">usage</span><span class="p">.</span><span class="nx">TotalPaidMinutesUsed</span><span class="p">,</span>
+		<span class="nx">usage</span><span class="p">.</span><span class="nx">IncludedMinutes</span><span class="p">,</span>
+		<span class="nx">usage</span><span class="p">.</span><span class="nx">MinutesUsedBreakdown</span><span class="p">[</span><span class="s">&#34;UBUNTU&#34;</span><span class="p">],</span>
+		<span class="nx">usage</span><span class="p">.</span><span class="nx">MinutesUsedBreakdown</span><span class="p">[</span><span class="s">&#34;MACOS&#34;</span><span class="p">],</span>
+		<span class="nx">usage</span><span class="p">.</span><span class="nx">MinutesUsedBreakdown</span><span class="p">[</span><span class="s">&#34;WINDOWS&#34;</span><span class="p">],</span>
+	<span class="p">})</span>
+	<span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">svc</span><span class="p">.</span><span class="nx">Spreadsheets</span><span class="p">.</span><span class="nx">Values</span><span class="p">.</span><span class="nf">Append</span><span class="p">(</span><span class="nx">sheetID</span><span class="p">,</span> <span class="nx">tableRange</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">reportData</span><span class="p">).</span>
+		<span class="nf">ValueInputOption</span><span class="p">(</span><span class="s">&#34;USER_ENTERED&#34;</span><span class="p">).</span>
+		<span class="nf">InsertDataOption</span><span class="p">(</span><span class="s">&#34;INSERT_ROWS&#34;</span><span class="p">).</span>
+		<span class="nf">Context</span><span class="p">(</span><span class="nx">ctx</span><span class="p">).</span>
+		<span class="nf">Do</span><span class="p">()</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+	<span class="p">}</span>
+<span class="p">}</span>
+
+<span class="kd">type</span> <span class="nx">GitHubActionsBilling</span> <span class="kd">struct</span> <span class="p">{</span>
+	<span class="nx">TotalMinutesUsed</span>     <span class="kt">float64</span>            <span class="s">`json:&#34;total_minutes_used&#34;`</span>
+	<span class="nx">TotalPaidMinutesUsed</span> <span class="kt">float64</span>            <span class="s">`json:&#34;total_paid_minutes_used&#34;`</span>
+	<span class="nx">IncludedMinutes</span>      <span class="kt">float64</span>            <span class="s">`json:&#34;included_minutes&#34;`</span>
+	<span class="nx">MinutesUsedBreakdown</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">float64</span> <span class="s">`json:&#34;minutes_used_breakdown&#34;`</span>
+<span class="p">}</span>
+
+<span class="kd">func</span> <span class="nf">GetGitHubActionsBilling</span><span class="p">(</span><span class="nx">ctx</span> <span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span> <span class="nx">token</span><span class="p">,</span> <span class="nx">org</span> <span class="kt">string</span><span class="p">)</span> <span class="p">(</span><span class="o">*</span><span class="nx">GitHubActionsBilling</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+	<span class="c1">// build the request
+</span><span class="c1"></span>	<span class="nx">u</span> <span class="o">:=</span> <span class="s">&#34;https://api.github.com/orgs/&#34;</span> <span class="o">+</span> <span class="nx">org</span> <span class="o">+</span> <span class="s">&#34;/settings/billing/actions&#34;</span>
+	<span class="nx">req</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nf">NewRequestWithContext</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nx">MethodGet</span><span class="p">,</span> <span class="nx">u</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">err</span>
+	<span class="p">}</span>
+	<span class="nx">req</span><span class="p">.</span><span class="nx">Header</span><span class="p">.</span><span class="nf">Set</span><span class="p">(</span><span class="s">&#34;Accept&#34;</span><span class="p">,</span> <span class="s">&#34;application/vnd.github+json&#34;</span><span class="p">)</span>
+	<span class="nx">req</span><span class="p">.</span><span class="nx">Header</span><span class="p">.</span><span class="nf">Set</span><span class="p">(</span><span class="s">&#34;Authorization&#34;</span><span class="p">,</span> <span class="s">&#34;Bearer &#34;</span><span class="o">+</span><span class="nx">token</span><span class="p">)</span>
+	<span class="nx">req</span><span class="p">.</span><span class="nx">Header</span><span class="p">.</span><span class="nf">Set</span><span class="p">(</span><span class="s">&#34;X-GitHub-Api-Version&#34;</span><span class="p">,</span> <span class="s">&#34;2022-11-28&#34;</span><span class="p">)</span>
+
+	<span class="c1">// send the request
+</span><span class="c1"></span>	<span class="nx">resp</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">DefaultClient</span><span class="p">.</span><span class="nf">Do</span><span class="p">(</span><span class="nx">req</span><span class="p">)</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">err</span>
+	<span class="p">}</span>
+	<span class="k">defer</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
+
+	<span class="k">if</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">StatusCode</span> <span class="o">!=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">StatusOK</span> <span class="p">{</span>
+		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;unexpected status code: %d&#34;</span><span class="p">,</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">StatusCode</span><span class="p">)</span>
+	<span class="p">}</span>
+
+	<span class="c1">// parse the response
+</span><span class="c1"></span>	<span class="nx">data</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">io</span><span class="p">.</span><span class="nf">ReadAll</span><span class="p">(</span><span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">)</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">err</span>
+	<span class="p">}</span>
+	<span class="kd">var</span> <span class="nx">usage</span> <span class="o">*</span><span class="nx">GitHubActionsBilling</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">Unmarshal</span><span class="p">(</span><span class="nx">data</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">usage</span><span class="p">);</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;failed to parse response: %w&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+	<span class="p">}</span>
+	<span class="k">return</span> <span class="nx">usage</span><span class="p">,</span> <span class="kc">nil</span>
+<span class="p">}</span>
+</code></pre></div><h2 id="認証設定">認証設定</h2>
+<p>実行にはGitHubとGoogleへの認証情報が必要です。</p>
+<p>GitHubは<a href="https://github.com/settings/tokens">settings/tokens</a>からPAT(Personal access token)を取得し、
+環境変数に設定します。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="go">export GITHUB_TOKEN=YOUR_GITHUB_TOKEN
+</span></code></pre></div><p>Googleは<code>gcloud</code>コマンドを使います。
+デフォルトの権限ではスプレッドシートへの書き込みができないので、スプレッドシートを書き込み権限をスコープに追加してログインします。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="go">gcloud auth application-default login \
+</span><span class="go">    --scopes=https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/spreadsheets
+</span></code></pre></div><h2 id="実行">実行</h2>
+<p>他の必要なパラメーターは環境変数で設定します。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="go">export SHEET_ID=hogehoge
+</span><span class="go">export GITHUB_REPOSITORY_OWNER=org
+</span><span class="go">go run main.go
+</span></code></pre></div><p>あとでGitHub Actionsで自動化することを想定して、オーガニゼーション名は<code>GITHUB_REPOSITORY_OWNER</code>から取得するようにしました。
+実際にGitHub Actionsを使って動かすのはまた今度。</p>
+<h2 id="まとめ">まとめ</h2>
+<p>GitHub Actionsの利用量を記録するスクリプトを書きました。</p>
+<hr>
+<p>ここまで書いたところで<a href="https://github.com/orgs/github/projects/4247">GitHub public roadmap</a>に載っているのでは？と思ったら、
+なんかそれっぽいのがありました。</p>
+<ul>
+<li><a href="https://github.com/github/roadmap/issues/217">Updated billing overview page #217</a></li>
+</ul>
+<p><img src="https://user-images.githubusercontent.com/11078662/123352101-780aca00-d513-11eb-82ca-d83023adbbcd.png" alt="Billing Overview"></p>
+<p>予定では「Q2 2023 – Apr-Jun」とありますが、最初公開されたときの予定はQ4 2021 – Oct-Dec。
+そしてこの文章を書いているのは2023-06-22。
+さて、僕のスクリプトが動き出すのとどっちが早いでしょう・・・？</p>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://docs.github.com/en/rest/billing?apiVersion=2022-11-28#get-github-actions-billing-for-an-organization">Get GitHub Actions billing for an organization</a></li>
+<li><a href="https://pkg.go.dev/google.golang.org/api@v0.128.0/sheets/v4">document - google.golang.org/api@v0.128.0/sheets/v4</a></li>
+<li><a href="https://cloud.google.com/sdk/gcloud/reference/auth/application-default/login">gcloud auth application-default login</a></li>
+<li><a href="https://developers.google.com/identity/protocols/oauth2/scopes">OAuth 2.0 Scopes for Google APIs</a></li>
+<li><a href="https://github.com/github/roadmap/issues/217">Updated billing overview page #217</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">ICHINOSE Shogo</span></span>
+    
+    <time>Jun 22, 2023</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2023/06/22/2023-06-22-go-loopvar-experiment/" title="Go 1.22で導入されるforループ変数の変更">Go 1.22で導入されるforループ変数の変更</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2023/06/22/2023-06-22-github-actions-usage-report/">GitHub Actionsの利用量をまとめる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/06/22/2023-06-22-go-loopvar-experiment/">Go 1.22で導入されるforループ変数の変更</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/06/18/2023-06-18-report-vulnerability-via-github/">GitHub経由で脆弱性報告してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/05/29/2023-05-29-why-you-should-not-use-timestamp-as-id/">なぜタイムスタンプをIDとして扱ってはいけないのか</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/04/23/2023-04-23-akamai-peace-for-all/">RE: Akamai x UNIQLOコラボTシャツに書かれたプログラムを解読してみる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/03/29/2023-03-29-downgrade-homebrew/">Homebrewで過去のバージョンのMySQLクライアントをインストールしたい</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/03/24/2023-03-24-github-identification-has-changed/">GitHubに接続したらWARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!と怒られる件</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/01/02/2023-01-02-rabbit-plan/">「全人類兎化計画」の特設サイトがサブドメインで展開していてエラい</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/01/01/2023-01-01-rmqr-generator-written-in-golang/">GolangでQRコード、マイクロQRコード、rMQRコードのジェネレーターを作った</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2023 ICHINOSE Shogo - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$']],
+    displayMath: [['$$','$$']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+</html>
+

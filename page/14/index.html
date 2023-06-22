@@ -112,6 +112,42 @@
         
 
 <header>
+  <p class="meta">Mar 14, 2016
+     - 2 minute read 
+     - <a href="https://shogo82148.github.io/blog/2016/03/14/http2-over-websocket/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a><a class="label" href="https://shogo82148.github.io/categories/websocket/">websocket </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2016/03/14/http2-over-websocket/">ngrokみたいなHTTPプロキシを書いてみた</a>
+  </h1>
+</header>
+
+        
+          <p>開発中のWebアプリをみんなに試してほしいけど、 サーバなんてなくて開発環境がローカルにしか無くて公開できないということは、 開発初期段階だとよくあることだと思います。 もちろん本格的にやるならテスト用にサーバを建てるべきですが、 小さなものならngrokを使うと簡単です。 ngrokの公開サーバへのHTTPリクエストをローカルにリレーして、 ローカルのサーバをお手がるに公開できるサービスです。
+びっくりするほど簡単に公開できて便利ですが、 一応oAuthで制限とかかけたいなーとかカスタマイズしてみたくなってきたので、 似たようなものを自作できないかといろいろ遊んでみました。
+その結果、HTTP2 over Websocketみたいな謎なものが出来上がってしまったというお話です。
+HTTP2 over Websocketというアイデア ngrokっぽいものを実現するためには、 サーバが受け取ったHTTPリクエストをローカルの環境に転送する必要があります。 ご存知のとおり通常のHTTPではサーバ側からのプッシュ配信が難しいので、Websocketを使うのが良さそうです。 しかし、複数のコネクションで並列にやってくるHTTPリクエストを、一本のWebsocketに束ねる必要があり、 上手く制御するのは大変そうです。
+さて、HTTP2は一つのTCPコネクションで複数のリクエストを並行処理する仕様があります。 「複数のリクエストを一本に束ねる」という点ではなんか似ているので、なんだか流用できそうな気がしてきました。 Golangならきっと上手いことinterfaceを実装すれば、なんとかできるのではとやってみました。
+実装 HTTP2は暗号化や複雑なフロー制御を行っていますが、 外から見ればnet.Connインターフェースに読み書きしている何かに過ぎません。 そして、websocket.Connもnet.Connを実装しているので、そのままHTTP2のライブラリに渡せるはずです。
+そうしてできたのが以下のサーバです。
+package main import ( &#34;errors&#34; &#34;log&#34; &#34;net/http&#34; &#34;net/http/httputil&#34; &#34;sync&#34; &#34;golang.org/x/net/http2&#34; &#34;golang.org/x/net/websocket&#34; ) type transport struct { m sync.Mutex t http.RoundTripper closed chan struct{} } var t *transport func main() { t = &amp;transport{} s := websocket.Server{Handler: websocket.Handler(Handler)} http.Handle(&#34;/&#34;, s) go http.ListenAndServe(&#34;:3000&#34;, nil) http.</p>
+          
+            <footer>
+              <a href="https://shogo82148.github.io/blog/2016/03/14/http2-over-websocket/" rel="full-article">Read On &rarr;</a>
+            </footer>
+          
+        
+      </article>
+      
+      <article>
+        
+        
+
+<header>
   <p class="meta">Mar 10, 2016
      - 1 minute read 
      - <a href="https://shogo82148.github.io/blog/2016/03/10/go-nginx-oauth2-adapter/#disqus_thread">Comments</a>
@@ -416,39 +452,6 @@ import MeCab tagger = MeCab.</p>
         
       </article>
       
-      <article>
-        
-        
-
-<header>
-  <p class="meta">Dec 17, 2015
-     - 6 minute read 
-     - <a href="https://shogo82148.github.io/blog/2015/12/17/dbix-class/#disqus_thread">Comments</a>
-
-    
-    
-      - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a>
-    
-  </p>
-  <h1 class="entry-title">
-    <a href="https://shogo82148.github.io/blog/2015/12/17/dbix-class/">PerlのDBIx::Class利用上の注意点</a>
-  </h1>
-</header>
-
-        
-          <p>この記事は、Perl 5 Advent Calendarの17日目の記事です。
-Redis::Fast の reconnect についての中で DBIx::Classのreconnectについても触れています。 DBIx::Classの安全にreconnectionが行えるように考慮されていますが、色々と注意点があります。 reconnection周りで調べてみたので、Advent Calendarの枠を借りてまとめたいと思います。
-DBIx::Classとは DBIx::ClassはPerlのO/Rマッピングモジュールです。 テーブル間のリレーションを定義でき、JOIN句の入ったクエリもサポートする等、かなり高機能なモジュールです。 もう僕はJOIN句をDBIx::Class以外で書ける気がしません。 詳しくはtypester先生の解説記事をどうぞ。
- Perl Hackers Hub  第3回　DBIx::Classでデータベース操作（1） 第3回　DBIx::Classでデータベース操作（2） 第3回　DBIx::Classでデータベース操作（3）    サンプル サンプルとしてユーザの所持金を管理する簡単なアプリを作ってみます。 Webアプリとか作るの面倒だったので、コンソールアプリです。
-package My::Schema::User { use base &#39;DBIx::Class::Core&#39;; __PACKAGE__-&gt;table(&#39;user&#39;); __PACKAGE__-&gt;add_columns( id =&gt; { data_type =&gt; &#39;INTEGER&#39;, is_nullable =&gt; 0, is_auto_increment =&gt; 1, }, username =&gt; { data_type =&gt; &#39;VARCHAR&#39;, size =&gt; 255, is_nullable =&gt; 0, }, ); __PACKAGE__-&gt;set_primary_key(&#39;id&#39;); # userとmoneyは1対1の関係で、userに対応するmoneyが必ず存在しなければならない __PACKAGE__-&gt;has_one( &#39;money&#39; =&gt; &#39;My::Schema::Money&#39;, { &#39;foreign.</p>
-          
-            <footer>
-              <a href="https://shogo82148.github.io/blog/2015/12/17/dbix-class/" rel="full-article">Read On &rarr;</a>
-            </footer>
-          
-        
-      </article>
-      
       
       
 
@@ -589,6 +592,12 @@ package My::Schema::User { use base &#39;DBIx::Class::Core&#39;; __PACKAGE__-&gt
           
             
               <li class="post">
+                <a href="/blog/2023/06/22/2023-06-22-github-actions-usage-report/">GitHub Actionsの利用量をまとめる</a>
+              </li>
+            
+          
+            
+              <li class="post">
                 <a href="/blog/2023/06/22/2023-06-22-go-loopvar-experiment/">Go 1.22で導入されるforループ変数の変更</a>
               </li>
             
@@ -634,12 +643,6 @@ package My::Schema::User { use base &#39;DBIx::Class::Core&#39;; __PACKAGE__-&gt
             
               <li class="post">
                 <a href="/blog/2023/01/01/2023-01-01-rmqr-generator-written-in-golang/">GolangでQRコード、マイクロQRコード、rMQRコードのジェネレーターを作った</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2022/12/25/2022-12-25-feature-module-true/">Perlのmodule_trueフラグを先取り！</a>
               </li>
             
           
