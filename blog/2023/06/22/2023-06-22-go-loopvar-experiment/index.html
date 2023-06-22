@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono&display=swap" rel="stylesheet"> 
+
+  
+  <title>Go 1.22で導入されるforループ変数の変更</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+    <link rel="stylesheet" href="/css/fork-awesome.min.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="ICHINOSE Shogo">
+
+  
+  <meta name="generator" content="Hugo 0.91.2" />
+
+  
+  
+  
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-40R0PCLKVF');
+</script>
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Jun 22, 2023
+     - 3 minute read 
+     - <a href="https://shogo82148.github.io/blog/2023/06/22/2023-06-22-go-loopvar-experiment/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
+    
+  </p>
+  <h1 class="entry-title">
+     Go 1.22で導入されるforループ変数の変更 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p><a href="https://go.dev/blog/go1.21rc">Go 1.21 Release Candidate</a>で、
+forループ変数のセマンティクス変更の予定をしりました。
+導入の背景や影響について、Wikiの<a href="https://github.com/golang/go/wiki/LoopvarExperiment">LoopvarExperiment</a>で説明されています。</p>
+<p>地味にインパクトが大きそうだったので、内容を理解するために和訳しました。
+といっても訳の大半はChatGPT ChatGPT May 24 Versionのものです。便利。
+多少僕の修正も入ってます。</p>
+<p>以下<a href="https://github.com/golang/go/wiki/LoopvarExperiment/dce06fba618410bc10d158c41f5a6199e8f5d409">LoopvarExperimentのリビジョンdce06fb</a>の和訳です。</p>
+<hr>
+<p>Go 1.22では、Goチームはforループ変数のセマンティクスを変更し、繰り返し毎のクロージャやゴルーチンにおける意図しない共有を防止することを検討しています。
+Go 1.21には、この変更の予備的な実装が含まれており、プログラムをビルドする際に<code>GOEXPERIMENT=loopvar</code>を設定することで有効になります。
+変更の影響を理解するのに協力していただける方々には、<code>GOEXPERIMENT=loopvar</code>を使用して試してみていただき、遭遇した問題や成功した点についてご報告いただけると幸いです。</p>
+<p>このページでは、変更に関するよくある質問にお答えします。</p>
+<h2 id="この変更を試すにはどうすればいいですか">この変更を試すにはどうすればいいですか？</h2>
+<p>Go 1.21を使用して、以下のように<code>GOEXPERIMENT=loopvar</code>を設定してプログラムをビルドします。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="nv">GOEXPERIMENT</span><span class="o">=</span>loopvar go install my/program
+<span class="nv">GOEXPERIMENT</span><span class="o">=</span>loopvar go build my/program
+<span class="nv">GOEXPERIMENT</span><span class="o">=</span>loopvar go <span class="nb">test</span> my/program
+<span class="nv">GOEXPERIMENT</span><span class="o">=</span>loopvar go <span class="nb">test</span> my/program -bench<span class="o">=</span>.
+...
+</code></pre></div><h2 id="この問題はどのようなものですか">この問題はどのようなものですか？</h2>
+<p>以下のようなループを考えてみましょう：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go">	<span class="kd">func</span> <span class="nf">TestAllEvenBuggy</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+		<span class="nx">testCases</span> <span class="o">:=</span> <span class="p">[]</span><span class="kt">int</span><span class="p">{</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">6</span><span class="p">}</span>
+		<span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">v</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">testCases</span> <span class="p">{</span>
+			<span class="nx">t</span><span class="p">.</span><span class="nf">Run</span><span class="p">(</span><span class="s">&#34;sub&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+				<span class="nx">t</span><span class="p">.</span><span class="nf">Parallel</span><span class="p">()</span>
+				<span class="k">if</span> <span class="nx">v</span><span class="o">&amp;</span><span class="mi">1</span> <span class="o">!=</span> <span class="mi">0</span> <span class="p">{</span>
+					<span class="nx">t</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="s">&#34;odd v&#34;</span><span class="p">,</span> <span class="nx">v</span><span class="p">)</span>
+				<span class="p">}</span>
+			<span class="p">})</span>
+		<span class="p">}</span>
+	<span class="p">}</span>
+</code></pre></div><p>このテストは、すべてのテストケースが偶数であるかを確認することを目的としていますが、<code>GOEXPERIMENT=loopvar</code>を使用しなくてもパスします。
+問題は、<code>t.Parallel</code>がクロージャを停止させ、ループを継続させ、そして<code>TestAllEven</code>が戻るときにすべてのクロージャを並列で実行することです。
+クロージャ内のif文が実行される時点でループは終了しており、vは最終的なイテレーションの値である6になっています。
+その結果、4つのサブテストはすべて並列で実行され、テストケースごとに確認する代わりに、すべてが6が偶数であるかどうかをチェックしてしまいます。</p>
+<p>この問題の別のバリエーションは以下のようなものです。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go">	<span class="kd">func</span> <span class="nf">TestAllEven</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+		<span class="nx">testCases</span> <span class="o">:=</span> <span class="p">[]</span><span class="kt">int</span><span class="p">{</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">6</span><span class="p">}</span>
+		<span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">v</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">testCases</span> <span class="p">{</span>
+			<span class="nx">t</span><span class="p">.</span><span class="nf">Run</span><span class="p">(</span><span class="s">&#34;sub&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+				<span class="nx">t</span><span class="p">.</span><span class="nf">Parallel</span><span class="p">()</span>
+				<span class="k">if</span> <span class="nx">v</span><span class="o">&amp;</span><span class="mi">1</span> <span class="o">!=</span> <span class="mi">0</span> <span class="p">{</span>
+					<span class="nx">t</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="s">&#34;odd v&#34;</span><span class="p">,</span> <span class="nx">v</span><span class="p">)</span>
+				<span class="p">}</span>
+			<span class="p">})</span>
+		<span class="p">}</span>
+	<span class="p">}</span>
+</code></pre></div><p>このテストは、0、2、4、6がすべて偶数であるかどうかを確認するものですが、0、2、4が正しく処理されているかどうかをテストしていません。<code>TestAllEvenBuggy</code>と同様に、6を4回テストしてしまいます。</p>
+<p>このバグのもう1つの一般的な形式は、3つの節を持つforループでループ変数をキャプチャする場合です。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go">	<span class="kd">func</span> <span class="nf">Print123</span><span class="p">()</span> <span class="p">{</span>
+		<span class="kd">var</span> <span class="nx">prints</span> <span class="p">[]</span><span class="kd">func</span><span class="p">()</span>
+		<span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="mi">1</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;=</span> <span class="mi">3</span><span class="p">;</span> <span class="nx">i</span><span class="o">++</span> <span class="p">{</span>
+			<span class="nx">prints</span> <span class="p">=</span> <span class="nb">append</span><span class="p">(</span><span class="nx">prints</span><span class="p">,</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">i</span><span class="p">)</span> <span class="p">})</span>
+		<span class="p">}</span>
+		<span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">print</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">prints</span> <span class="p">{</span>
+			<span class="nb">print</span><span class="p">()</span>
+		<span class="p">}</span>
+	<span class="p">}</span>
+</code></pre></div><p>このプログラムは1、2、3を表示するように見えますが、実際には4、4、4と表示されます。</p>
+<p>このような意図しない共有のバグは、Goを学び始めたばかりの人から10年間使用している人まで、すべてのGoプログラマに影響を与えます。
+この問題の議論は、Go FAQの<a href="https://go.dev/doc/faq#closures_and_goroutines">最初のエントリーの1つ</a>です。</p>
+<p>こちらは、この種のバグによって引き起こされた<a href="https://bugzilla.mozilla.org/show_bug.cgi?id=1619047">実際のプロダクション問題の公開例</a>です。
+これはLet&rsquo;s Encryptからのものです。関連するコードは次のようになっています：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="c1">// authz2ModelMapToPB converts a mapping of domain name to authz2Models into a
+</span><span class="c1">// protobuf authorizations map
+</span><span class="c1"></span><span class="kd">func</span> <span class="nf">authz2ModelMapToPB</span><span class="p">(</span><span class="nx">m</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="nx">authz2Model</span><span class="p">)</span> <span class="p">(</span><span class="o">*</span><span class="nx">sapb</span><span class="p">.</span><span class="nx">Authorizations</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+	<span class="nx">resp</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">sapb</span><span class="p">.</span><span class="nx">Authorizations</span><span class="p">{}</span>
+	<span class="k">for</span> <span class="nx">k</span><span class="p">,</span> <span class="nx">v</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">m</span> <span class="p">{</span>
+		<span class="c1">// Make a copy of k because it will be reassigned with each loop.
+</span><span class="c1"></span>		<span class="nx">kCopy</span> <span class="o">:=</span> <span class="nx">k</span>
+		<span class="nx">authzPB</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nf">modelToAuthzPB</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">v</span><span class="p">)</span>
+		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+			<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">err</span>
+		<span class="p">}</span>
+		<span class="nx">resp</span><span class="p">.</span><span class="nx">Authz</span> <span class="p">=</span> <span class="nb">append</span><span class="p">(</span><span class="nx">resp</span><span class="p">.</span><span class="nx">Authz</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">sapb</span><span class="p">.</span><span class="nx">Authorizations_MapElement</span><span class="p">{</span><span class="nx">Domain</span><span class="p">:</span> <span class="o">&amp;</span><span class="nx">kCopy</span><span class="p">,</span> <span class="nx">Authz</span><span class="p">:</span> <span class="nx">authzPB</span><span class="p">})</span>
+	<span class="p">}</span>
+	<span class="k">return</span> <span class="nx">resp</span><span class="p">,</span> <span class="kc">nil</span>
+<span class="p">}</span>
+</code></pre></div><p>ループの最後で使用されている<code>&amp;kCopy</code>に対処するために<code>kCopy := k</code>が存在することに注意してください。
+残念ながら、<code>modelToAuthzPB</code>は<code>v</code>のいくつかのフィールドへのポインターを保持していることが判明しましたが、これはループを読んでいる段階では分からないものでした。</p>
+<p>このバグの初期の影響は、Let&rsquo;s Encryptが<a href="https://community.letsencrypt.org/t/revoking-certain-certificates-on-march-4/114864">不正に発行された300万以上の証明書を取り消す必要があった</a>ことでした。
+彼らはインターネットのセキュリティに与える負の影響のためにその処置を取らないことにし、代わりに<a href="https://bugzilla.mozilla.org/show_bug.cgi?id=1619179">例外を主張</a>しましたが、
+そのインパクトの大きさがわかると思います。</p>
+<p>このコードは作成時に注意深くレビューされており、著者は明らかに潜在的な問題に気づき、<code>kCopy := k</code>という行を書いています。
+それにもかかわらず、まだ重大なバグがありました。このバグは、<code>modelToAuthzPB</code>が正確に何を行っているかを正確に把握しない限りは見えません。</p>
+<h2 id="提案されている解決策は">提案されている解決策は？</h2>
+<p>提案されている解決策は、<code>:=</code>を使用してforループ内で宣言されたループ変数が、各イテレーションごとに異なるインスタンスになるようにすることです。
+これにより、値がクロージャやゴルーチンにキャプチャされたり、イテレーションを超えて存在する場合でも、後の参照ではそのイテレーション中に持っていた値が見えるようになり、後のイテレーションで上書きされた値ではなくなります。</p>
+<p>rangeループの場合、各ループの本体が各range変数に対して<code>k := k</code>および<code>v := v</code>で開始される効果があります。
+上記のLet&rsquo;s Encryptの例では、<code>kCopy := k</code>は不要になり、<code>v := v</code>がないことによって引き起こされるバグも回避されます。</p>
+<p>3つの節を持つforループの場合、各ループの本体が<code>i := i</code>で始まり、ループ本体の最後で逆の代入が行われ、イテレーションごとの<code>i</code>が次のイテレーションの準備に使用されるiにコピーされます。
+これは複雑に聞こえるかもしれませんが、実際には一般的なforループのイディオムは従来通りに正確に機能し続けます。
+ループの動作が変わるのは、<code>i</code>がキャプチャされて他の何かと共有される場合だけです。たとえば、次のコードは従来通りに動作します。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go">	<span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="mi">0</span><span class="p">;;</span> <span class="nx">i</span><span class="o">++</span> <span class="p">{</span>
+		<span class="k">if</span> <span class="nx">i</span> <span class="o">&gt;=</span> <span class="nb">len</span><span class="p">(</span><span class="nx">s</span><span class="p">)</span> <span class="o">||</span> <span class="nx">s</span><span class="p">[</span><span class="nx">i</span><span class="p">]</span> <span class="o">==</span> <span class="sc">&#39;&#34;&#39;</span> <span class="p">{</span>
+			<span class="k">return</span> <span class="nx">s</span><span class="p">[:</span><span class="nx">i</span><span class="p">]</span>
+		<span class="p">}</span>
+		<span class="k">if</span> <span class="nx">s</span><span class="p">[</span><span class="nx">i</span><span class="p">]</span> <span class="o">==</span> <span class="sc">&#39;\\&#39;</span> <span class="p">{</span> <span class="c1">// エスケープされた文字（おそらく引用符）をスキップ
+</span><span class="c1"></span>			<span class="nx">i</span><span class="o">++</span>
+		<span class="p">}</span>
+	<span class="p">}</span>
+</code></pre></div><p>詳細については、<a href="https://go.googlesource.com/proposal/+/master/design/60078-loopvar.md">設計ドキュメント</a>を参照してください。</p>
+<h2 id="この変更でプログラムが壊れる可能性はありますか">この変更でプログラムが壊れる可能性はありますか？</h2>
+<p>はい、この変更によってプログラムが壊れる可能性があります。たとえば、リスト内の値を単一要素のマップを使用して合計する驚くべき方法があります。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="nf">sum</span><span class="p">(</span><span class="nx">list</span> <span class="p">[]</span><span class="kt">int</span><span class="p">)</span> <span class="kt">int</span> <span class="p">{</span>
+	<span class="nx">m</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">map</span><span class="p">[</span><span class="o">*</span><span class="kt">int</span><span class="p">]</span><span class="kt">int</span><span class="p">)</span>
+	<span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">x</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">list</span> <span class="p">{</span>
+		<span class="nx">m</span><span class="p">[</span><span class="o">&amp;</span><span class="nx">x</span><span class="p">]</span> <span class="o">+=</span> <span class="nx">x</span>
+	<span class="p">}</span>
+	<span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">sum</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">m</span> <span class="p">{</span>
+		<span class="k">return</span> <span class="nx">sum</span>
+	<span class="p">}</span>
+	<span class="k">return</span> <span class="mi">0</span>
+<span class="p">}</span>
+</code></pre></div><p>この例では、ループ内には1つの<code>x</code>しかないため、各イテレーションで<code>&amp;x</code>が同じになることを前提としています。
+しかし、<code>GOEXPERIMENT=loopvar</code>では、<code>x</code>がイテレーションからエスケープするため、各イテレーションごとに<code>&amp;x</code>が異なる値となります。
+マップには単一のエントリーではなく複数のエントリーが含まれるようになります。</p>
+<p>以下は、0から9までの値を出力する意外な方法です。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go">	<span class="kd">var</span> <span class="nx">f</span> <span class="kd">func</span><span class="p">()</span>
+	<span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="p">&lt;</span> <span class="mi">10</span><span class="p">;</span> <span class="nx">i</span><span class="o">++</span> <span class="p">{</span>
+		<span class="k">if</span> <span class="nx">i</span> <span class="o">==</span> <span class="mi">0</span> <span class="p">{</span>
+			<span class="nx">f</span> <span class="p">=</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span> <span class="nb">print</span><span class="p">(</span><span class="nx">i</span><span class="p">)</span> <span class="p">}</span>
+		<span class="p">}</span>
+		<span class="nf">f</span><span class="p">()</span>
+	<span class="p">}</span>
+</code></pre></div><p>この例では、最初のイテレーションで初期化されたfは、呼び出されるたびにiの新しい値を「見る」ということに依存しています。<code>GOEXPERIMENT=loopvar</code>を使用すると、0が10回出力されます。</p>
+<p><code>GOEXPERIMENT=loopvar</code>を使用して壊れる人工的なプログラムを作成することは可能ですが、まだ実際に誤って実行されるプログラムは見つかっていません。</p>
+<p>C#もC# 5.0で同様の変更を行い、<a href="https://github.com/golang/go/discussions/56010#discussioncomment-3788526">彼らも同様の変更による問題はほとんど報告されなかった</a>と報告しています。</p>
+<h2 id="この変更は実際のプログラムをどれくらいの頻度で壊すのでしょうか">この変更は、実際のプログラムをどれくらいの頻度で壊すのでしょうか？</h2>
+<p>実証的には、この変更によって実際のプログラムが壊れることはほとんどありません。
+Googleのコードベースでのテストでは、多くのテストが修正されました。
+また、ループ変数と<code>t.Parallel</code>の間の相互作用の問題により、いくつかのバグのあるテストが誤って合格していることも特定されました。
+先ほどの「<code>TestAllEvenBuggy</code>」のようなテストを修正するために、それらのテストを書き直しました。</p>
+<p>私たちの経験からは、新しいセマンティクスは正しいコードを壊すよりも、バグのあるコードを修正することの方が遥かに多いということが示されています。
+新しいセマンティクスは、テストパッケージの約1/8（すべてが誤って合格しているテスト）でのみテストの失敗を引き起こしました。
+ただし、更新されたGo 1.20の<code>loopclosure</code>vetチェックをコードベース全体に適用すると、テストがはるかに高い割合で検出されました。
+約400件のうちの1つ（8,000件の中で20件）です。
+この<code>loopclosure</code>チェッカーには偽陽性はありません。すべての報告は、ソースツリー内での<code>t.Parallel</code>の誤った使用です。
+つまり、検出されたテストの約5%が「<code>TestAllEvenBuggy</code>」のようなものであり、残りの95%が「<code>TestAllEven</code>」のようなものです。
+ループ変数のバグが修正されたとしても、意図した動作をテストしていない（まだ）ものの、正しいコードの正しいテストです。</p>
+<p>Googleは、2023年5月初旬以来、新しいループセマンティクスを標準のプロダクションツールチェーンのすべてのforループに適用して実行しており、報告された問題はひとつもありません（たくさんの喝采を浴びています）。</p>
+<p>Googleでの経験の詳細については、<a href="https://go.googlesource.com/proposal/+/master/design/60078-loopvar.md#fixes">この記事</a>を参照してください。</p>
+<p>また、<a href="https://github.com/golang/go/issues/60078#issuecomment-1556058025">Kubernetesでも新しいループセマンティクスを試しました</a>。
+その結果、基盤となるコードに潜在的なループ変数のスコープ関連したバグにより、新たに2つのテストが失敗することが特定されました。
+比較のために、KubernetesをGo 1.20からGo 1.21に更新した場合、Go自体の未公開の振る舞いに依存していたため、3つの新たなテストの失敗が特定されました。
+ループ変数の変更による2つのテストの失敗は、通常のリリースの更新に比べて重大な負担とはなりません。</p>
+<h2 id="プログラムの実行を遅くする可能性がありますかそれによってより多くの割り当てが行われるためですか">プログラムの実行を遅くする可能性がありますか？それによってより多くの割り当てが行われるためですか？</h2>
+<p>可能性があります。いくつかの場合、追加の割り当ては潜在的なバグの修正に固有のものです。
+たとえば、<code>Print123</code>では、ループが終了した後に異なる値を印刷するために、現在は3つの別々の<code>int</code>（クロージャ内部で行われる）を割り当てています。
+そのため、1つの代わりに<code>N</code>個の異なる変数を割り当てる必要がありますが、共有変数であっても別々の変数であっても、ループは正しい状態です。
+非常に頻繁に実行されるループでは、これにより遅延が発生する場合があります。このような問題は、メモリ割り当てプロファイル（<code>pprof --alloc_objects</code>を使用）で明らかになるはずです。</p>
+<p>公開されている「bent」ベンチマークスイートのベンチマークでは、統計的に有意なパフォーマンスの差は見られなかったため、ほとんどのプログラムに影響はないと予想されます。</p>
+<h2 id="もし提案が承認される場合変更はどのように展開されますか">もし提案が承認される場合、変更はどのように展開されますか？</h2>
+<p>Goの一般的な<a href="https://tip.golang.org/doc/godebug">互換性のアプローチ</a>に沿って、新しいforループのセマンティクスは、
+コンパイルされるパッケージが<code>go 1.22</code>や<code>go 1.23</code>のようにGo 1.22以降を宣言するgo行を含むモジュールにのみ適用されます。
+この保守的なアプローチにより、「新しいGoツールチェーンを単純に採用するだけでプログラムの動作が変わることはありません」。
+代わりに、各モジュールの作者がモジュールが新しいセマンティクスに変更されるタイミングを制御します。</p>
+<p><code>GOEXPERIMENT=loopvar</code>の試験メカニズムでは、宣言されたGo言語のバージョンは使用されません。
+このメカニズムはプログラムのすべてのforループに新しいセマンティクスを条件なく適用します。
+これにより、変更の最大の影響を特定するための最悪のケースの振る舞いが提供されます。</p>
+<h2 id="変更の影響を受けるコードの場所のリストを確認することはできますか">変更の影響を受けるコードの場所のリストを確認することはできますか？</h2>
+<p>はい、コマンドラインで<code>-gcflags=all=-d=loopvar=2</code>を使用してビルドすることで、変更の影響を受ける各ループに対して警告スタイルの出力が表示されます。以下はその例です。</p>
+<pre tabindex="0"><code>	$ go build -gcflags=all=-d=loopvar=2 cmd/go
+	...
+	modload/import.go:676:7: loop variable d now per-iteration, stack-allocated
+	modload/query.go:742:10: loop variable r now per-iteration, heap-allocated
+</code></pre><p>all=はビルド内のすべてのパッケージの変更に関する情報を表示します。
+<code>all=</code>を省略した場合、<code>-gcflags=-d=loopvar=2</code>のように指定すると、コマンドラインで指定したパッケージ（または現在のディレクトリのパッケージ）のみが診断情報を出力します。</p>
+<h2 id="この変更でテストが失敗しますどうすればデバッグできますか">この変更でテストが失敗します。どうすればデバッグできますか？</h2>
+<p>テストが変更によって失敗する場合、<code>bisect</code>という新しいツールを使用して、プログラムの異なるサブセットに対して変更を適用し、どの特定のループがテストの失敗を引き起こしているかを特定できます。
+失敗しているテストがある場合、<code>bisect</code>は問題を引き起こしている具体的なループを特定します。次のように使用します:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="go">go install golang.org/x/tools/cmd/bisect@latest
+</span><span class="go">bisect -compile=loopvar go test
+</span></code></pre></div><p>実際の例については、<a href="https://github.com/golang/go/issues/60078#issuecomment-1556058025">このコメントのbisect transcriptセクション</a>を参照してください。
+詳細については、<a href="https://pkg.go.dev/golang.org/x/tools/cmd/bisect">bisectのドキュメント</a>をご覧ください。</p>
+<h2 id="これはループの中でx--xと書く必要がなくなったということですか">これは、ループの中で<code>x := x</code>と書く必要がなくなったということですか？</h2>
+<p>まだそうではありません。しかし、将来のバージョンのGoでは、おそらくGo 1.22であるかもしれませんが、その必要がなくなることを期待しています。</p>
+<h2 id="どうすればフィードバックを送れますか">どうすればフィードバックを送れますか？</h2>
+<p>フィードバックを送る方法は次の通りです。</p>
+<p><a href="https://github.com/golang/go/issues/60078">提案の問題</a>は提案について議論するための場所です。
+ただし、直感的または自然なものは何かについての議論は生産的ではないことに注意してください。
+異なる人々は、何が直感的または自然であるかについて合理的に異なる意見を持つことがあります。</p>
+<p>代わりに、議論に貢献できるもっとも重要なフィードバックは、 <em>実際のコードベースでの変更の使用に関する実証データ</em> です。</p>
+<ul>
+<li><code>GOEXPERIMENT=loopvar</code> でいくつのテストが失敗するようになったでしょうか？</li>
+<li><code>GOEXPERIMENT=loopvar</code> によって正しいプロダクションコードが壊れたというよりも、バグのあるコードやテストを特定するために使われましたか？</li>
+<li>重要な実世界のベンチマークのいずれかが大幅に遅くなったり、メモリを大幅に消費するようになったりしましたか？</li>
+</ul>
+<p>このような具体的なデータを議論に寄与することが、もっとも重要なフィードバックです。</p>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">ICHINOSE Shogo</span></span>
+    
+    <time>Jun 22, 2023</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2023/06/18/2023-06-18-report-vulnerability-via-github/" title="GitHub経由で脆弱性報告してみた">GitHub経由で脆弱性報告してみた</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2023/06/22/2023-06-22-go-loopvar-experiment/">Go 1.22で導入されるforループ変数の変更</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/06/18/2023-06-18-report-vulnerability-via-github/">GitHub経由で脆弱性報告してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/05/29/2023-05-29-why-you-should-not-use-timestamp-as-id/">なぜタイムスタンプをIDとして扱ってはいけないのか</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/04/23/2023-04-23-akamai-peace-for-all/">RE: Akamai x UNIQLOコラボTシャツに書かれたプログラムを解読してみる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/03/29/2023-03-29-downgrade-homebrew/">Homebrewで過去のバージョンのMySQLクライアントをインストールしたい</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/03/24/2023-03-24-github-identification-has-changed/">GitHubに接続したらWARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!と怒られる件</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/01/02/2023-01-02-rabbit-plan/">「全人類兎化計画」の特設サイトがサブドメインで展開していてエラい</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/01/01/2023-01-01-rmqr-generator-written-in-golang/">GolangでQRコード、マイクロQRコード、rMQRコードのジェネレーターを作った</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2022/12/25/2022-12-25-feature-module-true/">Perlのmodule_trueフラグを先取り！</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2023 ICHINOSE Shogo - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$']],
+    displayMath: [['$$','$$']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+</html>
+
