@@ -49,9 +49,9 @@ AWS SDK for Go は v2 からマルチモジュール構成になり、サービ�
 以下のモジュールが必要です。
 
 - [github.com/aws/aws-sdk-go-v2/feature/s3/manager](https://pkg.go.dev/github.com/aws/aws-sdk-go-v2/feature/s3/manager)
-- [github.com/aws/aws-sdk-go-v2/service/s3](github.com/aws/aws-sdk-go-v2/service/s3)
-- [github.com/aws/aws-sdk-go-v2/config](github.com/aws/aws-sdk-go-v2/config)
-- [github.com/aws/aws-sdk-go-v2](github.com/aws/aws-sdk-go-v2)
+- [github.com/aws/aws-sdk-go-v2/service/s3](https://github.com/aws/aws-sdk-go-v2/service/s3)
+- [github.com/aws/aws-sdk-go-v2/config](https://github.com/aws/aws-sdk-go-v2/config)
+- [github.com/aws/aws-sdk-go-v2](https://github.com/aws/aws-sdk-go-v2)
 
 dependabot は各モジュール 1 つずつプルリクエストを作りので、最大で 4 つのプルリクエストが押し寄せてきます。
 しかも一個マージすると、十中八九他のプルリクエストとコンフリクト →dependabot の rebase を待つ → テストが通るのを待つ、というフローが発生します。
