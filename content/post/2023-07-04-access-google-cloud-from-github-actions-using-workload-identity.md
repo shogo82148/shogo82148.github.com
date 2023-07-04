@@ -125,7 +125,8 @@ GitHub Actions標準の権限ではオーガニゼーションの設定にアク
 
 ---
 
-完全に余談なんですが、GitHub OIDCのSubject claimは以下のようなパターンがあり、だいぶ複雑です（参考: [Example subject claims]）。
+ここからは完全に余談です。
+GitHub OIDCのSubject claimは以下のようなパターンがあり、だいぶ複雑です（参考: [Example subject claims]）。
 
 - `repo:octo-org/octo-repo:environment:Production`: Environment
 - `repo:octo-org/octo-repo:pull_request`: Pull Request
@@ -133,12 +134,13 @@ GitHub Actions標準の権限ではオーガニゼーションの設定にアク
 - `repo:octo-org/octo-repo:ref:refs/tags/demo-tag`: Push Tags
 
 連携先によっては「`repo:octo-org/octo-repo:*`でパターンマッチせよ」とドキュメントに書いてあります。
-僕は「**これ非常に危うい方法だな**」と常々思っています。
-ユーザー名やレポジトリ名を慎重にバリデーションしておかないとインジェクション攻撃できる危険性があったり、
+僕は常々「**これ非常に危うい方法だな**」と思っています。
+単純な文字列操作では、ユーザー名やレポジトリ名を使ってインジェクション攻撃できる危険性があったり、
 `repo:octo-org/octo-repo*`のような設定ミス（`*`の前に`:`が抜けている）に気が付かなかったりするからです。
 インジェクション攻撃に関してはGitHub側で対策済みですが（~~もちろん試した~~）、設定ミスは自分たちで気をつけないとダメです。
 
-そういうわけで、本来は「**claimと完全一致するか**」をチェックするべきだと思ってます。
+そういうわけで、本来は「**claimとの完全一致で判断する**」べきだと思ってます。
+その点、Google Cloudの[GitHub OIDC Terraform Module]は、repository custom claimとの完全一致で判定するので安心感があります。
 
 ## 参考
 
