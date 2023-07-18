@@ -125,7 +125,7 @@ jobs:
 実行するとすぐに[failing input]を見つけてくれます。
 アクションは[failing input]を見つけると、その内容をコミットして、プルリクエストを作ってくれます。
 
-```diff
+`````diff
 From a61ed4471d7058448f3985aa939bda29dcd51040 Mon Sep 17 00:00:00 2001
 From: "github-actions[bot]"
  <41898282+github-actions[bot]@users.noreply.github.com>
@@ -158,7 +158,7 @@ index 0000000..8106293
 @@ -0,0 +1,2 @@
 +go test fuzz v1
 +string("Ԣ")
-```
+``````
 
 プルリクエストには「エラーを再現するためのコマンド」と「その実行結果」が含まれているので、
 手元にpullしてコマンドを叩けばすぐに再現できます。
