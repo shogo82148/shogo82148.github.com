@@ -234,7 +234,8 @@ hello world!
 
 - [復活の呪文 - ピクシブ百科事典](https://dic.pixiv.net/a/%E5%BE%A9%E6%B4%BB%E3%81%AE%E5%91%AA%E6%96%87)
 - [復活の呪文 - ニコニコ大百科](https://dic.nicovideo.jp/a/%E5%BE%A9%E6%B4%BB%E3%81%AE%E5%91%AA%E6%96%87)
-- [yoshi389111/dq1pswd] [https://yoshi389111.github.io/dq1pswd/](ふっかつのじゅもんジェネレーター)
+- [yoshi389111/dq1pswd]
+- [https://yoshi389111.github.io/dq1pswd/](ふっかつのじゅもんジェネレーター)
 - [DQ1 復活の呪文解析日記]
 - [shogo82148/base64dq]
 - [encoding/base64]
