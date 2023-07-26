@@ -193,7 +193,7 @@ $ head -c 15 /dev/random | base64dq
 実装の参考に[encoding/base64]のコードを読んで、実装によってパディングの扱いに差があることに気が付きました。
 たとえば、[encoding/base64]はパディング文字のあとに英数字が現れることを禁止しています。
 
-```
+```go
 package main
 
 import (
