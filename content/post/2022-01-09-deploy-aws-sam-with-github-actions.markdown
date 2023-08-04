@@ -155,7 +155,7 @@ IAM ポリシーの `Condition` (条件) 要素に `iam:PermissionsBoundary` を
 
 対応する CloudFormation のテンプレートは以下の部分です。
 
-- [cicd.yaml#L36-L103](https://github.com/shogo82148/holidays-jp/blob/6638af346b1e7c28c1cb92fdedd36f047ddbefb1/cicd.yaml#L36-L103)
+- [cicd.yaml#L36-L104](https://github.com/shogo82148/holidays-jp/blob/c7b5e8e9d1bafafe3e4d9178680851502299b6ed/cicd.yaml#L36-L104)
 
 ```yaml
 Policies:
@@ -207,6 +207,7 @@ Policies:
             - "iam:TagRole"
             - "iam:UntagRole"
             - "iam:DeleteRole"
+            - "iam:PassRole" # 2023-08-04 追記: Lambda関数のランタイムを変更するために必要
 
             # handle Service Linked Roles
             - "iam:ListPoliciesGrantingServiceAccess"
