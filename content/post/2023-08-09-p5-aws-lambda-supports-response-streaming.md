@@ -2,7 +2,7 @@
 layout: post
 title: "AWS::LambdaがResponse Streamingに対応しました"
 slug: 2023-08-09-p5-aws-lambda-supports-response-streaming
-date: 2023-08-09 23:22:00 +0900
+date: 2023-08-09 21:30:00 +0900
 comments: true
 categories: [aws, aws-lambda, perl]
 ---
