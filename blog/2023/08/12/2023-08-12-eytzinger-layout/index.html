@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono&display=swap" rel="stylesheet"> 
+
+  
+  <title>Eytzinger LayoutをGoで試してみた</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+    <link rel="stylesheet" href="/css/fork-awesome.min.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="ICHINOSE Shogo">
+
+  
+  <meta name="generator" content="Hugo 0.91.2" />
+
+  
+  
+  
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-40R0PCLKVF');
+</script>
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Aug 12, 2023
+     - 3 minute read 
+     - <a href="https://shogo82148.github.io/blog/2023/08/12/2023-08-12-eytzinger-layout/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
+    
+  </p>
+  <h1 class="entry-title">
+     Eytzinger LayoutをGoで試してみた 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>2021年のスライド資料だけど、たまたま𝕏に流れているを見かけました。</p>
+<iframe class="speakerdeck-iframe" style="border: 0px; background: rgba(0, 0, 0, 0.1) padding-box; margin: 0px; padding: 0px; border-radius: 6px; box-shadow: rgba(0, 0, 0, 0.2) 0px 5px 40px; width: 100%; height: auto; aspect-ratio: 560 / 314;" frameborder="0" src="https://speakerdeck.com/player/5baa265604154e4c9bdbefb0ab58cdbb" title="Binary search with modern processors" allowfullscreen="true" data-ratio="1.78343949044586"></iframe>
+<p>このスライドでEytzinger Layoutという配列をはじめて知ったのでメモ。</p>
+<h2 id="eytzinger-layout">Eytzinger Layout</h2>
+<p>16世紀のオーストリアの貴族<a href="https://en.wikipedia.org/wiki/Micha%C3%ABl_Eytzinger">Michaël Eytzinger</a>が考案したことから、この名前がついたそうです。
+もともとはヨーロッパの王様の家系図に番号をつけるための方法です。
+ある人物の番号が$<code>k</code>$のとき、父親に$<code>2k</code>$、母親に$<code>2k+1</code>$と番号をつけます。
+このルールを使うと家系図に登場するすべての人物にユニークな番号をふることができます。</p>
+<p>この番号付けのルールをバイナリツリーに応用すると、ツリー構造をポインターを使わずに表現できます。
+<a href="https://ja.wikipedia.org/wiki/%E4%BA%8C%E5%88%86%E3%83%92%E3%83%BC%E3%83%97">二分ヒープ</a>を配列で表現するときの実装としてよく登場するのを目にします。
+こういう名前がついているのは知らなかった。</p>
+<h2 id="バイナリサーチとeytzinger-layoutの関係">バイナリサーチとEytzinger Layoutの関係</h2>
+<p>イマドキのCPUは非常に高速で、CPUの動作速度と比べてメモリーへの読み書きすら遅い、というレベルです。
+この速度差を解消すべく、イマドキCPUはコア上にキャッシュと持っています。
+読み書きの頻度の多いメモリー領域をキャッシュ上に保存することで、高速な動作を保っています。</p>
+<p>さて、バイナリサーチはソート済みの配列から$<code>\log n</code>$オーダーで要素を検索する方法です。
+しかし、通常のバイナリサーチはメモリーのアクセスパターンが複雑なため、CPUのキャッシュと非常に相性が悪いです。</p>
+<p>そこでEytzinger Layoutの出番です。
+Eytzinger Layoutを利用するとよくアクセスされる要素が隣接するようになります。
+これによりCPUキャッシュのヒット率をあげようという作戦です。
+冒頭のスライドや、以下の記事で詳しく説明されています（図があるとわかりやすいけど、面倒で力尽きた）。</p>
+<ul>
+<li><a href="https://algorithmica.org/en/eytzinger">Eytzinger Binary Search</a></li>
+<li><a href="https://postd.cc/cache-friendly-binary-search/">キャッシュフレンドリーな二分探索 ー データ構造を再考する</a></li>
+<li><a href="http://bannalia.blogspot.com/2015/06/cache-friendly-binary-search.html">Cache-friendly binary search</a></li>
+</ul>
+<h2 id="実装">実装</h2>
+<p>Goで実装してみました。</p>
+<ul>
+<li><a href="https://github.com/shogo82148/go-eytzinger">shogo82148/go-eytzinger</a></li>
+</ul>
+<p>ソート済みの配列からEytzinger Layoutへの変換は、再帰を使うと簡単に実装できます。
+（参考: <a href="https://algorithmica.org/en/eytzinger">Eytzinger Binary Search</a>）</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="c1">// https://github.com/shogo82148/go-eytzinger/blob/cd9c2f8a9657333f29a6b645cb2587322295ef3a/eytzinger.go#L8-L34
+</span><span class="c1"></span>
+<span class="c1">// Eytzinger rearranges the elements of a slice into a cache friendly binary tree
+</span><span class="c1">// as known as [Eytzinger Layout].
+</span><span class="c1">// The slice must be sorted in increasing order.
+</span><span class="c1">//
+</span><span class="c1">// [Eytzinger Layout]: https://en.wikipedia.org/wiki/Binary_tree#Arrays
+</span><span class="c1"></span><span class="kd">func</span> <span class="nx">Eytzinger</span><span class="p">[</span><span class="nx">S</span> <span class="err">~</span><span class="p">[]</span><span class="nx">E</span><span class="p">,</span> <span class="nx">E</span> <span class="nx">any</span><span class="p">](</span><span class="nx">a</span> <span class="nx">S</span><span class="p">)</span> <span class="nx">S</span> <span class="p">{</span>
+    <span class="nx">b</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="nx">S</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="nx">a</span><span class="p">))</span>
+    <span class="nx">ctx</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">eytzingerContext</span><span class="p">[</span><span class="nx">S</span><span class="p">,</span> <span class="nx">E</span><span class="p">]{</span><span class="nx">a</span><span class="p">:</span> <span class="nx">a</span><span class="p">,</span> <span class="nx">b</span><span class="p">:</span> <span class="nx">b</span><span class="p">}</span>
+    <span class="nx">ctx</span><span class="p">.</span><span class="nf">eytzinger</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nx">b</span>
+<span class="p">}</span>
+
+
+<span class="kd">type</span> <span class="nx">eytzingerContext</span><span class="p">[</span><span class="nx">S</span> <span class="err">~</span><span class="p">[]</span><span class="nx">E</span><span class="p">,</span> <span class="nx">E</span> <span class="nx">any</span><span class="p">]</span> <span class="kd">struct</span> <span class="p">{</span>
+    <span class="nx">a</span> <span class="nx">S</span> <span class="c1">// input slice
+</span><span class="c1"></span>    <span class="nx">b</span> <span class="nx">S</span> <span class="c1">// output slice
+</span><span class="c1"></span><span class="p">}</span>
+
+
+<span class="c1">// based on https://algorithmica.org/en/eytzinger
+</span><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">ctx</span> <span class="o">*</span><span class="nx">eytzingerContext</span><span class="p">[</span><span class="nx">S</span><span class="p">,</span> <span class="nx">E</span><span class="p">])</span> <span class="nf">eytzinger</span><span class="p">(</span><span class="nx">i</span><span class="p">,</span> <span class="nx">k</span> <span class="kt">int</span><span class="p">)</span> <span class="kt">int</span> <span class="p">{</span>
+    <span class="k">if</span> <span class="nx">k</span> <span class="p">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="nx">ctx</span><span class="p">.</span><span class="nx">a</span><span class="p">)</span> <span class="p">{</span>
+        <span class="nx">i</span> <span class="p">=</span> <span class="nx">ctx</span><span class="p">.</span><span class="nf">eytzinger</span><span class="p">(</span><span class="nx">i</span><span class="p">,</span> <span class="mi">2</span><span class="o">*</span><span class="nx">k</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
+        <span class="nx">ctx</span><span class="p">.</span><span class="nx">b</span><span class="p">[</span><span class="nx">k</span><span class="p">]</span> <span class="p">=</span> <span class="nx">ctx</span><span class="p">.</span><span class="nx">a</span><span class="p">[</span><span class="nx">i</span><span class="p">]</span>
+        <span class="nx">i</span><span class="o">++</span>
+        <span class="nx">i</span> <span class="p">=</span> <span class="nx">ctx</span><span class="p">.</span><span class="nf">eytzinger</span><span class="p">(</span><span class="nx">i</span><span class="p">,</span> <span class="mi">2</span><span class="o">*</span><span class="nx">k</span><span class="o">+</span><span class="mi">2</span><span class="p">)</span>
+    <span class="p">}</span>
+    <span class="k">return</span> <span class="nx">i</span>
+<span class="p">}</span>
+</code></pre></div><p>検索の実装例です。　
+実装の参考にした記事では、GCCの組み込み関数である<code>__builtin_ffs</code>を使用しています。
+Goに直接これに対応する関数はありませんが、標準ライブラリの<code>math/bits.TrailingZeros</code>を使用すると簡単に移植できます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="c1">// https://github.com/shogo82148/go-eytzinger/blob/cd9c2f8a9657333f29a6b645cb2587322295ef3a/eytzinger.go#L55-L71
+</span><span class="c1"></span>
+<span class="c1">// Search searches for target in a Eytzinger Layout slice.
+</span><span class="c1"></span><span class="kd">func</span> <span class="nx">Search</span><span class="p">[</span><span class="nx">S</span> <span class="err">~</span><span class="p">[]</span><span class="nx">E</span><span class="p">,</span> <span class="nx">E</span> <span class="nx">cmp</span><span class="p">.</span><span class="nx">Ordered</span><span class="p">](</span><span class="nx">x</span> <span class="nx">S</span><span class="p">,</span> <span class="nx">target</span> <span class="nx">E</span><span class="p">)</span> <span class="p">(</span><span class="kt">int</span><span class="p">,</span> <span class="kt">bool</span><span class="p">)</span> <span class="p">{</span>
+    <span class="nx">k</span> <span class="o">:=</span> <span class="mi">1</span>
+    <span class="k">for</span> <span class="nx">k</span> <span class="o">&lt;=</span> <span class="nb">len</span><span class="p">(</span><span class="nx">x</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">if</span> <span class="nx">cmp</span><span class="p">.</span><span class="nf">Less</span><span class="p">(</span><span class="nx">x</span><span class="p">[</span><span class="nx">k</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="nx">target</span><span class="p">)</span> <span class="p">{</span>
+            <span class="nx">k</span> <span class="p">=</span> <span class="mi">2</span><span class="o">*</span><span class="nx">k</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="nx">k</span> <span class="p">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="nx">k</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+    <span class="nx">k</span> <span class="o">&gt;&gt;=</span> <span class="nx">bits</span><span class="p">.</span><span class="nf">TrailingZeros</span><span class="p">(^</span><span class="nb">uint</span><span class="p">(</span><span class="nx">k</span><span class="p">))</span> <span class="o">+</span> <span class="mi">1</span>
+    <span class="k">if</span> <span class="nx">k</span> <span class="o">==</span> <span class="mi">0</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="nx">x</span><span class="p">),</span> <span class="kc">false</span>
+    <span class="p">}</span>
+    <span class="nx">k</span><span class="o">--</span>
+    <span class="k">return</span> <span class="nx">k</span><span class="p">,</span> <span class="nx">k</span> <span class="p">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="nx">x</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="p">(</span><span class="nx">x</span><span class="p">[</span><span class="nx">k</span><span class="p">]</span> <span class="o">==</span> <span class="nx">target</span> <span class="o">||</span> <span class="nf">isNaN</span><span class="p">(</span><span class="nx">target</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="nf">isNaN</span><span class="p">(</span><span class="nx">x</span><span class="p">[</span><span class="nx">k</span><span class="p">]))</span>
+<span class="p">}</span>
+</code></pre></div><h2 id="ベンチマーク">ベンチマーク</h2>
+<p>MacBook Pro 2021(CPU Apple M1 Pro, Memory 32GB)でベンチマークを取ってみました。</p>
+<h3 id="検索">検索</h3>
+<p><code>[]int</code>から<a href="https://github.com/shogo82148/go-eytzinger/blob/cd9c2f8a9657333f29a6b645cb2587322295ef3a/benchmark_test.go#L33-L45">毎回ランダムな整数を検索するベンチマーク</a>を書きました。
+以下に実行結果をしめします。</p>
+<p><img src="/images/2023-08-12-eytzinger-layout-1.svg" alt="検索時間"></p>
+<p><code>eytzinger.Search</code>がEytzinger Layoutに並べ替えてから検索した結果、<code>slice.BinarySearch</code>は<a href="https://pkg.go.dev/slices#BinarySearch">slices.BinarySearch</a>）（先週リリースされた<a href="https://go.dev/doc/devel/release#go1.21.0">Go 1.21.0</a>の新機能です！）の結果です。
+縦軸は検索1回あたりの処理時間、横軸は要素数の対数を取ったものです。Apple M1 Proで<code>int</code>は8バイトなので、横軸の数字を$<code>n</code>$とすると、検索対象の配列は$8\times2^n$バイトの大きさを持っています。
+「オーバーヘッド」はランダムな整数を生成する時間のにかかった時間です。</p>
+<p>8MB（グラフだと20のあたり）の前後でグラフの傾きが大きく変わっていることが読み取れます。
+Apple M1 ProのL2 cacheが12MBらしいので、L2キャッシュにヒットしなくなったのでしょう。
+知識として知っていても、実際に確認できるとなんだかおもしろいですね。</p>
+<h3 id="eytzinger-layout並べ替え">Eytzinger Layout並べ替え</h3>
+<p>Eytzinger Layoutに並べ替えるのにかかった時間についてもベンチマークを取ってみました。</p>
+<p><img src="/images/2023-08-12-eytzinger-layout-2.svg" alt="Eytzinger Layout並べ替え"></p>
+<p>両対数グラフで直線状になったので、$<code>O(n)</code>$のオーダーっぽいです。
+代入の回数は各要素につき1回なので、納得の結果ですね。</p>
+<h2 id="unisegへの応用">unisegへの応用</h2>
+<p>いやーちょうどバイナリサーチが遅くて困っていてですね。こういう情報ほしかったんです。
+そういうわけで高速化できるか試してみました。</p>
+<p><a href="https://github.com/rivo/uniseg">rivo/uniseg</a>は文字列を<a href="https://hydrocul.github.io/wiki/blog/2015/1025-unicode-grapheme-clusters.html">書記素クラスター</a>に分割するライブラリです。
+書記素クラスターへの分割アルゴリズムは<a href="https://unicode.org/reports/tr14/">Unicode Standard Annex #14</a>で定義されています。
+<a href="https://unicode.org/reports/tr14/">Unicode Standard Annex #14</a>では、<strong>Unicodeに収録されているすべての文字について</strong>
+「この文字のあとでは分割してはいけないよ」「この文字のあとでは分割してもいいよ」というような属性を付与しています（あくまでもイメージで実際にはもっと複雑）。
+この属性の検索にバイナリサーチを利用しているのですが、検索コストが無視できません。
+実際にベンチマークを取ってみると実行時間の50%をバイナリサーチに使っていることがわかりました
+（<a href="https://github.com/shogo82148/uniseg/pull/22#issuecomment-1648046809">pprofで解析した結果</a>）。</p>
+<p>Eytzinger Layoutに並べ替えたら早くなるのでは？
+と考え、<a href="https://github.com/shogo82148/uniseg/pull/27">実際にEytzinger Layoutに並べ替えてみました</a>。</p>
+<pre tabindex="0"><code>goos: darwin
+goarch: arm64
+pkg: github.com/shogo82148/uniseg
+                           │  .old.txt   │              .new.txt               │
+                           │   sec/op    │   sec/op     vs base                │
+GraphemesClass-10            8.553µ ± 0%   8.233µ ± 0%   -3.74% (p=0.000 n=10)
+GraphemesFunctionBytes-10    3.059µ ± 1%   2.621µ ± 0%  -14.32% (p=0.000 n=10)
+GraphemesFunctionString-10   3.039µ ± 0%   2.621µ ± 0%  -13.74% (p=0.000 n=10)
+LineFunctionBytes-10         2.817µ ± 0%   2.908µ ± 0%   +3.21% (p=0.000 n=10)
+LineFunctionString-10        2.844µ ± 0%   2.903µ ± 0%   +2.09% (p=0.000 n=10)
+SentenceFunctionBytes-10     2.038µ ± 0%   1.701µ ± 0%  -16.56% (p=0.000 n=10)
+SentenceFunctionString-10    2.057µ ± 0%   1.704µ ± 0%  -17.19% (p=0.000 n=10)
+StepBytes-10                 8.209µ ± 0%   7.651µ ± 0%   -6.79% (p=0.000 n=10)
+StepString-10                8.149µ ± 1%   7.640µ ± 0%   -6.25% (p=0.000 n=10)
+WordFunctionBytes-10         1.876µ ± 0%   1.762µ ± 0%   -6.05% (p=0.000 n=10)
+WordFunctionString-10        1.876µ ± 0%   1.749µ ± 0%   -6.77% (p=0.000 n=10)
+geomean                      3.366µ        3.094µ        -8.07%
+</code></pre><p>なんだか遅くなっている項目もあるけど、全体としては早くなっているのでﾖｼ!
+（ちゃんとした考察は誰かに任せた・・・）</p>
+<p><a href="https://github.com/rivo/uniseg">rivo/uniseg</a>へ取り込んでもらうかは考え中・・・
+まだプルリクエスト出してないけど、「コードが複雑になってわかりにくい」と言われそう。</p>
+<h2 id="まとめ">まとめ</h2>
+<ul>
+<li>GoでEytzinger Layoutを使ったバイナリサーチを試してみました
+<ul>
+<li>今回試した範囲では、12MBを超えるようなデーターでとくに効果がある</li>
+</ul>
+</li>
+<li><a href="https://github.com/rivo/uniseg">rivo/uniseg</a>に適用してベンチマークを取ってみました
+<ul>
+<li>速くなりそう！</li>
+</ul>
+</li>
+<li>標準ライブラリ最高！
+<ul>
+<li>って書いておかないといけない気がした</li>
+<li><a href="https://pkg.go.dev/slices#BinarySearch">slices.BinarySearch</a>最高！</li>
+</ul>
+</li>
+</ul>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://speakerdeck.com/kampersanda/binary-search-with-modern-processors">遅い二分探索はみんな嫌だよね</a></li>
+<li><a href="https://algorithmica.org/en/eytzinger">Eytzinger Binary Search</a></li>
+<li><a href="https://pkg.go.dev/slices#BinarySearch">slices.BinarySearch</a></li>
+<li><a href="https://postd.cc/cache-friendly-binary-search/">キャッシュフレンドリーな二分探索 ー データ構造を再考する</a></li>
+<li><a href="http://bannalia.blogspot.com/2015/06/cache-friendly-binary-search.html">Cache-friendly binary search</a></li>
+<li><a href="https://github.com/shogo82148/go-eytzinger">shogo82148/go-eytzinger</a></li>
+<li><a href="https://github.com/rivo/uniseg">rivo/uniseg</a></li>
+<li><a href="https://unicode.org/reports/tr14/">Unicode Standard Annex #14</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">ICHINOSE Shogo</span></span>
+    
+    <time>Aug 12, 2023</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2023/08/09/2023-08-09-p5-aws-lambda-supports-response-streaming/" title="AWS::LambdaがResponse Streamingに対応しました">AWS::LambdaがResponse Streamingに対応しました</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2023/08/12/2023-08-12-eytzinger-layout/">Eytzinger LayoutをGoで試してみた</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/08/09/2023-08-09-p5-aws-lambda-supports-response-streaming/">AWS::LambdaがResponse Streamingに対応しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/08/04/2023-08-04-context-for-slog/">Contextに埋め込んだ値をログに出力してくれるログハンドラーを書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/08/01/2023-08-01-p5-aws-lambda-0.1.1-are-released/">AWS::Lambda 0.1.1リリースのお知らせ</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/07/26/2023-07-26-base64dq-base64-variant-inspired-by-dragon-quest/">「ふっかつのじゅもん」みたいなBase64亜種「base64dq」を書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/07/05/2023-07-05-github-used-by-counter/">GitHubのプロジェクトにUsed by counterを追加する</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/07/05/2023-07-05-actions-go-fuzz/">GitHub Actions上でFuzzingを実行するアクションを書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/07/04/2023-07-04-access-google-cloud-from-github-actions-using-workload-identity/">GitHub ActionsからWorkload Identityを使ってGCPにアクセスする</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/07/02/2023-07-02-update-aws-sdk-v2-with-grouped-version-updates-for-dependabot/">dependabotの更新グループ化機能を使ってAWS SDK for Go v2をアップデートする</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2023 ICHINOSE Shogo - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [
+      ['$','$'], // https://github.blog/2022-05-19-math-support-in-markdown/
+
+      // GitLab Style
+      // It is also supported by GitHub https://github.blog/changelog/2023-05-08-new-delimiter-syntax-for-inline-mathematical-expressions/
+      ['$`', '`$']
+    ],
+    displayMath: [['$$','$$']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+})
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Queue(function() {
+  // Fix <code> tags after MathJax finishes running. This is a
+  // hack to overcome a shortcoming of Markdown. Discussion at
+  // https://github.com/mojombo/jekyll/issues/199
+  let all = MathJax.Hub.getAllJax()
+  for(let o of all) {
+      o.SourceElement().parentNode.className += ' has-jax'
+  }
+})
+</script>
+
+<script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+
+
+<script>
+  var _gaq = [['_setAccount', 'UA-4526627-4'], ['_trackPageview']];
+  (function (d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+    s.parentNode.insertBefore(g, s)
+  }(document, 'script'));
+</script>
+
+</body>
+
+</html>
+
