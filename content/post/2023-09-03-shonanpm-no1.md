@@ -2,7 +2,7 @@
 layout: post
 title: "湘南.pm #1 で「趣味でPerlのビルドをしている話」をしてきた"
 slug: 2023-09-03-shonanpm-no-1
-date: 2023-0903 18:10:00 +0900
+date: 2023-09-03 18:10:00 +0900
 comments: true
 categories: [perl]
 ---
