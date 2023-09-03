@@ -120,6 +120,39 @@ MathJax = {
         
 
 <header>
+  <p class="meta">Sep 28, 2013
+     - 4 minute read 
+     - <a href="https://shogo82148.github.io/blog/2013/09/28/redis-fast/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a><a class="label" href="https://shogo82148.github.io/categories/redis/">redis </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2013/09/28/redis-fast/">Redis::Fastってモジュールを書いた</a>
+  </h1>
+</header>
+
+        
+          <p>hiredisをPerlから扱うためのライブラリとして Redis::hiredisってのがあるけど、 なんだか微妙だって聞いたので自分でPerlのhiredisバインディング書いてみたよ。
+ https://github.com/shogo82148/Redis-Fast  (READMEからRedis.pmをそのまま持ってきたことがまるわかりですね。なんとかしよう。)
+使い方 Redis.pmと全く同じインターフェースなので、 そのまま置換できる、はず。
+use Redis::Fast; my $redis = Redis::Fast-&gt;new; ### synchronize mode $redis-&gt;set(&#39;hoge&#39;, &#39;piyo&#39;); print $redis-&gt;get(&#39;hoge&#39;); # piyo ### asynchronize mode $redis-&gt;get(&#39;hoge&#39;, sub { my ($result, $error) = @_; print $result; # piyo }); $redis-&gt;wait_all_responses; ### pubsub $redis-&gt;publish(&#39;fugu&#39;, &#39;fuga&#39;); $redis-&gt;subscribe(&#39;fugu&#39;, sub { my ($message, $topic, $subscribed_topic) = @_; }); my $timeout = 10; $redis-&gt;wait_for_messages($timeout) while 1; 以前作った、Redis::Namespaceにもそのまま使えます。
+use Redis::Fast; use Redis::Namespace; my $redis = Redis::Fast-&gt;new; my $ns = Redis::Namespace(redis =&gt; $redis, namespace =&gt; &#39;fugu&#39;); $ns-&gt;set(&#39;foo&#39;, &#39;bar&#39;); # $redis-&gt;set(&#39;fugu:foo&#39;, &#39;bar&#39;); my $foo = $ns-&gt;get(&#39;foo&#39;); # my $foo = $redis-&gt;get(&#39;fugu:foo&#39;); ベンチマーク Redis.</p>
+          
+            <footer>
+              <a href="https://shogo82148.github.io/blog/2013/09/28/redis-fast/" rel="full-article">Read On &rarr;</a>
+            </footer>
+          
+        
+      </article>
+      
+      <article>
+        
+        
+
+<header>
   <p class="meta">Sep 24, 2013
      - 1 minute read 
      - <a href="https://shogo82148.github.io/blog/2013/09/24/yapc-second-day/#disqus_thread">Comments</a>
@@ -425,47 +458,6 @@ import tweepy import urllib import urllib2 import base64 import json class AppAu
         
       </article>
       
-      <article>
-        
-        
-
-<header>
-  <p class="meta">Apr 13, 2013
-     - 1 minute read 
-     - <a href="https://shogo82148.github.io/blog/2013/04/13/isucon/#disqus_thread">Comments</a>
-
-    
-    
-      - 
-    
-  </p>
-  <h1 class="entry-title">
-    <a href="https://shogo82148.github.io/blog/2013/04/13/isucon/">社内ISUCONに参加した</a>
-  </h1>
-</header>
-
-        
-          <p>先日、社内 ISUCON(良い感じにスピードアップコンテスト) に参加してきました。 Livedoorで開催されたISUCONのミニ版で、 Webアプリをひたすら高速化するコンテストです。
-高速化の対象はNoPaste。 テキストを共有するWebアプリです。 テキストの投稿・投稿の閲覧・投稿にスターをつける の3つの動作ができる簡単なアプリです。
-新卒 vs 先輩ということで、それぞれ4チームが参戦。 チームは二人一組で僕は @Maco_Tasu くんと一緒でした。 @Maco_Tasuくんのブログも参照。
-Recent Posts 生成クエリの高速化 高速化前のアプリのベンチマークの結果、スコアは77(≒1分あたりの捌いたリクエスト数)。 何も考えずにデータベースの全行を舐めるクエリを書いていたので、まあ、妥当なスコアですね。
-重いのはサイドバーに表示される Recent Posts。 Recent Posts は表示回数が多く、 複数の行、複数のテーブルへのアクセスが発生するため、 きっとここがボトルネックになるだろうと予測してました。 そこで最初にこの部分を解決することにしました。
- とりあえずインデックスを張る クエリを修正してアクセスする行を最小化 スターのカウントした結果をテーブルに格納  オリジナルのデータベース構成では、スターした回数だけ行が増えてました 必要なのは投稿ごとのスター数なので、独立したテーブルに この時点で早くも重大なバグを組み込んでしまったことに、この時はまだ気がついていなかった・・・    nginxによる静的ファイル配信 僕がクエリをいじっている間、@Maco_Tasuくんには サーバの設定をお願いしました。
-ログの様子を眺めてみると、cssとかjsとかの静的ファイルが結構な量ありました。 最初のスクリプトでは静的ファイルの配信もアプリでやってたので、 これをnginxを使って配信するように変更。 その他のリクエストはリバースプロキシを設定してアプリに投げます。
-Starlet と Server::Starter リバースプロキシを設定する際にアプリの起動スクリプトを編集する必要があったので、 ついでに起動時の設定を色々変更。 PSGI実行のStarletというのが速いと聞いてこれを採用。 Starlet使い方調べてたら、Server::Starterを使った例が出てきたので一緒にインストール。 ワーカーの数の数は適当に10個にしました。
-ここで2回目のベンチマークを実行。 スコア1300程度で、その時点のトップ！
-SSIを使ったサイドバーの埋め込み お昼を挟んで、さらなる高速化を目指します。
-topコマンドを眺めているとPerlで作ったアプリの負荷が大きい。 ほとんどテンプレートエンジンを呼び出しているだけの単純なコードなので、 ここを高速化するのは面倒くさい。 そこで、前段のnginxでキャッシュする作戦を採用することにしました。
-もっともキャッシュが有効なのはサイドバーだろうと予想。 クエリの最適化をしたとは言え、サイドバーには100件程度の投稿が表示されるので、 クエリ実行にもレンダリングにも時間がかかるはず。 さらにすべてのページでサイドバーは共有できるので、大幅な高速化が期待できるはずです。
-過去のISUCONの記事にSSI(Server Side Include)を使った例があったのを思い出し、 これを使ってサイドバーのみキャッシュ、nginx内でサイドバーを埋め込むように。</p>
-          
-            <footer>
-              <a href="https://shogo82148.github.io/blog/2013/04/13/isucon/" rel="full-article">Read On &rarr;</a>
-            </footer>
-          
-        
-      </article>
-      
       
       
 
@@ -610,6 +602,12 @@ topコマンドを眺めているとPerlで作ったアプリの負荷が大き�
           
             
               <li class="post">
+                <a href="/blog/2023/09/03/2023-09-03-gyotaku/">ウェブ魚拓の創業者のインタビュー記事のウェブ魚拓</a>
+              </li>
+            
+          
+            
+              <li class="post">
                 <a href="/blog/2023/09/03/2023-09-03-shonanpm-no-1/">湘南.pm #1 で「趣味でPerlのビルドをしている話」をしてきた</a>
               </li>
             
@@ -653,12 +651,6 @@ topコマンドを眺めているとPerlで作ったアプリの負荷が大き�
             
               <li class="post">
                 <a href="/blog/2023/07/05/2023-07-05-actions-go-fuzz/">GitHub Actions上でFuzzingを実行するアクションを書いた</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2023/07/04/2023-07-04-access-google-cloud-from-github-actions-using-workload-identity/">GitHub ActionsからWorkload Identityを使ってGCPにアクセスする</a>
               </li>
             
           
