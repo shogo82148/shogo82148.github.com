@@ -122,4 +122,4 @@ Perlモジュール末尾の`1;`というおまじないが不要になります
 ## 参考
 
 - [perldelta v5.37.6](https://metacpan.org/release/CORION/perl-5.37.6/view/pod/perldelta.pod)
-- [RFC-18](https://github.com/Perl/RFCs/blob/main/rfcs/rfc0018.md)
+- ~~RFC-18~~ → [PPC-18](https://github.com/Perl/PPCs/blob/8dcea2bc863627a1b2585ef47c263e4ee5e5403d/ppcs/ppc0018-module-true.md)（2023-09-03 リンク先修正、RFCからPPCに名前が変わったらしい）
