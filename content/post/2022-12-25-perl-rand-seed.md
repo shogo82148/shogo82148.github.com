@@ -137,4 +137,4 @@ UNIX-LikeなOSでは`/dev/random`の値をシードに使うので、このよ�
 ## 参考
 
 - [perldelta - perl 5.37.3](https://metacpan.org/release/NEILB/perl-5.37.3/view/pod/perldelta.pod)
-- [perlrunに](https://metacpan.org/release/NEILB/perl-5.37.3/view/pod/perlrun.pod#PERL_RAND_SEED)
+- [perlrunのPERL_RAND_SEEDに関する記述](https://metacpan.org/release/NEILB/perl-5.37.3/view/pod/perlrun.pod#PERL_RAND_SEED)
