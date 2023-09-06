@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono&display=swap" rel="stylesheet"> 
+
+  
+  <title>ぼくのかんがえたさいきょうの[0.0, 1.0)の乱数を得るための方法</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="ICHINOSE Shogo">
+
+  
+  <meta name="generator" content="Hugo 0.91.2" />
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-40R0PCLKVF');
+</script>
+
+
+<script>
+MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']]
+  },
+  svg: {
+    fontCache: 'global'
+  }
+};
+</script>
+
+<script type="text/javascript" id="MathJax-script" async
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+</script>
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Sep 4, 2023
+     - 4 minute read 
+     - <a href="https://shogo82148.github.io/blog/2023/09/04/2023-09-04-generate-random-float/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2023/09/04/2023-09-04-generate-random-float/">ぼくのかんがえたさいきょうの[0.0, 1.0)の乱数を得るための方法</a>
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>Twitterもとい𝕏でこんなスライドが流れてきました。</p>
+<iframe class="speakerdeck-iframe" style="border: 0px; background: rgba(0, 0, 0, 0.1) padding-box; margin: 0px; padding: 0px; border-radius: 6px; box-shadow: rgba(0, 0, 0, 0.2) 0px 5px 40px; width: 100%; height: auto; aspect-ratio: 560 / 315;" frameborder="0" src="https://speakerdeck.com/player/b000ac1dfa2d479d83756b0267d3f992" title="[0.0, 1.0) の乱数を得るための“本当の”方法" allowfullscreen="true" data-ratio="1.7777777777777777"></iframe>
+<p>$[0.0, 1.0)$ の範囲を保証しつつ、浮動小数点数が表現可能なすべての値をとるのは難しい、というお話です。
+なるほど・・・確かに改めて考えてみると「浮動小数点数が表現可能なすべての値」という条件は難しいですね。
+でも、スライド中で紹介されていたアルゴリズムには、もうちょっと最適化の余地があるのでは？と考えてみました。</p>
+<h2 id="goの標準ライブラリでの実装">Goの標準ライブラリでの実装</h2>
+<p>もとのスライドはC++の話っぽいけど、C++はよくわからないので、Go言語での実装を考えます。</p>
+<h3 id="除算法">除算法</h3>
+<p>Goの標準ライブラリはスライド中で「除算法」と呼ばれている方法で乱数を生成します。</p>
+<ul>
+<li>Go 1.21.0 の実装: <a href="https://github.com/golang/go/blob/33d4a5105cf2b2d549922e909e9239a48b8cefcc/src/math/rand/rand.go#L188-L212">https://github.com/golang/go/blob/33d4a5105cf2b2d549922e909e9239a48b8cefcc/src/math/rand/rand.go#L188-L212</a></li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="c1">// Float64 returns, as a float64, a pseudo-random number in the half-open interval [0.0,1.0).
+</span><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">r</span> <span class="o">*</span><span class="nx">Rand</span><span class="p">)</span> <span class="nf">Float64</span><span class="p">()</span> <span class="kt">float64</span> <span class="p">{</span>
+	<span class="c1">// コメント略
+</span><span class="c1"></span><span class="nx">again</span><span class="p">:</span>
+	<span class="nx">f</span> <span class="o">:=</span> <span class="nb">float64</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nf">Int63</span><span class="p">())</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">63</span><span class="p">)</span>
+	<span class="k">if</span> <span class="nx">f</span> <span class="o">==</span> <span class="mi">1</span> <span class="p">{</span>
+		<span class="k">goto</span> <span class="nx">again</span> <span class="c1">// resample; this branch is taken O(never)
+</span><span class="c1"></span>	<span class="p">}</span>
+	<span class="k">return</span> <span class="nx">f</span>
+<span class="p">}</span>
+</code></pre></div><p>除算法は大変シンプルですが、丸め誤差の影響で誤って 1.0 を返すことがあります。
+Goは乱数を再生成することで、この問題を回避しています。</p>
+<h3 id="過去の実装">過去の実装</h3>
+<p>実際 Go 1.2 までは 1.0 を返すバグがあったみたいです。</p>
+<ul>
+<li><a href="https://github.com/golang/go/issues/6721">math/rand: rand.Float{32,64}() can erroneously return 1 #6721</a></li>
+<li>Go 1.2 での実装: <a href="https://github.com/golang/go/blob/402d3590b54e4a0df9fb51ed14b2999e85ce0b76/src/pkg/math/rand/rand.go#L97-L98">https://github.com/golang/go/blob/402d3590b54e4a0df9fb51ed14b2999e85ce0b76/src/pkg/math/rand/rand.go#L97-L98</a></li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="c1">// Float64 returns, as a float64, a pseudo-random number in [0.0,1.0).
+</span><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">r</span> <span class="o">*</span><span class="nx">Rand</span><span class="p">)</span> <span class="nf">Float64</span><span class="p">()</span> <span class="kt">float64</span> <span class="p">{</span> <span class="k">return</span> <span class="nb">float64</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nf">Int63</span><span class="p">())</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">63</span><span class="p">)</span> <span class="p">}</span>
+</code></pre></div><p>これに対して、分子と分母を53bitに丸める修正が入りました。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="p">(</span><span class="nx">r</span> <span class="o">*</span><span class="nx">Rand</span><span class="p">)</span> <span class="nf">Float64</span><span class="p">()</span> <span class="kt">float64</span> <span class="p">{</span>
+	<span class="k">return</span> <span class="nb">float64</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nf">Int63n</span><span class="p">(</span><span class="mi">1</span><span class="o">&lt;&lt;</span><span class="mi">53</span><span class="p">))</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1</span><span class="o">&lt;&lt;</span><span class="mi">53</span><span class="p">)</span>
+<span class="p">}</span>
+</code></pre></div><p>53bitまでの整数なら<code>float64</code> 型で正確に表現できるため、これなら誤差の入り込む余地はありません。
+しかし、Go 1との互換性を壊してしまう（同じシード値からは同じ乱数列が生成されてほしい）とのことで、今の実装になっています。</p>
+<p>また、互換性の問題以外にも「浮動小数点数が表現可能なすべての値を取らない」という問題点もあります。
+たとえば分母分子は整数なので、返り値が $(0, 2^{-53})$ の区間の値を取る可能性はゼロです。
+一方 <code>float64</code> は $2^{-1074}$ のように、$(0, 2^{-53})$ の区間の中の値を表現できます。
+この実装でいいじゃん？と思ったけど、今回のスライドで難しさを痛感しました。</p>
+<h2 id="２ステップに分けて考える">２ステップに分けて考える</h2>
+<p>さて、スライド資料では除算法から浮動小数点数に話が移りますが、
+その前に僕たちは除算法を別の観点で考え直してみましょう。</p>
+<p>$x$ を <code>r.Int63()</code> の出力、 $y$ を <code>r.Float64</code> の出力とします。
+Goの現在の実装は以下のように表現できます。</p>
+<p>$$
+y = \frac{x}{2^{63}}
+$$</p>
+<p>単なる割り算なんですが、ちょっと見方を変えて考えてみます。
+2進数の世界で $2^n$ をかけたり割ったりする操作は、小数点を移動させる操作に対応します。</p>
+<p>「小数点の移動」という観点で上の式をよく見ると・・・
+「<code>001011...</code> という63bitのビット列 $x$ と、実数 $y = 0.001011&hellip;$ を同一視する式」
+と考えることができます。</p>
+<p>あ、これは <strong>固定小数点数</strong> だ！</p>
+<p>実は $x$ を決めた時点で「$[0.0, 1.0)$ の範囲の乱数を生成する処理」はすでに終わっていたのです。
+ただし出力が固定小数点方式だっただけで。
+そのままでは扱いにくいので「固定小数点方式で表現された $x$ を浮動小数点数 $y$ に変換する処理」をしている、
+と考えることはできないでしょうか。</p>
+<p>そうすると、「$[0.0, 1.0)$ の範囲の浮動小数点数の乱数を生成する処理」は、
+「固定小数点数の乱数を作る問題」と「固定小数点数を浮動小数点数に変換する問題」に分けて考えることができます。</p>
+<p>いきなり <code>float64</code> や <code>float32</code> は桁数が多くてつらいので、
+<code>float16</code>（<a href="https://ja.wikipedia.org/wiki/%E5%8D%8A%E7%B2%BE%E5%BA%A6%E6%B5%AE%E5%8B%95%E5%B0%8F%E6%95%B0%E7%82%B9%E6%95%B0">半精度浮動小数点数</a>）を例に考えてみましょう。</p>
+<h3 id="固定小数点数の乱数を作る問題">固定小数点数の乱数を作る問題</h3>
+<p>固定小数点数の乱数を作るのは簡単ですね。
+整数部は必ず0です。
+そして小数点のあとに0/1をランダムに並べれば、任意の精度の乱数を生成できます。</p>
+<pre tabindex="0"><code>x = 0.(このあとにランダムに0/1の配列を並べる)
+</code></pre><p><code>float16</code> の 0 でない最小の値は $2^{-24}$ なので、24桁準備しておけば <code>float16</code> の表現できる範囲をすべてカバーできます。
+例として以下のbit列を使って考えます。</p>
+<pre tabindex="0"><code>x = 0.0 0 1 0 1 1 0 0 1 1 1 0 1 1 0 0 0 0 0 0 0 1 0 0
+</code></pre><h3 id="固定小数点数を浮動小数点数に変換する問題">固定小数点数を浮動小数点数に変換する問題</h3>
+<p>割り算という固定概念を捨て、
+「固定小数点数を浮動小数点数に変換する問題」と捉えれば他にもやり方はあります。
+そう、<a href="https://ja.wikipedia.org/wiki/%E6%B5%AE%E5%8B%95%E5%B0%8F%E6%95%B0%E7%82%B9%E6%95%B0">浮動小数点数</a>の仕様にしたがってエンコードすればよいのです。</p>
+<p>浮動小数点数は $1.xxx\times 2^n$ になるよう正規化されています。
+まずはこの先頭の1を見つけましょう。</p>
+<pre tabindex="0"><code>x = 0.0 0 1 0 1 1 0 0 1 1 1 0 1 1 0 0 0 0 0 0 0 1 0 0
+        ↑上の桁から見て行って、最初の1を見つける
+</code></pre><p><code>float16</code> の有効桁数は10桁なので、1のあとの10桁が仮数部です。</p>
+<pre tabindex="0"><code>x = 0.0 0 1 0 1 1 0 0 1 1 1 0 1 1 0 0 0 0 0 0 0 1 0 0
+          1.0 1 1 0 0 1 1 1 0 1
+            ^^^^^^^^^^^^^^^^^^^ 仮数部
+</code></pre><p>小数点を3つ動かしているので、指数部は $-3$ です。</p>
+<pre tabindex="0"><code>x = 0.0 0 1 0 1 1 0 0 1 1 1 0 1 1 0 0 0 0 0 0 0 1 0 0
+      y = 1.0 1 1 0 0 1 1 1 0 1 × 2^(-3)
+</code></pre><p>仮数部と指数部の情報がわかったので、16bitに収まるよう組み立てます。
+指数部は下駄履き表現されるので、実際に記録されるのは $-3 + 15 = 12$、
+ビット列に直すと<code>01100</code>です。今は0以上の数を扱っているので符号は <code>0</code>。
+<a href="https://ja.wikipedia.org/wiki/%E5%8D%8A%E7%B2%BE%E5%BA%A6%E6%B5%AE%E5%8B%95%E5%B0%8F%E6%95%B0%E7%82%B9%E6%95%B0">半精度浮動小数点数</a>の仕様にしたがって組み立てれば以下のようになります。</p>
+<pre tabindex="0"><code> |  指数部  |       仮数部       |
+0|0 1 1 0 0|0 1 1 0 0 1 1 1 0 1|
+↑
+符号ビット
+</code></pre><p>できあがり！</p>
+<h2 id="実装">実装</h2>
+<p>C++はよくわからないので、Goで実装しました。</p>
+<ul>
+<li><a href="https://github.com/shogo82148/random-float">shogo82148/random-float</a></li>
+</ul>
+<p>固定小数点数をナイーブに計算するとたくさんの乱数を消費してしまうので、
+遅延評価を行います。
+浮動小数点数のビット表現を求めたあとは、<a href="https://pkg.go.dev/math#Float64frombits">math.Float64frombits</a> を使って
+<code>float64</code> に変換します。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kd">const</span> <span class="p">(</span>
+	<span class="nx">mask64</span>     <span class="p">=</span> <span class="mh">0x7ff</span>       <span class="c1">// mask for exponent
+</span><span class="c1"></span>	<span class="nx">shift64</span>    <span class="p">=</span> <span class="mi">64</span> <span class="o">-</span> <span class="mi">11</span> <span class="o">-</span> <span class="mi">1</span> <span class="c1">// shift for exponent
+</span><span class="c1"></span>	<span class="nx">bias64</span>     <span class="p">=</span> <span class="mi">1023</span>        <span class="c1">// bias for exponent
+</span><span class="c1"></span>	<span class="nx">signMask64</span> <span class="p">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">63</span>     <span class="c1">// mask for sign bit
+</span><span class="c1"></span>	<span class="nx">fracMask64</span> <span class="p">=</span> <span class="mi">1</span><span class="o">&lt;&lt;</span><span class="nx">shift64</span> <span class="o">-</span> <span class="mi">1</span>
+<span class="p">)</span>
+
+<span class="kd">type</span> <span class="nx">Rand</span> <span class="kd">struct</span> <span class="p">{</span>
+	<span class="nx">src</span> <span class="nx">rand</span><span class="p">.</span><span class="nx">Source</span>
+	<span class="nx">s64</span> <span class="nx">rand</span><span class="p">.</span><span class="nx">Source64</span> <span class="c1">// non-nil if src is source64
+</span><span class="c1"></span><span class="p">}</span>
+
+<span class="kd">func</span> <span class="p">(</span><span class="nx">r</span> <span class="o">*</span><span class="nx">Rand</span><span class="p">)</span> <span class="nf">float64s64</span><span class="p">()</span> <span class="kt">float64</span> <span class="p">{</span>
+	<span class="kd">var</span> <span class="nx">exp</span> <span class="p">=</span> <span class="nx">bias64</span> <span class="o">-</span> <span class="mi">1</span>
+	<span class="kd">var</span> <span class="nx">frac</span> <span class="kt">uint64</span>
+	<span class="k">for</span> <span class="p">{</span>
+		<span class="nx">i</span> <span class="o">:=</span> <span class="nx">r</span><span class="p">.</span><span class="nx">s64</span><span class="p">.</span><span class="nf">Uint64</span><span class="p">()</span>
+		<span class="nx">l</span> <span class="o">:=</span> <span class="nx">bits</span><span class="p">.</span><span class="nf">Len64</span><span class="p">(</span><span class="nx">i</span><span class="p">)</span> <span class="c1">// 上位から順にみて、最初に現れる1を見つける
+</span><span class="c1"></span>		<span class="nx">exp</span> <span class="o">-=</span> <span class="mi">64</span> <span class="o">-</span> <span class="nx">l</span>
+		<span class="k">if</span> <span class="nx">exp</span> <span class="o">&lt;=</span> <span class="mi">0</span> <span class="p">{</span>
+			<span class="c1">// float64 で表せる最小の数に到達したときの処理
+</span><span class="c1"></span>			<span class="nx">frac</span> <span class="p">=</span> <span class="nb">uint64</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nx">s64</span><span class="p">.</span><span class="nf">Uint64</span><span class="p">())</span>
+			<span class="nx">exp</span> <span class="p">=</span> <span class="mi">0</span>
+			<span class="k">break</span>
+		<span class="p">}</span>
+
+		<span class="c1">// 1が53bit目に来るよう正規化
+</span><span class="c1"></span>		<span class="k">if</span> <span class="nx">l</span> <span class="p">&gt;</span> <span class="nx">shift64</span> <span class="p">{</span>
+			<span class="nx">frac</span> <span class="p">=</span> <span class="nb">uint64</span><span class="p">(</span><span class="nx">i</span> <span class="o">&gt;&gt;</span> <span class="p">(</span><span class="nx">l</span> <span class="o">-</span> <span class="nx">shift64</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
+			<span class="k">break</span>
+		<span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="nx">l</span> <span class="p">&gt;</span> <span class="mi">0</span> <span class="p">{</span>
+			<span class="nx">s</span> <span class="o">:=</span> <span class="nx">shift64</span> <span class="o">-</span> <span class="nx">l</span> <span class="o">+</span> <span class="mi">1</span>
+			<span class="nx">frac</span> <span class="p">=</span> <span class="nb">uint64</span><span class="p">(</span><span class="nx">i</span> <span class="o">&lt;&lt;</span> <span class="nx">s</span><span class="p">)</span>
+
+			<span class="c1">// 仮数部のビット数が足りないので、残りをランダムに埋める
+</span><span class="c1"></span>			<span class="nx">i</span> <span class="p">=</span> <span class="nx">r</span><span class="p">.</span><span class="nx">s64</span><span class="p">.</span><span class="nf">Uint64</span><span class="p">()</span>
+			<span class="nx">frac</span> <span class="o">|=</span> <span class="nb">uint64</span><span class="p">(</span><span class="nx">i</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="mi">1</span><span class="o">&lt;&lt;</span><span class="nx">s</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+			<span class="k">break</span>
+		<span class="p">}</span>
+
+		<span class="c1">// 1が見つからなかったので、次の64bitを生成する
+</span><span class="c1"></span>	<span class="p">}</span>
+	<span class="k">return</span> <span class="nx">math</span><span class="p">.</span><span class="nf">Float64frombits</span><span class="p">(</span><span class="nb">uint64</span><span class="p">(</span><span class="nx">exp</span><span class="p">)</span><span class="o">&lt;&lt;</span><span class="nx">shift64</span> <span class="p">|</span> <span class="nx">frac</span><span class="o">&amp;</span><span class="nx">fracMask64</span><span class="p">)</span>
+<span class="p">}</span>
+</code></pre></div><p>この方式なら $[0.0, 1.0)$ の範囲の表現可能なすべての <code>float64</code> が出現します。
+欠点は必要な乱数列の数が多くなることがある点でしょうか。
+<code>float64</code> の場合ワーストケースで 1074 bit必要です。
+もっとも、ワーストケースにハマる確率は $2^{-1022}$ です。</p>
+<h2 id="まとめ">まとめ</h2>
+<p>「ぼくのかんがえたさいきょうの $[0.0, 1.0)$ の乱数を得るための方法」を実装しました。
+「固定小数点数の乱数を作る問題」と「固定小数点数を浮動小数点数に変換する問題」に分けて考えることで問題をシンプルにしました。
+$[0.0, 1.0)$ の範囲の表現可能なすべての <code>float64</code> が出現します。</p>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://speakerdeck.com/hole/rand01">[0.0, 1.0) の乱数を得るための“本当の”方法</a></li>
+<li>Go 1.21.0 の乱数の実装: <a href="https://github.com/golang/go/blob/33d4a5105cf2b2d549922e909e9239a48b8cefcc/src/math/rand/rand.go#L188-L212">https://github.com/golang/go/blob/33d4a5105cf2b2d549922e909e9239a48b8cefcc/src/math/rand/rand.go#L188-L212</a>
+<ul>
+<li>今の実装になった経緯がコメントしてあります</li>
+</ul>
+</li>
+<li><a href="https://github.com/shogo82148/random-float">shogo82148/random-float</a></li>
+</ul>
+<h2 id="余談">余談</h2>
+<p><code>float32</code>, <code>float64</code> はビット数の割り当てがちょっと違うだけでほぼ同じ処理です。
+共通化できないかと、ジェネリック使ってみました。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="c1">// https://github.com/shogo82148/random-float/blob/542b7127f90e9f9d031fce833f73e8c17f67662c/float.go
+</span><span class="c1"></span>
+<span class="kd">type</span> <span class="nx">bitsN</span> <span class="kd">interface</span> <span class="p">{</span>
+	<span class="kt">uint64</span> <span class="p">|</span> <span class="kt">uint32</span>
+<span class="p">}</span>
+
+<span class="kd">type</span> <span class="nx">intN</span> <span class="kd">interface</span> <span class="p">{</span>
+	<span class="kt">int64</span> <span class="p">|</span> <span class="kt">uint64</span>
+<span class="p">}</span>
+
+<span class="kd">type</span> <span class="nx">floatN</span> <span class="kd">interface</span> <span class="p">{</span>
+	<span class="kt">float64</span> <span class="p">|</span> <span class="kt">float32</span>
+<span class="p">}</span>
+
+<span class="kd">type</span> <span class="nx">floatNFromBits</span><span class="p">[</span><span class="nx">B</span> <span class="nx">bitsN</span><span class="p">,</span> <span class="nx">F</span> <span class="nx">floatN</span><span class="p">]</span> <span class="kd">func</span><span class="p">(</span><span class="nx">B</span><span class="p">)</span> <span class="nx">F</span>
+
+<span class="kd">type</span> <span class="nx">srcN</span><span class="p">[</span><span class="nx">I</span> <span class="nx">intN</span><span class="p">]</span> <span class="kd">func</span><span class="p">()</span> <span class="nx">I</span>
+
+<span class="kd">func</span> <span class="nx">randFloat</span><span class="p">[</span><span class="nx">I</span> <span class="nx">intN</span><span class="p">,</span> <span class="nx">B</span> <span class="nx">bitsN</span><span class="p">,</span> <span class="nx">F</span> <span class="nx">floatN</span><span class="p">](</span><span class="nx">src</span> <span class="nx">srcN</span><span class="p">[</span><span class="nx">I</span><span class="p">],</span> <span class="nx">bias</span><span class="p">,</span> <span class="nx">shift</span><span class="p">,</span> <span class="nx">num</span> <span class="kt">int</span><span class="p">,</span> <span class="nx">mask</span> <span class="nx">B</span><span class="p">,</span> <span class="kt">float</span> <span class="nx">floatNFromBits</span><span class="p">[</span><span class="nx">B</span><span class="p">,</span> <span class="nx">F</span><span class="p">])</span> <span class="nx">F</span> <span class="p">{</span>
+	<span class="kd">var</span> <span class="nx">exp</span> <span class="p">=</span> <span class="nx">bias</span> <span class="o">-</span> <span class="mi">1</span>
+	<span class="kd">var</span> <span class="nx">frac</span> <span class="nx">B</span>
+	<span class="k">for</span> <span class="p">{</span>
+		<span class="nx">i</span> <span class="o">:=</span> <span class="nf">src</span><span class="p">()</span>
+		<span class="nx">l</span> <span class="o">:=</span> <span class="nx">bits</span><span class="p">.</span><span class="nf">Len64</span><span class="p">(</span><span class="nb">uint64</span><span class="p">(</span><span class="nx">i</span><span class="p">))</span>
+		<span class="nx">exp</span> <span class="o">-=</span> <span class="nx">num</span> <span class="o">-</span> <span class="nx">l</span>
+		<span class="k">if</span> <span class="nx">exp</span> <span class="o">&lt;=</span> <span class="mi">0</span> <span class="p">{</span>
+			<span class="nx">frac</span> <span class="p">=</span> <span class="nf">B</span><span class="p">(</span><span class="nf">src</span><span class="p">())</span>
+			<span class="nx">exp</span> <span class="p">=</span> <span class="mi">0</span>
+			<span class="k">break</span>
+		<span class="p">}</span>
+		<span class="k">if</span> <span class="nx">l</span> <span class="p">&gt;</span> <span class="nx">shift</span> <span class="p">{</span>
+			<span class="nx">frac</span> <span class="p">=</span> <span class="nf">B</span><span class="p">(</span><span class="nx">i</span> <span class="o">&gt;&gt;</span> <span class="p">(</span><span class="nx">l</span> <span class="o">-</span> <span class="nx">shift</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
+			<span class="k">break</span>
+		<span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="nx">l</span> <span class="p">&gt;</span> <span class="mi">0</span> <span class="p">{</span>
+			<span class="nx">frac</span> <span class="p">=</span> <span class="nf">B</span><span class="p">(</span><span class="nx">i</span> <span class="o">&lt;&lt;</span> <span class="p">(</span><span class="nx">shift</span> <span class="o">-</span> <span class="nx">l</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+			<span class="nx">i</span> <span class="p">=</span> <span class="nf">src</span><span class="p">()</span> <span class="o">&gt;&gt;</span> <span class="p">(</span><span class="nx">num</span> <span class="o">-</span> <span class="nx">shift</span> <span class="o">+</span> <span class="nx">l</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+			<span class="nx">frac</span> <span class="o">|=</span> <span class="nf">B</span><span class="p">(</span><span class="nx">i</span><span class="p">)</span>
+			<span class="k">break</span>
+		<span class="p">}</span>
+	<span class="p">}</span>
+	<span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="nf">B</span><span class="p">(</span><span class="nx">exp</span><span class="p">)</span><span class="o">&lt;&lt;</span><span class="nx">shift</span> <span class="p">|</span> <span class="nx">frac</span><span class="o">&amp;</span><span class="nx">mask</span><span class="p">)</span>
+<span class="p">}</span>
+
+<span class="kd">func</span> <span class="p">(</span><span class="nx">r</span> <span class="o">*</span><span class="nx">Rand</span><span class="p">)</span> <span class="nf">Float32</span><span class="p">()</span> <span class="kt">float32</span> <span class="p">{</span>
+	<span class="k">if</span> <span class="nx">r</span><span class="p">.</span><span class="nx">s64</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="k">return</span> <span class="nf">randFloat</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nx">s64</span><span class="p">.</span><span class="nx">Uint64</span><span class="p">,</span> <span class="nx">bias32</span><span class="p">,</span> <span class="nx">shift32</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="nx">fracMask32</span><span class="p">,</span> <span class="nx">math</span><span class="p">.</span><span class="nx">Float32frombits</span><span class="p">)</span>
+	<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+		<span class="k">return</span> <span class="nf">randFloat</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nx">src</span><span class="p">.</span><span class="nx">Int63</span><span class="p">,</span> <span class="nx">bias32</span><span class="p">,</span> <span class="nx">shift32</span><span class="p">,</span> <span class="mi">63</span><span class="p">,</span> <span class="nx">fracMask32</span><span class="p">,</span> <span class="nx">math</span><span class="p">.</span><span class="nx">Float32frombits</span><span class="p">)</span>
+	<span class="p">}</span>
+<span class="p">}</span>
+
+<span class="kd">func</span> <span class="p">(</span><span class="nx">r</span> <span class="o">*</span><span class="nx">Rand</span><span class="p">)</span> <span class="nf">Float64</span><span class="p">()</span> <span class="kt">float64</span> <span class="p">{</span>
+	<span class="k">if</span> <span class="nx">r</span><span class="p">.</span><span class="nx">s64</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="k">return</span> <span class="nf">randFloat</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nx">s64</span><span class="p">.</span><span class="nx">Uint64</span><span class="p">,</span> <span class="nx">bias64</span><span class="p">,</span> <span class="nx">shift64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="nx">fracMask64</span><span class="p">,</span> <span class="nx">math</span><span class="p">.</span><span class="nx">Float64frombits</span><span class="p">)</span>
+	<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+		<span class="k">return</span> <span class="nf">randFloat</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nx">src</span><span class="p">.</span><span class="nx">Int63</span><span class="p">,</span> <span class="nx">bias64</span><span class="p">,</span> <span class="nx">shift64</span><span class="p">,</span> <span class="mi">63</span><span class="p">,</span> <span class="nx">fracMask64</span><span class="p">,</span> <span class="nx">math</span><span class="p">.</span><span class="nx">Float64frombits</span><span class="p">)</span>
+	<span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div><p>動作はしたけど、愚直に書いたほうが実行速度は速かったので、不採用。</p>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">ICHINOSE Shogo</span></span>
+    
+    <time>Sep 4, 2023</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2023/09/03/2023-09-03-gyotaku/" title="ウェブ魚拓の創業者のインタビュー記事のウェブ魚拓">ウェブ魚拓の創業者のインタビュー記事のウェブ魚拓</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/09/04/2023-09-04-generate-random-float/">ぼくのかんがえたさいきょうの[0.0, 1.0)の乱数を得るための方法</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/09/03/2023-09-03-gyotaku/">ウェブ魚拓の創業者のインタビュー記事のウェブ魚拓</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/09/03/2023-09-03-shonanpm-no-1/">湘南.pm #1 で「趣味でPerlのビルドをしている話」をしてきた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/08/12/2023-08-12-eytzinger-layout/">Eytzinger LayoutをGoで試してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/08/09/2023-08-09-p5-aws-lambda-supports-response-streaming/">AWS::LambdaがResponse Streamingに対応しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/08/04/2023-08-04-context-for-slog/">Contextに埋め込んだ値をログに出力してくれるログハンドラーを書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/08/01/2023-08-01-p5-aws-lambda-0.1.1-are-released/">AWS::Lambda 0.1.1リリースのお知らせ</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/07/26/2023-07-26-base64dq-base64-variant-inspired-by-dragon-quest/">「ふっかつのじゅもん」みたいなBase64亜種「base64dq」を書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/07/05/2023-07-05-github-used-by-counter/">GitHubのプロジェクトにUsed by counterを追加する</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2023 ICHINOSE Shogo - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+</body>
+
+</html>
+
