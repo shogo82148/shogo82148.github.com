@@ -22,7 +22,7 @@ categories: [github, github-actions]
 
 よほど単純なワークフローでない限り、 actions/checkout は必須のアクションです。
 GitHub Actions でCIを組んでいるレポジトリはもれなく使っています。
-[@shogo82148](https://github.com/shogo82148/)以下にあるレポジトリだけで、129個のプルリクエストが来ました。
+[@shogo82148](https://github.com/shogo82148/)以下にあるレポジトリだけで、76個のプルリクエストが来ました。
 心を無にしてマージボタンを押しまくりました。
 他のorgにも参加しているので、実際に対応したプルリクエストはもっと多いです。
 
