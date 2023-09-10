@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono&display=swap" rel="stylesheet"> 
+
+  
+  <title>log/slogにログを転送する logrus hook を書いた</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="ICHINOSE Shogo">
+
+  
+  <meta name="generator" content="Hugo 0.91.2" />
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-40R0PCLKVF');
+</script>
+
+
+<script>
+MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']]
+  },
+  svg: {
+    fontCache: 'global'
+  }
+};
+</script>
+
+<script type="text/javascript" id="MathJax-script" async
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+</script>
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Sep 10, 2023
+     - 1 minute read 
+     - <a href="https://shogo82148.github.io/blog/2023/09/10/2023-09-10-logrus-slog-hook/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
+    
+  </p>
+  <h1 class="entry-title">
+     log/slogにログを転送する logrus hook を書いた 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>長らく構造化ログの仕組みが標準ライブラリになかったGoですが、
+Go 1.21がリリースされて晴れて <a href="https://pkg.go.dev/log/slog">log/slog</a> が使えるようになりました。
+弊社では<a href="https://github.com/sirupsen/logrus">logrus</a>を使っているので、<a href="https://pkg.go.dev/log/slog">log/slog</a>を連携するためのフックを書きました。</p>
+<ul>
+<li><a href=""></a></li>
+</ul>
+<h2 id="背景">背景</h2>
+<p>弊社では<a href="https://github.com/sirupsen/logrus">logrus</a>をメインに使っています。
+特段困ったこともなく <strong>素晴らしいライブラリだと思います！！！</strong>（大事）
+強いて問題点を上げるとすれば、メンテナンスモードに入ってしまってあまり開発が活発でない、ということでしょうか。
+重大なバグがあれば別ですが、新規機能の追加等は行わない方針のようです。</p>
+<p>一方 <a href="https://pkg.go.dev/log/slog">log/slog</a> は公式ライブラリなので、<a href="https://pkg.go.dev/log/slog">log/slog</a>の仕様を前提としたエコシステムが、今後発展してくでしょう。</p>
+<p><a href="https://github.com/sirupsen/logrus">logrus</a>を使いながら<a href="https://pkg.go.dev/log/slog">log/slog</a>のいいとこ取りとする方法はないか？と考えた結果作ったのが <a href="https://github.com/shogo82148/logrus-slog-hook">shogo82148/logrus-slog-hook</a> です。</p>
+<h2 id="synopsis">SYNOPSIS</h2>
+<p><code>sloghook.New</code> で作成したフックを差し込むだけです。
+<a href="https://github.com/sirupsen/logrus">logrus</a>に流したログが<a href="https://pkg.go.dev/log/slog">log/slog</a>の設定で流れてきます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
+
+<span class="kn">import</span> <span class="p">(</span>
+	<span class="s">&#34;io&#34;</span>
+	<span class="s">&#34;log/slog&#34;</span>
+	<span class="s">&#34;os&#34;</span>
+
+	<span class="nx">sloghook</span> <span class="s">&#34;github.com/shogo82148/logrus-slog-hook&#34;</span>
+	<span class="s">&#34;github.com/sirupsen/logrus&#34;</span>
+<span class="p">)</span>
+
+<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+	<span class="nx">h</span> <span class="o">:=</span> <span class="nx">slog</span><span class="p">.</span><span class="nf">NewTextHandler</span><span class="p">(</span><span class="nx">os</span><span class="p">.</span><span class="nx">Stderr</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
+	<span class="nx">logrus</span><span class="p">.</span><span class="nf">AddHook</span><span class="p">(</span><span class="nx">sloghook</span><span class="p">.</span><span class="nf">New</span><span class="p">(</span><span class="nx">h</span><span class="p">))</span>
+
+	<span class="c1">// logrus も logrus-slog-hook もSTDERRに書き込むので、同じログが二回表示されてしまう。
+</span><span class="c1"></span>	<span class="c1">// logrus側を止めて防止。
+</span><span class="c1"></span>	<span class="nx">logrus</span><span class="p">.</span><span class="nf">SetFormatter</span><span class="p">(</span><span class="nx">sloghook</span><span class="p">.</span><span class="nf">NewFormatter</span><span class="p">())</span>
+	<span class="nx">logrus</span><span class="p">.</span><span class="nf">SetOutput</span><span class="p">(</span><span class="nx">io</span><span class="p">.</span><span class="nx">Discard</span><span class="p">)</span>
+
+	<span class="nx">logrus</span><span class="p">.</span><span class="nf">WithFields</span><span class="p">(</span><span class="nx">logrus</span><span class="p">.</span><span class="nx">Fields</span><span class="p">{</span>
+		<span class="s">&#34;name&#34;</span><span class="p">:</span> <span class="s">&#34;joe&#34;</span><span class="p">,</span>
+		<span class="s">&#34;age&#34;</span><span class="p">:</span>  <span class="mi">42</span><span class="p">,</span>
+	<span class="p">}).</span><span class="nf">Error</span><span class="p">(</span><span class="s">&#34;Hello world!&#34;</span><span class="p">)</span>
+
+	<span class="c1">// Output:
+</span><span class="c1"></span>	<span class="c1">// time=2023-09-10T23:32:41.229+09:00 level=ERROR msg=&#34;Hello world!&#34; age=42 name=joe
+</span><span class="c1"></span><span class="p">}</span>
+</code></pre></div><h2 id="注意点">注意点</h2>
+<p><a href="https://github.com/sirupsen/logrus">logrus</a>はエラーレベルが <code>Trace</code>, <code>Debug</code>, <code>Info</code>, <code>Warn</code>, <code>Error</code>, <code>Panic</code>, <code>Fatal</code> と7段階ありますが、
+<a href="https://pkg.go.dev/log/slog">log/slog</a>には <code>Debug</code>, <code>Info</code>, <code>Warn</code>, <code>Error</code> しかありません。
+しかし実は整数をレベルを設定できるので、適当に割り当てました。</p>
+<ul>
+<li>logrus: slog</li>
+<li><code>trace</code>: <code>DEBUG-1</code></li>
+<li><code>debug</code>: <code>DEBUG</code></li>
+<li><code>info</code>: <code>INFO</code></li>
+<li><code>warn</code>: <code>WARN</code></li>
+<li><code>error</code>: <code>ERROR</code></li>
+<li><code>panic</code>: <code>ERROR+1</code></li>
+<li><code>fatal</code>: <code>ERROR+2</code></li>
+</ul>
+<p>ログに出力されるエラーレベルもこれになるので、ログを監視するようなツールを導入していると修正が必要がかもしれません。</p>
+<h2 id="まとめ">まとめ</h2>
+<p><a href="https://pkg.go.dev/log/slog">log/slog</a>を連携する<a href="https://github.com/sirupsen/logrus">logrus</a>のフックを書きました。
+<a href="https://pkg.go.dev/log/slog">log/slog</a>の便利機能を取り込んだり、<a href="https://pkg.go.dev/log/slog">log/slog</a>への移行に使用できると思うので、
+ぜひ利用してください。</p>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">ICHINOSE Shogo</span></span>
+    
+    <time>Sep 10, 2023</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2023/09/08/2023-09-08-actions-checkout-v4/" title="actions/checkout@v4の襲撃を受けた件">actions/checkout@v4の襲撃を受けた件</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2023/09/10/2023-09-10-logrus-slog-hook/">log/slogにログを転送する logrus hook を書いた</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/09/08/2023-09-08-actions-checkout-v4/">actions/checkout@v4の襲撃を受けた件</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/09/04/2023-09-04-generate-random-float/">ぼくのかんがえたさいきょうの[0.0, 1.0)の乱数を得るための方法</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/09/03/2023-09-03-gyotaku/">ウェブ魚拓の創業者のインタビュー記事のウェブ魚拓</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/09/03/2023-09-03-shonanpm-no-1/">湘南.pm #1 で「趣味でPerlのビルドをしている話」をしてきた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/08/12/2023-08-12-eytzinger-layout/">Eytzinger LayoutをGoで試してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/08/09/2023-08-09-p5-aws-lambda-supports-response-streaming/">AWS::LambdaがResponse Streamingに対応しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/08/04/2023-08-04-context-for-slog/">Contextに埋め込んだ値をログに出力してくれるログハンドラーを書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/08/01/2023-08-01-p5-aws-lambda-0.1.1-are-released/">AWS::Lambda 0.1.1リリースのお知らせ</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2023 ICHINOSE Shogo - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+</body>
+
+</html>
+
