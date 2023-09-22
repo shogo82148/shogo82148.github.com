@@ -19,7 +19,7 @@ categories: [go, golang]
 
 ## ぼくのかんがえたさいきょうの Go HTTP サーバー起動方法
 
-最初に結論。
+とりあえず完成形のコード。
 
 ```go
 package main
@@ -51,7 +51,7 @@ func main() {
 	}
 	http.Handle("/", h)
 
-	// 別 goroutine で Serve する
+	// 別 goroutine で起動する
 	chServe := make(chan error, 1)
 	go func() {
 		defer close(chServe)
@@ -60,8 +60,8 @@ func main() {
 
 	select {
 	case err := <-chServe:
-		// ListenAndServe はたまに失敗する
-		// 失敗したら死んでほしい
+		// ListenAndServe はたまに失敗するので、失敗したら死んでほしい
+		// 他のプロセスが使用しているポートを開いたときとか
 		log.Fatal(err)
 	case <-chSignal:
 	}
@@ -75,9 +75,22 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// HTTPサーバーが終了するのを待つ
-	//
+	// HTTPサーバーが完全に終了するのを待つ
+	// (OSがリソース閉じてくれるはずだけど、お行儀よく）
 	s.Close()
-	<-chServe
+	<-chServe // http.ErrServerClosed が返ってくるのがわかっているので、特に何もしない。
 }
 ```
+
+大事なのは、`ListenAndServe` がサーバーの起動に失敗したときはプロセスを終了させること。
+HTTP サーバーとしての役割を果たさないのに、プロセスだけ生き残っても仕方がないのでね。
+
+ただし `ListenAndServe` がエラーを返したらプロセス即終了、という訳にはいかない。
+たとえば、`Shutdown` を呼び出すと `ListenAndServe` は `http.ErrServerClosed` エラーで終了してしまう。
+この場合はプロセスを終了させてはいけなくって、すべてのリクエストが正常に処理されるのを待つ必要がある。
+
+「`ListenAndServe` の失敗監視」と「シグナルの受信監視」を並行してやらないといけないので、意外と難しい。
+
+---
+
+まあ、最近はロードバランサーがよしなに取り計らってくれるので、このへん多少雑でも構わない。
