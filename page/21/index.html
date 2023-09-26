@@ -120,6 +120,39 @@ MathJax = {
         
 
 <header>
+  <p class="meta">May 27, 2014
+     - 3 minute read 
+     - <a href="https://shogo82148.github.io/blog/2014/05/27/using-statement-without-instantiating/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/csharp/">csharp </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2014/05/27/using-statement-without-instantiating/">初期化なしのusing文ってOK？</a>
+  </h1>
+</header>
+
+        
+          <p>C# の using ステートメント、普通は変数の初期化とか new とかをまとめてやるものだと思ってたんですが、 某プロジェクトでusing文をこんな感じで使っているのを見かけました。
+var hoge = new Hoge(); using(hoge) { // using( var hoge = new Hoge() ) { ならよく見る  ... } 見慣れない書き方だったので、本当にリソース解放が行われているのか不安・・・。 リソース解放が行われているのか調べてみました。
+まずは結論  リソース解放自体は行われているので、ちゃんと書いてあれば問題なし しかしエラーをコンパイル時に見つけられない場合があるので非推奨  逆アセンブルして調べてみた コンパイル結果見ればちゃんとリソース解放されているかわかるよね！ ってことでバイナリを逆アセンブルして調べてみました。
+サンプルコード 検証に使ったのはこんなコード。
+using System; using System.IO; namespace UsingTest { class MainClass { public static void Main (string[] args) { var sr = new StreamReader (&#34;hoge.txt&#34;); Console.WriteLine (&#34;Hoge: {0}&#34;, sr.ReadLine ()); } } } 僕はMac使いに転向したので、Monoを使います。 mcsを使ってコンパイル、monodis ってのを使うとILを見れるらしいです。 Windowsだったら .</p>
+          
+            <footer>
+              <a href="https://shogo82148.github.io/blog/2014/05/27/using-statement-without-instantiating/" rel="full-article">Read On &rarr;</a>
+            </footer>
+          
+        
+      </article>
+      
+      <article>
+        
+        
+
+<header>
   <p class="meta">May 25, 2014
      - 1 minute read 
      - <a href="https://shogo82148.github.io/blog/2014/05/25/mini-message-pack/#disqus_thread">Comments</a>
@@ -404,39 +437,6 @@ githubのコードプレビューはタブストップが8文字幅で表示さ�
         
       </article>
       
-      <article>
-        
-        
-
-<header>
-  <p class="meta">Feb 1, 2014
-     - 1 minute read 
-     - <a href="https://shogo82148.github.io/blog/2014/02/01/redis-fast-0-dot-06-released/#disqus_thread">Comments</a>
-
-    
-    
-      - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a><a class="label" href="https://shogo82148.github.io/categories/redis/">redis </a>
-    
-  </p>
-  <h1 class="entry-title">
-    <a href="https://shogo82148.github.io/blog/2014/02/01/redis-fast-0-dot-06-released/">Redis::Fast 0.06 released</a>
-  </h1>
-</header>
-
-        
-          <p>こんにちは、もうすぐ17才と100ヶ月を迎えるいっちーです。 今朝、Redis::Fast 0.06をリリースしました。 主な変更点はメモリーリークの修正と、エラー発生時にSegmentation Faltで落ちる問題の修正です。
-メモリーリーク Redis::Fastをサブスクライバーモードで動作させると、メモリを無限に食い続ける問題をついに！ついに！修正しました。 原因は、一言で言ってしまえば、Perlのリファレンスカウントの扱いの勉強不足です・・・。
-XSの中でPerlのオブジェクトを作るとき、プログラマが手動でリファレンスカウントを制御する必要があります。 とはいうものの、全てのオブジェクトのリファレンスカウントを制御するのは大変なので、 XSには「揮発性」という考え方があります。 sv_2motralを使って変数を揮発性に設定しておけば、よしななタイミングでオブジェクトを解放してくれます。 gfx先生のブログにもあるように、 オブジェクト作成したら原則sv_2motralをつけるようにすれば、 メモリーリークはほとんどなくなるはずです。
-SV * s = newSVpv(&#34;Hello World&#34;,0); // Perl の文字列オブジェクト sv_2motral(s) // 揮発性にすることで、使われなくなったら自動的に解放してくれる この「よしななタイミング」をよく理解していなかったのでリークしてました・・・。 XSからオブジェクトへアクセスできなくなったときでないとオブジェクトを解放できないので、 揮発性のオブジェクトが実際に解放されるのは「XSで書かれた関数が終了してPerlに戻るとき」です。 メッセージを待ち続けるwait_for_messages関数は (タイムアウトをしない限り)ずっと終了しないので、 揮発性のオブジェクトを解放するタイミングが一切なかったのです。
-不要になったら解放されるよう、揮発性オブジェクトの有効範囲を明示的に指定しました。
-sv_2motral(s); ENTER; SAVETMPS; sv_2motral(v); FREETMPS; LEAVE; // v はココで解放される // s は生き残ってる perlcallとかちゃんとドキュメントを読みましょう &gt; 自分
-Segmentation Falt 同期的にコマンドを実行してる最中にSIGNAL等で実行が中断されると、 Segmentation Faltが起こる問題を修正しました。 Redis::Fastは同期モードでコマンドを発行したときでも、 hiredisの非同期モードの機能を使って通信しています。 コマンド実行中にエラーが発生すると、 コールバック関数の呼び出しタイミングが変わってしまい、 メモリの確保・解放のタイミングが狂ってしまっていました。
-このバグ、試した環境の中ではUbuntu+Perl5.14でしか再現しませんでした。 他の環境ではたまたま解放後もアクセスできてしまって、 正常に動作してしまっていたようです。 嫌なバグだ・・・。
-まとめ C言語でメモリ管理するコードは書くべきでない。</p>
-          
-        
-      </article>
-      
       
       
 
@@ -580,6 +580,12 @@ Segmentation Falt 同期的にコマンドを実行してる最中にSIGNAL等�
           
           
             
+              <li class="post">
+                <a href="/blog/2023/09/26/2023-09-26-actions-github-app-token/">actions-github-app-tokenの紹介</a>
+              </li>
+            
+          
+            
           
             
               <li class="post">
@@ -626,12 +632,6 @@ Segmentation Falt 同期的にコマンドを実行してる最中にSIGNAL等�
             
               <li class="post">
                 <a href="/blog/2023/09/03/2023-09-03-gyotaku/">ウェブ魚拓の創業者のインタビュー記事のウェブ魚拓</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2023/09/03/2023-09-03-shonanpm-no-1/">湘南.pm #1 で「趣味でPerlのビルドをしている話」をしてきた</a>
               </li>
             
           
