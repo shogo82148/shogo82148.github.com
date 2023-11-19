@@ -33,7 +33,7 @@
   <meta name="author" content="ICHINOSE Shogo">
 
   
-  <meta name="generator" content="Hugo 0.91.2" />
+  <meta name="generator" content="Hugo 0.120.4">
 
 
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
@@ -166,15 +166,15 @@ syscall や golang.org/x/sys/unix を直接呼び出している場合にこれ�
 <h2 id="原因">原因</h2>
 <p>エラーメッセージを元に原因を探っていくと、レポジトリの検索に使っている<a href="https://github.com/saracen/walker">saracen/walker</a>にたどり着きました。
 <a href="https://github.com/saracen/walker/blob/e4a590f03e852923cdb02e2b7422fb070838b49d/walker_unix.go#L26-L29">walker_unix.go</a> の以下の部分です。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="nx">fd</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">syscall</span><span class="p">.</span><span class="nf">Open</span><span class="p">(</span><span class="nx">dirname</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
-<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-    <span class="k">return</span> <span class="o">&amp;</span><span class="nx">os</span><span class="p">.</span><span class="nx">PathError</span><span class="p">{</span><span class="nx">Op</span><span class="p">:</span> <span class="s">&#34;open&#34;</span><span class="p">,</span> <span class="nx">Path</span><span class="p">:</span> <span class="nx">dirname</span><span class="p">,</span> <span class="nx">Err</span><span class="p">:</span> <span class="nx">err</span><span class="p">}</span>
-<span class="p">}</span>
-</code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="nx">nbuf</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">syscall</span><span class="p">.</span><span class="nf">ReadDirent</span><span class="p">(</span><span class="nx">fd</span><span class="p">,</span> <span class="nx">buf</span><span class="p">)</span>
-<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-    <span class="k">return</span> <span class="nx">err</span>
-<span class="p">}</span>
-</code></pre></div><p>syscall パッケージを直接使っていますね。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="nx">fd</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">syscall</span><span class="p">.</span><span class="nf">Open</span><span class="p">(</span><span class="nx">dirname</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="o">&amp;</span><span class="nx">os</span><span class="p">.</span><span class="nx">PathError</span><span class="p">{</span><span class="nx">Op</span><span class="p">:</span> <span class="s">&#34;open&#34;</span><span class="p">,</span> <span class="nx">Path</span><span class="p">:</span> <span class="nx">dirname</span><span class="p">,</span> <span class="nx">Err</span><span class="p">:</span> <span class="nx">err</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="nx">nbuf</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">syscall</span><span class="p">.</span><span class="nf">ReadDirent</span><span class="p">(</span><span class="nx">fd</span><span class="p">,</span> <span class="nx">buf</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">err</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>syscall パッケージを直接使っていますね。</p>
 <p>厄介なのが頻度が多くなっただけで、<strong>毎回 EINTR で落ちるわけではない</strong>、ということ。
 通常のテストでは発見できず、一分間ペンチを回してようやくここがエラーの原因だと確証が得られました。</p>
 <pre tabindex="0"><code>$ go test -v -bench ^BenchmarkWalkerWalk -run none -benchtime 1m
@@ -197,24 +197,24 @@ FAIL    github.com/saracen/walker       8.928s
 <ul>
 <li><a href="https://github.com/saracen/walker/pull/5">fix &ldquo;interrupted system call&rdquo; error #5</a></li>
 </ul>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="nf">open</span><span class="p">(</span><span class="nx">path</span> <span class="kt">string</span><span class="p">,</span> <span class="nx">mode</span> <span class="kt">int</span><span class="p">,</span> <span class="nx">perm</span> <span class="kt">uint32</span><span class="p">)</span> <span class="p">(</span><span class="nx">fd</span> <span class="kt">int</span><span class="p">,</span> <span class="nx">err</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
-	<span class="k">for</span> <span class="p">{</span>
-		<span class="nx">fd</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">syscall</span><span class="p">.</span><span class="nf">Open</span><span class="p">(</span><span class="nx">path</span><span class="p">,</span> <span class="nx">mode</span><span class="p">,</span> <span class="nx">perm</span><span class="p">)</span>
-		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">EINTR</span> <span class="p">{</span>
-			<span class="k">return</span> <span class="nx">fd</span><span class="p">,</span> <span class="nx">err</span>
-		<span class="p">}</span>
-	<span class="p">}</span>
-<span class="p">}</span>
-
-<span class="kd">func</span> <span class="nf">readDirent</span><span class="p">(</span><span class="nx">fd</span> <span class="kt">int</span><span class="p">,</span> <span class="nx">buf</span> <span class="p">[]</span><span class="kt">byte</span><span class="p">)</span> <span class="p">(</span><span class="nx">n</span> <span class="kt">int</span><span class="p">,</span> <span class="nx">err</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
-	<span class="k">for</span> <span class="p">{</span>
-		<span class="nx">nbuf</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">syscall</span><span class="p">.</span><span class="nf">ReadDirent</span><span class="p">(</span><span class="nx">fd</span><span class="p">,</span> <span class="nx">buf</span><span class="p">)</span>
-		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">EINTR</span> <span class="p">{</span>
-			<span class="k">return</span> <span class="nx">nbuf</span><span class="p">,</span> <span class="nx">err</span>
-		<span class="p">}</span>
-	<span class="p">}</span>
-<span class="p">}</span>
-</code></pre></div><h2 id="ついでの-yak-shaving">ついでの yak shaving</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">open</span><span class="p">(</span><span class="nx">path</span> <span class="kt">string</span><span class="p">,</span> <span class="nx">mode</span> <span class="kt">int</span><span class="p">,</span> <span class="nx">perm</span> <span class="kt">uint32</span><span class="p">)</span> <span class="p">(</span><span class="nx">fd</span> <span class="kt">int</span><span class="p">,</span> <span class="nx">err</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">fd</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">syscall</span><span class="p">.</span><span class="nf">Open</span><span class="p">(</span><span class="nx">path</span><span class="p">,</span> <span class="nx">mode</span><span class="p">,</span> <span class="nx">perm</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">EINTR</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="k">return</span> <span class="nx">fd</span><span class="p">,</span> <span class="nx">err</span>
+</span></span><span class="line"><span class="cl">		<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">readDirent</span><span class="p">(</span><span class="nx">fd</span> <span class="kt">int</span><span class="p">,</span> <span class="nx">buf</span> <span class="p">[]</span><span class="kt">byte</span><span class="p">)</span> <span class="p">(</span><span class="nx">n</span> <span class="kt">int</span><span class="p">,</span> <span class="nx">err</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">nbuf</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">syscall</span><span class="p">.</span><span class="nf">ReadDirent</span><span class="p">(</span><span class="nx">fd</span><span class="p">,</span> <span class="nx">buf</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">EINTR</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="k">return</span> <span class="nx">nbuf</span><span class="p">,</span> <span class="nx">err</span>
+</span></span><span class="line"><span class="cl">		<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><h2 id="ついでの-yak-shaving">ついでの yak shaving</h2>
 <p><a href="https://github.com/saracen/walker">saracen/walker</a> は <a href="https://github.com/golang/tools/tree/2363391a5b2fe95c264da3c106a6ecca73490587/internal/fastwalk">x/tools/internal/fastwalk</a> をパッケージとして切り出して、独自の改良を加えたものです
 (fastwalk は internal なので外部から呼び出せない)。
 大まかな実装方針は一緒なので、修正の参考になるのでは？と fastwalk のコードも覗いてみたのですが、 <strong>対応した形跡がない</strong> 。

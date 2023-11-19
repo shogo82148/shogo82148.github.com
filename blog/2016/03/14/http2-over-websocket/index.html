@@ -33,7 +33,7 @@
   <meta name="author" content="ICHINOSE Shogo">
 
   
-  <meta name="generator" content="Hugo 0.91.2" />
+  <meta name="generator" content="Hugo 0.120.4">
 
 
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
@@ -161,109 +161,109 @@ Golangならきっと上手いこと<code>interface</code>を実装すれば、�
 外から見れば<code>net.Conn</code>インターフェースに読み書きしている何かに過ぎません。
 そして、<code>websocket.Conn</code>も<code>net.Conn</code>を実装しているので、そのままHTTP2のライブラリに渡せるはずです。</p>
 <p>そうしてできたのが以下のサーバです。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
-
-<span class="kn">import</span> <span class="p">(</span>
-	<span class="s">&#34;errors&#34;</span>
-	<span class="s">&#34;log&#34;</span>
-	<span class="s">&#34;net/http&#34;</span>
-	<span class="s">&#34;net/http/httputil&#34;</span>
-	<span class="s">&#34;sync&#34;</span>
-
-	<span class="s">&#34;golang.org/x/net/http2&#34;</span>
-	<span class="s">&#34;golang.org/x/net/websocket&#34;</span>
-<span class="p">)</span>
-
-<span class="kd">type</span> <span class="nx">transport</span> <span class="kd">struct</span> <span class="p">{</span>
-	<span class="nx">m</span>      <span class="nx">sync</span><span class="p">.</span><span class="nx">Mutex</span>
-	<span class="nx">t</span>      <span class="nx">http</span><span class="p">.</span><span class="nx">RoundTripper</span>
-	<span class="nx">closed</span> <span class="kd">chan</span> <span class="kd">struct</span><span class="p">{}</span>
-<span class="p">}</span>
-
-<span class="kd">var</span> <span class="nx">t</span> <span class="o">*</span><span class="nx">transport</span>
-
-<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
-	<span class="nx">t</span> <span class="p">=</span> <span class="o">&amp;</span><span class="nx">transport</span><span class="p">{}</span>
-	<span class="nx">s</span> <span class="o">:=</span> <span class="nx">websocket</span><span class="p">.</span><span class="nx">Server</span><span class="p">{</span><span class="nx">Handler</span><span class="p">:</span> <span class="nx">websocket</span><span class="p">.</span><span class="nf">Handler</span><span class="p">(</span><span class="nx">Handler</span><span class="p">)}</span>
-	<span class="nx">http</span><span class="p">.</span><span class="nf">Handle</span><span class="p">(</span><span class="s">&#34;/&#34;</span><span class="p">,</span> <span class="nx">s</span><span class="p">)</span>
-	<span class="k">go</span> <span class="nx">http</span><span class="p">.</span><span class="nf">ListenAndServe</span><span class="p">(</span><span class="s">&#34;:3000&#34;</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
-	<span class="nx">http</span><span class="p">.</span><span class="nf">ListenAndServe</span><span class="p">(</span><span class="s">&#34;:3001&#34;</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">httputil</span><span class="p">.</span><span class="nx">ReverseProxy</span><span class="p">{</span>
-		<span class="nx">Transport</span><span class="p">:</span> <span class="nx">t</span><span class="p">,</span>
-		<span class="nx">Director</span><span class="p">:</span> <span class="kd">func</span><span class="p">(</span><span class="nx">req</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
-		<span class="p">},</span>
-	<span class="p">})</span>
-<span class="p">}</span>
-
-<span class="kd">func</span> <span class="nf">Handler</span><span class="p">(</span><span class="nx">ws</span> <span class="o">*</span><span class="nx">websocket</span><span class="p">.</span><span class="nx">Conn</span><span class="p">)</span> <span class="p">{</span>
-	<span class="nx">log</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;start new connection&#34;</span><span class="p">)</span>
-	<span class="nx">t2</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http2</span><span class="p">.</span><span class="nx">Transport</span><span class="p">{}</span>
-	<span class="nx">conn</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">t2</span><span class="p">.</span><span class="nf">NewClientConn</span><span class="p">(</span><span class="nx">ws</span><span class="p">)</span>
-	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-		<span class="nx">log</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
-		<span class="k">return</span>
-	<span class="p">}</span>
-
-	<span class="nx">t</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
-	<span class="k">if</span> <span class="nx">t</span><span class="p">.</span><span class="nx">t</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-		<span class="nx">t</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
-		<span class="nx">log</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;already connected.&#34;</span><span class="p">)</span>
-		<span class="k">return</span>
-	<span class="p">}</span>
-	<span class="nx">t</span><span class="p">.</span><span class="nx">t</span> <span class="p">=</span> <span class="nx">conn</span>
-	<span class="nx">t</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
-	<span class="o">&lt;-</span><span class="nx">t</span><span class="p">.</span><span class="nx">closed</span>
-	<span class="nx">log</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;close connection&#34;</span><span class="p">)</span>
-<span class="p">}</span>
-
-<span class="kd">func</span> <span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">transport</span><span class="p">)</span> <span class="nf">RoundTrip</span><span class="p">(</span><span class="nx">req</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">(</span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Response</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
-	<span class="nx">t</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
-	<span class="nx">t2</span> <span class="o">:=</span> <span class="nx">t</span><span class="p">.</span><span class="nx">t</span>
-	<span class="nx">t</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
-	<span class="k">if</span> <span class="nx">t2</span> <span class="o">==</span> <span class="kc">nil</span> <span class="p">{</span>
-		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">errors</span><span class="p">.</span><span class="nf">New</span><span class="p">(</span><span class="s">&#34;connection not found&#34;</span><span class="p">)</span>
-	<span class="p">}</span>
-	<span class="nx">res</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">t2</span><span class="p">.</span><span class="nf">RoundTrip</span><span class="p">(</span><span class="nx">req</span><span class="p">)</span>
-	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-		<span class="nx">log</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
-		<span class="nx">t</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
-		<span class="nx">t</span><span class="p">.</span><span class="nx">t</span> <span class="p">=</span> <span class="kc">nil</span>
-		<span class="nx">t</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
-		<span class="nx">t</span><span class="p">.</span><span class="nx">closed</span> <span class="o">&lt;-</span> <span class="kd">struct</span><span class="p">{}{}</span>
-		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">err</span>
-	<span class="p">}</span>
-	<span class="k">return</span> <span class="nx">res</span><span class="p">,</span> <span class="kc">nil</span>
-<span class="p">}</span>
-</code></pre></div><p>複数Websocketのコネクションが張られた場合の処理が少し煩雑ですが、思いのほか短くかけました。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;errors&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;log&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;net/http&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;net/http/httputil&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;sync&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;golang.org/x/net/http2&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;golang.org/x/net/websocket&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">transport</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">m</span>      <span class="nx">sync</span><span class="p">.</span><span class="nx">Mutex</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">t</span>      <span class="nx">http</span><span class="p">.</span><span class="nx">RoundTripper</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">closed</span> <span class="kd">chan</span> <span class="kd">struct</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">var</span> <span class="nx">t</span> <span class="o">*</span><span class="nx">transport</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">t</span> <span class="p">=</span> <span class="o">&amp;</span><span class="nx">transport</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">s</span> <span class="o">:=</span> <span class="nx">websocket</span><span class="p">.</span><span class="nx">Server</span><span class="p">{</span><span class="nx">Handler</span><span class="p">:</span> <span class="nx">websocket</span><span class="p">.</span><span class="nf">Handler</span><span class="p">(</span><span class="nx">Handler</span><span class="p">)}</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">http</span><span class="p">.</span><span class="nf">Handle</span><span class="p">(</span><span class="s">&#34;/&#34;</span><span class="p">,</span> <span class="nx">s</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">go</span> <span class="nx">http</span><span class="p">.</span><span class="nf">ListenAndServe</span><span class="p">(</span><span class="s">&#34;:3000&#34;</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">http</span><span class="p">.</span><span class="nf">ListenAndServe</span><span class="p">(</span><span class="s">&#34;:3001&#34;</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">httputil</span><span class="p">.</span><span class="nx">ReverseProxy</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">Transport</span><span class="p">:</span> <span class="nx">t</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">Director</span><span class="p">:</span> <span class="kd">func</span><span class="p">(</span><span class="nx">req</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="p">},</span>
+</span></span><span class="line"><span class="cl">	<span class="p">})</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Handler</span><span class="p">(</span><span class="nx">ws</span> <span class="o">*</span><span class="nx">websocket</span><span class="p">.</span><span class="nx">Conn</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">log</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;start new connection&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">t2</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http2</span><span class="p">.</span><span class="nx">Transport</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">conn</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">t2</span><span class="p">.</span><span class="nf">NewClientConn</span><span class="p">(</span><span class="nx">ws</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">log</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="k">return</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="nx">t</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">t</span><span class="p">.</span><span class="nx">t</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">t</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">log</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;already connected.&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="k">return</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">t</span><span class="p">.</span><span class="nx">t</span> <span class="p">=</span> <span class="nx">conn</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">t</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="o">&lt;-</span><span class="nx">t</span><span class="p">.</span><span class="nx">closed</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">log</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;close connection&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">transport</span><span class="p">)</span> <span class="nf">RoundTrip</span><span class="p">(</span><span class="nx">req</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">(</span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Response</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">t</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">t2</span> <span class="o">:=</span> <span class="nx">t</span><span class="p">.</span><span class="nx">t</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">t</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">t2</span> <span class="o">==</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">errors</span><span class="p">.</span><span class="nf">New</span><span class="p">(</span><span class="s">&#34;connection not found&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">res</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">t2</span><span class="p">.</span><span class="nf">RoundTrip</span><span class="p">(</span><span class="nx">req</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">log</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">t</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">t</span><span class="p">.</span><span class="nx">t</span> <span class="p">=</span> <span class="kc">nil</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">t</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">t</span><span class="p">.</span><span class="nx">closed</span> <span class="o">&lt;-</span> <span class="kd">struct</span><span class="p">{}{}</span>
+</span></span><span class="line"><span class="cl">		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">err</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="k">return</span> <span class="nx">res</span><span class="p">,</span> <span class="kc">nil</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>複数Websocketのコネクションが張られた場合の処理が少し煩雑ですが、思いのほか短くかけました。
 3001番ポートに来たリクエストをWebsocket経由で転送します。
 Websocketは3000番ポートで待ち受けです。</p>
 <p>これにアクセスするためのクライアントがこちら。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
-
-<span class="kn">import</span> <span class="p">(</span>
-	<span class="s">&#34;log&#34;</span>
-	<span class="s">&#34;net/http/httputil&#34;</span>
-	<span class="s">&#34;net/url&#34;</span>
-
-	<span class="s">&#34;golang.org/x/net/http2&#34;</span>
-	<span class="s">&#34;golang.org/x/net/websocket&#34;</span>
-<span class="p">)</span>
-
-<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
-	<span class="nx">origin</span> <span class="o">:=</span> <span class="s">&#34;http://localhost:3000/&#34;</span>
-	<span class="nx">u</span> <span class="o">:=</span> <span class="s">&#34;ws://localhost:3000/&#34;</span>
-	<span class="nx">ws</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">websocket</span><span class="p">.</span><span class="nf">Dial</span><span class="p">(</span><span class="nx">u</span><span class="p">,</span> <span class="s">&#34;&#34;</span><span class="p">,</span> <span class="nx">origin</span><span class="p">)</span>
-	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
-	<span class="p">}</span>
-
-	<span class="nx">target</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">url</span><span class="p">.</span><span class="nf">Parse</span><span class="p">(</span><span class="s">&#34;http://localhost:8000/&#34;</span><span class="p">)</span>
-
-	<span class="nx">s</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http2</span><span class="p">.</span><span class="nx">Server</span><span class="p">{}</span>
-	<span class="nx">s</span><span class="p">.</span><span class="nf">ServeConn</span><span class="p">(</span><span class="nx">ws</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">http2</span><span class="p">.</span><span class="nx">ServeConnOpts</span><span class="p">{</span>
-		<span class="nx">Handler</span><span class="p">:</span> <span class="nx">httputil</span><span class="p">.</span><span class="nf">NewSingleHostReverseProxy</span><span class="p">(</span><span class="nx">target</span><span class="p">),</span>
-	<span class="p">})</span>
-<span class="p">}</span>
-</code></pre></div><p>Websocket経由でリクエストを受け付け、それを8000番ポートに転送します。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;log&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;net/http/httputil&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;net/url&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;golang.org/x/net/http2&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;golang.org/x/net/websocket&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">origin</span> <span class="o">:=</span> <span class="s">&#34;http://localhost:3000/&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">u</span> <span class="o">:=</span> <span class="s">&#34;ws://localhost:3000/&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">ws</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">websocket</span><span class="p">.</span><span class="nf">Dial</span><span class="p">(</span><span class="nx">u</span><span class="p">,</span> <span class="s">&#34;&#34;</span><span class="p">,</span> <span class="nx">origin</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="nx">target</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">url</span><span class="p">.</span><span class="nf">Parse</span><span class="p">(</span><span class="s">&#34;http://localhost:8000/&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="nx">s</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http2</span><span class="p">.</span><span class="nx">Server</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">s</span><span class="p">.</span><span class="nf">ServeConn</span><span class="p">(</span><span class="nx">ws</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">http2</span><span class="p">.</span><span class="nx">ServeConnOpts</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">Handler</span><span class="p">:</span> <span class="nx">httputil</span><span class="p">.</span><span class="nf">NewSingleHostReverseProxy</span><span class="p">(</span><span class="nx">target</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">	<span class="p">})</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Websocket経由でリクエストを受け付け、それを8000番ポートに転送します。
 こちらも非常に短くかけました。
 サーバーとクライアントを立ち上げて<code>http://localhost:3001/</code>にアクセスすると、
 <code>http://localhost:8000/</code>の内容が見れるはずです。</p>

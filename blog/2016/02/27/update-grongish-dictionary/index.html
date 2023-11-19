@@ -33,7 +33,7 @@
   <meta name="author" content="ICHINOSE Shogo">
 
   
-  <meta name="generator" content="Hugo 0.91.2" />
+  <meta name="generator" content="Hugo 0.120.4">
 
 
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
@@ -190,26 +190,26 @@ PythonのWebフレームワークである<a href="http://www.pylonsproject.org/
 <h3 id="デプロイ時のファイル置き換えをアトミックにする">デプロイ時のファイル置き換えをアトミックにする</h3>
 <p>sakuraのVPS上で<a href="http://yuuki.hatenablog.com/entry/droot">droot</a>を使って起動しています。
 kazuhoさんの「<a href="https://twitter.com/kazuho/status/671489245895221248">server-starter が SIGHUP 受け取ると pull 型のデプロイツールが起動して、そいつが新しいディレクトリにイメージを展開して、そこに chroot してアプリケーションが動き出すスタイル</a>」を実践してみたくなったので、以下のようなスクリプトを書いてみました。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="nv">CONTAINER_DIR</span><span class="o">=</span>/var/containers/hogehoge-<span class="nv">$$</span>
-tar zfx hogehoge.tar.gz -C <span class="nv">$CONTAINER_DIR</span>
-
-droot run --root <span class="nv">$CONTAINER_DIR</span> <span class="nb">exec</span> gunicorn server:application <span class="p">&amp;</span>
-<span class="nv">CHILD</span><span class="o">=</span><span class="nv">$!</span>
-
-_term<span class="o">()</span> <span class="o">{</span>
-    <span class="nb">kill</span> -TERM <span class="s2">&#34;</span><span class="nv">$CHILD</span><span class="s2">&#34;</span> 2&gt;/dev/null
-<span class="o">}</span>
-
-<span class="nb">trap</span> _term SIGTERM
-
-_cleanup_child<span class="o">()</span> <span class="o">{</span>
-    droot rm --root <span class="nv">$CONTAINER_DIR</span>
-<span class="o">}</span>
-
-<span class="nb">trap</span> _cleanup_child EXIT
-
-<span class="nb">wait</span> <span class="s2">&#34;</span><span class="nv">$CHILD</span><span class="s2">&#34;</span>
-</code></pre></div><p>起動時にイメージの展開を行い、終了時には展開したディレクトリのお掃除をします。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="nv">CONTAINER_DIR</span><span class="o">=</span>/var/containers/hogehoge-<span class="nv">$$</span>
+</span></span><span class="line"><span class="cl">tar zfx hogehoge.tar.gz -C <span class="nv">$CONTAINER_DIR</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">droot run --root <span class="nv">$CONTAINER_DIR</span> <span class="nb">exec</span> gunicorn server:application <span class="p">&amp;</span>
+</span></span><span class="line"><span class="cl"><span class="nv">CHILD</span><span class="o">=</span><span class="nv">$!</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">_term<span class="o">()</span> <span class="o">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">kill</span> -TERM <span class="s2">&#34;</span><span class="nv">$CHILD</span><span class="s2">&#34;</span> 2&gt;/dev/null
+</span></span><span class="line"><span class="cl"><span class="o">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nb">trap</span> _term SIGTERM
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">_cleanup_child<span class="o">()</span> <span class="o">{</span>
+</span></span><span class="line"><span class="cl">    droot rm --root <span class="nv">$CONTAINER_DIR</span>
+</span></span><span class="line"><span class="cl"><span class="o">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nb">trap</span> _cleanup_child EXIT
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nb">wait</span> <span class="s2">&#34;</span><span class="nv">$CHILD</span><span class="s2">&#34;</span>
+</span></span></code></pre></div><p>起動時にイメージの展開を行い、終了時には展開したディレクトリのお掃除をします。
 <a href="https://twitter.com/kazuho/status/671489766689341440">「デプロイ時のファイルの置き換えを atomic にする」</a>ことができている・・・はず。
 MeCabの辞書って上書きして大丈夫なの？とか余計なことを考えなくて済むので楽ちんですね。
 (mmapしているから直接書き換えるとまずそう。mvすればinodeが変わるから行けるかもしれないけど、単語辞書と品詞辞書とで不整合起きたらまずくないか？とか)
@@ -227,10 +227,10 @@ PerlであればStarlet,Starman,Gazelleといった対応モジュールが出�
 <a href="http://d.hatena.ne.jp/limitusus/20131225/1387993119">Server::Starterに対応するとはどういうことか</a>
 で紹介されているのと同じ方法が使えます。</p>
 <p>どこでフックして変換コードを差し込めばいいかよくわかなかったので、さっきの起動スクリプトに差し込んでみました。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="k">if</span> <span class="o">[[</span> -n <span class="s2">&#34;</span><span class="si">${</span><span class="nv">SERVER_STARTER_PORT</span><span class="p">-</span><span class="si">}</span><span class="s2">&#34;</span> <span class="o">]]</span><span class="p">;</span> <span class="k">then</span>
-    <span class="nb">export</span> <span class="nv">GUNICORN_FD</span><span class="o">=</span><span class="k">$(</span><span class="nb">echo</span> <span class="nv">$SERVER_STARTER_PORT</span> <span class="p">|</span> tr <span class="s1">&#39;;&#39;</span> <span class="s1">&#39; &#39;</span> <span class="p">|</span> xargs -n1 <span class="p">|</span> cut -d<span class="o">=</span> -f2 <span class="p">|</span> xargs <span class="p">|</span> tr <span class="s1">&#39; &#39;</span> <span class="s1">&#39;,&#39;</span><span class="k">)</span>
-<span class="k">fi</span>
-</code></pre></div><p>僕はShell Script芸人じゃないので、もっとシンプルな書き方があれば教えていただきたい。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="k">if</span> <span class="o">[[</span> -n <span class="s2">&#34;</span><span class="si">${</span><span class="nv">SERVER_STARTER_PORT</span><span class="p">-</span><span class="si">}</span><span class="s2">&#34;</span> <span class="o">]]</span><span class="p">;</span> <span class="k">then</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">export</span> <span class="nv">GUNICORN_FD</span><span class="o">=</span><span class="k">$(</span><span class="nb">echo</span> <span class="nv">$SERVER_STARTER_PORT</span> <span class="p">|</span> tr <span class="s1">&#39;;&#39;</span> <span class="s1">&#39; &#39;</span> <span class="p">|</span> xargs -n1 <span class="p">|</span> cut -d<span class="o">=</span> -f2 <span class="p">|</span> xargs <span class="p">|</span> tr <span class="s1">&#39; &#39;</span> <span class="s1">&#39;,&#39;</span><span class="k">)</span>
+</span></span><span class="line"><span class="cl"><span class="k">fi</span>
+</span></span></code></pre></div><p>僕はShell Script芸人じゃないので、もっとシンプルな書き方があれば教えていただきたい。</p>
 <h2 id="あとがき">あとがき</h2>
 <p>最初の予告ツイートの商品の販売が始まってましたね。</p>
 <ul>

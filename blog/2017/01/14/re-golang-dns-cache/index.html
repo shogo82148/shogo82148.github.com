@@ -33,7 +33,7 @@
   <meta name="author" content="ICHINOSE Shogo">
 
   
-  <meta name="generator" content="Hugo 0.91.2" />
+  <meta name="generator" content="Hugo 0.120.4">
 
 
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
@@ -181,309 +181,309 @@ HTTP2は基本的にドメイン毎にコネクションを1つだけ張って�
 <a href="https://twitter.com/deeeet">deeeet</a>さんの<a href="https://github.com/tcnksm/go-httpstat">go-httpstat</a>という便利パッケージがあるので、
 これをありがたく利用させていただきます。
 go-httpstatを使うと時間計測を行うコードを簡単に差し込むことができます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
-
-<span class="kn">import</span> <span class="p">(</span>
-	<span class="s">&#34;io&#34;</span>
-	<span class="s">&#34;io/ioutil&#34;</span>
-	<span class="s">&#34;log&#34;</span>
-	<span class="s">&#34;net/http&#34;</span>
-	<span class="s">&#34;time&#34;</span>
-
-	<span class="s">&#34;github.com/tcnksm/go-httpstat&#34;</span>
-<span class="p">)</span>
-
-<span class="kd">var</span> <span class="p">(</span>
-	<span class="nx">urls</span> <span class="p">=</span> <span class="p">[]</span><span class="kt">string</span><span class="p">{</span>
-		<span class="s">&#34;https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/&#34;</span><span class="p">,</span>
-		<span class="s">&#34;https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm/&#34;</span><span class="p">,</span>
-		<span class="s">&#34;https://shogo82148.github.io/blog/2016/11/23/qr-code/&#34;</span><span class="p">,</span>
-	<span class="p">}</span>
-<span class="p">)</span>
-
-<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
-	<span class="nx">client</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Client</span><span class="p">{</span>
-		<span class="nx">Transport</span><span class="p">:</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Transport</span><span class="p">{</span>
-			<span class="nx">Proxy</span><span class="p">:</span>             <span class="nx">http</span><span class="p">.</span><span class="nx">ProxyFromEnvironment</span><span class="p">,</span>
-			<span class="c1">// DisableKeepAlives: true,
-</span><span class="c1"></span>		<span class="p">},</span>
-	<span class="p">}</span>
-
-	<span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">url</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">urls</span> <span class="p">{</span>
-		<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;GET %s&#34;</span><span class="p">,</span> <span class="nx">url</span><span class="p">)</span>
-
-		<span class="nx">req</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nf">NewRequest</span><span class="p">(</span><span class="s">&#34;GET&#34;</span><span class="p">,</span> <span class="nx">url</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
-		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-			<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
-		<span class="p">}</span>
-		<span class="nx">result</span> <span class="o">:=</span> <span class="nb">new</span><span class="p">(</span><span class="nx">httpstat</span><span class="p">.</span><span class="nx">Result</span><span class="p">)</span>
-		<span class="nx">ctx</span> <span class="o">:=</span> <span class="nx">httpstat</span><span class="p">.</span><span class="nf">WithHTTPStat</span><span class="p">(</span><span class="nx">req</span><span class="p">.</span><span class="nf">Context</span><span class="p">(),</span> <span class="nx">result</span><span class="p">)</span>
-		<span class="nx">req</span> <span class="p">=</span> <span class="nx">req</span><span class="p">.</span><span class="nf">WithContext</span><span class="p">(</span><span class="nx">ctx</span><span class="p">)</span>
-
-		<span class="nx">resp</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">client</span><span class="p">.</span><span class="nf">Do</span><span class="p">(</span><span class="nx">req</span><span class="p">)</span>
-		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-			<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
-		<span class="p">}</span>
-		<span class="nx">io</span><span class="p">.</span><span class="nf">Copy</span><span class="p">(</span><span class="nx">ioutil</span><span class="p">.</span><span class="nx">Discard</span><span class="p">,</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">)</span>
-		<span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
-
-		<span class="nx">result</span><span class="p">.</span><span class="nf">End</span><span class="p">(</span><span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">())</span>
-		<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;%+v\n&#34;</span><span class="p">,</span> <span class="nx">result</span><span class="p">)</span>
-	<span class="p">}</span>
-<span class="p">}</span>
-</code></pre></div><p>元記事はGoogleを叩いていましたが、あのURLだとリダイレクトが発生して考えることが増えそうなので、
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;io&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;io/ioutil&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;log&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;net/http&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;time&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;github.com/tcnksm/go-httpstat&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">var</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">urls</span> <span class="p">=</span> <span class="p">[]</span><span class="kt">string</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="s">&#34;https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">		<span class="s">&#34;https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm/&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">		<span class="s">&#34;https://shogo82148.github.io/blog/2016/11/23/qr-code/&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">client</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Client</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">Transport</span><span class="p">:</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Transport</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">Proxy</span><span class="p">:</span>             <span class="nx">http</span><span class="p">.</span><span class="nx">ProxyFromEnvironment</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">			<span class="c1">// DisableKeepAlives: true,
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>		<span class="p">},</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">url</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">urls</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;GET %s&#34;</span><span class="p">,</span> <span class="nx">url</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">		<span class="nx">req</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nf">NewRequest</span><span class="p">(</span><span class="s">&#34;GET&#34;</span><span class="p">,</span> <span class="nx">url</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="p">}</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">result</span> <span class="o">:=</span> <span class="nb">new</span><span class="p">(</span><span class="nx">httpstat</span><span class="p">.</span><span class="nx">Result</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">ctx</span> <span class="o">:=</span> <span class="nx">httpstat</span><span class="p">.</span><span class="nf">WithHTTPStat</span><span class="p">(</span><span class="nx">req</span><span class="p">.</span><span class="nf">Context</span><span class="p">(),</span> <span class="nx">result</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">req</span> <span class="p">=</span> <span class="nx">req</span><span class="p">.</span><span class="nf">WithContext</span><span class="p">(</span><span class="nx">ctx</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">		<span class="nx">resp</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">client</span><span class="p">.</span><span class="nf">Do</span><span class="p">(</span><span class="nx">req</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="p">}</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">io</span><span class="p">.</span><span class="nf">Copy</span><span class="p">(</span><span class="nx">ioutil</span><span class="p">.</span><span class="nx">Discard</span><span class="p">,</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">		<span class="nx">result</span><span class="p">.</span><span class="nf">End</span><span class="p">(</span><span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;%+v\n&#34;</span><span class="p">,</span> <span class="nx">result</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>元記事はGoogleを叩いていましたが、あのURLだとリダイレクトが発生して考えることが増えそうなので、
 このブログのURLに変更してあります。
 あと静的ページなら相手に余計な負荷をかけることも無いですしね。</p>
 <p>さっそく実行してみましょう。
 <strong>Keep-Aliveを有効</strong>にした場合の結果です。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain">2017/01/14 16:14:10 GET https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/
-2017/01/14 16:14:10 DNS lookup:          30 ms
-TCP connection:      16 ms
-TLS handshake:      130 ms
-Server processing:   17 ms
-Content transfer:     1 ms
-Name Lookup:      30 ms
-Connect:          47 ms
-Pre Transfer:    177 ms
-Start Transfer:  195 ms
-Total:           197 ms
-2017/01/14 16:14:10 GET https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm/
-2017/01/14 16:14:10 DNS lookup:           0 ms
-TCP connection:       0 ms
-TLS handshake:        0 ms
-Server processing:   17 ms
-Content transfer:     2 ms
-Name Lookup:       0 ms
-Connect:           0 ms
-Pre Transfer:      0 ms
-Start Transfer:   17 ms
-Total:            19 ms
-2017/01/14 16:14:10 GET https://shogo82148.github.io/blog/2016/11/23/qr-code/
-2017/01/14 16:14:10 DNS lookup:           0 ms
-TCP connection:       0 ms
-TLS handshake:        0 ms
-Server processing:   17 ms
-Content transfer:     4 ms
-Name Lookup:       0 ms
-Connect:           0 ms
-Pre Transfer:      0 ms
-Start Transfer:   17 ms
-Total:            22 ms
-</code></pre></div><p>二回目以降のDNS lookupやTCP connectionが0msになっています。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">2017/01/14 16:14:10 GET https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/
+</span></span><span class="line"><span class="cl">2017/01/14 16:14:10 DNS lookup:          30 ms
+</span></span><span class="line"><span class="cl">TCP connection:      16 ms
+</span></span><span class="line"><span class="cl">TLS handshake:      130 ms
+</span></span><span class="line"><span class="cl">Server processing:   17 ms
+</span></span><span class="line"><span class="cl">Content transfer:     1 ms
+</span></span><span class="line"><span class="cl">Name Lookup:      30 ms
+</span></span><span class="line"><span class="cl">Connect:          47 ms
+</span></span><span class="line"><span class="cl">Pre Transfer:    177 ms
+</span></span><span class="line"><span class="cl">Start Transfer:  195 ms
+</span></span><span class="line"><span class="cl">Total:           197 ms
+</span></span><span class="line"><span class="cl">2017/01/14 16:14:10 GET https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm/
+</span></span><span class="line"><span class="cl">2017/01/14 16:14:10 DNS lookup:           0 ms
+</span></span><span class="line"><span class="cl">TCP connection:       0 ms
+</span></span><span class="line"><span class="cl">TLS handshake:        0 ms
+</span></span><span class="line"><span class="cl">Server processing:   17 ms
+</span></span><span class="line"><span class="cl">Content transfer:     2 ms
+</span></span><span class="line"><span class="cl">Name Lookup:       0 ms
+</span></span><span class="line"><span class="cl">Connect:           0 ms
+</span></span><span class="line"><span class="cl">Pre Transfer:      0 ms
+</span></span><span class="line"><span class="cl">Start Transfer:   17 ms
+</span></span><span class="line"><span class="cl">Total:            19 ms
+</span></span><span class="line"><span class="cl">2017/01/14 16:14:10 GET https://shogo82148.github.io/blog/2016/11/23/qr-code/
+</span></span><span class="line"><span class="cl">2017/01/14 16:14:10 DNS lookup:           0 ms
+</span></span><span class="line"><span class="cl">TCP connection:       0 ms
+</span></span><span class="line"><span class="cl">TLS handshake:        0 ms
+</span></span><span class="line"><span class="cl">Server processing:   17 ms
+</span></span><span class="line"><span class="cl">Content transfer:     4 ms
+</span></span><span class="line"><span class="cl">Name Lookup:       0 ms
+</span></span><span class="line"><span class="cl">Connect:           0 ms
+</span></span><span class="line"><span class="cl">Pre Transfer:      0 ms
+</span></span><span class="line"><span class="cl">Start Transfer:   17 ms
+</span></span><span class="line"><span class="cl">Total:            22 ms
+</span></span></code></pre></div><p>二回目以降のDNS lookupやTCP connectionが0msになっています。
 予想通りコネクションが再利用され、名前解決やコネクション確立がスキップされているようです。</p>
 <p>次に<strong>Keep-Aliveを無効</strong>にした状態で実行してみます。
 コード中の<code>DisableKeepAlives</code>のコメントを外すと都度接続になります。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain">2017/01/14 16:14:33 GET https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/
-2017/01/14 16:14:33 DNS lookup:          21 ms
-TCP connection:      18 ms
-TLS handshake:      131 ms
-Server processing:   15 ms
-Content transfer:     1 ms
-Name Lookup:      21 ms
-Connect:          40 ms
-Pre Transfer:    171 ms
-Start Transfer:  187 ms
-Total:           188 ms
-2017/01/14 16:14:33 GET https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm/
-2017/01/14 16:14:33 DNS lookup:           1 ms
-TCP connection:      15 ms
-TLS handshake:       33 ms
-Server processing:   14 ms
-Content transfer:     1 ms
-Name Lookup:       1 ms
-Connect:          16 ms
-Pre Transfer:     49 ms
-Start Transfer:   64 ms
-Total:            65 ms
-2017/01/14 16:14:33 GET https://shogo82148.github.io/blog/2016/11/23/qr-code/
-2017/01/14 16:14:33 DNS lookup:           0 ms
-TCP connection:      17 ms
-TLS handshake:       35 ms
-Server processing:   19 ms
-Content transfer:     3 ms
-Name Lookup:       0 ms
-Connect:          18 ms
-Pre Transfer:     54 ms
-Start Transfer:   73 ms
-Total:            76 ms
-</code></pre></div><p>リクエスト毎に名前解決が行われるようになりました。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">2017/01/14 16:14:33 GET https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/
+</span></span><span class="line"><span class="cl">2017/01/14 16:14:33 DNS lookup:          21 ms
+</span></span><span class="line"><span class="cl">TCP connection:      18 ms
+</span></span><span class="line"><span class="cl">TLS handshake:      131 ms
+</span></span><span class="line"><span class="cl">Server processing:   15 ms
+</span></span><span class="line"><span class="cl">Content transfer:     1 ms
+</span></span><span class="line"><span class="cl">Name Lookup:      21 ms
+</span></span><span class="line"><span class="cl">Connect:          40 ms
+</span></span><span class="line"><span class="cl">Pre Transfer:    171 ms
+</span></span><span class="line"><span class="cl">Start Transfer:  187 ms
+</span></span><span class="line"><span class="cl">Total:           188 ms
+</span></span><span class="line"><span class="cl">2017/01/14 16:14:33 GET https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm/
+</span></span><span class="line"><span class="cl">2017/01/14 16:14:33 DNS lookup:           1 ms
+</span></span><span class="line"><span class="cl">TCP connection:      15 ms
+</span></span><span class="line"><span class="cl">TLS handshake:       33 ms
+</span></span><span class="line"><span class="cl">Server processing:   14 ms
+</span></span><span class="line"><span class="cl">Content transfer:     1 ms
+</span></span><span class="line"><span class="cl">Name Lookup:       1 ms
+</span></span><span class="line"><span class="cl">Connect:          16 ms
+</span></span><span class="line"><span class="cl">Pre Transfer:     49 ms
+</span></span><span class="line"><span class="cl">Start Transfer:   64 ms
+</span></span><span class="line"><span class="cl">Total:            65 ms
+</span></span><span class="line"><span class="cl">2017/01/14 16:14:33 GET https://shogo82148.github.io/blog/2016/11/23/qr-code/
+</span></span><span class="line"><span class="cl">2017/01/14 16:14:33 DNS lookup:           0 ms
+</span></span><span class="line"><span class="cl">TCP connection:      17 ms
+</span></span><span class="line"><span class="cl">TLS handshake:       35 ms
+</span></span><span class="line"><span class="cl">Server processing:   19 ms
+</span></span><span class="line"><span class="cl">Content transfer:     3 ms
+</span></span><span class="line"><span class="cl">Name Lookup:       0 ms
+</span></span><span class="line"><span class="cl">Connect:          18 ms
+</span></span><span class="line"><span class="cl">Pre Transfer:     54 ms
+</span></span><span class="line"><span class="cl">Start Transfer:   73 ms
+</span></span><span class="line"><span class="cl">Total:            76 ms
+</span></span></code></pre></div><p>リクエスト毎に名前解決が行われるようになりました。
 ですが、初回に比べて異様に速いですね。
 OS側でキャッシュされてるんでしょうか。</p>
 <p><code>GODEBUG=netdns=go</code>と環境変数を設定すると、Pure Golangで名前解決が行われるらしいので、
 その場合の結果も貼っておきます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain">2017/01/14 16:15:03 GET https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/
-2017/01/14 16:15:03 DNS lookup:          33 ms
-TCP connection:      15 ms
-TLS handshake:      133 ms
-Server processing:   16 ms
-Content transfer:     0 ms
-Name Lookup:      33 ms
-Connect:          48 ms
-Pre Transfer:    181 ms
-Start Transfer:  197 ms
-Total:           198 ms
-2017/01/14 16:15:03 GET https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm/
-2017/01/14 16:15:03 DNS lookup:          17 ms
-TCP connection:      14 ms
-TLS handshake:       32 ms
-Server processing:   19 ms
-Content transfer:     0 ms
-Name Lookup:      17 ms
-Connect:          31 ms
-Pre Transfer:     63 ms
-Start Transfer:   82 ms
-Total:            83 ms
-2017/01/14 16:15:03 GET https://shogo82148.github.io/blog/2016/11/23/qr-code/
-2017/01/14 16:15:03 DNS lookup:          18 ms
-TCP connection:      15 ms
-TLS handshake:       36 ms
-Server processing:   18 ms
-Content transfer:     2 ms
-Name Lookup:      18 ms
-Connect:          34 ms
-Pre Transfer:     70 ms
-Start Transfer:   89 ms
-Total:            91 ms
-</code></pre></div><h3 id="dnsキャッシュあり版をトレースする">DNSキャッシュあり版をトレースする</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">2017/01/14 16:15:03 GET https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/
+</span></span><span class="line"><span class="cl">2017/01/14 16:15:03 DNS lookup:          33 ms
+</span></span><span class="line"><span class="cl">TCP connection:      15 ms
+</span></span><span class="line"><span class="cl">TLS handshake:      133 ms
+</span></span><span class="line"><span class="cl">Server processing:   16 ms
+</span></span><span class="line"><span class="cl">Content transfer:     0 ms
+</span></span><span class="line"><span class="cl">Name Lookup:      33 ms
+</span></span><span class="line"><span class="cl">Connect:          48 ms
+</span></span><span class="line"><span class="cl">Pre Transfer:    181 ms
+</span></span><span class="line"><span class="cl">Start Transfer:  197 ms
+</span></span><span class="line"><span class="cl">Total:           198 ms
+</span></span><span class="line"><span class="cl">2017/01/14 16:15:03 GET https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm/
+</span></span><span class="line"><span class="cl">2017/01/14 16:15:03 DNS lookup:          17 ms
+</span></span><span class="line"><span class="cl">TCP connection:      14 ms
+</span></span><span class="line"><span class="cl">TLS handshake:       32 ms
+</span></span><span class="line"><span class="cl">Server processing:   19 ms
+</span></span><span class="line"><span class="cl">Content transfer:     0 ms
+</span></span><span class="line"><span class="cl">Name Lookup:      17 ms
+</span></span><span class="line"><span class="cl">Connect:          31 ms
+</span></span><span class="line"><span class="cl">Pre Transfer:     63 ms
+</span></span><span class="line"><span class="cl">Start Transfer:   82 ms
+</span></span><span class="line"><span class="cl">Total:            83 ms
+</span></span><span class="line"><span class="cl">2017/01/14 16:15:03 GET https://shogo82148.github.io/blog/2016/11/23/qr-code/
+</span></span><span class="line"><span class="cl">2017/01/14 16:15:03 DNS lookup:          18 ms
+</span></span><span class="line"><span class="cl">TCP connection:      15 ms
+</span></span><span class="line"><span class="cl">TLS handshake:       36 ms
+</span></span><span class="line"><span class="cl">Server processing:   18 ms
+</span></span><span class="line"><span class="cl">Content transfer:     2 ms
+</span></span><span class="line"><span class="cl">Name Lookup:      18 ms
+</span></span><span class="line"><span class="cl">Connect:          34 ms
+</span></span><span class="line"><span class="cl">Pre Transfer:     70 ms
+</span></span><span class="line"><span class="cl">Start Transfer:   89 ms
+</span></span><span class="line"><span class="cl">Total:            91 ms
+</span></span></code></pre></div><h3 id="dnsキャッシュあり版をトレースする">DNSキャッシュあり版をトレースする</h3>
 <p>DNSキャッシュありも同様にトレースしようと思ったのですが、
 残念ながら<a href="https://github.com/abursavich/nett">nett</a>は<code>context.Context</code>を引数に持つインターフェースをサポートしていません。
 httptraceを利用するにはcontextが必要なので、同じ方法は使えません。</p>
 <p>仕方がないので、頑張ってResolverを自作して、
 時間計測するコードを埋め込んでいきます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
-
-<span class="kn">import</span> <span class="p">(</span>
-	<span class="s">&#34;io&#34;</span>
-	<span class="s">&#34;io/ioutil&#34;</span>
-	<span class="s">&#34;log&#34;</span>
-	<span class="s">&#34;net&#34;</span>
-	<span class="s">&#34;net/http&#34;</span>
-	<span class="s">&#34;time&#34;</span>
-
-	<span class="s">&#34;github.com/abursavich/nett&#34;</span>
-<span class="p">)</span>
-
-<span class="kd">var</span> <span class="p">(</span>
-	<span class="nx">urls</span> <span class="p">=</span> <span class="p">[]</span><span class="kt">string</span><span class="p">{</span>
-		<span class="s">&#34;https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/&#34;</span><span class="p">,</span>
-		<span class="s">&#34;https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm/&#34;</span><span class="p">,</span>
-		<span class="s">&#34;https://shogo82148.github.io/blog/2016/11/23/qr-code/&#34;</span><span class="p">,</span>
-	<span class="p">}</span>
-<span class="p">)</span>
-
-<span class="kd">type</span> <span class="nx">MyResolver</span> <span class="kd">struct</span> <span class="p">{</span>
-	<span class="nx">Resolver</span> <span class="nx">nett</span><span class="p">.</span><span class="nx">Resolver</span>
-<span class="p">}</span>
-
-<span class="kd">func</span> <span class="p">(</span><span class="nx">r</span> <span class="o">*</span><span class="nx">MyResolver</span><span class="p">)</span> <span class="nf">Resolve</span><span class="p">(</span><span class="nx">host</span> <span class="kt">string</span><span class="p">)</span> <span class="p">([]</span><span class="nx">net</span><span class="p">.</span><span class="nx">IP</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
-	<span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
-	<span class="nx">ips</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">r</span><span class="p">.</span><span class="nx">Resolver</span><span class="p">.</span><span class="nf">Resolve</span><span class="p">(</span><span class="nx">host</span><span class="p">)</span>
-	<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;Name Lookup: %s&#34;</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">().</span><span class="nf">Sub</span><span class="p">(</span><span class="nx">start</span><span class="p">))</span>
-	<span class="k">return</span> <span class="nx">ips</span><span class="p">,</span> <span class="nx">err</span>
-<span class="p">}</span>
-
-<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
-	<span class="nx">dialer</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">nett</span><span class="p">.</span><span class="nx">Dialer</span><span class="p">{</span>
-		<span class="nx">Resolver</span><span class="p">:</span> <span class="o">&amp;</span><span class="nx">MyResolver</span><span class="p">{</span>
-			<span class="o">&amp;</span><span class="nx">nett</span><span class="p">.</span><span class="nx">CacheResolver</span><span class="p">{</span><span class="nx">TTL</span><span class="p">:</span> <span class="mi">5</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Minute</span><span class="p">},</span>
-		<span class="p">},</span>
-		<span class="nx">IPFilter</span><span class="p">:</span> <span class="nx">nett</span><span class="p">.</span><span class="nx">DualStack</span><span class="p">,</span>
-		<span class="nx">Timeout</span><span class="p">:</span>  <span class="mi">10</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span>
-	<span class="p">}</span>
-	<span class="nx">client</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Client</span><span class="p">{</span>
-		<span class="nx">Transport</span><span class="p">:</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Transport</span><span class="p">{</span>
-			<span class="nx">Dial</span><span class="p">:</span> <span class="kd">func</span><span class="p">(</span><span class="nx">network</span><span class="p">,</span> <span class="nx">address</span> <span class="kt">string</span><span class="p">)</span> <span class="p">(</span><span class="nx">net</span><span class="p">.</span><span class="nx">Conn</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
-				<span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
-				<span class="nx">conn</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">dialer</span><span class="p">.</span><span class="nf">Dial</span><span class="p">(</span><span class="nx">network</span><span class="p">,</span> <span class="nx">address</span><span class="p">)</span>
-				<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;Connect: %s&#34;</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">().</span><span class="nf">Sub</span><span class="p">(</span><span class="nx">start</span><span class="p">))</span>
-				<span class="k">return</span> <span class="nx">conn</span><span class="p">,</span> <span class="nx">err</span>
-			<span class="p">},</span>
-			<span class="nx">Proxy</span><span class="p">:</span>             <span class="nx">http</span><span class="p">.</span><span class="nx">ProxyFromEnvironment</span><span class="p">,</span>
-			<span class="c1">// DisableKeepAlives: true,
-</span><span class="c1"></span>		<span class="p">},</span>
-	<span class="p">}</span>
-	<span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">url</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">urls</span> <span class="p">{</span>
-		<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;GET %s&#34;</span><span class="p">,</span> <span class="nx">url</span><span class="p">)</span>
-		<span class="nx">resp</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">client</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="nx">url</span><span class="p">)</span>
-		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-			<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
-		<span class="p">}</span>
-		<span class="nx">io</span><span class="p">.</span><span class="nf">Copy</span><span class="p">(</span><span class="nx">ioutil</span><span class="p">.</span><span class="nx">Discard</span><span class="p">,</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">)</span>
-		<span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
-	<span class="p">}</span>
-<span class="p">}</span>
-</code></pre></div><p>こちらのコードも実行してみます。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;io&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;io/ioutil&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;log&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;net&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;net/http&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;time&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;github.com/abursavich/nett&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">var</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">urls</span> <span class="p">=</span> <span class="p">[]</span><span class="kt">string</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="s">&#34;https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">		<span class="s">&#34;https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm/&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">		<span class="s">&#34;https://shogo82148.github.io/blog/2016/11/23/qr-code/&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">MyResolver</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">Resolver</span> <span class="nx">nett</span><span class="p">.</span><span class="nx">Resolver</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="p">(</span><span class="nx">r</span> <span class="o">*</span><span class="nx">MyResolver</span><span class="p">)</span> <span class="nf">Resolve</span><span class="p">(</span><span class="nx">host</span> <span class="kt">string</span><span class="p">)</span> <span class="p">([]</span><span class="nx">net</span><span class="p">.</span><span class="nx">IP</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">ips</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">r</span><span class="p">.</span><span class="nx">Resolver</span><span class="p">.</span><span class="nf">Resolve</span><span class="p">(</span><span class="nx">host</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;Name Lookup: %s&#34;</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">().</span><span class="nf">Sub</span><span class="p">(</span><span class="nx">start</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">	<span class="k">return</span> <span class="nx">ips</span><span class="p">,</span> <span class="nx">err</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">dialer</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">nett</span><span class="p">.</span><span class="nx">Dialer</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">Resolver</span><span class="p">:</span> <span class="o">&amp;</span><span class="nx">MyResolver</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="o">&amp;</span><span class="nx">nett</span><span class="p">.</span><span class="nx">CacheResolver</span><span class="p">{</span><span class="nx">TTL</span><span class="p">:</span> <span class="mi">5</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Minute</span><span class="p">},</span>
+</span></span><span class="line"><span class="cl">		<span class="p">},</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">IPFilter</span><span class="p">:</span> <span class="nx">nett</span><span class="p">.</span><span class="nx">DualStack</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">Timeout</span><span class="p">:</span>  <span class="mi">10</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">client</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Client</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">Transport</span><span class="p">:</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Transport</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">Dial</span><span class="p">:</span> <span class="kd">func</span><span class="p">(</span><span class="nx">network</span><span class="p">,</span> <span class="nx">address</span> <span class="kt">string</span><span class="p">)</span> <span class="p">(</span><span class="nx">net</span><span class="p">.</span><span class="nx">Conn</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">				<span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">				<span class="nx">conn</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">dialer</span><span class="p">.</span><span class="nf">Dial</span><span class="p">(</span><span class="nx">network</span><span class="p">,</span> <span class="nx">address</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">				<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;Connect: %s&#34;</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">().</span><span class="nf">Sub</span><span class="p">(</span><span class="nx">start</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">				<span class="k">return</span> <span class="nx">conn</span><span class="p">,</span> <span class="nx">err</span>
+</span></span><span class="line"><span class="cl">			<span class="p">},</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">Proxy</span><span class="p">:</span>             <span class="nx">http</span><span class="p">.</span><span class="nx">ProxyFromEnvironment</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">			<span class="c1">// DisableKeepAlives: true,
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>		<span class="p">},</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">url</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">urls</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;GET %s&#34;</span><span class="p">,</span> <span class="nx">url</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">resp</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">client</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="nx">url</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="p">}</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">io</span><span class="p">.</span><span class="nf">Copy</span><span class="p">(</span><span class="nx">ioutil</span><span class="p">.</span><span class="nx">Discard</span><span class="p">,</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>こちらのコードも実行してみます。
 <strong>Keep-Aliveを有効</strong>にした場合の結果です。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain">2017/01/14 16:29:19 GET https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/
-2017/01/14 16:29:19 Name Lookup: 22.239218ms
-2017/01/14 16:29:19 Connect: 39.364428ms
-2017/01/14 16:29:19 GET https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm/
-2017/01/14 16:29:19 GET https://shogo82148.github.io/blog/2016/11/23/qr-code/
-</code></pre></div><p>こちらも予想通り名前解決とコネクション確立が初回しか行われないので、
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">2017/01/14 16:29:19 GET https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/
+</span></span><span class="line"><span class="cl">2017/01/14 16:29:19 Name Lookup: 22.239218ms
+</span></span><span class="line"><span class="cl">2017/01/14 16:29:19 Connect: 39.364428ms
+</span></span><span class="line"><span class="cl">2017/01/14 16:29:19 GET https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm/
+</span></span><span class="line"><span class="cl">2017/01/14 16:29:19 GET https://shogo82148.github.io/blog/2016/11/23/qr-code/
+</span></span></code></pre></div><p>こちらも予想通り名前解決とコネクション確立が初回しか行われないので、
 最初の一回だけ時間計測のログが出力されています。</p>
 <p>次に、<strong>Keep-Aliveを無効</strong>にした場合の結果です。
 DNSキャッシュなし版と同様に<code>DisableKeepAlives</code>のコメントを外すと無効にできます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain">2017/01/14 16:29:41 GET https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/
-2017/01/14 16:29:41 Name Lookup: 27.337342ms
-2017/01/14 16:29:41 Connect: 44.552754ms
-2017/01/14 16:29:41 GET https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm/
-2017/01/14 16:29:41 Name Lookup: 1.991µs
-2017/01/14 16:29:41 Connect: 14.964222ms
-2017/01/14 16:29:41 GET https://shogo82148.github.io/blog/2016/11/23/qr-code/
-2017/01/14 16:29:41 Name Lookup: 2.024µs
-2017/01/14 16:29:41 Connect: 22.782755ms
-</code></pre></div><p>二回目以降の名前解決が一瞬で終わっており、キャッシュされている様子が確認できますね。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">2017/01/14 16:29:41 GET https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/
+</span></span><span class="line"><span class="cl">2017/01/14 16:29:41 Name Lookup: 27.337342ms
+</span></span><span class="line"><span class="cl">2017/01/14 16:29:41 Connect: 44.552754ms
+</span></span><span class="line"><span class="cl">2017/01/14 16:29:41 GET https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm/
+</span></span><span class="line"><span class="cl">2017/01/14 16:29:41 Name Lookup: 1.991µs
+</span></span><span class="line"><span class="cl">2017/01/14 16:29:41 Connect: 14.964222ms
+</span></span><span class="line"><span class="cl">2017/01/14 16:29:41 GET https://shogo82148.github.io/blog/2016/11/23/qr-code/
+</span></span><span class="line"><span class="cl">2017/01/14 16:29:41 Name Lookup: 2.024µs
+</span></span><span class="line"><span class="cl">2017/01/14 16:29:41 Connect: 22.782755ms
+</span></span></code></pre></div><p>二回目以降の名前解決が一瞬で終わっており、キャッシュされている様子が確認できますね。</p>
 <p>最後に名前解決にPure Golangを使った結果です。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain">2017/01/14 16:30:04 GET https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/
-2017/01/14 16:30:04 Name Lookup: 18.279786ms
-2017/01/14 16:30:04 Connect: 35.113831ms
-2017/01/14 16:30:04 GET https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm/
-2017/01/14 16:30:04 Name Lookup: 1.628µs
-2017/01/14 16:30:04 Connect: 16.364037ms
-2017/01/14 16:30:04 GET https://shogo82148.github.io/blog/2016/11/23/qr-code/
-2017/01/14 16:30:04 Name Lookup: 1.77µs
-2017/01/14 16:30:04 Connect: 16.048895ms
-</code></pre></div><h2 id="異様な高速化の理由">異様な高速化の理由</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">2017/01/14 16:30:04 GET https://shogo82148.github.io/blog/2016/12/20/redis-fast-0-dot-19-released/
+</span></span><span class="line"><span class="cl">2017/01/14 16:30:04 Name Lookup: 18.279786ms
+</span></span><span class="line"><span class="cl">2017/01/14 16:30:04 Connect: 35.113831ms
+</span></span><span class="line"><span class="cl">2017/01/14 16:30:04 GET https://shogo82148.github.io/blog/2016/12/15/leap-second-in-datetime-dot-pm/
+</span></span><span class="line"><span class="cl">2017/01/14 16:30:04 Name Lookup: 1.628µs
+</span></span><span class="line"><span class="cl">2017/01/14 16:30:04 Connect: 16.364037ms
+</span></span><span class="line"><span class="cl">2017/01/14 16:30:04 GET https://shogo82148.github.io/blog/2016/11/23/qr-code/
+</span></span><span class="line"><span class="cl">2017/01/14 16:30:04 Name Lookup: 1.77µs
+</span></span><span class="line"><span class="cl">2017/01/14 16:30:04 Connect: 16.048895ms
+</span></span></code></pre></div><h2 id="異様な高速化の理由">異様な高速化の理由</h2>
 <p>さて、ここまでの結果で、たしかにDNSキャッシュの効果があることは確認できました。
 しかし、デフォルトの状態ではKeep-Aliveが有効になっているため、
 事前の予想の通り<strong>名前解決が行われるのは初回のみ</strong>ということがわかりました。
 mattnさんのベンチマークにはKeep-Alive無効化処理は入っていないので、
 DNSキャッシュの有無で差はでないはずです。</p>
 <p>思うに、<code>for i := 0; i &lt; b.N; i++ {}</code>がないのが原因なのではないかと・・・。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
-
-<span class="kn">import</span> <span class="p">(</span>
-	<span class="s">&#34;testing&#34;</span>
-	<span class="s">&#34;time&#34;</span>
-<span class="p">)</span>
-
-<span class="kd">func</span> <span class="nf">BenchmarkHoge1</span><span class="p">(</span><span class="nx">b</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">B</span><span class="p">)</span> <span class="p">{</span>
-	<span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">1100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
-<span class="p">}</span>
-
-<span class="kd">func</span> <span class="nf">BenchmarkHoge2</span><span class="p">(</span><span class="nx">b</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">B</span><span class="p">)</span> <span class="p">{</span>
-	<span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">997</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
-<span class="p">}</span>
-
-<span class="kd">func</span> <span class="nf">BenchmarkFuga1</span><span class="p">(</span><span class="nx">b</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">B</span><span class="p">)</span> <span class="p">{</span>
-	<span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="p">&lt;</span> <span class="nx">b</span><span class="p">.</span><span class="nx">N</span><span class="p">;</span> <span class="nx">i</span><span class="o">++</span> <span class="p">{</span>
-		<span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">1100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
-	<span class="p">}</span>
-<span class="p">}</span>
-
-<span class="kd">func</span> <span class="nf">BenchmarkFuga2</span><span class="p">(</span><span class="nx">b</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">B</span><span class="p">)</span> <span class="p">{</span>
-	<span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="p">&lt;</span> <span class="nx">b</span><span class="p">.</span><span class="nx">N</span><span class="p">;</span> <span class="nx">i</span><span class="o">++</span> <span class="p">{</span>
-		<span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">997</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
-	<span class="p">}</span>
-<span class="p">}</span>
-</code></pre></div><p>僕の手元では以下のような結果になりました。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;testing&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;time&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">BenchmarkHoge1</span><span class="p">(</span><span class="nx">b</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">B</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">1100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">BenchmarkHoge2</span><span class="p">(</span><span class="nx">b</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">B</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">997</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">BenchmarkFuga1</span><span class="p">(</span><span class="nx">b</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">B</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="p">&lt;</span> <span class="nx">b</span><span class="p">.</span><span class="nx">N</span><span class="p">;</span> <span class="nx">i</span><span class="o">++</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">1100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">BenchmarkFuga2</span><span class="p">(</span><span class="nx">b</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">B</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="p">&lt;</span> <span class="nx">b</span><span class="p">.</span><span class="nx">N</span><span class="p">;</span> <span class="nx">i</span><span class="o">++</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">997</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>僕の手元では以下のような結果になりました。
 (タイミングの問題なので、再現させるには数値の微調整が必要かも)</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain">BenchmarkHoge1-4   	       1	1104960703 ns/op
-BenchmarkHoge2-4   	       2	 500677841 ns/op
-BenchmarkFuga1-4   	       1	1103413336 ns/op
-BenchmarkFuga2-4   	       1	1001147782 ns/op
-PASS
-</code></pre></div><h2 id="nettの問題点">nettの問題点</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">BenchmarkHoge1-4   	       1	1104960703 ns/op
+</span></span><span class="line"><span class="cl">BenchmarkHoge2-4   	       2	 500677841 ns/op
+</span></span><span class="line"><span class="cl">BenchmarkFuga1-4   	       1	1103413336 ns/op
+</span></span><span class="line"><span class="cl">BenchmarkFuga2-4   	       1	1001147782 ns/op
+</span></span><span class="line"><span class="cl">PASS
+</span></span></code></pre></div><h2 id="nettの問題点">nettの問題点</h2>
 <p><a href="https://github.com/abursavich/nett">nett</a>の効果も確認できたし、
 ベンチマークが異様に良い理由もわかったので、
 ここで検証終了・・・といきたいところですが、

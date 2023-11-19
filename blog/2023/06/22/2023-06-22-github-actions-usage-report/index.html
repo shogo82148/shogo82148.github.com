@@ -33,7 +33,7 @@
   <meta name="author" content="ICHINOSE Shogo">
 
   
-  <meta name="generator" content="Hugo 0.91.2" />
+  <meta name="generator" content="Hugo 0.120.4">
 
 
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
@@ -148,123 +148,123 @@ APIは見つけたので、取得スクリプトを組んでみました。</p>
 GitHub REST APIを叩く部分はGitHub CLIを使えばすぐにできるんですが、
 Google Spreadsheetへの書き込みをシェルスクリプトで組むのはちょっと大変です。</p>
 <p>今回はGoで書いてみました。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
-
-<span class="kn">import</span> <span class="p">(</span>
-	<span class="s">&#34;context&#34;</span>
-	<span class="s">&#34;encoding/json&#34;</span>
-	<span class="s">&#34;fmt&#34;</span>
-	<span class="s">&#34;io&#34;</span>
-	<span class="s">&#34;log&#34;</span>
-	<span class="s">&#34;net/http&#34;</span>
-	<span class="s">&#34;os&#34;</span>
-	<span class="s">&#34;time&#34;</span>
-
-	<span class="s">&#34;google.golang.org/api/sheets/v4&#34;</span>
-<span class="p">)</span>
-
-<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
-	<span class="nx">ctx</span> <span class="o">:=</span> <span class="nx">context</span><span class="p">.</span><span class="nf">Background</span><span class="p">()</span>
-	<span class="nx">token</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getenv</span><span class="p">(</span><span class="s">&#34;GITHUB_TOKEN&#34;</span><span class="p">)</span>
-	<span class="k">if</span> <span class="nx">token</span> <span class="o">==</span> <span class="s">&#34;&#34;</span> <span class="p">{</span>
-		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="s">&#34;GITHUB_TOKEN is required&#34;</span><span class="p">)</span>
-	<span class="p">}</span>
-	<span class="nx">sheetID</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getenv</span><span class="p">(</span><span class="s">&#34;SHEET_ID&#34;</span><span class="p">)</span>
-	<span class="k">if</span> <span class="nx">sheetID</span> <span class="o">==</span> <span class="s">&#34;&#34;</span> <span class="p">{</span>
-		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="s">&#34;SHEET_ID is required&#34;</span><span class="p">)</span>
-	<span class="p">}</span>
-	<span class="nx">org</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getenv</span><span class="p">(</span><span class="s">&#34;GITHUB_REPOSITORY_OWNER&#34;</span><span class="p">)</span>
-	<span class="k">if</span> <span class="nx">org</span> <span class="o">==</span> <span class="s">&#34;&#34;</span> <span class="p">{</span>
-		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="s">&#34;GITHUB_REPOSITORY_OWNER is required&#34;</span><span class="p">)</span>
-	<span class="p">}</span>
-
-	<span class="nx">now</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
-	<span class="nx">usage</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nf">GetGitHubActionsBilling</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span> <span class="nx">token</span><span class="p">,</span> <span class="nx">org</span><span class="p">)</span>
-	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
-	<span class="p">}</span>
-
-	<span class="nx">svc</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">sheets</span><span class="p">.</span><span class="nf">NewService</span><span class="p">(</span><span class="nx">ctx</span><span class="p">)</span>
-	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
-	<span class="p">}</span>
-
-	<span class="nx">tableRange</span> <span class="o">:=</span> <span class="s">&#34;report!A1&#34;</span>
-	<span class="kd">var</span> <span class="nx">reportData</span> <span class="nx">sheets</span><span class="p">.</span><span class="nx">ValueRange</span>
-	<span class="nx">reportData</span><span class="p">.</span><span class="nx">Values</span> <span class="p">=</span> <span class="nb">append</span><span class="p">(</span><span class="nx">reportData</span><span class="p">.</span><span class="nx">Values</span><span class="p">,</span> <span class="p">[]</span><span class="nx">any</span><span class="p">{</span>
-		<span class="nx">now</span><span class="p">,</span>
-		<span class="nx">usage</span><span class="p">.</span><span class="nx">TotalMinutesUsed</span><span class="p">,</span>
-		<span class="nx">usage</span><span class="p">.</span><span class="nx">TotalPaidMinutesUsed</span><span class="p">,</span>
-		<span class="nx">usage</span><span class="p">.</span><span class="nx">IncludedMinutes</span><span class="p">,</span>
-		<span class="nx">usage</span><span class="p">.</span><span class="nx">MinutesUsedBreakdown</span><span class="p">[</span><span class="s">&#34;UBUNTU&#34;</span><span class="p">],</span>
-		<span class="nx">usage</span><span class="p">.</span><span class="nx">MinutesUsedBreakdown</span><span class="p">[</span><span class="s">&#34;MACOS&#34;</span><span class="p">],</span>
-		<span class="nx">usage</span><span class="p">.</span><span class="nx">MinutesUsedBreakdown</span><span class="p">[</span><span class="s">&#34;WINDOWS&#34;</span><span class="p">],</span>
-	<span class="p">})</span>
-	<span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">svc</span><span class="p">.</span><span class="nx">Spreadsheets</span><span class="p">.</span><span class="nx">Values</span><span class="p">.</span><span class="nf">Append</span><span class="p">(</span><span class="nx">sheetID</span><span class="p">,</span> <span class="nx">tableRange</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">reportData</span><span class="p">).</span>
-		<span class="nf">ValueInputOption</span><span class="p">(</span><span class="s">&#34;USER_ENTERED&#34;</span><span class="p">).</span>
-		<span class="nf">InsertDataOption</span><span class="p">(</span><span class="s">&#34;INSERT_ROWS&#34;</span><span class="p">).</span>
-		<span class="nf">Context</span><span class="p">(</span><span class="nx">ctx</span><span class="p">).</span>
-		<span class="nf">Do</span><span class="p">()</span>
-	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
-	<span class="p">}</span>
-<span class="p">}</span>
-
-<span class="kd">type</span> <span class="nx">GitHubActionsBilling</span> <span class="kd">struct</span> <span class="p">{</span>
-	<span class="nx">TotalMinutesUsed</span>     <span class="kt">float64</span>            <span class="s">`json:&#34;total_minutes_used&#34;`</span>
-	<span class="nx">TotalPaidMinutesUsed</span> <span class="kt">float64</span>            <span class="s">`json:&#34;total_paid_minutes_used&#34;`</span>
-	<span class="nx">IncludedMinutes</span>      <span class="kt">float64</span>            <span class="s">`json:&#34;included_minutes&#34;`</span>
-	<span class="nx">MinutesUsedBreakdown</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">float64</span> <span class="s">`json:&#34;minutes_used_breakdown&#34;`</span>
-<span class="p">}</span>
-
-<span class="kd">func</span> <span class="nf">GetGitHubActionsBilling</span><span class="p">(</span><span class="nx">ctx</span> <span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span> <span class="nx">token</span><span class="p">,</span> <span class="nx">org</span> <span class="kt">string</span><span class="p">)</span> <span class="p">(</span><span class="o">*</span><span class="nx">GitHubActionsBilling</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
-	<span class="c1">// build the request
-</span><span class="c1"></span>	<span class="nx">u</span> <span class="o">:=</span> <span class="s">&#34;https://api.github.com/orgs/&#34;</span> <span class="o">+</span> <span class="nx">org</span> <span class="o">+</span> <span class="s">&#34;/settings/billing/actions&#34;</span>
-	<span class="nx">req</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nf">NewRequestWithContext</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nx">MethodGet</span><span class="p">,</span> <span class="nx">u</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
-	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">err</span>
-	<span class="p">}</span>
-	<span class="nx">req</span><span class="p">.</span><span class="nx">Header</span><span class="p">.</span><span class="nf">Set</span><span class="p">(</span><span class="s">&#34;Accept&#34;</span><span class="p">,</span> <span class="s">&#34;application/vnd.github+json&#34;</span><span class="p">)</span>
-	<span class="nx">req</span><span class="p">.</span><span class="nx">Header</span><span class="p">.</span><span class="nf">Set</span><span class="p">(</span><span class="s">&#34;Authorization&#34;</span><span class="p">,</span> <span class="s">&#34;Bearer &#34;</span><span class="o">+</span><span class="nx">token</span><span class="p">)</span>
-	<span class="nx">req</span><span class="p">.</span><span class="nx">Header</span><span class="p">.</span><span class="nf">Set</span><span class="p">(</span><span class="s">&#34;X-GitHub-Api-Version&#34;</span><span class="p">,</span> <span class="s">&#34;2022-11-28&#34;</span><span class="p">)</span>
-
-	<span class="c1">// send the request
-</span><span class="c1"></span>	<span class="nx">resp</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">DefaultClient</span><span class="p">.</span><span class="nf">Do</span><span class="p">(</span><span class="nx">req</span><span class="p">)</span>
-	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">err</span>
-	<span class="p">}</span>
-	<span class="k">defer</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
-
-	<span class="k">if</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">StatusCode</span> <span class="o">!=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">StatusOK</span> <span class="p">{</span>
-		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;unexpected status code: %d&#34;</span><span class="p">,</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">StatusCode</span><span class="p">)</span>
-	<span class="p">}</span>
-
-	<span class="c1">// parse the response
-</span><span class="c1"></span>	<span class="nx">data</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">io</span><span class="p">.</span><span class="nf">ReadAll</span><span class="p">(</span><span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">)</span>
-	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">err</span>
-	<span class="p">}</span>
-	<span class="kd">var</span> <span class="nx">usage</span> <span class="o">*</span><span class="nx">GitHubActionsBilling</span>
-	<span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">Unmarshal</span><span class="p">(</span><span class="nx">data</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">usage</span><span class="p">);</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;failed to parse response: %w&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
-	<span class="p">}</span>
-	<span class="k">return</span> <span class="nx">usage</span><span class="p">,</span> <span class="kc">nil</span>
-<span class="p">}</span>
-</code></pre></div><h2 id="認証設定">認証設定</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;context&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;encoding/json&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;fmt&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;io&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;log&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;net/http&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;os&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;time&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;google.golang.org/api/sheets/v4&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">ctx</span> <span class="o">:=</span> <span class="nx">context</span><span class="p">.</span><span class="nf">Background</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">token</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getenv</span><span class="p">(</span><span class="s">&#34;GITHUB_TOKEN&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">token</span> <span class="o">==</span> <span class="s">&#34;&#34;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="s">&#34;GITHUB_TOKEN is required&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">sheetID</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getenv</span><span class="p">(</span><span class="s">&#34;SHEET_ID&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">sheetID</span> <span class="o">==</span> <span class="s">&#34;&#34;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="s">&#34;SHEET_ID is required&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">org</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getenv</span><span class="p">(</span><span class="s">&#34;GITHUB_REPOSITORY_OWNER&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">org</span> <span class="o">==</span> <span class="s">&#34;&#34;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="s">&#34;GITHUB_REPOSITORY_OWNER is required&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="nx">now</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">usage</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nf">GetGitHubActionsBilling</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span> <span class="nx">token</span><span class="p">,</span> <span class="nx">org</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="nx">svc</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">sheets</span><span class="p">.</span><span class="nf">NewService</span><span class="p">(</span><span class="nx">ctx</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="nx">tableRange</span> <span class="o">:=</span> <span class="s">&#34;report!A1&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="kd">var</span> <span class="nx">reportData</span> <span class="nx">sheets</span><span class="p">.</span><span class="nx">ValueRange</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">reportData</span><span class="p">.</span><span class="nx">Values</span> <span class="p">=</span> <span class="nb">append</span><span class="p">(</span><span class="nx">reportData</span><span class="p">.</span><span class="nx">Values</span><span class="p">,</span> <span class="p">[]</span><span class="nx">any</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">now</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">usage</span><span class="p">.</span><span class="nx">TotalMinutesUsed</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">usage</span><span class="p">.</span><span class="nx">TotalPaidMinutesUsed</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">usage</span><span class="p">.</span><span class="nx">IncludedMinutes</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">usage</span><span class="p">.</span><span class="nx">MinutesUsedBreakdown</span><span class="p">[</span><span class="s">&#34;UBUNTU&#34;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">usage</span><span class="p">.</span><span class="nx">MinutesUsedBreakdown</span><span class="p">[</span><span class="s">&#34;MACOS&#34;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">usage</span><span class="p">.</span><span class="nx">MinutesUsedBreakdown</span><span class="p">[</span><span class="s">&#34;WINDOWS&#34;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">	<span class="p">})</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">svc</span><span class="p">.</span><span class="nx">Spreadsheets</span><span class="p">.</span><span class="nx">Values</span><span class="p">.</span><span class="nf">Append</span><span class="p">(</span><span class="nx">sheetID</span><span class="p">,</span> <span class="nx">tableRange</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">reportData</span><span class="p">).</span>
+</span></span><span class="line"><span class="cl">		<span class="nf">ValueInputOption</span><span class="p">(</span><span class="s">&#34;USER_ENTERED&#34;</span><span class="p">).</span>
+</span></span><span class="line"><span class="cl">		<span class="nf">InsertDataOption</span><span class="p">(</span><span class="s">&#34;INSERT_ROWS&#34;</span><span class="p">).</span>
+</span></span><span class="line"><span class="cl">		<span class="nf">Context</span><span class="p">(</span><span class="nx">ctx</span><span class="p">).</span>
+</span></span><span class="line"><span class="cl">		<span class="nf">Do</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">GitHubActionsBilling</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">TotalMinutesUsed</span>     <span class="kt">float64</span>            <span class="s">`json:&#34;total_minutes_used&#34;`</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">TotalPaidMinutesUsed</span> <span class="kt">float64</span>            <span class="s">`json:&#34;total_paid_minutes_used&#34;`</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">IncludedMinutes</span>      <span class="kt">float64</span>            <span class="s">`json:&#34;included_minutes&#34;`</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">MinutesUsedBreakdown</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">float64</span> <span class="s">`json:&#34;minutes_used_breakdown&#34;`</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">GetGitHubActionsBilling</span><span class="p">(</span><span class="nx">ctx</span> <span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span> <span class="nx">token</span><span class="p">,</span> <span class="nx">org</span> <span class="kt">string</span><span class="p">)</span> <span class="p">(</span><span class="o">*</span><span class="nx">GitHubActionsBilling</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="c1">// build the request
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="nx">u</span> <span class="o">:=</span> <span class="s">&#34;https://api.github.com/orgs/&#34;</span> <span class="o">+</span> <span class="nx">org</span> <span class="o">+</span> <span class="s">&#34;/settings/billing/actions&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">req</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nf">NewRequestWithContext</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nx">MethodGet</span><span class="p">,</span> <span class="nx">u</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">err</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">req</span><span class="p">.</span><span class="nx">Header</span><span class="p">.</span><span class="nf">Set</span><span class="p">(</span><span class="s">&#34;Accept&#34;</span><span class="p">,</span> <span class="s">&#34;application/vnd.github+json&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">req</span><span class="p">.</span><span class="nx">Header</span><span class="p">.</span><span class="nf">Set</span><span class="p">(</span><span class="s">&#34;Authorization&#34;</span><span class="p">,</span> <span class="s">&#34;Bearer &#34;</span><span class="o">+</span><span class="nx">token</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">req</span><span class="p">.</span><span class="nx">Header</span><span class="p">.</span><span class="nf">Set</span><span class="p">(</span><span class="s">&#34;X-GitHub-Api-Version&#34;</span><span class="p">,</span> <span class="s">&#34;2022-11-28&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="c1">// send the request
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="nx">resp</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">DefaultClient</span><span class="p">.</span><span class="nf">Do</span><span class="p">(</span><span class="nx">req</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">err</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="k">defer</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">StatusCode</span> <span class="o">!=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">StatusOK</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;unexpected status code: %d&#34;</span><span class="p">,</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">StatusCode</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="c1">// parse the response
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="nx">data</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">io</span><span class="p">.</span><span class="nf">ReadAll</span><span class="p">(</span><span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">err</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="kd">var</span> <span class="nx">usage</span> <span class="o">*</span><span class="nx">GitHubActionsBilling</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">Unmarshal</span><span class="p">(</span><span class="nx">data</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">usage</span><span class="p">);</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;failed to parse response: %w&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="k">return</span> <span class="nx">usage</span><span class="p">,</span> <span class="kc">nil</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><h2 id="認証設定">認証設定</h2>
 <p>実行にはGitHubとGoogleへの認証情報が必要です。</p>
 <p>GitHubは<a href="https://github.com/settings/tokens">settings/tokens</a>からPAT(Personal access token)を取得し、
 環境変数に設定します。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="go">export GITHUB_TOKEN=YOUR_GITHUB_TOKEN
-</span></code></pre></div><p>Googleは<code>gcloud</code>コマンドを使います。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="line"><span class="cl"><span class="go">export GITHUB_TOKEN=YOUR_GITHUB_TOKEN
+</span></span></span></code></pre></div><p>Googleは<code>gcloud</code>コマンドを使います。
 デフォルトの権限ではスプレッドシートへの書き込みができないので、スプレッドシートを書き込み権限をスコープに追加してログインします。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="go">gcloud auth application-default login \
-</span><span class="go">    --scopes=https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/spreadsheets
-</span></code></pre></div><h2 id="実行">実行</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="line"><span class="cl"><span class="go">gcloud auth application-default login \
+</span></span></span><span class="line"><span class="cl"><span class="go">    --scopes=https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/spreadsheets
+</span></span></span></code></pre></div><h2 id="実行">実行</h2>
 <p>他の必要なパラメーターは環境変数で設定します。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="go">export SHEET_ID=hogehoge
-</span><span class="go">export GITHUB_REPOSITORY_OWNER=org
-</span><span class="go">go run main.go
-</span></code></pre></div><p>あとでGitHub Actionsで自動化することを想定して、オーガニゼーション名は<code>GITHUB_REPOSITORY_OWNER</code>から取得するようにしました。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="line"><span class="cl"><span class="go">export SHEET_ID=hogehoge
+</span></span></span><span class="line"><span class="cl"><span class="go">export GITHUB_REPOSITORY_OWNER=org
+</span></span></span><span class="line"><span class="cl"><span class="go">go run main.go
+</span></span></span></code></pre></div><p>あとでGitHub Actionsで自動化することを想定して、オーガニゼーション名は<code>GITHUB_REPOSITORY_OWNER</code>から取得するようにしました。
 実際にGitHub Actionsを使って動かすのはまた今度。</p>
 <h2 id="まとめ">まとめ</h2>
 <p>GitHub Actionsの利用量を記録するスクリプトを書きました。</p>

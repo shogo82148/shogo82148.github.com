@@ -33,7 +33,7 @@
   <meta name="author" content="ICHINOSE Shogo">
 
   
-  <meta name="generator" content="Hugo 0.91.2" />
+  <meta name="generator" content="Hugo 0.120.4">
 
 
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
@@ -192,66 +192,66 @@ HTTP/2サポートも問題なく動くはずです。
 <h3 id="servershutdownを使う">Server.Shutdownを使う</h3>
 <p><a href="http://qiita.com/advent-calendar/2016/go3">Go(その3) Advent Calendar</a>の
 <a href="http://qiita.com/najeira/items/806cacb9bba96ff06ec4">最終日の記事</a>でも扱ってますが改めて。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
-
-<span class="kn">import</span> <span class="p">(</span>
-	<span class="s">&#34;context&#34;</span>
-	<span class="s">&#34;fmt&#34;</span>
-	<span class="s">&#34;log&#34;</span>
-	<span class="s">&#34;net&#34;</span>
-	<span class="s">&#34;net/http&#34;</span>
-	<span class="s">&#34;os&#34;</span>
-	<span class="s">&#34;os/signal&#34;</span>
-	<span class="s">&#34;syscall&#34;</span>
-
-	<span class="s">&#34;github.com/lestrrat/go-server-starter/listener&#34;</span>
-<span class="p">)</span>
-
-<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
-	<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;start pid %d\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getpid</span><span class="p">())</span>
-
-	<span class="nx">listeners</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">listener</span><span class="p">.</span><span class="nf">ListenAll</span><span class="p">()</span>
-	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="o">&amp;&amp;</span> <span class="nx">err</span> <span class="o">!=</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ErrNoListeningTarget</span> <span class="p">{</span>
-		<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
-	<span class="p">}</span>
-	<span class="kd">var</span> <span class="nx">l</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Listener</span>
-	<span class="k">if</span> <span class="nx">err</span> <span class="o">==</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ErrNoListeningTarget</span> <span class="p">{</span>
-		<span class="c1">// Fallback if not running under Server::Starter
-</span><span class="c1"></span>		<span class="nx">l</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">net</span><span class="p">.</span><span class="nf">Listen</span><span class="p">(</span><span class="s">&#34;tcp&#34;</span><span class="p">,</span> <span class="s">&#34;:8080&#34;</span><span class="p">)</span>
-		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-			<span class="nb">panic</span><span class="p">(</span><span class="s">&#34;Failed to listen to port 8080&#34;</span><span class="p">)</span>
-		<span class="p">}</span>
-	<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-		<span class="nx">l</span> <span class="p">=</span> <span class="nx">listeners</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-	<span class="p">}</span>
-
-    <span class="c1">// 別goroutineでServeしていることに注意！
-</span><span class="c1"></span>	<span class="nx">srv</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Server</span><span class="p">{</span><span class="nx">Handler</span><span class="p">:</span> <span class="nf">newHandler</span><span class="p">()}</span>
-	<span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
-		<span class="nx">srv</span><span class="p">.</span><span class="nf">Serve</span><span class="p">(</span><span class="nx">l</span><span class="p">)</span>
-	<span class="p">}()</span>
-
-    <span class="c1">// mainの中でシグナルの待受をしていることに注意！
-</span><span class="c1"></span>	<span class="nx">signal_chan</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Signal</span><span class="p">)</span>
-	<span class="nx">signal</span><span class="p">.</span><span class="nf">Notify</span><span class="p">(</span><span class="nx">signal_chan</span><span class="p">,</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span><span class="p">)</span>
-	<span class="k">for</span> <span class="p">{</span>
-		<span class="nx">s</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">signal_chan</span>
-		<span class="k">if</span> <span class="nx">s</span> <span class="o">==</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span> <span class="p">{</span>
-			<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;SIGTERM!!!!\n&#34;</span><span class="p">)</span>
-			<span class="nx">srv</span><span class="p">.</span><span class="nf">Shutdown</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nf">Background</span><span class="p">())</span>
-			<span class="k">return</span>
-		<span class="p">}</span>
-	<span class="p">}</span>
-<span class="p">}</span>
-
-<span class="kd">func</span> <span class="nf">newHandler</span><span class="p">()</span> <span class="nx">http</span><span class="p">.</span><span class="nx">Handler</span> <span class="p">{</span>
-	<span class="nx">mux</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nf">NewServeMux</span><span class="p">()</span>
-	<span class="nx">mux</span><span class="p">.</span><span class="nf">HandleFunc</span><span class="p">(</span><span class="s">&#34;/&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
-		<span class="nx">fmt</span><span class="p">.</span><span class="nf">Fprintf</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="s">&#34;from pid %d.\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getpid</span><span class="p">())</span>
-	<span class="p">})</span>
-	<span class="k">return</span> <span class="nx">mux</span>
-<span class="p">}</span>
-</code></pre></div><p>go-gracedownからの移行するさいの注意点は以下の通りです。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;context&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;fmt&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;log&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;net&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;net/http&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;os&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;os/signal&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;syscall&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;github.com/lestrrat/go-server-starter/listener&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;start pid %d\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getpid</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="nx">listeners</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">listener</span><span class="p">.</span><span class="nf">ListenAll</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="o">&amp;&amp;</span> <span class="nx">err</span> <span class="o">!=</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ErrNoListeningTarget</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="kd">var</span> <span class="nx">l</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Listener</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">err</span> <span class="o">==</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ErrNoListeningTarget</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="c1">// Fallback if not running under Server::Starter
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>		<span class="nx">l</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">net</span><span class="p">.</span><span class="nf">Listen</span><span class="p">(</span><span class="s">&#34;tcp&#34;</span><span class="p">,</span> <span class="s">&#34;:8080&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nb">panic</span><span class="p">(</span><span class="s">&#34;Failed to listen to port 8080&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">l</span> <span class="p">=</span> <span class="nx">listeners</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 別goroutineでServeしていることに注意！
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="nx">srv</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Server</span><span class="p">{</span><span class="nx">Handler</span><span class="p">:</span> <span class="nf">newHandler</span><span class="p">()}</span>
+</span></span><span class="line"><span class="cl">	<span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">srv</span><span class="p">.</span><span class="nf">Serve</span><span class="p">(</span><span class="nx">l</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// mainの中でシグナルの待受をしていることに注意！
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="nx">signal_chan</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Signal</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">signal</span><span class="p">.</span><span class="nf">Notify</span><span class="p">(</span><span class="nx">signal_chan</span><span class="p">,</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">s</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">signal_chan</span>
+</span></span><span class="line"><span class="cl">		<span class="k">if</span> <span class="nx">s</span> <span class="o">==</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;SIGTERM!!!!\n&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">srv</span><span class="p">.</span><span class="nf">Shutdown</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nf">Background</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl">			<span class="k">return</span>
+</span></span><span class="line"><span class="cl">		<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">newHandler</span><span class="p">()</span> <span class="nx">http</span><span class="p">.</span><span class="nx">Handler</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">mux</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nf">NewServeMux</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">mux</span><span class="p">.</span><span class="nf">HandleFunc</span><span class="p">(</span><span class="s">&#34;/&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">fmt</span><span class="p">.</span><span class="nf">Fprintf</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="s">&#34;from pid %d.\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getpid</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl">	<span class="p">})</span>
+</span></span><span class="line"><span class="cl">	<span class="k">return</span> <span class="nx">mux</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>go-gracedownからの移行するさいの注意点は以下の通りです。</p>
 <ul>
 <li><code>Server.Shutdown</code>を使う(<code>Serer.Close</code>もあるけど、そっちはGracefulではない)</li>
 <li><code>Server.Serve</code>は<strong>シャットダウンが始まる</strong>とすぐに制御を返す(<strong>シャットダウンが終わる</strong>とではない)</li>
@@ -261,284 +261,284 @@ HTTP/2サポートも問題なく動くはずです。
 <p>go-gracedownの使い方も再掲しておきます。
 Go1.6から利用方法は一切変更はないですが、
 Go1.8でコンパイルすると<code>Server.Shutdown</code>を利用してくれます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
-
-<span class="kn">import</span> <span class="p">(</span>
-	<span class="s">&#34;fmt&#34;</span>
-	<span class="s">&#34;log&#34;</span>
-	<span class="s">&#34;net&#34;</span>
-	<span class="s">&#34;net/http&#34;</span>
-	<span class="s">&#34;os&#34;</span>
-	<span class="s">&#34;os/signal&#34;</span>
-	<span class="s">&#34;syscall&#34;</span>
-
-	<span class="s">&#34;github.com/lestrrat/go-server-starter/listener&#34;</span>
-	<span class="s">&#34;github.com/shogo82148/go-gracedown&#34;</span>
-<span class="p">)</span>
-
-<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
-	<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;start pid %d\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getpid</span><span class="p">())</span>
-
-	<span class="nx">signal_chan</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Signal</span><span class="p">)</span>
-	<span class="nx">signal</span><span class="p">.</span><span class="nf">Notify</span><span class="p">(</span><span class="nx">signal_chan</span><span class="p">,</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span><span class="p">)</span>
-	<span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
-		<span class="k">for</span> <span class="p">{</span>
-			<span class="nx">s</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">signal_chan</span>
-			<span class="k">if</span> <span class="nx">s</span> <span class="o">==</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span> <span class="p">{</span>
-				<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;SIGTERM!!!!\n&#34;</span><span class="p">)</span>
-				<span class="nx">gracedown</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
-			<span class="p">}</span>
-		<span class="p">}</span>
-	<span class="p">}()</span>
-
-	<span class="nx">listeners</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">listener</span><span class="p">.</span><span class="nf">ListenAll</span><span class="p">()</span>
-	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="o">&amp;&amp;</span> <span class="nx">err</span> <span class="o">!=</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ErrNoListeningTarget</span> <span class="p">{</span>
-		<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
-	<span class="p">}</span>
-	<span class="kd">var</span> <span class="nx">l</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Listener</span>
-	<span class="k">if</span> <span class="nx">err</span> <span class="o">==</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ErrNoListeningTarget</span> <span class="p">{</span>
-		<span class="c1">// Fallback if not running under Server::Starter
-</span><span class="c1"></span>		<span class="nx">l</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">net</span><span class="p">.</span><span class="nf">Listen</span><span class="p">(</span><span class="s">&#34;tcp&#34;</span><span class="p">,</span> <span class="s">&#34;:8080&#34;</span><span class="p">)</span>
-		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-			<span class="nb">panic</span><span class="p">(</span><span class="s">&#34;Failed to listen to port 8080&#34;</span><span class="p">)</span>
-		<span class="p">}</span>
-	<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-		<span class="nx">l</span> <span class="p">=</span> <span class="nx">listeners</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-	<span class="p">}</span>
-
-	<span class="nx">gracedown</span><span class="p">.</span><span class="nf">Serve</span><span class="p">(</span><span class="nx">l</span><span class="p">,</span> <span class="nf">newHandler</span><span class="p">())</span>
-<span class="p">}</span>
-
-<span class="kd">func</span> <span class="nf">newHandler</span><span class="p">()</span> <span class="nx">http</span><span class="p">.</span><span class="nx">Handler</span> <span class="p">{</span>
-	<span class="nx">mux</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nf">NewServeMux</span><span class="p">()</span>
-	<span class="nx">mux</span><span class="p">.</span><span class="nf">HandleFunc</span><span class="p">(</span><span class="s">&#34;/&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
-		<span class="nx">fmt</span><span class="p">.</span><span class="nf">Fprintf</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="s">&#34;from pid %d.\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getpid</span><span class="p">())</span>
-	<span class="p">})</span>
-	<span class="k">return</span> <span class="nx">mux</span>
-<span class="p">}</span>
-</code></pre></div><h3 id="http2を使う">HTTP/2を使う</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;fmt&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;log&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;net&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;net/http&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;os&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;os/signal&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;syscall&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;github.com/lestrrat/go-server-starter/listener&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;github.com/shogo82148/go-gracedown&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;start pid %d\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getpid</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="nx">signal_chan</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Signal</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">signal</span><span class="p">.</span><span class="nf">Notify</span><span class="p">(</span><span class="nx">signal_chan</span><span class="p">,</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">s</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">signal_chan</span>
+</span></span><span class="line"><span class="cl">			<span class="k">if</span> <span class="nx">s</span> <span class="o">==</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">				<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;SIGTERM!!!!\n&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">				<span class="nx">gracedown</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">			<span class="p">}</span>
+</span></span><span class="line"><span class="cl">		<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="nx">listeners</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">listener</span><span class="p">.</span><span class="nf">ListenAll</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="o">&amp;&amp;</span> <span class="nx">err</span> <span class="o">!=</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ErrNoListeningTarget</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="kd">var</span> <span class="nx">l</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Listener</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">err</span> <span class="o">==</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ErrNoListeningTarget</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="c1">// Fallback if not running under Server::Starter
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>		<span class="nx">l</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">net</span><span class="p">.</span><span class="nf">Listen</span><span class="p">(</span><span class="s">&#34;tcp&#34;</span><span class="p">,</span> <span class="s">&#34;:8080&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nb">panic</span><span class="p">(</span><span class="s">&#34;Failed to listen to port 8080&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">l</span> <span class="p">=</span> <span class="nx">listeners</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="nx">gracedown</span><span class="p">.</span><span class="nf">Serve</span><span class="p">(</span><span class="nx">l</span><span class="p">,</span> <span class="nf">newHandler</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">newHandler</span><span class="p">()</span> <span class="nx">http</span><span class="p">.</span><span class="nx">Handler</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">mux</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nf">NewServeMux</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">mux</span><span class="p">.</span><span class="nf">HandleFunc</span><span class="p">(</span><span class="s">&#34;/&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">fmt</span><span class="p">.</span><span class="nf">Fprintf</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="s">&#34;from pid %d.\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getpid</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl">	<span class="p">})</span>
+</span></span><span class="line"><span class="cl">	<span class="k">return</span> <span class="nx">mux</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><h3 id="http2を使う">HTTP/2を使う</h3>
 <p>せっかくHTTP/2にも対応したことなので、
 Server::Starterを使ってHTTP/2サーバのGraceful Restartをする例も書いてみました。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
-
-<span class="kn">import</span> <span class="p">(</span>
-	<span class="s">&#34;context&#34;</span>
-	<span class="s">&#34;crypto/tls&#34;</span>
-	<span class="s">&#34;fmt&#34;</span>
-	<span class="s">&#34;log&#34;</span>
-	<span class="s">&#34;net&#34;</span>
-	<span class="s">&#34;net/http&#34;</span>
-	<span class="s">&#34;os&#34;</span>
-	<span class="s">&#34;os/signal&#34;</span>
-	<span class="s">&#34;syscall&#34;</span>
-
-	<span class="s">&#34;github.com/lestrrat/go-server-starter/listener&#34;</span>
-<span class="p">)</span>
-
-<span class="c1">// net/http/internal/testcert.go から拝借
-</span><span class="c1"></span><span class="kd">var</span> <span class="nx">localhostCert</span> <span class="p">=</span> <span class="p">[]</span><span class="nb">byte</span><span class="p">(</span><span class="s">`-----BEGIN CERTIFICATE-----
-</span><span class="s">MIICEzCCAXygAwIBAgIQMIMChMLGrR+QvmQvpwAU6zANBgkqhkiG9w0BAQsFADAS
-</span><span class="s">MRAwDgYDVQQKEwdBY21lIENvMCAXDTcwMDEwMTAwMDAwMFoYDzIwODQwMTI5MTYw
-</span><span class="s">MDAwWjASMRAwDgYDVQQKEwdBY21lIENvMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCB
-</span><span class="s">iQKBgQDuLnQAI3mDgey3VBzWnB2L39JUU4txjeVE6myuDqkM/uGlfjb9SjY1bIw4
-</span><span class="s">iA5sBBZzHi3z0h1YV8QPuxEbi4nW91IJm2gsvvZhIrCHS3l6afab4pZBl2+XsDul
-</span><span class="s">rKBxKKtD1rGxlG4LjncdabFn9gvLZad2bSysqz/qTAUStTvqJQIDAQABo2gwZjAO
-</span><span class="s">BgNVHQ8BAf8EBAMCAqQwEwYDVR0lBAwwCgYIKwYBBQUHAwEwDwYDVR0TAQH/BAUw
-</span><span class="s">AwEB/zAuBgNVHREEJzAlggtleGFtcGxlLmNvbYcEfwAAAYcQAAAAAAAAAAAAAAAA
-</span><span class="s">AAAAATANBgkqhkiG9w0BAQsFAAOBgQCEcetwO59EWk7WiJsG4x8SY+UIAA+flUI9
-</span><span class="s">tyC4lNhbcF2Idq9greZwbYCqTTTr2XiRNSMLCOjKyI7ukPoPjo16ocHj+P3vZGfs
-</span><span class="s">h1fIw3cSS2OolhloGw/XM6RWPWtPAlGykKLciQrBru5NAPvCMsb/I1DAceTiotQM
-</span><span class="s">fblo6RBxUQ==
-</span><span class="s">-----END CERTIFICATE-----`</span><span class="p">)</span>
-
-<span class="kd">var</span> <span class="nx">localhostKey</span> <span class="p">=</span> <span class="p">[]</span><span class="nb">byte</span><span class="p">(</span><span class="s">`-----BEGIN RSA PRIVATE KEY-----
-</span><span class="s">MIICXgIBAAKBgQDuLnQAI3mDgey3VBzWnB2L39JUU4txjeVE6myuDqkM/uGlfjb9
-</span><span class="s">SjY1bIw4iA5sBBZzHi3z0h1YV8QPuxEbi4nW91IJm2gsvvZhIrCHS3l6afab4pZB
-</span><span class="s">l2+XsDulrKBxKKtD1rGxlG4LjncdabFn9gvLZad2bSysqz/qTAUStTvqJQIDAQAB
-</span><span class="s">AoGAGRzwwir7XvBOAy5tM/uV6e+Zf6anZzus1s1Y1ClbjbE6HXbnWWF/wbZGOpet
-</span><span class="s">3Zm4vD6MXc7jpTLryzTQIvVdfQbRc6+MUVeLKwZatTXtdZrhu+Jk7hx0nTPy8Jcb
-</span><span class="s">uJqFk541aEw+mMogY/xEcfbWd6IOkp+4xqjlFLBEDytgbIECQQDvH/E6nk+hgN4H
-</span><span class="s">qzzVtxxr397vWrjrIgPbJpQvBsafG7b0dA4AFjwVbFLmQcj2PprIMmPcQrooz8vp
-</span><span class="s">jy4SHEg1AkEA/v13/5M47K9vCxmb8QeD/asydfsgS5TeuNi8DoUBEmiSJwma7FXY
-</span><span class="s">fFUtxuvL7XvjwjN5B30pNEbc6Iuyt7y4MQJBAIt21su4b3sjXNueLKH85Q+phy2U
-</span><span class="s">fQtuUE9txblTu14q3N7gHRZB4ZMhFYyDy8CKrN2cPg/Fvyt0Xlp/DoCzjA0CQQDU
-</span><span class="s">y2ptGsuSmgUtWj3NM9xuwYPm+Z/F84K6+ARYiZ6PYj013sovGKUFfYAqVXVlxtIX
-</span><span class="s">qyUBnu3X9ps8ZfjLZO7BAkEAlT4R5Yl6cGhaJQYZHOde3JEMhNRcVFMO8dJDaFeo
-</span><span class="s">f9Oeos0UUothgiDktdQHxdNEwLjQf7lJJBzV+5OtwswCWA==
-</span><span class="s">-----END RSA PRIVATE KEY-----`</span><span class="p">)</span>
-
-<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
-	<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;start pid %d\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getpid</span><span class="p">())</span>
-
-	<span class="nx">listeners</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">listener</span><span class="p">.</span><span class="nf">ListenAll</span><span class="p">()</span>
-	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="o">&amp;&amp;</span> <span class="nx">err</span> <span class="o">!=</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ErrNoListeningTarget</span> <span class="p">{</span>
-		<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
-	<span class="p">}</span>
-	<span class="kd">var</span> <span class="nx">l</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Listener</span>
-	<span class="k">if</span> <span class="nx">err</span> <span class="o">==</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ErrNoListeningTarget</span> <span class="p">{</span>
-		<span class="c1">// Fallback if not running under Server::Starter
-</span><span class="c1"></span>		<span class="nx">l</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">net</span><span class="p">.</span><span class="nf">Listen</span><span class="p">(</span><span class="s">&#34;tcp&#34;</span><span class="p">,</span> <span class="s">&#34;:8080&#34;</span><span class="p">)</span>
-		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-			<span class="nb">panic</span><span class="p">(</span><span class="s">&#34;Failed to listen to port 8080&#34;</span><span class="p">)</span>
-		<span class="p">}</span>
-	<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-		<span class="nx">l</span> <span class="p">=</span> <span class="nx">listeners</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-	<span class="p">}</span>
-	<span class="nx">cert</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">tls</span><span class="p">.</span><span class="nf">X509KeyPair</span><span class="p">(</span><span class="nx">localhostCert</span><span class="p">,</span> <span class="nx">localhostKey</span><span class="p">)</span>
-	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-		<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
-	<span class="p">}</span>
-	<span class="nx">tlsConfig</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">tls</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span>
-		<span class="nx">NextProtos</span><span class="p">:</span>   <span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">&#34;h2&#34;</span><span class="p">},</span>
-		<span class="nx">Certificates</span><span class="p">:</span> <span class="p">[]</span><span class="nx">tls</span><span class="p">.</span><span class="nx">Certificate</span><span class="p">{</span><span class="nx">cert</span><span class="p">},</span>
-	<span class="p">}</span>
-
-	<span class="nx">srv</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Server</span><span class="p">{</span>
-		<span class="nx">Handler</span><span class="p">:</span>   <span class="nf">newHandler</span><span class="p">(),</span>
-		<span class="nx">TLSConfig</span><span class="p">:</span> <span class="nx">tlsConfig</span><span class="p">,</span>
-	<span class="p">}</span>
-	<span class="nx">l</span> <span class="p">=</span> <span class="nx">tls</span><span class="p">.</span><span class="nf">NewListener</span><span class="p">(</span><span class="nx">l</span><span class="p">,</span> <span class="nx">tlsConfig</span><span class="p">)</span>
-	<span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
-		<span class="nx">srv</span><span class="p">.</span><span class="nf">Serve</span><span class="p">(</span><span class="nx">l</span><span class="p">)</span>
-	<span class="p">}()</span>
-
-	<span class="nx">signal_chan</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Signal</span><span class="p">)</span>
-	<span class="nx">signal</span><span class="p">.</span><span class="nf">Notify</span><span class="p">(</span><span class="nx">signal_chan</span><span class="p">,</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span><span class="p">)</span>
-	<span class="k">for</span> <span class="p">{</span>
-		<span class="nx">s</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">signal_chan</span>
-		<span class="k">if</span> <span class="nx">s</span> <span class="o">==</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span> <span class="p">{</span>
-			<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;SIGTERM!!!!\n&#34;</span><span class="p">)</span>
-			<span class="nx">srv</span><span class="p">.</span><span class="nf">Shutdown</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nf">Background</span><span class="p">())</span>
-			<span class="k">return</span>
-		<span class="p">}</span>
-	<span class="p">}</span>
-<span class="p">}</span>
-
-<span class="kd">func</span> <span class="nf">newHandler</span><span class="p">()</span> <span class="nx">http</span><span class="p">.</span><span class="nx">Handler</span> <span class="p">{</span>
-	<span class="nx">mux</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nf">NewServeMux</span><span class="p">()</span>
-	<span class="nx">mux</span><span class="p">.</span><span class="nf">HandleFunc</span><span class="p">(</span><span class="s">&#34;/&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
-		<span class="nx">fmt</span><span class="p">.</span><span class="nf">Fprintf</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="s">&#34;from pid %d.\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getpid</span><span class="p">())</span>
-	<span class="p">})</span>
-	<span class="k">return</span> <span class="nx">mux</span>
-<span class="p">}</span>
-</code></pre></div><p><code>NextProtos</code>へ明示的に<code>h2</code>を指定する必要があるのがポイントです。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;context&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;crypto/tls&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;fmt&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;log&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;net&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;net/http&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;os&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;os/signal&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;syscall&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;github.com/lestrrat/go-server-starter/listener&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// net/http/internal/testcert.go から拝借
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">var</span> <span class="nx">localhostCert</span> <span class="p">=</span> <span class="p">[]</span><span class="nb">byte</span><span class="p">(</span><span class="s">`-----BEGIN CERTIFICATE-----
+</span></span></span><span class="line"><span class="cl"><span class="s">MIICEzCCAXygAwIBAgIQMIMChMLGrR+QvmQvpwAU6zANBgkqhkiG9w0BAQsFADAS
+</span></span></span><span class="line"><span class="cl"><span class="s">MRAwDgYDVQQKEwdBY21lIENvMCAXDTcwMDEwMTAwMDAwMFoYDzIwODQwMTI5MTYw
+</span></span></span><span class="line"><span class="cl"><span class="s">MDAwWjASMRAwDgYDVQQKEwdBY21lIENvMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCB
+</span></span></span><span class="line"><span class="cl"><span class="s">iQKBgQDuLnQAI3mDgey3VBzWnB2L39JUU4txjeVE6myuDqkM/uGlfjb9SjY1bIw4
+</span></span></span><span class="line"><span class="cl"><span class="s">iA5sBBZzHi3z0h1YV8QPuxEbi4nW91IJm2gsvvZhIrCHS3l6afab4pZBl2+XsDul
+</span></span></span><span class="line"><span class="cl"><span class="s">rKBxKKtD1rGxlG4LjncdabFn9gvLZad2bSysqz/qTAUStTvqJQIDAQABo2gwZjAO
+</span></span></span><span class="line"><span class="cl"><span class="s">BgNVHQ8BAf8EBAMCAqQwEwYDVR0lBAwwCgYIKwYBBQUHAwEwDwYDVR0TAQH/BAUw
+</span></span></span><span class="line"><span class="cl"><span class="s">AwEB/zAuBgNVHREEJzAlggtleGFtcGxlLmNvbYcEfwAAAYcQAAAAAAAAAAAAAAAA
+</span></span></span><span class="line"><span class="cl"><span class="s">AAAAATANBgkqhkiG9w0BAQsFAAOBgQCEcetwO59EWk7WiJsG4x8SY+UIAA+flUI9
+</span></span></span><span class="line"><span class="cl"><span class="s">tyC4lNhbcF2Idq9greZwbYCqTTTr2XiRNSMLCOjKyI7ukPoPjo16ocHj+P3vZGfs
+</span></span></span><span class="line"><span class="cl"><span class="s">h1fIw3cSS2OolhloGw/XM6RWPWtPAlGykKLciQrBru5NAPvCMsb/I1DAceTiotQM
+</span></span></span><span class="line"><span class="cl"><span class="s">fblo6RBxUQ==
+</span></span></span><span class="line"><span class="cl"><span class="s">-----END CERTIFICATE-----`</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">var</span> <span class="nx">localhostKey</span> <span class="p">=</span> <span class="p">[]</span><span class="nb">byte</span><span class="p">(</span><span class="s">`-----BEGIN RSA PRIVATE KEY-----
+</span></span></span><span class="line"><span class="cl"><span class="s">MIICXgIBAAKBgQDuLnQAI3mDgey3VBzWnB2L39JUU4txjeVE6myuDqkM/uGlfjb9
+</span></span></span><span class="line"><span class="cl"><span class="s">SjY1bIw4iA5sBBZzHi3z0h1YV8QPuxEbi4nW91IJm2gsvvZhIrCHS3l6afab4pZB
+</span></span></span><span class="line"><span class="cl"><span class="s">l2+XsDulrKBxKKtD1rGxlG4LjncdabFn9gvLZad2bSysqz/qTAUStTvqJQIDAQAB
+</span></span></span><span class="line"><span class="cl"><span class="s">AoGAGRzwwir7XvBOAy5tM/uV6e+Zf6anZzus1s1Y1ClbjbE6HXbnWWF/wbZGOpet
+</span></span></span><span class="line"><span class="cl"><span class="s">3Zm4vD6MXc7jpTLryzTQIvVdfQbRc6+MUVeLKwZatTXtdZrhu+Jk7hx0nTPy8Jcb
+</span></span></span><span class="line"><span class="cl"><span class="s">uJqFk541aEw+mMogY/xEcfbWd6IOkp+4xqjlFLBEDytgbIECQQDvH/E6nk+hgN4H
+</span></span></span><span class="line"><span class="cl"><span class="s">qzzVtxxr397vWrjrIgPbJpQvBsafG7b0dA4AFjwVbFLmQcj2PprIMmPcQrooz8vp
+</span></span></span><span class="line"><span class="cl"><span class="s">jy4SHEg1AkEA/v13/5M47K9vCxmb8QeD/asydfsgS5TeuNi8DoUBEmiSJwma7FXY
+</span></span></span><span class="line"><span class="cl"><span class="s">fFUtxuvL7XvjwjN5B30pNEbc6Iuyt7y4MQJBAIt21su4b3sjXNueLKH85Q+phy2U
+</span></span></span><span class="line"><span class="cl"><span class="s">fQtuUE9txblTu14q3N7gHRZB4ZMhFYyDy8CKrN2cPg/Fvyt0Xlp/DoCzjA0CQQDU
+</span></span></span><span class="line"><span class="cl"><span class="s">y2ptGsuSmgUtWj3NM9xuwYPm+Z/F84K6+ARYiZ6PYj013sovGKUFfYAqVXVlxtIX
+</span></span></span><span class="line"><span class="cl"><span class="s">qyUBnu3X9ps8ZfjLZO7BAkEAlT4R5Yl6cGhaJQYZHOde3JEMhNRcVFMO8dJDaFeo
+</span></span></span><span class="line"><span class="cl"><span class="s">f9Oeos0UUothgiDktdQHxdNEwLjQf7lJJBzV+5OtwswCWA==
+</span></span></span><span class="line"><span class="cl"><span class="s">-----END RSA PRIVATE KEY-----`</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;start pid %d\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getpid</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="nx">listeners</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">listener</span><span class="p">.</span><span class="nf">ListenAll</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="o">&amp;&amp;</span> <span class="nx">err</span> <span class="o">!=</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ErrNoListeningTarget</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="kd">var</span> <span class="nx">l</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Listener</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">err</span> <span class="o">==</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">ErrNoListeningTarget</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="c1">// Fallback if not running under Server::Starter
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>		<span class="nx">l</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">net</span><span class="p">.</span><span class="nf">Listen</span><span class="p">(</span><span class="s">&#34;tcp&#34;</span><span class="p">,</span> <span class="s">&#34;:8080&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nb">panic</span><span class="p">(</span><span class="s">&#34;Failed to listen to port 8080&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">l</span> <span class="p">=</span> <span class="nx">listeners</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">cert</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">tls</span><span class="p">.</span><span class="nf">X509KeyPair</span><span class="p">(</span><span class="nx">localhostCert</span><span class="p">,</span> <span class="nx">localhostKey</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">tlsConfig</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">tls</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">NextProtos</span><span class="p">:</span>   <span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">&#34;h2&#34;</span><span class="p">},</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">Certificates</span><span class="p">:</span> <span class="p">[]</span><span class="nx">tls</span><span class="p">.</span><span class="nx">Certificate</span><span class="p">{</span><span class="nx">cert</span><span class="p">},</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="nx">srv</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Server</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">Handler</span><span class="p">:</span>   <span class="nf">newHandler</span><span class="p">(),</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">TLSConfig</span><span class="p">:</span> <span class="nx">tlsConfig</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">l</span> <span class="p">=</span> <span class="nx">tls</span><span class="p">.</span><span class="nf">NewListener</span><span class="p">(</span><span class="nx">l</span><span class="p">,</span> <span class="nx">tlsConfig</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">srv</span><span class="p">.</span><span class="nf">Serve</span><span class="p">(</span><span class="nx">l</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="nx">signal_chan</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Signal</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">signal</span><span class="p">.</span><span class="nf">Notify</span><span class="p">(</span><span class="nx">signal_chan</span><span class="p">,</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">s</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">signal_chan</span>
+</span></span><span class="line"><span class="cl">		<span class="k">if</span> <span class="nx">s</span> <span class="o">==</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;SIGTERM!!!!\n&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">srv</span><span class="p">.</span><span class="nf">Shutdown</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nf">Background</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl">			<span class="k">return</span>
+</span></span><span class="line"><span class="cl">		<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">newHandler</span><span class="p">()</span> <span class="nx">http</span><span class="p">.</span><span class="nx">Handler</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">mux</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nf">NewServeMux</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">mux</span><span class="p">.</span><span class="nf">HandleFunc</span><span class="p">(</span><span class="s">&#34;/&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">fmt</span><span class="p">.</span><span class="nf">Fprintf</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="s">&#34;from pid %d.\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getpid</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl">	<span class="p">})</span>
+</span></span><span class="line"><span class="cl">	<span class="k">return</span> <span class="nx">mux</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p><code>NextProtos</code>へ明示的に<code>h2</code>を指定する必要があるのがポイントです。
 net/httpはデフォルトでHTTP/2を有効にしてくれますが、
 <code>TLSConfig</code>が指定されているときは自前でやる必要があります。</p>
 <h2 id="実験">実験</h2>
 <p>HTTP/2に対応していて証明書の検証もスキップできて・・・という条件で
 ベンチマークソフトを探すのが面倒だったので、Goで自作です。
 あまり詳しい統計情報は要らないので、負荷をかけるのにリソースを割きたかったというのもあります。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
-
-<span class="kn">import</span> <span class="p">(</span>
-	<span class="s">&#34;crypto/tls&#34;</span>
-	<span class="s">&#34;flag&#34;</span>
-	<span class="s">&#34;io&#34;</span>
-	<span class="s">&#34;io/ioutil&#34;</span>
-	<span class="s">&#34;log&#34;</span>
-	<span class="s">&#34;net&#34;</span>
-	<span class="s">&#34;net/http&#34;</span>
-	<span class="s">&#34;time&#34;</span>
-
-	<span class="s">&#34;github.com/kayac/parallel-benchmark/benchmark&#34;</span>
-	<span class="s">&#34;golang.org/x/net/http2&#34;</span>
-<span class="p">)</span>
-
-<span class="kd">type</span> <span class="nx">myWorker</span> <span class="kd">struct</span> <span class="p">{</span>
-	<span class="nx">URL</span>    <span class="kt">string</span>
-	<span class="nx">client</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Client</span>
-	<span class="nx">buf</span>    <span class="p">[]</span><span class="kt">byte</span>
-<span class="p">}</span>
-
-<span class="kd">func</span> <span class="p">(</span><span class="nx">w</span> <span class="o">*</span><span class="nx">myWorker</span><span class="p">)</span> <span class="nf">Setup</span><span class="p">()</span> <span class="p">{</span>
-	<span class="nx">tr</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Transport</span><span class="p">{</span>
-		<span class="nx">Proxy</span><span class="p">:</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ProxyFromEnvironment</span><span class="p">,</span>
-		<span class="nx">DialContext</span><span class="p">:</span> <span class="p">(</span><span class="o">&amp;</span><span class="nx">net</span><span class="p">.</span><span class="nx">Dialer</span><span class="p">{</span>
-			<span class="nx">Timeout</span><span class="p">:</span>   <span class="mi">30</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span>
-			<span class="nx">KeepAlive</span><span class="p">:</span> <span class="mi">30</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span>
-		<span class="p">}).</span><span class="nx">DialContext</span><span class="p">,</span>
-		<span class="nx">MaxIdleConns</span><span class="p">:</span>        <span class="mi">1</span><span class="p">,</span>
-		<span class="nx">IdleConnTimeout</span><span class="p">:</span>     <span class="mi">90</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span>
-		<span class="nx">TLSHandshakeTimeout</span><span class="p">:</span> <span class="mi">10</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span>
-		<span class="nx">TLSClientConfig</span><span class="p">:</span> <span class="o">&amp;</span><span class="nx">tls</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span>
-			<span class="c1">// テストなので証明書の検証はスキップ
-</span><span class="c1"></span>			<span class="c1">// プロダクションでは必ず有効にしてください！
-</span><span class="c1"></span>			<span class="nx">InsecureSkipVerify</span><span class="p">:</span> <span class="kc">true</span><span class="p">,</span>
-		<span class="p">},</span>
-		<span class="nx">ExpectContinueTimeout</span><span class="p">:</span> <span class="mi">1</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span>
-	<span class="p">}</span>
-	<span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">http2</span><span class="p">.</span><span class="nf">ConfigureTransport</span><span class="p">(</span><span class="nx">tr</span><span class="p">);</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-		<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
-	<span class="p">}</span>
-	<span class="nx">w</span><span class="p">.</span><span class="nx">client</span> <span class="p">=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Client</span><span class="p">{</span>
-		<span class="nx">Transport</span><span class="p">:</span> <span class="nx">tr</span><span class="p">,</span>
-	<span class="p">}</span>
-	<span class="nx">w</span><span class="p">.</span><span class="nx">buf</span> <span class="p">=</span> <span class="nb">make</span><span class="p">([]</span><span class="kt">byte</span><span class="p">,</span> <span class="mi">1024</span><span class="p">)</span>
-<span class="p">}</span>
-
-<span class="kd">func</span> <span class="p">(</span><span class="nx">w</span> <span class="o">*</span><span class="nx">myWorker</span><span class="p">)</span> <span class="nf">Teardown</span><span class="p">()</span> <span class="p">{</span>
-<span class="p">}</span>
-
-<span class="kd">func</span> <span class="p">(</span><span class="nx">w</span> <span class="o">*</span><span class="nx">myWorker</span><span class="p">)</span> <span class="nf">Process</span><span class="p">()</span> <span class="p">(</span><span class="nx">subscore</span> <span class="kt">int</span><span class="p">)</span> <span class="p">{</span>
-	<span class="nx">resp</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">w</span><span class="p">.</span><span class="nx">client</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="nx">w</span><span class="p">.</span><span class="nx">URL</span><span class="p">)</span>
-	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-		<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;ERROR: %v&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
-		<span class="k">return</span> <span class="mi">0</span>
-	<span class="p">}</span>
-	<span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">io</span><span class="p">.</span><span class="nf">CopyBuffer</span><span class="p">(</span><span class="nx">ioutil</span><span class="p">.</span><span class="nx">Discard</span><span class="p">,</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">,</span> <span class="nx">w</span><span class="p">.</span><span class="nx">buf</span><span class="p">)</span>
-	<span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
-	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="o">&amp;&amp;</span> <span class="nx">err</span> <span class="o">!=</span> <span class="nx">io</span><span class="p">.</span><span class="nx">EOF</span> <span class="p">{</span>
-		<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;ERROR: %v&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
-		<span class="k">return</span> <span class="mi">0</span>
-	<span class="p">}</span>
-	<span class="k">if</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">StatusCode</span> <span class="o">!=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">StatusOK</span> <span class="p">{</span>
-		<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;Invalid Status: %d&#34;</span><span class="p">,</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">StatusCode</span><span class="p">)</span>
-		<span class="k">return</span> <span class="mi">0</span>
-	<span class="p">}</span>
-	<span class="k">return</span> <span class="mi">1</span>
-<span class="p">}</span>
-
-<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
-	<span class="kd">var</span> <span class="p">(</span>
-		<span class="nx">conn</span>     <span class="kt">int</span>
-		<span class="nx">duration</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Duration</span>
-	<span class="p">)</span>
-	<span class="nx">flag</span><span class="p">.</span><span class="nf">IntVar</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">conn</span><span class="p">,</span> <span class="s">&#34;c&#34;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="s">&#34;connections to keep open&#34;</span><span class="p">)</span>
-	<span class="nx">flag</span><span class="p">.</span><span class="nf">DurationVar</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">duration</span><span class="p">,</span> <span class="s">&#34;d&#34;</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span> <span class="s">&#34;duration of benchmark&#34;</span><span class="p">)</span>
-	<span class="nx">flag</span><span class="p">.</span><span class="nf">Parse</span><span class="p">()</span>
-	<span class="nx">url</span> <span class="o">:=</span> <span class="nx">flag</span><span class="p">.</span><span class="nf">Args</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
-	<span class="nx">workers</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">([]</span><span class="nx">benchmark</span><span class="p">.</span><span class="nx">Worker</span><span class="p">,</span> <span class="nx">conn</span><span class="p">)</span>
-	<span class="k">for</span> <span class="nx">i</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">workers</span> <span class="p">{</span>
-		<span class="nx">workers</span><span class="p">[</span><span class="nx">i</span><span class="p">]</span> <span class="p">=</span> <span class="o">&amp;</span><span class="nx">myWorker</span><span class="p">{</span><span class="nx">URL</span><span class="p">:</span> <span class="nx">url</span><span class="p">}</span>
-	<span class="p">}</span>
-	<span class="nx">benchmark</span><span class="p">.</span><span class="nf">Run</span><span class="p">(</span><span class="nx">workers</span><span class="p">,</span> <span class="nx">duration</span><span class="p">)</span>
-<span class="p">}</span>
-</code></pre></div><p>前回記事同様、Server::Starterを使って1秒毎に再起動を繰り返しながらベンチを回します。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;crypto/tls&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;flag&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;io&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;io/ioutil&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;log&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;net&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;net/http&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;time&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;github.com/kayac/parallel-benchmark/benchmark&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;golang.org/x/net/http2&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">myWorker</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">URL</span>    <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">client</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Client</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">buf</span>    <span class="p">[]</span><span class="kt">byte</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="p">(</span><span class="nx">w</span> <span class="o">*</span><span class="nx">myWorker</span><span class="p">)</span> <span class="nf">Setup</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">tr</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Transport</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">Proxy</span><span class="p">:</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ProxyFromEnvironment</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">DialContext</span><span class="p">:</span> <span class="p">(</span><span class="o">&amp;</span><span class="nx">net</span><span class="p">.</span><span class="nx">Dialer</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">Timeout</span><span class="p">:</span>   <span class="mi">30</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">KeepAlive</span><span class="p">:</span> <span class="mi">30</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">		<span class="p">}).</span><span class="nx">DialContext</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">MaxIdleConns</span><span class="p">:</span>        <span class="mi">1</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">IdleConnTimeout</span><span class="p">:</span>     <span class="mi">90</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">TLSHandshakeTimeout</span><span class="p">:</span> <span class="mi">10</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">TLSClientConfig</span><span class="p">:</span> <span class="o">&amp;</span><span class="nx">tls</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="c1">// テストなので証明書の検証はスキップ
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>			<span class="c1">// プロダクションでは必ず有効にしてください！
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>			<span class="nx">InsecureSkipVerify</span><span class="p">:</span> <span class="kc">true</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">		<span class="p">},</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">ExpectContinueTimeout</span><span class="p">:</span> <span class="mi">1</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">http2</span><span class="p">.</span><span class="nf">ConfigureTransport</span><span class="p">(</span><span class="nx">tr</span><span class="p">);</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">w</span><span class="p">.</span><span class="nx">client</span> <span class="p">=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Client</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">Transport</span><span class="p">:</span> <span class="nx">tr</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">w</span><span class="p">.</span><span class="nx">buf</span> <span class="p">=</span> <span class="nb">make</span><span class="p">([]</span><span class="kt">byte</span><span class="p">,</span> <span class="mi">1024</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="p">(</span><span class="nx">w</span> <span class="o">*</span><span class="nx">myWorker</span><span class="p">)</span> <span class="nf">Teardown</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="p">(</span><span class="nx">w</span> <span class="o">*</span><span class="nx">myWorker</span><span class="p">)</span> <span class="nf">Process</span><span class="p">()</span> <span class="p">(</span><span class="nx">subscore</span> <span class="kt">int</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">resp</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">w</span><span class="p">.</span><span class="nx">client</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="nx">w</span><span class="p">.</span><span class="nx">URL</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;ERROR: %v&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="k">return</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">io</span><span class="p">.</span><span class="nf">CopyBuffer</span><span class="p">(</span><span class="nx">ioutil</span><span class="p">.</span><span class="nx">Discard</span><span class="p">,</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">,</span> <span class="nx">w</span><span class="p">.</span><span class="nx">buf</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">resp</span><span class="p">.</span><span class="nx">Body</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="o">&amp;&amp;</span> <span class="nx">err</span> <span class="o">!=</span> <span class="nx">io</span><span class="p">.</span><span class="nx">EOF</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;ERROR: %v&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="k">return</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">StatusCode</span> <span class="o">!=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">StatusOK</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;Invalid Status: %d&#34;</span><span class="p">,</span> <span class="nx">resp</span><span class="p">.</span><span class="nx">StatusCode</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="k">return</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="k">return</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="kd">var</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">conn</span>     <span class="kt">int</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">duration</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Duration</span>
+</span></span><span class="line"><span class="cl">	<span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">flag</span><span class="p">.</span><span class="nf">IntVar</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">conn</span><span class="p">,</span> <span class="s">&#34;c&#34;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="s">&#34;connections to keep open&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">flag</span><span class="p">.</span><span class="nf">DurationVar</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">duration</span><span class="p">,</span> <span class="s">&#34;d&#34;</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span> <span class="s">&#34;duration of benchmark&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">flag</span><span class="p">.</span><span class="nf">Parse</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">url</span> <span class="o">:=</span> <span class="nx">flag</span><span class="p">.</span><span class="nf">Args</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">workers</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">([]</span><span class="nx">benchmark</span><span class="p">.</span><span class="nx">Worker</span><span class="p">,</span> <span class="nx">conn</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="nx">i</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">workers</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">workers</span><span class="p">[</span><span class="nx">i</span><span class="p">]</span> <span class="p">=</span> <span class="o">&amp;</span><span class="nx">myWorker</span><span class="p">{</span><span class="nx">URL</span><span class="p">:</span> <span class="nx">url</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">benchmark</span><span class="p">.</span><span class="nf">Run</span><span class="p">(</span><span class="nx">workers</span><span class="p">,</span> <span class="nx">duration</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>前回記事同様、Server::Starterを使って1秒毎に再起動を繰り返しながらベンチを回します。
 AWSのc4.largeインスタンス上で実行しました。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash">$ start_server --port <span class="m">8080</span> --pid-file app.pid -- ./main
-$ <span class="k">while</span> true<span class="p">;</span> <span class="k">do</span> <span class="nb">kill</span> -HUP <span class="sb">`</span>cat app.pid<span class="sb">`</span><span class="p">;</span> sleep 1<span class="p">;</span> <span class="k">done</span>
-$ ./bin/bench -c <span class="m">10</span> -d<span class="o">=</span>1m http://localhost:8080/
-</code></pre></div><h2 id="結果">結果</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">$ start_server --port <span class="m">8080</span> --pid-file app.pid -- ./main
+</span></span><span class="line"><span class="cl">$ <span class="k">while</span> true<span class="p">;</span> <span class="k">do</span> <span class="nb">kill</span> -HUP <span class="sb">`</span>cat app.pid<span class="sb">`</span><span class="p">;</span> sleep 1<span class="p">;</span> <span class="k">done</span>
+</span></span><span class="line"><span class="cl">$ ./bin/bench -c <span class="m">10</span> -d<span class="o">=</span>1m http://localhost:8080/
+</span></span></code></pre></div><h2 id="結果">結果</h2>
 <h3 id="servershutdownを使った場合">Server.Shutdownを使った場合</h3>
 <p>Server.Shutdownを使った場合の結果です。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain">$ ./bin/bench -c 10 -d=1m http://localhost:8080/
-2017/01/22 12:20:51 starting benchmark: concurrency: 10, time: 1m0s, GOMAXPROCS: 2
-2017/01/22 12:21:51 done benchmark: score 1174412, elapsed 1m0.002557914s = 19572.698912 / sec
-</code></pre></div><p>先程紹介したKeepAliveの挙動変更の影響で多少はエラーがでるのでは？と予想していたものの、
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">$ ./bin/bench -c 10 -d=1m http://localhost:8080/
+</span></span><span class="line"><span class="cl">2017/01/22 12:20:51 starting benchmark: concurrency: 10, time: 1m0s, GOMAXPROCS: 2
+</span></span><span class="line"><span class="cl">2017/01/22 12:21:51 done benchmark: score 1174412, elapsed 1m0.002557914s = 19572.698912 / sec
+</span></span></code></pre></div><p>先程紹介したKeepAliveの挙動変更の影響で多少はエラーがでるのでは？と予想していたものの、
 まったく影響はありませんでした。</p>
 <h3 id="go-gracedownを使った場合">go-gracedownを使った場合</h3>
 <p>go-gracedownを使った場合の結果です。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain">$ ./bin/bench -c 10 -d=1m http://localhost:8080/
-2017/01/22 12:22:26 starting benchmark: concurrency: 10, time: 1m0s, GOMAXPROCS: 2
-2017/01/22 12:23:26 done benchmark: score 1160878, elapsed 1m0.009764419s = 19344.818485 / sec
-</code></pre></div><p>中身は<code>Server.Shutdown</code>なので、当然ながら同じ結果です。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">$ ./bin/bench -c 10 -d=1m http://localhost:8080/
+</span></span><span class="line"><span class="cl">2017/01/22 12:22:26 starting benchmark: concurrency: 10, time: 1m0s, GOMAXPROCS: 2
+</span></span><span class="line"><span class="cl">2017/01/22 12:23:26 done benchmark: score 1160878, elapsed 1m0.009764419s = 19344.818485 / sec
+</span></span></code></pre></div><p>中身は<code>Server.Shutdown</code>なので、当然ながら同じ結果です。</p>
 <h3 id="http2でアクセスした場合">HTTP/2でアクセスした場合</h3>
 <p>HTTP/2でアクセスした場合の結果です。
 GoのHTTP/2サポートはHTTPSで通信したときにしか有効にならないので、他のベンチとURLが違うことに注意。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain">$ ./bin/bench -c 10 -d=1m https://localhost:8080/
-2017/01/22 12:30:04 starting benchmark: concurrency: 10, time: 1m0s, GOMAXPROCS: 2
-2017/01/22 12:31:04 done benchmark: score 666801, elapsed 1m0.001842465s = 11113.008745 / sec
-</code></pre></div><p>特にエラーもなく、全く問題ありませんでした。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">$ ./bin/bench -c 10 -d=1m https://localhost:8080/
+</span></span><span class="line"><span class="cl">2017/01/22 12:30:04 starting benchmark: concurrency: 10, time: 1m0s, GOMAXPROCS: 2
+</span></span><span class="line"><span class="cl">2017/01/22 12:31:04 done benchmark: score 666801, elapsed 1m0.001842465s = 11113.008745 / sec
+</span></span></code></pre></div><p>特にエラーもなく、全く問題ありませんでした。</p>
 <h2 id="まとめ">まとめ</h2>
 <ul>
 <li>Go1.8からサポートされる予定のHTTPサーバのGraceful Shutdownについて検証しました

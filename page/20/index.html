@@ -33,7 +33,7 @@
   <meta name="author" content="ICHINOSE Shogo">
 
   
-  <meta name="generator" content="Hugo 0.91.2" />
+  <meta name="generator" content="Hugo 0.120.4">
 
 
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
@@ -165,7 +165,7 @@ git branch | sed -e &#39;s/^[\* ]*//g&#39; | xargs -n1 -I% sh -c &#39;git archiv
           <p>Go言語でポインタを使うべきか使わないべきか問題。 「ケース・バイ・ケースなので、状況に応じて使い分けましょう！」という結論が出るのは目に見えているので、 具体例について検証してみた結果を書いておきます。
 背景 他の人のコードレビューを見ていたら、 レビュアーが「コピーをしないで済むのでstructの受け渡しにはポインタ使ったほうがいいと思います！」とコメントしていて、 そうなのか？と思ったのですがあんまり自信がなかったので検証してみました。 コメントがついていたのは以下のようなコード。
 package hoge import ( &#34;strconv&#34; ) type Hoge struct { A int B int C int } func NewHogeMapStruct() map[string]Hoge { m := make(map[string]Hoge) for i := 0; i &lt; 10000; i++ { m[strconv.Itoa(i)] = Hoge{i, i, i} } return m } ポイントは以下の点です。
- 受け渡すstructはintが3つ程度の小さなもの mapに入れて返す  benchmarkを使って検証する ポインタを使わない版と使う版を両方作ってベンチマークをとってみます。
+受け渡すstructはintが3つ程度の小さなもの mapに入れて返す benchmarkを使って検証する ポインタを使わない版と使う版を両方作ってベンチマークをとってみます。
 package hoge import ( &#34;strconv&#34; ) type Hoge struct { A int B int C int } // ポインタ使わない版 func NewHogeMapStruct() map[string]Hoge { m := make(map[string]Hoge) for i := 0; i &lt; 10000; i++ { m[strconv.</p>
           
             <footer>
@@ -201,7 +201,7 @@ acidlemon: githubのwiki編集のIRC通知、ここに秘密が隠されてい�
 真似してgithub-servicesにプルリクエストをだしてマージしてもらった。 で、さっき対応イベント一覧見てたらgollum増えてる！ マージのときのコメントで「a few days」と言われたので2,3日かかるのかな？と思ってたけど、24時間経たないうちに反映されたよ！ 早い！！
 さっそくGithub::Hooks::Managerを使って設定しておきました。 「[project-name] shogo82148 edited wiki page hogehoge」みたいに編集されたページが通知されます。
 便利！！！
-SEE ALSO  github-services github の irc hook に幾つかの event type が追加されました - @soh335 memo GithubのHookについてのまとめとソリューション - おそらくはそれさえも平凡な日々  </p>
+SEE ALSO github-services github の irc hook に幾つかの event type が追加されました - @soh335 memo GithubのHookについてのまとめとソリューション - おそらくはそれさえも平凡な日々 </p>
           
         
       </article>
@@ -260,14 +260,14 @@ $ git checkout -- AwesomeFeature $ git add . $ git status On branch master Chang
 
         
           <p>Redis::Fast 0.13をリリースしました。 主な変更点は以下のとおりです。
- passwordオプションの対応 maxclientsに達した場合に、deep recursion することがある問題の修正 トランザクション内で再接続処理が行われる問題の修正  passwordオプションの対応 今更感のある機能ですね。昔は対応してたんです。 対応してたんですが、Sentinel対応のために接続開始周りをごそっと入れ替えて、そのときに間違ってパスワード認証機能を削除しちゃってたっぽいです(・ω&lt;) なんというかごめんなさい。
+passwordオプションの対応 maxclientsに達した場合に、deep recursion することがある問題の修正 トランザクション内で再接続処理が行われる問題の修正 passwordオプションの対応 今更感のある機能ですね。昔は対応してたんです。 対応してたんですが、Sentinel対応のために接続開始周りをごそっと入れ替えて、そのときに間違ってパスワード認証機能を削除しちゃってたっぽいです(・ω&lt;) なんというかごめんなさい。
 実際実装してテストしてみると、認証失敗したときにdouble freeで落ちてちょっとハマりました。 hiredisを使う場合はredisAsyncSetConnectCallbackに指定する関数内で、コネクションを切断するような処理(password認証とか)はしないようにしましょう。
 maxclientsに達した場合に、deep recursion することがある問題の修正 Redis::Fastでは、接続処理の中で、コネクションに名前をつけたり、パスワード認証したり、その他独自の処理を実行しています。 この処理の途中でも再接続処理が走ってしまい、 再接続処理の中で再接続処理が実行されて、その再接続処理の中で再接続が&hellip; というような無限ループに突入する場合があります。 maxclientsに達した場合、一度コネクションの確立に成功したあとに接続が切られるので、この無限ループに入ってしまうようです。
 接続処理中は再接続処理を行わないようにすることで対応しました。
 トランザクション内で再接続処理が行われる問題の修正 Redis::Fast 0.07以降、MULTI-EXECコマンドを遣ったトランザクションの中にいるときは再接続処理が行わないようになっています。 その仕組みを作るにあたって、トランザクションの中にいるか外にいるかを表すフラグをコマンド送信前に更新していました。
- 再接続を禁止する MULTI コマンドを送る 結果を受け取る 必要なコマンド発行を行う 再接続を許可する EXECコマンドを実行する 結果を受け取る  しかしこれだと 5 と 6 の間で再接続が起こってしまいます。 EXECコマンドがまだ実行されていないので、ここはまだトランザクションの中ですね。
+再接続を禁止する MULTI コマンドを送る 結果を受け取る 必要なコマンド発行を行う 再接続を許可する EXECコマンドを実行する 結果を受け取る しかしこれだと 5 と 6 の間で再接続が起こってしまいます。 EXECコマンドがまだ実行されていないので、ここはまだトランザクションの中ですね。
 Redis::Fast 0.13ではフラグの更新はコマンドが成功したときに変更してあります。
- MULTIコマンドを送る 結果を受け取る 再接続を禁止する 必要なコマンド発行を行う EXECコマンドを実行する 結果を受け取る 再接続を許可する  これでトランザクション中に再接続処理が走ることは無いはずです。</p>
+MULTIコマンドを送る 結果を受け取る 再接続を禁止する 必要なコマンド発行を行う EXECコマンドを実行する 結果を受け取る 再接続を許可する これでトランザクション中に再接続処理が走ることは無いはずです。</p>
           
         
       </article>
@@ -329,11 +329,7 @@ $ cat .</p>
         
           <p>遅くなりましたが、ISUCON4のレポートです。 まこぴーとchroneさんとともにチームぽわわで参加し、惨敗してきました。
 2014-10-06 追記: 競技中に使ったレポジトリを公開しました。
-事前準備  メンバー三人で集まって、去年のnopasteアプリで練習  chroneさんは初参戦なので雰囲気を掴んでもらう   Ansibleを使っていこうっていう話になったので、プレイブックを書いて遊んでみる githubにprivate repositoryを予め建てる  PayPalに対応してるっぽいので、ログインを試みるも何故か失敗 諦めてクレカ情報を直接入力 どうなってるんですかgithubさん！！！    競技 10時くらいまで  お題確認 サーバのセットアップはchroneさんにお願いしスムーズにできた サーバは人数分準備  僕がコミット＆実行確認をこまめに繰り返すタイプなので、書いたコードはすぐにデプロイしてテストに回したい！！ サーバ一台だとインフラの調整とアプリの確認がかぶって面倒 かといってローカルで同じ環境用意するのも面倒 AMIがあるならそれを使っちゃえ！(って記事を去年見た気がしたので)   密かにUkigumoで自動デプロイする仕組みを作っておいた  書いたコードはすぐにデプロイしてテストに回したい！！ あらかじめukigumo-agentを起動 github-hookを設定してコミットしたら実行 Github::Hooks::Receiverいじってたのはこれやるためだったんだけど、Ukigumoさんで十分でした。便利ですね！！ 去年はサーバに入って作業する人(まこぴー)がかなり忙しそうだったので、なんとか解消したかった    お昼くらいまで  nginxで静的ファイル配信とかMySQLのクエリ分析とか いっちーさんは早速Redis::Fastに手を付ける  みんなもRedis::Fast使ってね！！   あとUkigumoさんのおもり  UkigumoとAnsibleのお陰で僕が何もしなくても、まこぴー氏が「nginxで静的ファイル配信したよ！」って言って数分後には確認できる状態になっていて便利 これのおかげでページが真っ白になっているのに気がつく 普通に設定を書き換えるとMIMEの設定がなくなるらしい Ukigumo++    14時くらいまで  chroneさんにMySQLのクエリ改善  COUNT() している部分を一行SELECTだけにする修正とか   一部Redis::Fastに書き換えた版も一応スコアでる アプリが単純すぎてMySQLでもRedisでも大差ないスコア 自分の環境でmy.</p>
-          
-            <footer>
-              <a href="https://shogo82148.github.io/blog/2014/10/03/isucon-powawa-4/" rel="full-article">Read On &rarr;</a>
-            </footer>
+事前準備 メンバー三人で集まって、去年のnopasteアプリで練習 chroneさんは初参戦なので雰囲気を掴んでもらう Ansibleを使っていこうっていう話になったので、プレイブックを書いて遊んでみる githubにprivate repositoryを予め建てる PayPalに対応してるっぽいので、ログインを試みるも何故か失敗 諦めてクレカ情報を直接入力 どうなってるんですかgithubさん！！！ 競技 10時くらいまで お題確認 サーバのセットアップはchroneさんにお願いしスムーズにできた サーバは人数分準備 僕がコミット＆実行確認をこまめに繰り返すタイプなので、書いたコードはすぐにデプロイしてテストに回したい！！ サーバ一台だとインフラの調整とアプリの確認がかぶって面倒 かといってローカルで同じ環境用意するのも面倒 AMIがあるならそれを使っちゃえ！(って記事を去年見た気がしたので) 密かにUkigumoで自動デプロイする仕組みを作っておいた 書いたコードはすぐにデプロイしてテストに回したい！！ あらかじめukigumo-agentを起動 github-hookを設定してコミットしたら実行 Github::Hooks::Receiverいじってたのはこれやるためだったんだけど、Ukigumoさんで十分でした。便利ですね！！ 去年はサーバに入って作業する人(まこぴー)がかなり忙しそうだったので、なんとか解消したかった お昼くらいまで nginxで静的ファイル配信とかMySQLのクエリ分析とか いっちーさんは早速Redis::Fastに手を付ける みんなもRedis::Fast使ってね！！ あとUkigumoさんのおもり UkigumoとAnsibleのお陰で僕が何もしなくても、まこぴー氏が「nginxで静的ファイル配信したよ！」って言って数分後には確認できる状態になっていて便利 これのおかげでページが真っ白になっているのに気がつく 普通に設定を書き換えるとMIMEの設定がなくなるらしい Ukigumo++ 14時くらいまで chroneさんにMySQLのクエリ改善 COUNT() している部分を一行SELECTだけにする修正とか 一部Redis::Fastに書き換えた版も一応スコアでる アプリが単純すぎてMySQLでもRedisでも大差ないスコア 自分の環境でmy.cnfの調整をしたら、MySQL gone awayしてしまってつらいことに Redisに書き換えたものの、reportのロジックには手をつけてなかったので、効果あるのではと MySQLだけ再起動したらそうなるらしいけど、ansibleのplaybookにアプリの再起動手順も含まれていたので全部再起動かかってたと思うんだけど・・・ 結局サーバごと再起動しました(・ω&lt;) 17時くらいまで workloadを上げるとfailが大量にでて/reportのチェックでコケる問題 トランザクションとかFOR UPDATEの問題かと思ってSQLをいじくりまわす 初期データの考慮を忘れてたことに気が付き、初期化スクリプトを組む 18時まで workload変えてベンチ走らせたり最後のあがき まとめ 初期化大事！！ 社内ISUCONに参加したときも初期化で散々な目にあった Ansibleがあまり効果的に使えてなかった configいじるのが速いので、どうしても直接いじっちゃう 各個人にサーバ用意したけど、微妙に環境が違ってつらい </p>
           
         
       </article>
@@ -360,12 +356,12 @@ $ cat .</p>
         
           <p>Github::Hooks::ReceiverにX-Hub-SignatureをサポートするPull Requestを送ったら、 速攻取り込まれ、さらにGithubのコミット権とPAUSEのco-maintパーミッションをもらったというお話。
 X-Hub-Signature GithubのWebhookは大変便利なんですが、特に対策をしないままだと 他の人にcurlとかで叩かれてしまう可能性があります。 本来であればIPアドレスで制限をかけるべきなんですが、 iptablesの設定とかよくわからないし・・・と思ってGithubのドキュメントを読んでいたら、 もっとお手軽な方法発見。
- Securing your webhooks  GithubからのリクエストにはX-Hub-Signatureというのがついていて、 これを使うとPayloadの検証ができるらしい。 Github::Hooks::Receiverは このヘッダを全くみていないようだったのでPull Requestを送ってみた。
+Securing your webhooks GithubからのリクエストにはX-Hub-Signatureというのがついていて、 これを使うとPayloadの検証ができるらしい。 Github::Hooks::Receiverは このヘッダを全くみていないようだったのでPull Requestを送ってみた。
 Github::Hooks::Receiver 0.02以降で、以下のようにsecretの指定ができるようになります。
 use Github::Hooks::Receiver::Declare; my $receiver = receiver { secret &#39;secret1234&#39;; # Webhookの設定画面のsecretの項目と同じものを入力 on push =&gt; sub { # レポジトリにPushされた時の処理とかをゴニョゴニョ書く }; }; my $psgi = $receiver-&gt;to_app; $receiver-&gt;run; これでsecretを知らない人がリクエストを偽装できなくなるので安心です。 secretはエントロピーが高いほうがいいので ruby -rsecurerandom -e 'puts SecureRandom.hex(20)' みたいなコマンド使うといいらしいですよ。
 String::Compare::ConstantTime Signatureの比較にはRubyのsecure_compareのような関数を 使ったほうがいいらしい。 Github::Hooks::Receiverでは、そのPerl版のString::Compare::ConstantTimeを使ってみた。 ちょっと引数のチェックに甘いところがあって、segmentation fault場合があったので、こちらにもPull Requestを送っておきました。 Github::Hooks::Receiverは使う前にチェックを入れてあるので、現行バージョンでも問題なく動くはず。
 String::Compare::ConstantTimeはXSで書かれたモジュールなんですが、 この手のバグが入り込みやすいのでXS難しいですね。
-まとめ  XS怖い Github::Hooks::Receiverにsecretを指定できるようになったので、IP制限がかけられない場合でも安心 でも、可能であればIP制限もしましょうね XS怖い  追記 IP制限について Songmu先生よりコメントをいただきました。</p>
+まとめ XS怖い Github::Hooks::Receiverにsecretを指定できるようになったので、IP制限がかけられない場合でも安心 でも、可能であればIP制限もしましょうね XS怖い 追記 IP制限について Songmu先生よりコメントをいただきました。</p>
           
             <footer>
               <a href="https://shogo82148.github.io/blog/2014/09/23/github-hooks-receiver-supports-x-hub-signature/" rel="full-article">Read On &rarr;</a>
@@ -397,7 +393,7 @@ String::Compare::ConstantTimeはXSで書かれたモジュールなんですが�
           <p>Githubに手元のレポジトリをpushしようとしたら、 「Pushできないよ！！」って言われたときのメモ。
 コミット数が17kほどあって、画像とかサイズが比較的大きいファイルがたくさんあるレポジトリを、 一度に全部pushしようとしたら「制限を超えてます」って言われてダメだった。
 $ git push origin master Counting objects: 280874, done. Delta compression using up to 4 threads. Compressing objects: 100% (60497/60497), done. remote: fatal: pack exceeds maximum allowed size error: pack-objects died of signal 13 error: failed to push some refs to &#39;git@github.com:***/****.git&#39; ググってみると、おんなじような症状が見つかった。
- Github remote push pack size exceeded  リモートへのPushはオブジェクトを全部一つにPackしてしまうので、 一度に大量のコミットをPushしようとすると制限に引っかかるらしい。 (そして、サイズを制限する方法はないみたい)
+Github remote push pack size exceeded リモートへのPushはオブジェクトを全部一つにPackしてしまうので、 一度に大量のコミットをPushしようとすると制限に引っかかるらしい。 (そして、サイズを制限する方法はないみたい)
 解決策は「2回以上に分けてPushしてね」とのこと
 git push remoteB &lt;some previous commit on master&gt;:master ... git push remoteB &lt;some previous commit after the last one&gt;:master git push remoteB master 頑張ってコミットログを遡ってコミットハッシュを調べるのはつらかったので、 打ってあったタグからコミットハッシュを調べてPushした。</p>
           

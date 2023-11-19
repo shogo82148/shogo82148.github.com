@@ -33,7 +33,7 @@
   <meta name="author" content="ICHINOSE Shogo">
 
   
-  <meta name="generator" content="Hugo 0.91.2" />
+  <meta name="generator" content="Hugo 0.120.4">
 
 
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
@@ -144,93 +144,93 @@ MathJax = {
 <p><a href="https://cloud.google.com/blog/ja/products/identity-security/enabling-keyless-authentication-from-github-actions">GitHub Actions からのキーなしの認証の有効化</a>を参考にGoogle Cloud側の設定を行います。
 設定内容をバージョン管理したいので、設定にはTerraformを使用します。
 意外と作成するリソースが多くて大変なので、<a href="https://github.com/terraform-google-modules/terraform-google-github-actions-runners/tree/master/modules/gh-oidc">GitHub OIDC Terraform Module</a>と<a href="https://github.com/terraform-google-modules/terraform-google-project-factory/tree/master/modules/project_services">Project API Activation Terraform Module</a>を利用してみましょう。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-hcl" data-lang="hcl"><span class="k">provider</span> <span class="s2">&#34;google&#34;</span> {
-  <span class="k">batching</span> {
-<span class="n">    enable_batching</span> <span class="o">=</span> <span class="kt">false</span>
-  }
-}<span class="c1">
-</span><span class="c1">
-</span><span class="c1"># Google Cloudのプロジェクト
-</span><span class="c1"></span><span class="k">resource</span> <span class="s2">&#34;google_project&#34; &#34;my_project&#34;</span> {
-<span class="n">  name</span>            <span class="o">=</span> <span class="s2">&#34;my-project&#34;</span>
-<span class="n">  project_id</span>      <span class="o">=</span> <span class="s2">&#34;my-project&#34;</span>
-}<span class="c1">
-</span><span class="c1">
-</span><span class="c1"># サービスアカウント
-</span><span class="c1"></span><span class="k">resource</span> <span class="s2">&#34;google_service_account&#34; &#34;github_actions&#34;</span> {
-<span class="n">  project</span>    <span class="o">=</span> <span class="k">google_project</span><span class="p">.</span><span class="k">my_project</span><span class="p">.</span><span class="k">id</span>
-<span class="n">  account_id</span> <span class="o">=</span> <span class="s2">&#34;github-actions&#34;</span>
-}<span class="c1">
-</span><span class="c1">
-</span><span class="c1"># サービスAPIの有効化設定
-</span><span class="c1"></span><span class="k">module</span> <span class="s2">&#34;project_services&#34;</span> {
-<span class="n">  source</span>  <span class="o">=</span> <span class="s2">&#34;terraform-google-modules/project-factory/google//modules/project_services&#34;</span>
-<span class="n">  version</span> <span class="o">=</span> <span class="s2">&#34;14.2.0&#34;</span>
-
-<span class="n">  project_id</span> <span class="o">=</span> <span class="k">google_project</span><span class="p">.</span><span class="k">my_project</span><span class="p">.</span><span class="k">project_id</span>
-
-<span class="n">  activate_apis</span> <span class="o">=</span> <span class="p">[</span><span class="c1">
-</span><span class="c1">    # GitHub Actions OIDC tokensを使ってGitHubからのアクセスを許可するために必要
-</span><span class="c1">    # https://github.com/terraform-google-modules/terraform-google-github-actions-runners/tree/005bd0220a2ba38768b90b43751fa2e6e6a84f45/modules/gh-oidc#requirements
-</span><span class="c1"></span>    <span class="s2">&#34;iam.googleapis.com&#34;</span><span class="p">,</span>
-    <span class="s2">&#34;cloudresourcemanager.googleapis.com&#34;</span><span class="p">,</span>
-    <span class="s2">&#34;iamcredentials.googleapis.com&#34;</span><span class="p">,</span>
-    <span class="s2">&#34;sts.googleapis.com&#34;</span><span class="p">,</span><span class="c1">
-</span><span class="c1">
-</span><span class="c1">    # スプレッドシートへの書き込みに必要
-</span><span class="c1"></span>    <span class="s2">&#34;sheets.googleapis.com&#34;</span><span class="p">,</span>
-  <span class="p">]</span>
-}<span class="c1">
-</span><span class="c1">
-</span><span class="c1"># GitHub OIDCの設定
-</span><span class="c1"></span><span class="k">module</span> <span class="s2">&#34;gh_oidc&#34;</span> {
-<span class="n">  source</span>      <span class="o">=</span> <span class="s2">&#34;terraform-google-modules/github-actions-runners/google//modules/gh-oidc&#34;</span>
-<span class="n">  version</span>     <span class="o">=</span> <span class="s2">&#34;3.1.1&#34;</span>
-<span class="n">  project_id</span>  <span class="o">=</span> <span class="k">var</span><span class="p">.</span><span class="k">project_id</span>
-<span class="n">  pool_id</span>     <span class="o">=</span> <span class="s2">&#34;gh-pool&#34;</span>
-<span class="n">  provider_id</span> <span class="o">=</span> <span class="s2">&#34;gh-provider&#34;</span>
-<span class="n">  sa_mapping</span> <span class="o">=</span> {<span class="c1">
-</span><span class="c1">    # &lt;user&gt;/&lt;repo&gt; GitHubレポジトリからサービスアカウントへの委任を許可する設定
-</span><span class="c1"></span><span class="n">    (google_service_account.github_actions.account_id)</span> <span class="o">=</span> {
-<span class="n">      sa_name</span>   <span class="o">=</span> <span class="k">google_service_account</span><span class="p">.</span><span class="k">github_actions</span><span class="p">.</span><span class="k">name</span>
-<span class="n">      attribute</span> <span class="o">=</span> <span class="s2">&#34;attribute.repository/&lt;user&gt;/&lt;repo&gt;&#34;</span>
-    }
-  }
-}
-</code></pre></div><p>Google Cloudの設定をひととおり終えたら、サービスアカウントからGoogle Spreadsheetにアクセスできるよう、
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-hcl" data-lang="hcl"><span class="line"><span class="cl"><span class="k">provider</span> <span class="s2">&#34;google&#34;</span> {
+</span></span><span class="line"><span class="cl">  <span class="k">batching</span> {
+</span></span><span class="line"><span class="cl"><span class="n">    enable_batching</span> <span class="o">=</span> <span class="kt">false</span>
+</span></span><span class="line"><span class="cl">  }
+</span></span><span class="line"><span class="cl">}<span class="c1">
+</span></span></span><span class="line"><span class="cl"><span class="c1">
+</span></span></span><span class="line"><span class="cl"><span class="c1"># Google Cloudのプロジェクト
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">resource</span> <span class="s2">&#34;google_project&#34; &#34;my_project&#34;</span> {
+</span></span><span class="line"><span class="cl"><span class="n">  name</span>            <span class="o">=</span> <span class="s2">&#34;my-project&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="n">  project_id</span>      <span class="o">=</span> <span class="s2">&#34;my-project&#34;</span>
+</span></span><span class="line"><span class="cl">}<span class="c1">
+</span></span></span><span class="line"><span class="cl"><span class="c1">
+</span></span></span><span class="line"><span class="cl"><span class="c1"># サービスアカウント
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">resource</span> <span class="s2">&#34;google_service_account&#34; &#34;github_actions&#34;</span> {
+</span></span><span class="line"><span class="cl"><span class="n">  project</span>    <span class="o">=</span> <span class="k">google_project</span><span class="p">.</span><span class="k">my_project</span><span class="p">.</span><span class="k">id</span>
+</span></span><span class="line"><span class="cl"><span class="n">  account_id</span> <span class="o">=</span> <span class="s2">&#34;github-actions&#34;</span>
+</span></span><span class="line"><span class="cl">}<span class="c1">
+</span></span></span><span class="line"><span class="cl"><span class="c1">
+</span></span></span><span class="line"><span class="cl"><span class="c1"># サービスAPIの有効化設定
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">module</span> <span class="s2">&#34;project_services&#34;</span> {
+</span></span><span class="line"><span class="cl"><span class="n">  source</span>  <span class="o">=</span> <span class="s2">&#34;terraform-google-modules/project-factory/google//modules/project_services&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="n">  version</span> <span class="o">=</span> <span class="s2">&#34;14.2.0&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">  project_id</span> <span class="o">=</span> <span class="k">google_project</span><span class="p">.</span><span class="k">my_project</span><span class="p">.</span><span class="k">project_id</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">  activate_apis</span> <span class="o">=</span> <span class="p">[</span><span class="c1">
+</span></span></span><span class="line"><span class="cl"><span class="c1">    # GitHub Actions OIDC tokensを使ってGitHubからのアクセスを許可するために必要
+</span></span></span><span class="line"><span class="cl"><span class="c1">    # https://github.com/terraform-google-modules/terraform-google-github-actions-runners/tree/005bd0220a2ba38768b90b43751fa2e6e6a84f45/modules/gh-oidc#requirements
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="s2">&#34;iam.googleapis.com&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;cloudresourcemanager.googleapis.com&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;iamcredentials.googleapis.com&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;sts.googleapis.com&#34;</span><span class="p">,</span><span class="c1">
+</span></span></span><span class="line"><span class="cl"><span class="c1">
+</span></span></span><span class="line"><span class="cl"><span class="c1">    # スプレッドシートへの書き込みに必要
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="s2">&#34;sheets.googleapis.com&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="p">]</span>
+</span></span><span class="line"><span class="cl">}<span class="c1">
+</span></span></span><span class="line"><span class="cl"><span class="c1">
+</span></span></span><span class="line"><span class="cl"><span class="c1"># GitHub OIDCの設定
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">module</span> <span class="s2">&#34;gh_oidc&#34;</span> {
+</span></span><span class="line"><span class="cl"><span class="n">  source</span>      <span class="o">=</span> <span class="s2">&#34;terraform-google-modules/github-actions-runners/google//modules/gh-oidc&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="n">  version</span>     <span class="o">=</span> <span class="s2">&#34;3.1.1&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="n">  project_id</span>  <span class="o">=</span> <span class="k">var</span><span class="p">.</span><span class="k">project_id</span>
+</span></span><span class="line"><span class="cl"><span class="n">  pool_id</span>     <span class="o">=</span> <span class="s2">&#34;gh-pool&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="n">  provider_id</span> <span class="o">=</span> <span class="s2">&#34;gh-provider&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="n">  sa_mapping</span> <span class="o">=</span> {<span class="c1">
+</span></span></span><span class="line"><span class="cl"><span class="c1">    # &lt;user&gt;/&lt;repo&gt; GitHubレポジトリからサービスアカウントへの委任を許可する設定
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="n">    (google_service_account.github_actions.account_id)</span> <span class="o">=</span> {
+</span></span><span class="line"><span class="cl"><span class="n">      sa_name</span>   <span class="o">=</span> <span class="k">google_service_account</span><span class="p">.</span><span class="k">github_actions</span><span class="p">.</span><span class="k">name</span>
+</span></span><span class="line"><span class="cl"><span class="n">      attribute</span> <span class="o">=</span> <span class="s2">&#34;attribute.repository/&lt;user&gt;/&lt;repo&gt;&#34;</span>
+</span></span><span class="line"><span class="cl">    }
+</span></span><span class="line"><span class="cl">  }
+</span></span><span class="line"><span class="cl">}
+</span></span></code></pre></div><p>Google Cloudの設定をひととおり終えたら、サービスアカウントからGoogle Spreadsheetにアクセスできるよう、
 共同編集者にサービスアカウントを追加してあげましょう。</p>
 <h2 id="github-actionsの設定">GitHub Actionsの設定</h2>
 <p>IDトークンを取得してGoogle Cloudへのアクセス設定するには<a href="https://github.com/google-github-actions/auth">google-github-actions/auth</a>アクションを使います。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="nt">on</span><span class="p">:</span><span class="w">
-</span><span class="w">  </span><span class="nt">schedule</span><span class="p">:</span><span class="w">
-</span><span class="w">    </span>- <span class="nt">cron</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;0 15 * * *&#34;</span><span class="w"> </span><span class="c"># every day at 00:00 JST</span><span class="w">
-</span><span class="w">  </span><span class="nt">workflow_dispatch</span><span class="p">:</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="nt">permissions</span><span class="p">:</span><span class="w">
-</span><span class="w">  </span><span class="nt">contents</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;read&#34;</span><span class="w">
-</span><span class="w">  </span><span class="nt">id-token</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;write&#34;</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="nt">jobs</span><span class="p">:</span><span class="w">
-</span><span class="w">  </span><span class="nt">billing-actions</span><span class="p">:</span><span class="w">
-</span><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l">ubuntu-latest</span><span class="w">
-</span><span class="w">    </span><span class="nt">steps</span><span class="p">:</span><span class="w">
-</span><span class="w">      </span>- <span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">actions/checkout@v3</span><span class="w">
-</span><span class="w">      </span>- <span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">actions/setup-go@v4</span><span class="w">
-</span><span class="w">
-</span><span class="w">      </span>- <span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;auth&#34;</span><span class="w">
-</span><span class="w">        </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;Authenticate to Google Cloud&#34;</span><span class="w">
-</span><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;google-github-actions/auth@v1&#34;</span><span class="w">
-</span><span class="w">        </span><span class="nt">with</span><span class="p">:</span><span class="w">
-</span><span class="w">          </span><span class="nt">workload_identity_provider</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;projects/&lt;project_number&gt;/locations/global/workloadIdentityPools/gh-pool/providers/gh-provider&#34;</span><span class="w">
-</span><span class="w">          </span><span class="nt">service_account</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;github-actions@&lt;project_id&gt;.iam.gserviceaccount.com&#34;</span><span class="w">
-</span><span class="w">
-</span><span class="w">      </span>- <span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">run billing-actions</span><span class="w">
-</span><span class="w">        </span><span class="nt">env</span><span class="p">:</span><span class="w">
-</span><span class="w">          </span><span class="nt">GITHUB_TOKEN</span><span class="p">:</span><span class="w"> </span><span class="l">${{ secrets.YOUR_PAT }}</span><span class="w">
-</span><span class="w">          </span><span class="nt">SHEET_ID</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;YOUR_SHEET_ID&#34;</span><span class="w">
-</span><span class="w">        </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="p">|</span><span class="sd">
-</span><span class="sd">          </span><span class="w">          </span><span class="l">go run main.go</span><span class="w">
-</span></code></pre></div><p>GitHub Actions標準の権限ではオーガニゼーションの設定にアクセスできないので、SecretにPAT(Personal Access Token)の登録が必要です。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="line"><span class="cl"><span class="nt">on</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">schedule</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span>- <span class="nt">cron</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;0 15 * * *&#34;</span><span class="w"> </span><span class="c"># every day at 00:00 JST</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">workflow_dispatch</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">permissions</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">contents</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;read&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">id-token</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;write&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">jobs</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">billing-actions</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l">ubuntu-latest</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">steps</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span>- <span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">actions/checkout@v3</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span>- <span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">actions/setup-go@v4</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span>- <span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;auth&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;Authenticate to Google Cloud&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;google-github-actions/auth@v1&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="nt">with</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">          </span><span class="nt">workload_identity_provider</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;projects/&lt;project_number&gt;/locations/global/workloadIdentityPools/gh-pool/providers/gh-provider&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">          </span><span class="nt">service_account</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;github-actions@&lt;project_id&gt;.iam.gserviceaccount.com&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span>- <span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">run billing-actions</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="nt">env</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">          </span><span class="nt">GITHUB_TOKEN</span><span class="p">:</span><span class="w"> </span><span class="l">${{ secrets.YOUR_PAT }}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">          </span><span class="nt">SHEET_ID</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;YOUR_SHEET_ID&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="p">|</span><span class="sd">
+</span></span></span><span class="line"><span class="cl"><span class="sd">          go run main.go</span><span class="w">          
+</span></span></span></code></pre></div><p>GitHub Actions標準の権限ではオーガニゼーションの設定にアクセスできないので、SecretにPAT(Personal Access Token)の登録が必要です。</p>
 <p>これで日本時間の0時ごろにGitHub Actionsの使用量が記録されます。</p>
 <h2 id="まとめ">まとめ</h2>
 <p><a href="https://cloud.google.com/iam/docs/configuring-workload-identity-federation?hl=ja">Workload Identity連携</a>を使ってGitHub ActionsからGoogle Cloudへアクセスしてみました。</p>

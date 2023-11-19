@@ -33,7 +33,7 @@
   <meta name="author" content="ICHINOSE Shogo">
 
   
-  <meta name="generator" content="Hugo 0.91.2" />
+  <meta name="generator" content="Hugo 0.120.4">
 
 
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
@@ -149,24 +149,24 @@ XSには「揮発性」という考え方があります。
 <a href="http://d.hatena.ne.jp/gfx/20100519/1274247355">gfx先生のブログ</a>にもあるように、
 オブジェクト作成したら原則<code>sv_2motral</code>をつけるようにすれば、
 メモリーリークはほとんどなくなるはずです。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="n">SV</span> <span class="o">*</span> <span class="n">s</span> <span class="o">=</span> <span class="n">newSVpv</span><span class="p">(</span><span class="s">&#34;Hello World&#34;</span><span class="p">,</span><span class="mi">0</span><span class="p">);</span>  <span class="c1">// Perl の文字列オブジェクト
-</span><span class="c1"></span><span class="n">sv_2motral</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="c1">// 揮発性にすることで、使われなくなったら自動的に解放してくれる
-</span></code></pre></div><p>この「よしななタイミング」をよく理解していなかったのでリークしてました・・・。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="n">SV</span> <span class="o">*</span> <span class="n">s</span> <span class="o">=</span> <span class="nf">newSVpv</span><span class="p">(</span><span class="s">&#34;Hello World&#34;</span><span class="p">,</span><span class="mi">0</span><span class="p">);</span>  <span class="c1">// Perl の文字列オブジェクト
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nf">sv_2motral</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="c1">// 揮発性にすることで、使われなくなったら自動的に解放してくれる
+</span></span></span></code></pre></div><p>この「よしななタイミング」をよく理解していなかったのでリークしてました・・・。
 XSからオブジェクトへアクセスできなくなったときでないとオブジェクトを解放できないので、
 揮発性のオブジェクトが実際に解放されるのは「XSで書かれた関数が終了してPerlに戻るとき」です。
 メッセージを待ち続ける<code>wait_for_messages</code>関数は
 (タイムアウトをしない限り)ずっと終了しないので、
 揮発性のオブジェクトを解放するタイミングが一切なかったのです。</p>
 <p>不要になったら解放されるよう、揮発性オブジェクトの有効範囲を明示的に指定しました。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="n">sv_2motral</span><span class="p">(</span><span class="n">s</span><span class="p">);</span>
-<span class="n">ENTER</span><span class="p">;</span>
-<span class="n">SAVETMPS</span><span class="p">;</span>
-<span class="n">sv_2motral</span><span class="p">(</span><span class="n">v</span><span class="p">);</span>
-<span class="n">FREETMPS</span><span class="p">;</span>
-<span class="n">LEAVE</span><span class="p">;</span>
-<span class="c1">// v はココで解放される
-</span><span class="c1">// s は生き残ってる
-</span></code></pre></div><p><a href="http://perldoc.jp/docs/perl/5.18.1/perlcall.pod">perlcall</a>とかちゃんとドキュメントを読みましょう &gt; 自分</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c" data-lang="c"><span class="line"><span class="cl"><span class="nf">sv_2motral</span><span class="p">(</span><span class="n">s</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="n">ENTER</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="n">SAVETMPS</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="nf">sv_2motral</span><span class="p">(</span><span class="n">v</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="n">FREETMPS</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="n">LEAVE</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// v はココで解放される
+</span></span></span><span class="line"><span class="cl"><span class="c1">// s は生き残ってる
+</span></span></span></code></pre></div><p><a href="http://perldoc.jp/docs/perl/5.18.1/perlcall.pod">perlcall</a>とかちゃんとドキュメントを読みましょう &gt; 自分</p>
 <h2 id="segmentation-falt">Segmentation Falt</h2>
 <p>同期的にコマンドを実行してる最中にSIGNAL等で実行が中断されると、
 Segmentation Faltが起こる問題を修正しました。

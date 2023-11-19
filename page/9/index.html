@@ -33,7 +33,7 @@
   <meta name="author" content="ICHINOSE Shogo">
 
   
-  <meta name="generator" content="Hugo 0.91.2" />
+  <meta name="generator" content="Hugo 0.120.4">
 
 
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
@@ -138,9 +138,10 @@ MathJax = {
           <p>世の中にはたくさんの OSS が公開されていて、それを Linux 上で動かす選択肢も多様になってきました。 今まで通り自前でビルドするのはもちろん, Go のようにシングルバイナリになってるならバイナリ落としてくるだけのものもあります。 DockerHub で公開されているものなら Docker でコンテナイメージをダウンロードするという手もあります。 Homebrew on Linux なんてものも登場しましたね。
 選択肢が増えて動かすだけなら楽になったんですが、 事前の環境構築が最小限で済んで、バージョン管理もできて、依存もいい感じに解決してくれて、 といろいろ考えると結局は Red Hat 系なら標準のパッケージマネージャーである yum が楽なんですよね。
 そういうわけで JFrog Bintray にバイナリをあげて、yum レポジトリを公開していました。 ところが今月になって 突然の Bintray 終了のお知らせ！！！
- Into the Sunset on May 1st: Bintray, JCenter, GoCenter, and ChartCenter  前置きが長くなりましたね。 要するに Bintray からのお引越しを考えないといけなくなったので、 yum レポジトリを AWS S3 上に移行した、というお話です。
+Into the Sunset on May 1st: Bintray, JCenter, GoCenter, and ChartCenter 前置きが長くなりましたね。 要するに Bintray からのお引越しを考えないといけなくなったので、 yum レポジトリを AWS S3 上に移行した、というお話です。
 標準的な yum レポジトリの作り方 yum レポジトリを作るには、まず公開したい rpm パッケージが必要です。 Bintray だろうが S3 だろうが、rpm 作成の手順は一緒なので省略します。
-rpm さえできてしまえば、レポジトリの作成は非常に簡単です。 createrepo コマンドをインストールして実行するだけ。</p>
+rpm さえできてしまえば、レポジトリの作成は非常に簡単です。 createrepo コマンドをインストールして実行するだけ。
+yum install createrepo createrepo /PATH/TO/REPOSITORY /PATH/TO/REPOSITORY の中を自動的に検索して、 メタデータを作成してくれます。 これをこのまま HTTP で公開すれば yum レポジトリの完成です。</p>
           
             <footer>
               <a href="https://shogo82148.github.io/blog/2021/02/21/private-yum-repo-on-s3/" rel="full-article">Read On &rarr;</a>
@@ -170,10 +171,11 @@ rpm さえできてしまえば、レポジトリの作成は非常に簡単で�
 
         
           <p>GitHub Actions が一般公開された際に Perl をセットアップするアクションを書きました。
- Setup Perl GitHub Action を公開しました  セットアップのたびに毎回コンパイルすると遅いので、コンパイル済みのバイナリを事前に Amazon S3 にアップロードしていました。 アップロード先に S3 を選んだのは単に自分が AWS に慣れているからなのですが、最近になってちょっとした問題に直面してます。 解決へ向けて S3 から Azure Blob Storage へ移行した、というお話です。
+Setup Perl GitHub Action を公開しました セットアップのたびに毎回コンパイルすると遅いので、コンパイル済みのバイナリを事前に Amazon S3 にアップロードしていました。 アップロード先に S3 を選んだのは単に自分が AWS に慣れているからなのですが、最近になってちょっとした問題に直面してます。 解決へ向けて S3 から Azure Blob Storage へ移行した、というお話です。
 利用する分には全く影響ないはずなんですが、Azure Blob Storage を使ってみたメモも兼ねてやったことを書いておきます。
 S3 の問題点 もちろん S3 自体が悪いわけじゃなくって、単に自分の見積もりが甘かっただけなんですが、 ネットワークのアウト向きのデーター転送料が高い！！！！
-これまでの僕のユースケースではせいぜい数 MB のバイナリをアップロードするだけだったのが、perl のバイナリは 1 バージョン当たり 100MB 以上あります。 Perl Monger の方々は互換性に気を使うので、いろんな OS、バージョン、コンパイルオプションでテストを実行します。 各 OS(Linux, Windows, macOS)、Perl 5.6〜5.32、multi-thread オプションありなし、という条件でマトリックスのワークフローを組むと 84 ジョブ。 単純計算で 1 ワークフローを実行するだけで、約 8GB の転送が発生するわけです。 2021-02-05 現在のアウトデーター転送料は 0.09USD/GB なので、1 ワークフローあたり 0.72USD です。</p>
+これまでの僕のユースケースではせいぜい数 MB のバイナリをアップロードするだけだったのが、perl のバイナリは 1 バージョン当たり 100MB 以上あります。 Perl Monger の方々は互換性に気を使うので、いろんな OS、バージョン、コンパイルオプションでテストを実行します。 各 OS(Linux, Windows, macOS)、Perl 5.6〜5.32、multi-thread オプションありなし、という条件でマトリックスのワークフローを組むと 84 ジョブ。 単純計算で 1 ワークフローを実行するだけで、約 8GB の転送が発生するわけです。 2021-02-05 現在のアウトデーター転送料は 0.09USD/GB なので、1 ワークフローあたり 0.72USD です。
+去年の秋あたりから使ってくれる人が増えたようで、転送量だけで 100USD/mo を超えるようになってきました。 趣味の範囲でやってるので、ちょっと許容できる範囲を超えてきたかな・・・ということでコスト削減に乗り出しました。</p>
           
             <footer>
               <a href="https://shogo82148.github.io/blog/2021/02/03/setup-perl-uses-azure-blob-storage/" rel="full-article">Read On &rarr;</a>
@@ -203,7 +205,7 @@ S3 の問題点 もちろん S3 自体が悪いわけじゃなくって、単に
 
         
           <p>最近アプリの UI で角丸アイコンを見ることが多くなりました。 この角は完全な円ではなく、スーパー楕円というものだという情報を入手しました。
- スーパー楕円 UI を iOS+Swift で実装する 丸よりも丸みを感じる!? スーパー楕円の魅力とデザイン  記事の中ではベジェ曲線で近似する方法が書かれています。 なるほど、こうすれば描けるのか！と関心したので、自分でもベジェ曲線で描いてみることにしました。
+スーパー楕円 UI を iOS+Swift で実装する 丸よりも丸みを感じる!? スーパー楕円の魅力とデザイン 記事の中ではベジェ曲線で近似する方法が書かれています。 なるほど、こうすれば描けるのか！と関心したので、自分でもベジェ曲線で描いてみることにしました。
 スーパー楕円 スーパー楕円というのは円の方程式を以下のように拡張したものです。
 $$ \left|\frac{x}{a}\right|^n + \left|\frac{y}{b}\right|^n = 1 $$
 n は曲線を制御するパラメーターで n=2 は円となり、n&gt;2 の場合は円と四角形のあいだのような形になります。 n が大きいほど四角形に近づいていきます。
@@ -211,7 +213,7 @@ n は曲線を制御するパラメーターで n=2 は円となり、n&gt;2 の
 制御点を $ \boldsymbol{B}_0, \boldsymbol{B}_1, \boldsymbol{B}_2, \boldsymbol{B}_3 $ とした場合の 3 次ベジェ曲線の数式を具体的に書き下すと以下のようになります。
 $$ \boldsymbol{P}(t) = \boldsymbol{B}_0(1-t)^3 + \boldsymbol{B}_1 3t(1-t)^2 + \boldsymbol{B}_2 3t^2(1-t) + \boldsymbol{B}_3 t^3 $$
 近似してみる 以下の記事と同じ戦略で近似してみます。
- ベジェ曲線による円の描画の制御点の位置はなぜ 0.55228…なのか?  スーパー楕円は左右対称・上下対象なので、第一象限の形だけ求めれば十分です (x &gt; 0, y &gt; 0 )。 またアフィン変換に対して不変なので a = b = 1 の場合のみを考えます。</p>
+ベジェ曲線による円の描画の制御点の位置はなぜ 0.55228…なのか? スーパー楕円は左右対称・上下対象なので、第一象限の形だけ求めれば十分です (x &gt; 0, y &gt; 0 )。 またアフィン変換に対して不変なので a = b = 1 の場合のみを考えます。</p>
           
             <footer>
               <a href="https://shogo82148.github.io/blog/2021/01/29/super-ellipse/" rel="full-article">Read On &rarr;</a>
@@ -241,9 +243,9 @@ $$ \boldsymbol{P}(t) = \boldsymbol{B}_0(1-t)^3 + \boldsymbol{B}_1 3t(1-t)^2 + \b
 
         
           <p>いつかやろうと思っていた AWS::Lambdaの Docker コンテナ対応、 年を越してしまったけど、ようやく手を付けました。
- AWS Lambda の新機能 – コンテナイメージのサポート  使い方 以下の handler.pl を Docker コンテナとして AWS Lambda デプロイする例です。
+AWS Lambda の新機能 – コンテナイメージのサポート 使い方 以下の handler.pl を Docker コンテナとして AWS Lambda デプロイする例です。
 use utf8; use warnings; use strict; sub handle { my $payload = shift; return +{&#34;hello&#34; =&gt; &#34;lambda&#34;}; } 1; ビルド済みイメージを使う Amazon Linux 2 ベースの Perl Runtime 入りイメージをDocker Hub で公開しています。 これをベースにデプロイしたいファイルを追加し、CMD に実行したい関数名を指定するだけ。 簡単ですね。
-FROMshogo82148/p5-aws-lambda:base-5.32-paws.al2COPY handler.pl /var/task/CMD [ &#34;handler.handle&#34; ]Docker Hub からのダウンロードに Rate Limit が適用されるようになったので、 同じイメージを Amazon ECR Public Gallery でも公開しました。 こちらを利用することも可能です。</p>
+FROM shogo82148/p5-aws-lambda:base-5.32-paws.al2 COPY handler.pl /var/task/ CMD [ &#34;handler.handle&#34; ] Docker Hub からのダウンロードに Rate Limit が適用されるようになったので、 同じイメージを Amazon ECR Public Gallery でも公開しました。 こちらを利用することも可能です。</p>
           
             <footer>
               <a href="https://shogo82148.github.io/blog/2021/01/02/perl-runtime-supports-docker-format/" rel="full-article">Read On &rarr;</a>
@@ -275,8 +277,8 @@ FROMshogo82148/p5-aws-lambda:base-5.32-paws.al2COPY handler.pl /var/task/CMD [ &
           <p>弊社では GitHub のレポジトリ管理に Terraform GitHub provider を使用しています。 いちいち手元で terraform plan や terraform apply を叩くのは面倒なので、 GitHub Actions を利用することを考えました。 tf ファイルと現実のリソースとの不整合を避けるために、 これらのコマンドは排他的に実行する必要があります。 例えば terraform apply を実行している最中に terraform plan を実行することはできません。
 ここで問題になってくるのが GitHub Actions のジョブ並列数です。 2020-12-30 現在、GitHub Actions は同時に 20 並列まで実行可能ですが、逆に並列数を制限できないという贅沢な悩みがあります。 一応 Matrix Build の並列数を制限するオプションはありますが、 ワークフローをまたいだ並列数の制限はできません。
 これを解決するために作ったのが actions-mutex です。
- shogo82148/actions-mutex actions-mutex Marketplace  使い方 ただワークフローから uses を使って呼び出すだけ。 面倒なアクセスキーの設定等は必要ありません。簡単ですね。
-on:push:branches:- mainjobs:build:runs-on:ubuntu-lateststeps:- uses:actions/checkout@v2- uses:shogo82148/actions-mutex@v1- run:&#34;: 排他的に実行する必要のあるタスク&#34;仕組み actions-mutex と同様のことを実現する Action として GitHub Action Locks があります。 これの使用も考えたのですが、GitHub Action Locks はバックエンドに AWS DynamoDB を使用しています。 DynamoDB のテーブルを作成した上で AWS IAM を適切に設定する必要があり、セットアップが面倒です (まあ単に DynamoDB 食わず嫌いしているだけ、というのもあります)。</p>
+shogo82148/actions-mutex actions-mutex Marketplace 使い方 ただワークフローから uses を使って呼び出すだけ。 面倒なアクセスキーの設定等は必要ありません。簡単ですね。
+on: push: branches: - main jobs: build: runs-on: ubuntu-latest steps: - uses: actions/checkout@v2 - uses: shogo82148/actions-mutex@v1 - run: &#34;: 排他的に実行する必要のあるタスク&#34; 仕組み actions-mutex と同様のことを実現する Action として GitHub Action Locks があります。 これの使用も考えたのですが、GitHub Action Locks はバックエンドに AWS DynamoDB を使用しています。 DynamoDB のテーブルを作成した上で AWS IAM を適切に設定する必要があり、セットアップが面倒です (まあ単に DynamoDB 食わず嫌いしているだけ、というのもあります)。</p>
           
             <footer>
               <a href="https://shogo82148.github.io/blog/2020/12/30/github-actions-mutex/" rel="full-article">Read On &rarr;</a>
@@ -291,7 +293,7 @@ on:push:branches:- mainjobs:build:runs-on:ubuntu-lateststeps:- uses:actions/chec
 
 <header>
   <p class="meta">Dec 3, 2020
-     - 1 minute read 
+     - 2 minute read 
      - <a href="https://shogo82148.github.io/blog/2020/12/03/github-actions-in-2020/#disqus_thread">Comments</a>
 
     
@@ -306,11 +308,11 @@ on:push:branches:- mainjobs:build:runs-on:ubuntu-lateststeps:- uses:actions/chec
 
         
           <p>この記事はフラーAdvent Calendar 2020の3日目の記事です。 2日目はid:gibachan03 さんで「Androidアプリエンジニアになって気づいたiOSとの違い」でした。
- さて、公開当初色々して遊んだ GitHub Actions ですが、今年も引き続き遊んでました。 いくつか新しい Action を作ったものの、このブログでは紹介していなかったので、2020年作ったものを紹介したいと思います。
-actions-upload-release-asset  Yet Another Upload Release Asset Action  一言で表すのならば、 Yet Another actions/upload-release-asset GitHub Action です。 GitHub の Releases にファイルをアップロードする Action です。 このアクションは GitHub 公式という安心感はあるのですが、一度のステップで1個のファイルしかアップロードできません。
+さて、公開当初色々して遊んだ GitHub Actions ですが、今年も引き続き遊んでました。 いくつか新しい Action を作ったものの、このブログでは紹介していなかったので、2020年作ったものを紹介したいと思います。
+actions-upload-release-asset Yet Another Upload Release Asset Action 一言で表すのならば、 Yet Another actions/upload-release-asset GitHub Action です。 GitHub の Releases にファイルをアップロードする Action です。 このアクションは GitHub 公式という安心感はあるのですが、一度のステップで1個のファイルしかアップロードできません。
 ソースファイル本体と、ビルド済みバイナリと・・・と色々アップロードしたいものがあったので、新しく作りました。 actions-upload-release-asset は @actions/glob の Glob Pattern に対応しているので、一つのステップで複数のファイルをアップロードすることができます。
 例えば、カレントディレクトリにあるテキストファイルを全てアップロードする例は以下のようになります。
-on:release:types:- createdjobs:build:runs-on:ubuntu-lateststeps:- uses:actions/checkout@v2# steps for building assets- run:echo &#34;REPLACE ME!&#34; &gt; assets.txt- uses:shogo82148/actions-upload-release-asset@v1with:upload_url:${{ github.event.release.upload_url }}asset_path:&#34;*.txt&#34;actions-setup-mysql  actions-setup-mysql  MySQLをインストールしてくれる Action です。 GitHubが提供している Linux イメージに MySQL はインストールされているのですが、MySQL 8.</p>
+on: release: types: - created jobs: build: runs-on: ubuntu-latest steps: - uses: actions/checkout@v2 # steps for building assets - run: echo &#34;REPLACE ME!&#34; &gt; assets.txt - uses: shogo82148/actions-upload-release-asset@v1 with: upload_url: ${{ github.</p>
           
             <footer>
               <a href="https://shogo82148.github.io/blog/2020/12/03/github-actions-in-2020/" rel="full-article">Read On &rarr;</a>
@@ -342,11 +344,12 @@ on:release:types:- createdjobs:build:runs-on:ubuntu-lateststeps:- uses:actions/c
           <p>なんだか今日はもうコードを書く気がしないので、最近思っていることをつらつらと・・・
 タイトルの通り、最近 AWS SDK for Go v2 の行く末がちょっと気になっています。 あんまり話題になっているのを観測できていないので、少し現状を書いてみます。
 背景 最近あったビッグイベントが v0.25.0 のリリースです。
- Client Updates in the Preview Version of the AWS SDK for Go V2  パッケージの構成が見直され、APIの呼び出し方法も変わりました。 まあ、プレビュー版なのでよくあること・・・なんですが、ちょっと変更点が多すぎて追いきれない。
+Client Updates in the Preview Version of the AWS SDK for Go V2 パッケージの構成が見直され、APIの呼び出し方法も変わりました。 まあ、プレビュー版なのでよくあること・・・なんですが、ちょっと変更点が多すぎて追いきれない。
 v0.25.0 移行で入った変更の数々 ちょっと一例を見てみましょう。
 設定の読み込み Before: v0.25.0 より前は external パッケージを使って設定を読み込んでいました。
 import ( &#34;github.com/aws/aws-sdk-go-v2/aws/external&#34; ) func loadConfig() (aws.Config, error) { return external.LoadDefaultAWSConfig() } After: これが config パッケージに変更になりました。
-import ( &#34;github.com/aws/aws-sdk-go-v2/config&#34; ) func loadConfig() (aws.Config, error) { return config.LoadDefaultConfig() } API の呼び出し Before: Requestオブジェクトを作って、そのSendメソッドを呼ぶ形式でした。</p>
+import ( &#34;github.com/aws/aws-sdk-go-v2/config&#34; ) func loadConfig() (aws.Config, error) { return config.LoadDefaultConfig() } API の呼び出し Before: Requestオブジェクトを作って、そのSendメソッドを呼ぶ形式でした。
+s3svc := s3.</p>
           
             <footer>
               <a href="https://shogo82148.github.io/blog/2020/10/24/aws-sdk-go-v2-broken/" rel="full-article">Read On &rarr;</a>
@@ -378,9 +381,9 @@ import ( &#34;github.com/aws/aws-sdk-go-v2/config&#34; ) func loadConfig() (aws.
           <p>リリース当初は git push など GitHub 上のイベントしかトリガーにできなかった GitHub Actionsですが、 workflow_dispatch イベント の登場により手動実行ができるようになりました。
 社内でもこの機能を利用してワークフローの手動実行をしていたのですが、人間とは欲深いもので「毎回ワークフローを選択してポチポチするのだるい」という声があがってきました。 そういうわけで、Pull Request のコメントをトリガーにしてワークフローを実行する簡単なボットを作ってみました。
 方針 workflow_dispatch と issue_comment をトリガーにしたワークフローを作ればいいだけの気もしますが、 以下のような理由からワークフローからワークフローを呼び出す形にしました。
- workflow_dispatch を使った既存のワークフローがあるので、それを流用したい  トリガーが複数あると、イベントの種類に応じてペイロードの形式が異なるので、地味に処理が大変 issue_comment は全部のコメントに反応するので、本当に見たいログが埋もれてしまう   コメントを投稿した Pull Request のHEADでワークフローを実行して欲しい  issue_comment はイベントの発生元として、デフォルトブランチのHEADが渡ってきます イベントのペイロードには、プルリクエストへのリンクが入っているだけで、HEADの情報はわからない    実装 jfurudo1 がサードパーティのアクションを使ってゴニョゴニョやっていたものの、 あんまりうまく行ってなさそうだったので、bash script でエイヤッと書き直しました。
+workflow_dispatch を使った既存のワークフローがあるので、それを流用したい トリガーが複数あると、イベントの種類に応じてペイロードの形式が異なるので、地味に処理が大変 issue_comment は全部のコメントに反応するので、本当に見たいログが埋もれてしまう コメントを投稿した Pull Request のHEADでワークフローを実行して欲しい issue_comment はイベントの発生元として、デフォルトブランチのHEADが渡ってきます イベントのペイロードには、プルリクエストへのリンクが入っているだけで、HEADの情報はわからない 実装 jfurudo1 がサードパーティのアクションを使ってゴニョゴニョやっていたものの、 あんまりうまく行ってなさそうだったので、bash script でエイヤッと書き直しました。
 「build」 とコメントすると、.github/workflows/build.yml のワークフローを実行するサンプルです。
-name:comment hookon:issue_comment:types:[created]jobs:distribute:runs-on:ubuntu-lateststeps:- name:dispatch workflowrun:|# イベントに関する詳細情報を取ってくる PAYLOAD=$(cat &#34;$GITHUB_EVENT_PATH&#34;) NUMBER=$(echo &#34;$PAYLOAD&#34; | jq -c &#39;.issue.number&#39;) # Issue と Pull Request のコメントが混ざってくるので、Issueは無視する if [[ &#34;$(echo &#34;$PAYLOAD&#34; | jq -c &#39;.</p>
+name: comment hook on: issue_comment: types: [created] jobs: distribute: runs-on: ubuntu-latest steps: - name: dispatch workflow run: | # イベントに関する詳細情報を取ってくる PAYLOAD=$(cat &#34;$GITHUB_EVENT_PATH&#34;) NUMBER=$(echo &#34;$PAYLOAD&#34; | jq -c &#39;.issue.number&#39;) # Issue と Pull Request のコメントが混ざってくるので、Issueは無視する if [[ &#34;$(echo &#34;$PAYLOAD&#34; | jq -c &#39;.</p>
           
             <footer>
               <a href="https://shogo82148.github.io/blog/2020/10/23/github-bot-using-actions/" rel="full-article">Read On &rarr;</a>
@@ -410,9 +413,9 @@ name:comment hookon:issue_comment:types:[created]jobs:distribute:runs-on:ubuntu-
 
         
           <p>Amazon Linux 2 への移行が進む AWS Lambda ですが、 ついに Custom Runtime にも Amazon Linux 2 がやってきました。
- AWS Lambda now supports custom runtimes on Amazon Linux 2  同時に provided.al2 の Docker Image も公開されたので、 それを利用して Amazon Linux 2 対応の Perl Runtime Layer を作成しました。
- AWS::Lambda  ビルド済み公開 Perl Runtime Layer リージョン毎のArn一覧はこちら
- Perl 5.32  arn:aws:lambda:af-south-1:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:ap-east-1:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:ap-northeast-1:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:ap-northeast-2:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:ap-south-1:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:ap-southeast-1:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:ap-southeast-2:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:ca-central-1:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:eu-central-1:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:eu-south-1:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:eu-west-1:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:eu-west-2:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:eu-west-3:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:me-south-1:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:sa-east-1:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:us-east-1:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:us-east-2:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:us-west-1:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:us-west-2:445285296882:layer:perl-5-32-runtime-al2:1    --runtime provided.</p>
+AWS Lambda now supports custom runtimes on Amazon Linux 2 同時に provided.al2 の Docker Image も公開されたので、 それを利用して Amazon Linux 2 対応の Perl Runtime Layer を作成しました。
+AWS::Lambda ビルド済み公開 Perl Runtime Layer リージョン毎のArn一覧はこちら
+Perl 5.32 arn:aws:lambda:af-south-1:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:ap-east-1:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:ap-northeast-1:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:ap-northeast-2:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:ap-south-1:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:ap-southeast-1:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:ap-southeast-2:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:ca-central-1:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:eu-central-1:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:eu-south-1:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:eu-west-1:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:eu-west-2:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:eu-west-3:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:me-south-1:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:sa-east-1:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:us-east-1:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:us-east-2:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:us-west-1:445285296882:layer:perl-5-32-runtime-al2:1 arn:aws:lambda:us-west-2:445285296882:layer:perl-5-32-runtime-al2:1 --runtime provided.al2 と合わせてご利用ください。</p>
           
             <footer>
               <a href="https://shogo82148.github.io/blog/2020/08/15/perl-lambda-runtime-on-amazon-linux2/" rel="full-article">Read On &rarr;</a>
@@ -443,10 +446,11 @@ name:comment hookon:issue_comment:types:[created]jobs:distribute:runs-on:ubuntu-
         
           <p>僕が管理しているサービスでは、ALB が発行する Trace ID を調査時の手がかりとして使えるようログに出力しています。 これのおかげで、Nginx, アプリケーション, その他AWSのマネージドサービス, etc. といった異なるコンポーネントであっても、関連するログを抽出ができ、 障害発生時の役に立っています。 しかし、肝心の抽出作業がマネージドコンソールぽちぽちなため、完全に職人芸になっているというのが現状でした。
 解決のための良いツールがないかな、と目をつけたのが CloudWatch ServiceLens です。 CloudWatch メトリックとログ、AWS X-Ray からのトレースを結び付けて、直感なインターフェースで分析できるというもの。
- Amazon CloudWatch ServiceLens の発表  AWS X-Ray のトレース結果を送るのは、以前開発した Yet Another AWS X-Ray SDK for Go でできます。 CloudWatch Logs への出力方法は色々ありますが、僕は自作の cloudwatch-logs-agent-lite を使っています。
+Amazon CloudWatch ServiceLens の発表 AWS X-Ray のトレース結果を送るのは、以前開発した Yet Another AWS X-Ray SDK for Go でできます。 CloudWatch Logs への出力方法は色々ありますが、僕は自作の cloudwatch-logs-agent-lite を使っています。
 材料はそろった、さあ、ServiceLens で分析だ！と行きたいところですが、 ただ単にこれらの情報を送りつけるだけでは、得られる情報は X-Ray 単体、CloudWatch Logs 単体で使ったときと大差ありません。 X-Ray のトレース結果とログの関連付けが行われていないので、結局 Trace ID を使って CloudWatch Logs を検索する必要が出てきてしまいます。
 ドキュメントを見る限り、2020-07-06現在 AWS X-Ray SDK for Java だけがログ関連付け機能に対応しているようです。 JavaにできてGoにできないわけがないだろう・・・ということで移植してきました。
-使い方 aws-xray-yasdk-go の v1.1.1 移行で対応しているので、そのバージョンを落としてきます。</p>
+使い方 aws-xray-yasdk-go の v1.1.1 移行で対応しているので、そのバージョンを落としてきます。
+go get github.</p>
           
             <footer>
               <a href="https://shogo82148.github.io/blog/2020/07/06/aws-xray-yasdk-go-supports-logs-correlation/" rel="full-article">Read On &rarr;</a>

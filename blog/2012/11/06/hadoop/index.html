@@ -33,7 +33,7 @@
   <meta name="author" content="ICHINOSE Shogo">
 
   
-  <meta name="generator" content="Hugo 0.91.2" />
+  <meta name="generator" content="Hugo 0.120.4">
 
 
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
@@ -168,89 +168,89 @@ tar.gzで圧縮されているので解凍しましょう．
 イメージの置いてあったページにある<a href="https://ccp.cloudera.com/display/DOC/Hadoop+Tutorial">Hadoop Tutorial</a>をやってみましょう．
 Hadoopの例として必ず最初に出てくるであろう，Word Countです．</p>
 <p>まずソースコードを入力します．</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kn">package</span> <span class="nn">org.myorg</span><span class="o">;</span>
-
-<span class="kn">import</span> <span class="nn">java.io.IOException</span><span class="o">;</span>
-<span class="kn">import</span> <span class="nn">java.util.*</span><span class="o">;</span>
-
-<span class="kn">import</span> <span class="nn">org.apache.hadoop.fs.Path</span><span class="o">;</span>
-<span class="kn">import</span> <span class="nn">org.apache.hadoop.conf.*</span><span class="o">;</span>
-<span class="kn">import</span> <span class="nn">org.apache.hadoop.io.*</span><span class="o">;</span>
-<span class="kn">import</span> <span class="nn">org.apache.hadoop.mapred.*</span><span class="o">;</span>
-<span class="kn">import</span> <span class="nn">org.apache.hadoop.util.*</span><span class="o">;</span>
-
-<span class="kd">public</span> <span class="kd">class</span> <span class="nc">WordCount</span> <span class="o">{</span>
-
-    <span class="kd">public</span> <span class="kd">static</span> <span class="kd">class</span> <span class="nc">Map</span> <span class="kd">extends</span> <span class="n">MapReduceBase</span> <span class="kd">implements</span> <span class="n">Mapper</span><span class="o">&lt;</span><span class="n">LongWritable</span><span class="o">,</span> <span class="n">Text</span><span class="o">,</span> <span class="n">Text</span><span class="o">,</span> <span class="n">IntWritable</span><span class="o">&gt;</span> <span class="o">{</span>
-        <span class="kd">private</span> <span class="kd">final</span> <span class="kd">static</span> <span class="n">IntWritable</span> <span class="n">one</span> <span class="o">=</span> <span class="k">new</span> <span class="n">IntWritable</span><span class="o">(</span><span class="n">1</span><span class="o">);</span>
-        <span class="kd">private</span> <span class="n">Text</span> <span class="n">word</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Text</span><span class="o">();</span>
-
-        <span class="kd">public</span> <span class="kt">void</span> <span class="nf">map</span><span class="o">(</span><span class="n">LongWritable</span> <span class="n">key</span><span class="o">,</span> <span class="n">Text</span> <span class="n">value</span><span class="o">,</span> <span class="n">OutputCollector</span><span class="o">&lt;</span><span class="n">Text</span><span class="o">,</span> <span class="n">IntWritable</span><span class="o">&gt;</span> <span class="n">output</span><span class="o">,</span> <span class="n">Reporter</span> <span class="n">reporter</span><span class="o">)</span> <span class="kd">throws</span> <span class="n">IOException</span> <span class="o">{</span>
-            <span class="n">String</span> <span class="n">line</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="na">toString</span><span class="o">();</span>
-            <span class="n">StringTokenizer</span> <span class="n">tokenizer</span> <span class="o">=</span> <span class="k">new</span> <span class="n">StringTokenizer</span><span class="o">(</span><span class="n">line</span><span class="o">);</span>
-            <span class="k">while</span> <span class="o">(</span><span class="n">tokenizer</span><span class="o">.</span><span class="na">hasMoreTokens</span><span class="o">())</span> <span class="o">{</span>
-                <span class="n">word</span><span class="o">.</span><span class="na">set</span><span class="o">(</span><span class="n">tokenizer</span><span class="o">.</span><span class="na">nextToken</span><span class="o">());</span>
-                <span class="n">output</span><span class="o">.</span><span class="na">collect</span><span class="o">(</span><span class="n">word</span><span class="o">,</span> <span class="n">one</span><span class="o">);</span>
-            <span class="o">}</span>
-        <span class="o">}</span>
-    <span class="o">}</span>
-
-    <span class="kd">public</span> <span class="kd">static</span> <span class="kd">class</span> <span class="nc">Reduce</span> <span class="kd">extends</span> <span class="n">MapReduceBase</span> <span class="kd">implements</span> <span class="n">Reducer</span><span class="o">&lt;</span><span class="n">Text</span><span class="o">,</span> <span class="n">IntWritable</span><span class="o">,</span> <span class="n">Text</span><span class="o">,</span> <span class="n">IntWritable</span><span class="o">&gt;</span> <span class="o">{</span>
-        <span class="kd">public</span> <span class="kt">void</span> <span class="nf">reduce</span><span class="o">(</span><span class="n">Text</span> <span class="n">key</span><span class="o">,</span> <span class="n">Iterator</span><span class="o">&lt;</span><span class="n">IntWritable</span><span class="o">&gt;</span> <span class="n">values</span><span class="o">,</span> <span class="n">OutputCollector</span><span class="o">&lt;</span><span class="n">Text</span><span class="o">,</span> <span class="n">IntWritable</span><span class="o">&gt;</span> <span class="n">output</span><span class="o">,</span> <span class="n">Reporter</span> <span class="n">reporter</span><span class="o">)</span> <span class="kd">throws</span> <span class="n">IOException</span> <span class="o">{</span>
-            <span class="kt">int</span> <span class="n">sum</span> <span class="o">=</span> <span class="n">0</span><span class="o">;</span>
-            <span class="k">while</span> <span class="o">(</span><span class="n">values</span><span class="o">.</span><span class="na">hasNext</span><span class="o">())</span> <span class="o">{</span>
-                <span class="n">sum</span> <span class="o">+=</span> <span class="n">values</span><span class="o">.</span><span class="na">next</span><span class="o">().</span><span class="na">get</span><span class="o">();</span>
-            <span class="o">}</span>
-            <span class="n">output</span><span class="o">.</span><span class="na">collect</span><span class="o">(</span><span class="n">key</span><span class="o">,</span> <span class="k">new</span> <span class="n">IntWritable</span><span class="o">(</span><span class="n">sum</span><span class="o">));</span>
-        <span class="o">}</span>
-    <span class="o">}</span>
-
-    <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">main</span><span class="o">(</span><span class="n">String</span><span class="o">[]</span> <span class="n">args</span><span class="o">)</span> <span class="kd">throws</span> <span class="n">Exception</span> <span class="o">{</span>
-        <span class="n">JobConf</span> <span class="n">conf</span> <span class="o">=</span> <span class="k">new</span> <span class="n">JobConf</span><span class="o">(</span><span class="n">WordCount</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
-        <span class="n">conf</span><span class="o">.</span><span class="na">setJobName</span><span class="o">(</span><span class="s">&#34;wordcount&#34;</span><span class="o">);</span>
-
-        <span class="n">conf</span><span class="o">.</span><span class="na">setOutputKeyClass</span><span class="o">(</span><span class="n">Text</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
-        <span class="n">conf</span><span class="o">.</span><span class="na">setOutputValueClass</span><span class="o">(</span><span class="n">IntWritable</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
-
-        <span class="n">conf</span><span class="o">.</span><span class="na">setMapperClass</span><span class="o">(</span><span class="n">Map</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
-        <span class="n">conf</span><span class="o">.</span><span class="na">setCombinerClass</span><span class="o">(</span><span class="n">Reduce</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
-        <span class="n">conf</span><span class="o">.</span><span class="na">setReducerClass</span><span class="o">(</span><span class="n">Reduce</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
-
-        <span class="n">conf</span><span class="o">.</span><span class="na">setInputFormat</span><span class="o">(</span><span class="n">TextInputFormat</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
-        <span class="n">conf</span><span class="o">.</span><span class="na">setOutputFormat</span><span class="o">(</span><span class="n">TextOutputFormat</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
-
-        <span class="n">FileInputFormat</span><span class="o">.</span><span class="na">setInputPaths</span><span class="o">(</span><span class="n">conf</span><span class="o">,</span> <span class="k">new</span> <span class="n">Path</span><span class="o">(</span><span class="n">args</span><span class="o">[</span><span class="n">0</span><span class="o">]));</span>
-        <span class="n">FileOutputFormat</span><span class="o">.</span><span class="na">setOutputPath</span><span class="o">(</span><span class="n">conf</span><span class="o">,</span> <span class="k">new</span> <span class="n">Path</span><span class="o">(</span><span class="n">args</span><span class="o">[</span><span class="n">1</span><span class="o">]));</span>
-
-        <span class="n">JobClient</span><span class="o">.</span><span class="na">runJob</span><span class="o">(</span><span class="n">conf</span><span class="o">);</span>
-    <span class="o">}</span>
-<span class="o">}</span>
-</code></pre></div><p>コンパイルして，jarで固めておきます．</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash">mkdir wordcount_classes
-javac -cp /usr/lib/hadoop/client-0.20/<span class="se">\*</span> -d wordcount_classes WordCount.java 
-jar cvf wordcount.jar -C wordcount_classes/ .
-</code></pre></div><p>プログラムの準備はこれで終わりです．
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="kn">package</span><span class="w"> </span><span class="nn">org.myorg</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kn">import</span><span class="w"> </span><span class="nn">java.io.IOException</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kn">import</span><span class="w"> </span><span class="nn">java.util.*</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kn">import</span><span class="w"> </span><span class="nn">org.apache.hadoop.fs.Path</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kn">import</span><span class="w"> </span><span class="nn">org.apache.hadoop.conf.*</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kn">import</span><span class="w"> </span><span class="nn">org.apache.hadoop.io.*</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kn">import</span><span class="w"> </span><span class="nn">org.apache.hadoop.mapred.*</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kn">import</span><span class="w"> </span><span class="nn">org.apache.hadoop.util.*</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">WordCount</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="kd">class</span> <span class="nc">Map</span><span class="w"> </span><span class="kd">extends</span><span class="w"> </span><span class="n">MapReduceBase</span><span class="w"> </span><span class="kd">implements</span><span class="w"> </span><span class="n">Mapper</span><span class="o">&lt;</span><span class="n">LongWritable</span><span class="p">,</span><span class="w"> </span><span class="n">Text</span><span class="p">,</span><span class="w"> </span><span class="n">Text</span><span class="p">,</span><span class="w"> </span><span class="n">IntWritable</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">private</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="n">IntWritable</span><span class="w"> </span><span class="n">one</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">IntWritable</span><span class="p">(</span><span class="n">1</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">private</span><span class="w"> </span><span class="n">Text</span><span class="w"> </span><span class="n">word</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">Text</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">map</span><span class="p">(</span><span class="n">LongWritable</span><span class="w"> </span><span class="n">key</span><span class="p">,</span><span class="w"> </span><span class="n">Text</span><span class="w"> </span><span class="n">value</span><span class="p">,</span><span class="w"> </span><span class="n">OutputCollector</span><span class="o">&lt;</span><span class="n">Text</span><span class="p">,</span><span class="w"> </span><span class="n">IntWritable</span><span class="o">&gt;</span><span class="w"> </span><span class="n">output</span><span class="p">,</span><span class="w"> </span><span class="n">Reporter</span><span class="w"> </span><span class="n">reporter</span><span class="p">)</span><span class="w"> </span><span class="kd">throws</span><span class="w"> </span><span class="n">IOException</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">String</span><span class="w"> </span><span class="n">line</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">value</span><span class="p">.</span><span class="na">toString</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">StringTokenizer</span><span class="w"> </span><span class="n">tokenizer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">StringTokenizer</span><span class="p">(</span><span class="n">line</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="n">tokenizer</span><span class="p">.</span><span class="na">hasMoreTokens</span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">word</span><span class="p">.</span><span class="na">set</span><span class="p">(</span><span class="n">tokenizer</span><span class="p">.</span><span class="na">nextToken</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">output</span><span class="p">.</span><span class="na">collect</span><span class="p">(</span><span class="n">word</span><span class="p">,</span><span class="w"> </span><span class="n">one</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="kd">class</span> <span class="nc">Reduce</span><span class="w"> </span><span class="kd">extends</span><span class="w"> </span><span class="n">MapReduceBase</span><span class="w"> </span><span class="kd">implements</span><span class="w"> </span><span class="n">Reducer</span><span class="o">&lt;</span><span class="n">Text</span><span class="p">,</span><span class="w"> </span><span class="n">IntWritable</span><span class="p">,</span><span class="w"> </span><span class="n">Text</span><span class="p">,</span><span class="w"> </span><span class="n">IntWritable</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">reduce</span><span class="p">(</span><span class="n">Text</span><span class="w"> </span><span class="n">key</span><span class="p">,</span><span class="w"> </span><span class="n">Iterator</span><span class="o">&lt;</span><span class="n">IntWritable</span><span class="o">&gt;</span><span class="w"> </span><span class="n">values</span><span class="p">,</span><span class="w"> </span><span class="n">OutputCollector</span><span class="o">&lt;</span><span class="n">Text</span><span class="p">,</span><span class="w"> </span><span class="n">IntWritable</span><span class="o">&gt;</span><span class="w"> </span><span class="n">output</span><span class="p">,</span><span class="w"> </span><span class="n">Reporter</span><span class="w"> </span><span class="n">reporter</span><span class="p">)</span><span class="w"> </span><span class="kd">throws</span><span class="w"> </span><span class="n">IOException</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="kt">int</span><span class="w"> </span><span class="n">sum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="n">values</span><span class="p">.</span><span class="na">hasNext</span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">sum</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">values</span><span class="p">.</span><span class="na">next</span><span class="p">().</span><span class="na">get</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">output</span><span class="p">.</span><span class="na">collect</span><span class="p">(</span><span class="n">key</span><span class="p">,</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">IntWritable</span><span class="p">(</span><span class="n">sum</span><span class="p">));</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">main</span><span class="p">(</span><span class="n">String</span><span class="o">[]</span><span class="w"> </span><span class="n">args</span><span class="p">)</span><span class="w"> </span><span class="kd">throws</span><span class="w"> </span><span class="n">Exception</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">JobConf</span><span class="w"> </span><span class="n">conf</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">JobConf</span><span class="p">(</span><span class="n">WordCount</span><span class="p">.</span><span class="na">class</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">conf</span><span class="p">.</span><span class="na">setJobName</span><span class="p">(</span><span class="s">&#34;wordcount&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">conf</span><span class="p">.</span><span class="na">setOutputKeyClass</span><span class="p">(</span><span class="n">Text</span><span class="p">.</span><span class="na">class</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">conf</span><span class="p">.</span><span class="na">setOutputValueClass</span><span class="p">(</span><span class="n">IntWritable</span><span class="p">.</span><span class="na">class</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">conf</span><span class="p">.</span><span class="na">setMapperClass</span><span class="p">(</span><span class="n">Map</span><span class="p">.</span><span class="na">class</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">conf</span><span class="p">.</span><span class="na">setCombinerClass</span><span class="p">(</span><span class="n">Reduce</span><span class="p">.</span><span class="na">class</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">conf</span><span class="p">.</span><span class="na">setReducerClass</span><span class="p">(</span><span class="n">Reduce</span><span class="p">.</span><span class="na">class</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">conf</span><span class="p">.</span><span class="na">setInputFormat</span><span class="p">(</span><span class="n">TextInputFormat</span><span class="p">.</span><span class="na">class</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">conf</span><span class="p">.</span><span class="na">setOutputFormat</span><span class="p">(</span><span class="n">TextOutputFormat</span><span class="p">.</span><span class="na">class</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">FileInputFormat</span><span class="p">.</span><span class="na">setInputPaths</span><span class="p">(</span><span class="n">conf</span><span class="p">,</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">Path</span><span class="p">(</span><span class="n">args</span><span class="o">[</span><span class="n">0</span><span class="o">]</span><span class="p">));</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">FileOutputFormat</span><span class="p">.</span><span class="na">setOutputPath</span><span class="p">(</span><span class="n">conf</span><span class="p">,</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">Path</span><span class="p">(</span><span class="n">args</span><span class="o">[</span><span class="n">1</span><span class="o">]</span><span class="p">));</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">JobClient</span><span class="p">.</span><span class="na">runJob</span><span class="p">(</span><span class="n">conf</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>コンパイルして，jarで固めておきます．</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">mkdir wordcount_classes
+</span></span><span class="line"><span class="cl">javac -cp /usr/lib/hadoop/client-0.20/<span class="se">\*</span> -d wordcount_classes WordCount.java 
+</span></span><span class="line"><span class="cl">jar cvf wordcount.jar -C wordcount_classes/ .
+</span></span></code></pre></div><p>プログラムの準備はこれで終わりです．
 しかし，解析対象が無いと解析のしようがないので，ローカルに適当な内容の解析対象のファイルを用意しておきましょう．</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="nb">echo</span> <span class="s2">&#34;Hello World Bye World&#34;</span> &gt; file01
-<span class="nb">echo</span> <span class="s2">&#34;Hello Hadoop Goodbye Hadoop&#34;</span> &gt; file02
-</code></pre></div><p>ローカルのファイルをHadoopのファイルシステムへコピーします．</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash">hadoop fs -mkdir /user/cloudera/wordcount
-hadoop fs -mkdir /user/cloudera/wordcount/input
-hadoop fs -copyFromLocal file1 /user/cloudera/wordcount/input
-hadoop fs -copyFromLocal file2 /user/cloudera/wordcount/input
-</code></pre></div><p>これで準備完了．
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="nb">echo</span> <span class="s2">&#34;Hello World Bye World&#34;</span> &gt; file01
+</span></span><span class="line"><span class="cl"><span class="nb">echo</span> <span class="s2">&#34;Hello Hadoop Goodbye Hadoop&#34;</span> &gt; file02
+</span></span></code></pre></div><p>ローカルのファイルをHadoopのファイルシステムへコピーします．</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">hadoop fs -mkdir /user/cloudera/wordcount
+</span></span><span class="line"><span class="cl">hadoop fs -mkdir /user/cloudera/wordcount/input
+</span></span><span class="line"><span class="cl">hadoop fs -copyFromLocal file1 /user/cloudera/wordcount/input
+</span></span><span class="line"><span class="cl">hadoop fs -copyFromLocal file2 /user/cloudera/wordcount/input
+</span></span></code></pre></div><p>これで準備完了．
 WordCountのプログラムを実行してみましょう．</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash">hadoop jar wordcount.jar org.myorg.WordCount /user/cloudera/wordcount/input /user/cloudera/wordcount/output
-</code></pre></div><p>以下のコマンドでプログラムが動いていることを確認します．</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash">hadoop fs -ls /user/cloudera/wordcount/output
-hadoop fs -cat /user/cloudera/wordcount/output/part-00000
-</code></pre></div><p>以下の結果が得られているはずです．</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain">Bye	1
-Goodbye	1
-Hadoop	2
-Hello	2
-World	2
-</code></pre></div><h2 id="まとめ">まとめ</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">hadoop jar wordcount.jar org.myorg.WordCount /user/cloudera/wordcount/input /user/cloudera/wordcount/output
+</span></span></code></pre></div><p>以下のコマンドでプログラムが動いていることを確認します．</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">hadoop fs -ls /user/cloudera/wordcount/output
+</span></span><span class="line"><span class="cl">hadoop fs -cat /user/cloudera/wordcount/output/part-00000
+</span></span></code></pre></div><p>以下の結果が得られているはずです．</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">Bye	1
+</span></span><span class="line"><span class="cl">Goodbye	1
+</span></span><span class="line"><span class="cl">Hadoop	2
+</span></span><span class="line"><span class="cl">Hello	2
+</span></span><span class="line"><span class="cl">World	2
+</span></span></code></pre></div><h2 id="まとめ">まとめ</h2>
 <p>VirtualBoxを使ってHadoopの実行環境をお手軽に作り，
 WordCountをして遊んでみました．</p>
 <p>HadoopというとWordCountが例としてあげられることが多く「それしかできないの？」と思っていましたが，

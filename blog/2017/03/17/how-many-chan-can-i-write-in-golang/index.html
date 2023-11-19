@@ -33,7 +33,7 @@
   <meta name="author" content="ICHINOSE Shogo">
 
   
-  <meta name="generator" content="Hugo 0.91.2" />
+  <meta name="generator" content="Hugo 0.120.4">
 
 
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
@@ -144,56 +144,56 @@ MathJax = {
 <ul>
 <li><a href="https://github.com/peco/peco/pull/411">Make Resume a blocking operation #411</a></li>
 </ul>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-diff" data-lang="diff"><span class="gh">diff --git a/interface.go b/interface.go
-</span><span class="gh">index 3d4472f..fff446c 100644
-</span><span class="gh"></span><span class="gd">--- a/interface.go
-</span><span class="gd"></span><span class="gi">+++ b/interface.go
-</span><span class="gi"></span><span class="gu">@@ -162,8 +162,8 @@ type Screen interface {
-</span><span class="gu"></span> // Termbox just hands out the processing to the termbox library
- type Termbox struct {
- 	mutex     sync.Mutex
-<span class="gd">-	resumeCh  chan (struct{})
-</span><span class="gd">-	suspendCh chan (struct{})
-</span><span class="gd"></span><span class="gi">+	resumeCh  chan chan struct{}
-</span><span class="gi">+	suspendCh chan struct{}
-</span><span class="gi"></span> }
- 
- // View handles the drawing/updating the screen
-<span class="gh">diff --git a/screen.go b/screen.go
-</span><span class="gh">index edbce87..f6dd71e 100644
-</span><span class="gh"></span><span class="gd">--- a/screen.go
-</span><span class="gd"></span><span class="gi">+++ b/screen.go
-</span><span class="gi"></span><span class="gu">@@ -21,7 +21,7 @@ func (t *Termbox) Init() error {
-</span><span class="gu"></span> func NewTermbox() *Termbox {
- 	return &amp;Termbox{
- 		suspendCh: make(chan struct{}),
-<span class="gd">-		resumeCh:  make(chan struct{}),
-</span><span class="gd"></span><span class="gi">+		resumeCh:  make(chan chan struct{}),
-</span><span class="gi"></span> 	}
- }
-</code></pre></div><p>channelを使ってchannelをやり取りすることができるので、
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-diff" data-lang="diff"><span class="line"><span class="cl"><span class="gh">diff --git a/interface.go b/interface.go
+</span></span></span><span class="line"><span class="cl"><span class="gh">index 3d4472f..fff446c 100644
+</span></span></span><span class="line"><span class="cl"><span class="gh"></span><span class="gd">--- a/interface.go
+</span></span></span><span class="line"><span class="cl"><span class="gd"></span><span class="gi">+++ b/interface.go
+</span></span></span><span class="line"><span class="cl"><span class="gi"></span><span class="gu">@@ -162,8 +162,8 @@ type Screen interface {
+</span></span></span><span class="line"><span class="cl"><span class="gu"></span> // Termbox just hands out the processing to the termbox library
+</span></span><span class="line"><span class="cl"> type Termbox struct {
+</span></span><span class="line"><span class="cl"> 	mutex     sync.Mutex
+</span></span><span class="line"><span class="cl"><span class="gd">-	resumeCh  chan (struct{})
+</span></span></span><span class="line"><span class="cl"><span class="gd">-	suspendCh chan (struct{})
+</span></span></span><span class="line"><span class="cl"><span class="gd"></span><span class="gi">+	resumeCh  chan chan struct{}
+</span></span></span><span class="line"><span class="cl"><span class="gi">+	suspendCh chan struct{}
+</span></span></span><span class="line"><span class="cl"><span class="gi"></span> }
+</span></span><span class="line"><span class="cl"> 
+</span></span><span class="line"><span class="cl"> // View handles the drawing/updating the screen
+</span></span><span class="line"><span class="cl"><span class="gh">diff --git a/screen.go b/screen.go
+</span></span></span><span class="line"><span class="cl"><span class="gh">index edbce87..f6dd71e 100644
+</span></span></span><span class="line"><span class="cl"><span class="gh"></span><span class="gd">--- a/screen.go
+</span></span></span><span class="line"><span class="cl"><span class="gd"></span><span class="gi">+++ b/screen.go
+</span></span></span><span class="line"><span class="cl"><span class="gi"></span><span class="gu">@@ -21,7 +21,7 @@ func (t *Termbox) Init() error {
+</span></span></span><span class="line"><span class="cl"><span class="gu"></span> func NewTermbox() *Termbox {
+</span></span><span class="line"><span class="cl"> 	return &amp;Termbox{
+</span></span><span class="line"><span class="cl"> 		suspendCh: make(chan struct{}),
+</span></span><span class="line"><span class="cl"><span class="gd">-		resumeCh:  make(chan struct{}),
+</span></span></span><span class="line"><span class="cl"><span class="gd"></span><span class="gi">+		resumeCh:  make(chan chan struct{}),
+</span></span></span><span class="line"><span class="cl"><span class="gi"></span> 	}
+</span></span><span class="line"><span class="cl"> }
+</span></span></code></pre></div><p>channelを使ってchannelをやり取りすることができるので、
 <code>chan struct{}</code>をやり取りする<code>chan chan struct{}</code>という型が使えます。
 同じ要領で、channelをやり取りするchannelをやり取りするchannelをやり取り&hellip;するchannelが
 無限に作れるはずです(少なくとも構文上は)。
 ということで、実際にやってみました。</p>
 <h2 id="実験">実験</h2>
 <p>雑なPerlスクリプトを準備して、大量の<code>chan</code>を付けたGoのコードを自動生成します。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="k">print</span> <span class="s">&lt;&lt;</span><span class="dl">EOF</span><span class="s">;
-</span><span class="s">package main
-</span><span class="s">
-</span><span class="s">import (
-</span><span class="s">    &#34;fmt&#34;
-</span><span class="s">)
-</span><span class="s">
-</span><span class="s">type Foo @{[&#39;chan &#39; x 4096]} struct{}
-</span><span class="s">
-</span><span class="s">func main() {
-</span><span class="s">    fmt.Printf(&#34;Hello, %#v\\n&#34;, make(Foo))
-</span><span class="s">}
-</span><span class="s"></span><span class="dl">EOF</span>
-</code></pre></div><p><code>chan</code>の個数を変えて何度かビルドを繰り返します。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="nb">time</span> go build -o main main.go
-</code></pre></div><h2 id="結果">結果</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="line"><span class="cl"><span class="k">print</span> <span class="s">&lt;&lt;</span><span class="dl">EOF</span><span class="s">;
+</span></span></span><span class="line"><span class="cl"><span class="s">package main
+</span></span></span><span class="line"><span class="cl"><span class="s">
+</span></span></span><span class="line"><span class="cl"><span class="s">import (
+</span></span></span><span class="line"><span class="cl"><span class="s">    &#34;fmt&#34;
+</span></span></span><span class="line"><span class="cl"><span class="s">)
+</span></span></span><span class="line"><span class="cl"><span class="s">
+</span></span></span><span class="line"><span class="cl"><span class="s">type Foo @{[&#39;chan &#39; x 4096]} struct{}
+</span></span></span><span class="line"><span class="cl"><span class="s">
+</span></span></span><span class="line"><span class="cl"><span class="s">func main() {
+</span></span></span><span class="line"><span class="cl"><span class="s">    fmt.Printf(&#34;Hello, %#v\\n&#34;, make(Foo))
+</span></span></span><span class="line"><span class="cl"><span class="s">}
+</span></span></span><span class="line"><span class="cl"><span class="s"></span><span class="dl">EOF</span>
+</span></span></code></pre></div><p><code>chan</code>の個数を変えて何度かビルドを繰り返します。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="nb">time</span> go build -o main main.go
+</span></span></code></pre></div><h2 id="結果">結果</h2>
 <p>chanの個数とビルドにかかった時間をまとめてみました。</p>
 <table>
     <tr><th>chanの個数</th><th>ビルド時間</th></tr>
@@ -214,9 +214,9 @@ MathJax = {
 </table>
 <p>8192個付けたら以下のようなエラーを吐いてビルドが失敗してしまったので、
 8192個の時の記録は参考記録です。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"># command-line-arguments
-too much data in section SDWARFINFO (over 2000000000 bytes)
-</code></pre></div><p>何かビルドの設定をいじればもっと行けるかもしれませんが、
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl"># command-line-arguments
+</span></span><span class="line"><span class="cl">too much data in section SDWARFINFO (over 2000000000 bytes)
+</span></span></code></pre></div><p>何かビルドの設定をいじればもっと行けるかもしれませんが、
 デフォルトの設定では4096から8192の間に限界があるようです。
 4096個<code>chan</code>を付けたときのソースコードは20KB程度なのにバイナリサイズは524MBまで膨らんでいました。</p>
 <p>256個当たりからビルド時間に影響が出ているので、
@@ -229,49 +229,49 @@ too much data in section SDWARFINFO (over 2000000000 bytes)
 <p>そもそも、<code>chan</code>を大量に並べなくとも、
 型定義を再帰的に行えば無限の<code>chan</code>を付けたときと同等のことができます。
 例えば以下のコードで&quot;Goroutine 1&quot;と&quot;Goroutine 2&quot;を交互に表示することが可能です。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
-
-<span class="kn">import</span> <span class="p">(</span>
-	<span class="s">&#34;fmt&#34;</span>
-<span class="p">)</span>
-
-<span class="kd">type</span> <span class="nx">Foo</span> <span class="kd">chan</span> <span class="nx">Foo</span>
-
-<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
-	<span class="nx">ch</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="nx">Foo</span><span class="p">)</span>
-	<span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
-		<span class="nx">ch</span> <span class="o">:=</span> <span class="nx">ch</span>
-		<span class="k">for</span> <span class="p">{</span>
-			<span class="nx">done</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">ch</span>
-			<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;Goroutine 2&#34;</span><span class="p">)</span>
-			<span class="nx">done</span> <span class="o">&lt;-</span> <span class="nx">ch</span>
-		<span class="p">}</span>
-	<span class="p">}()</span>
-	
-	<span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="p">&lt;</span> <span class="mi">100</span><span class="p">;</span> <span class="nx">i</span><span class="o">++</span> <span class="p">{</span>
-		<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;Goroutine 1&#34;</span><span class="p">)</span>
-		<span class="nx">done</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="nx">Foo</span><span class="p">)</span>
-		<span class="nx">ch</span> <span class="o">&lt;-</span> <span class="nx">done</span>
-		<span class="nx">ch</span> <span class="p">=</span> <span class="o">&lt;-</span><span class="nx">done</span>
-	<span class="p">}</span>
-	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;Hello, playground&#34;</span><span class="p">)</span>
-<span class="p">}</span>
-</code></pre></div><p>channelでのやり取りが複雑になるので実用性があるかは不明ですが・・・。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;fmt&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">Foo</span> <span class="kd">chan</span> <span class="nx">Foo</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">ch</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="nx">Foo</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">ch</span> <span class="o">:=</span> <span class="nx">ch</span>
+</span></span><span class="line"><span class="cl">		<span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">done</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">ch</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;Goroutine 2&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">done</span> <span class="o">&lt;-</span> <span class="nx">ch</span>
+</span></span><span class="line"><span class="cl">		<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}()</span>
+</span></span><span class="line"><span class="cl">	
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="p">&lt;</span> <span class="mi">100</span><span class="p">;</span> <span class="nx">i</span><span class="o">++</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;Goroutine 1&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">done</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="nx">Foo</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">ch</span> <span class="o">&lt;-</span> <span class="nx">done</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">ch</span> <span class="p">=</span> <span class="o">&lt;-</span><span class="nx">done</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;Hello, playground&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>channelでのやり取りが複雑になるので実用性があるかは不明ですが・・・。
 例えば先程の例だと、普通にループを書いたほうが圧倒的にシンプルです。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
-
-<span class="kn">import</span> <span class="p">(</span>
-	<span class="s">&#34;fmt&#34;</span>
-<span class="p">)</span>
-
-<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
-	<span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="p">&lt;</span> <span class="mi">100</span><span class="p">;</span> <span class="nx">i</span><span class="o">++</span> <span class="p">{</span>
-		<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;Goroutine 1&#34;</span><span class="p">)</span>
-		<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;Goroutine 2&#34;</span><span class="p">)</span>
-	<span class="p">}</span>
-	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;Hello, playground&#34;</span><span class="p">)</span>
-<span class="p">}</span>
-</code></pre></div><p>無限<code>chan</code>が必要になる多くのケースは、このような書き換えができるような気がします。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;fmt&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="p">&lt;</span> <span class="mi">100</span><span class="p">;</span> <span class="nx">i</span><span class="o">++</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;Goroutine 1&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;Goroutine 2&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;Hello, playground&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>無限<code>chan</code>が必要になる多くのケースは、このような書き換えができるような気がします。
 (そもそも必要になったことがない)</p>
 <h2 id="まとめ">まとめ</h2>
 <ul>

@@ -33,7 +33,7 @@
   <meta name="author" content="ICHINOSE Shogo">
 
   
-  <meta name="generator" content="Hugo 0.91.2" />
+  <meta name="generator" content="Hugo 0.120.4">
 
 
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
@@ -166,35 +166,35 @@ Workflow の中で <code>redis-cli</code> を使いたい場合や、 macOS で�
 <p>多くの場合、リンカを直接呼び出すのではなく、 <code>gcc</code> を経由してリンクすることでしょう。
 その場合は <code>-Wl,linker-options</code> でリンカに渡すオプションを指定できます。
 例えば <code>/opt/awesome/lib</code> を検索パスとして埋め込む場合はこうです。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash">gcc -Wl,-rpath,/opt/awesome/lib main.c
-</code></pre></div><h2 id="origin-を使って相対パスを指定する"><code>$ORIGIN</code> を使って相対パスを指定する</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">gcc -Wl,-rpath,/opt/awesome/lib main.c
+</span></span></code></pre></div><h2 id="origin-を使って相対パスを指定する"><code>$ORIGIN</code> を使って相対パスを指定する</h2>
 <p>先の例では絶対パスを埋め込みました。
 <code>$ORIGIN</code> というキーワードを使うと、実行バイナリからの相対パスを指定できます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash">gcc -Wl,-rpath,<span class="s1">&#39;$ORIGIN/../lib&#39;</span> main.c
-</code></pre></div><p><code>$ORIGIN/../lib</code> をシングルクォーテーションでくくっているのがポイントです。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">gcc -Wl,-rpath,<span class="s1">&#39;$ORIGIN/../lib&#39;</span> main.c
+</span></span></code></pre></div><p><code>$ORIGIN/../lib</code> をシングルクォーテーションでくくっているのがポイントです。
 単に <code>$ORIGIN</code> と書いてしまうと、シェルに環境変数展開としてみなされてしまい、
 <code>/../lib</code> が埋め込まれるという悲しい事故が起こります (たいてい <code>ORIGIN</code> なんていう環境変数は定義していないので)。
 シングルクォーテーションでくくることで、<code>$ORIGIN</code> という文字列自体を埋め込むことができます。</p>
 <h2 id="ldflags環境変数"><code>LDFLAGS</code>　環境変数</h2>
 <p>伝統的な Makefile を使ったビルドシステムでは、 <code>LDFLAGS</code> 環境変数で、リンカにわたすオプションをカスタマイズできます。
 <code>/opt/awesome/lib</code> を検索パスに埋め込むには、事前に以下のように設定しておけば OK です。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="nb">export</span> <span class="nv">LDFLAGS</span><span class="o">=</span>-Wl,-rpath,/opt/awesome/lib
-</code></pre></div><p>さて、面倒なのがここからですよ・・・。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="nb">export</span> <span class="nv">LDFLAGS</span><span class="o">=</span>-Wl,-rpath,/opt/awesome/lib
+</span></span></code></pre></div><p>さて、面倒なのがここからですよ・・・。</p>
 <p><code>$ORIGIN/../lib</code> を埋め込むにはこうです。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="nb">export</span> <span class="nv">LDFLAGS</span><span class="o">=</span>-Wl,-rpath,<span class="s1">&#39;\$$ORIGIN/../lib&#39;</span>
-</code></pre></div><p>最終的に得たいのは <code>$ORIGIN/../lib</code> なのに、
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="nb">export</span> <span class="nv">LDFLAGS</span><span class="o">=</span>-Wl,-rpath,<span class="s1">&#39;\$$ORIGIN/../lib&#39;</span>
+</span></span></code></pre></div><p>最終的に得たいのは <code>$ORIGIN/../lib</code> なのに、
 <code>'\$$ORIGIN/../lib'</code> となんだかたくさん記号が増えています。
 なぜこんなことになるのか、簡単な Makefile で試してみましょう。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-makefile" data-lang="makefile"><span class="nf">all</span><span class="o">:</span>
-	<span class="nb">echo</span> <span class="k">$(</span>LDFLAGS<span class="k">)</span>
-</code></pre></div><p><code>LDFLAGS</code> 環境変数を設定して <code>make</code> してみます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash">$ <span class="nb">export</span> <span class="nv">LDFLAGS</span><span class="o">=</span>-Wl,-rpath,<span class="s1">&#39;\$$ORIGIN/../lib&#39;</span>
-$ <span class="nb">echo</span> <span class="nv">$LDFLAGS</span>
--Wl,-rpath,<span class="se">\$</span><span class="nv">$ORIGIN</span>/../lib
-$ make
-<span class="nb">echo</span> -Wl,-rpath,<span class="se">\$</span>ORIGIN/../lib
--Wl,-rpath,<span class="nv">$ORIGIN</span>/../lib
-</code></pre></div><p>何が起こっているかというと、</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-makefile" data-lang="makefile"><span class="line"><span class="cl"><span class="nf">all</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">	<span class="nb">echo</span> <span class="k">$(</span>LDFLAGS<span class="k">)</span>
+</span></span></code></pre></div><p><code>LDFLAGS</code> 環境変数を設定して <code>make</code> してみます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">$ <span class="nb">export</span> <span class="nv">LDFLAGS</span><span class="o">=</span>-Wl,-rpath,<span class="s1">&#39;\$$ORIGIN/../lib&#39;</span>
+</span></span><span class="line"><span class="cl">$ <span class="nb">echo</span> <span class="nv">$LDFLAGS</span>
+</span></span><span class="line"><span class="cl">-Wl,-rpath,<span class="se">\$</span><span class="nv">$ORIGIN</span>/../lib
+</span></span><span class="line"><span class="cl">$ make
+</span></span><span class="line"><span class="cl"><span class="nb">echo</span> -Wl,-rpath,<span class="se">\$</span>ORIGIN/../lib
+</span></span><span class="line"><span class="cl">-Wl,-rpath,<span class="nv">$ORIGIN</span>/../lib
+</span></span></code></pre></div><p>何が起こっているかというと、</p>
 <ul>
 <li><code>export LDFLAGS=-Wl,-rpath,'\$$ORIGIN/../lib'</code></li>
 <li>→ bash → <code>-Wl,-rpath,\$$ORIGIN/../lib</code> (環境変数の設定時に bash が変数展開)</li>
@@ -209,8 +209,8 @@ $ make
 <li><code>$ORIGIN</code> で実行バイナリからの相対パスも指定できるよ。</li>
 <li><code>LDFLAGS</code> 環境変数で指定しようとすると、そこは魔境だった。</li>
 </ul>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="nb">export</span> <span class="nv">LDFLAGS</span><span class="o">=</span>-Wl,-rpath,<span class="s1">&#39;\$$ORIGIN/../lib&#39;</span>
-</code></pre></div><h2 id="参考">参考</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="nb">export</span> <span class="nv">LDFLAGS</span><span class="o">=</span>-Wl,-rpath,<span class="s1">&#39;\$$ORIGIN/../lib&#39;</span>
+</span></span></code></pre></div><h2 id="参考">参考</h2>
 <ul>
 <li><a href="https://github.com/marketplace/actions/actions-setup-redis">actions-setup-redis</a></li>
 <li><a href="https://github.com/shogo82148/actions-setup-redis/issues/375">Add support for building redis with TLS support #375</a></li>

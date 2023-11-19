@@ -33,7 +33,7 @@
   <meta name="author" content="ICHINOSE Shogo">
 
   
-  <meta name="generator" content="Hugo 0.91.2" />
+  <meta name="generator" content="Hugo 0.120.4">
 
 
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
@@ -147,171 +147,171 @@ MathJax = {
 <!-- More -->
 <h2 id="ディレクトリトラバーサル脆弱性">ディレクトリトラバーサル脆弱性</h2>
 <p>紹介されているのは以下のコードです。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="nx">http</span><span class="p">.</span><span class="nf">HandleFunc</span><span class="p">(</span><span class="s">&#34;/static/&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
-  <span class="nx">http</span><span class="p">.</span><span class="nf">ServeFile</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">,</span> <span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
-<span class="p">})</span>
-</code></pre></div><p>しかし、参照先の「<a href="http://stackoverflow.com/questions/25945538/go-golang-to-serve-a-specific-html-file">Go Golang to serve a specific html file</a>」には
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="nx">http</span><span class="p">.</span><span class="nf">HandleFunc</span><span class="p">(</span><span class="s">&#34;/static/&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">http</span><span class="p">.</span><span class="nf">ServeFile</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">,</span> <span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>しかし、参照先の「<a href="http://stackoverflow.com/questions/25945538/go-golang-to-serve-a-specific-html-file">Go Golang to serve a specific html file</a>」には
 <strong>Actually, do not do that.</strong> (やっちゃいけない)とコメントされています。
 <a href="https://ja.wikipedia.org/wiki/%E3%83%87%E3%82%A3%E3%83%AC%E3%82%AF%E3%83%88%E3%83%AA%E3%83%88%E3%83%A9%E3%83%90%E3%83%BC%E3%82%B5%E3%83%AB">ディレクトリトラバーサル</a>により
 脆弱性の原因となってしまう可能性があるためです。</p>
 <p>脆弱性再現のために、以下の様なコードを書いてGo1.5でコンパイルして実行してみました。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
-
-<span class="kn">import</span> <span class="p">(</span>
-	<span class="s">&#34;net/http&#34;</span>
-	<span class="s">&#34;strings&#34;</span>
-<span class="p">)</span>
-
-<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
-	<span class="nx">http</span><span class="p">.</span><span class="nf">ListenAndServe</span><span class="p">(</span><span class="s">&#34;:3000&#34;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nf">HandlerFunc</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
-		<span class="k">if</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">HasPrefix</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">,</span> <span class="s">&#34;/static/&#34;</span><span class="p">)</span> <span class="p">{</span>
-			<span class="nx">http</span><span class="p">.</span><span class="nf">ServeFile</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">,</span> <span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
-		<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-			<span class="nx">http</span><span class="p">.</span><span class="nf">NotFound</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">)</span>
-		<span class="p">}</span>
-	<span class="p">}))</span>
-<span class="p">}</span>
-</code></pre></div><p><code>..</code>を含んだパスをリクエストしてみます。(実行した場所によって<code>..</code>の数は変わるので適宜調整してみてください)</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain">$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
-* About to connect() to localhost port 3000 (#0)
-*   Trying ::1... connected
-* Connected to localhost (::1) port 3000 (#0)
-&gt; GET /static/../../../.ssh/id_rsa HTTP/1.1
-&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
-&gt; Host: localhost:3000
-&gt; Accept: */*
-&gt;
-&lt; HTTP/1.1 200 OK
-&lt; Accept-Ranges: bytes
-&lt; Content-Length: 1679
-&lt; Content-Type: text/plain; charset=utf-8
-&lt; Last-Modified: Fri, 13 Jun 2014 04:57:05 GMT
-&lt; Date: Tue, 12 Apr 2016 17:53:19 GMT
-&lt;
------BEGIN RSA PRIVATE KEY-----
-(中略)
------END RSA PRIVATE KEY-----
-* Connection #0 to host localhost left intact
-* Closing connection #0
-</code></pre></div><p>macのcurlで試したらクライアント側で相対パスを解決した状態でリクエストが飛んでしまって上手く行きませんでした。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;net/http&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;strings&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">http</span><span class="p">.</span><span class="nf">ListenAndServe</span><span class="p">(</span><span class="s">&#34;:3000&#34;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nf">HandlerFunc</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="k">if</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">HasPrefix</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">,</span> <span class="s">&#34;/static/&#34;</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">http</span><span class="p">.</span><span class="nf">ServeFile</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">,</span> <span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
+</span></span><span class="line"><span class="cl">		<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">http</span><span class="p">.</span><span class="nf">NotFound</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}))</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p><code>..</code>を含んだパスをリクエストしてみます。(実行した場所によって<code>..</code>の数は変わるので適宜調整してみてください)</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
+</span></span><span class="line"><span class="cl">* About to connect() to localhost port 3000 (#0)
+</span></span><span class="line"><span class="cl">*   Trying ::1... connected
+</span></span><span class="line"><span class="cl">* Connected to localhost (::1) port 3000 (#0)
+</span></span><span class="line"><span class="cl">&gt; GET /static/../../../.ssh/id_rsa HTTP/1.1
+</span></span><span class="line"><span class="cl">&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
+</span></span><span class="line"><span class="cl">&gt; Host: localhost:3000
+</span></span><span class="line"><span class="cl">&gt; Accept: */*
+</span></span><span class="line"><span class="cl">&gt;
+</span></span><span class="line"><span class="cl">&lt; HTTP/1.1 200 OK
+</span></span><span class="line"><span class="cl">&lt; Accept-Ranges: bytes
+</span></span><span class="line"><span class="cl">&lt; Content-Length: 1679
+</span></span><span class="line"><span class="cl">&lt; Content-Type: text/plain; charset=utf-8
+</span></span><span class="line"><span class="cl">&lt; Last-Modified: Fri, 13 Jun 2014 04:57:05 GMT
+</span></span><span class="line"><span class="cl">&lt; Date: Tue, 12 Apr 2016 17:53:19 GMT
+</span></span><span class="line"><span class="cl">&lt;
+</span></span><span class="line"><span class="cl">-----BEGIN RSA PRIVATE KEY-----
+</span></span><span class="line"><span class="cl">(中略)
+</span></span><span class="line"><span class="cl">-----END RSA PRIVATE KEY-----
+</span></span><span class="line"><span class="cl">* Connection #0 to host localhost left intact
+</span></span><span class="line"><span class="cl">* Closing connection #0
+</span></span></code></pre></div><p>macのcurlで試したらクライアント側で相対パスを解決した状態でリクエストが飛んでしまって上手く行きませんでした。
 オプションで外す方法がよくわかなかったので、<code>telnet</code>で叩いてみた例も載せておきます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain">$ telnet localhost 3000
-Trying ::1...
-Connected to localhost.
-Escape character is &#39;^]&#39;.
-GET /static/../../../.ssh/id_rsa HTTP/1.0
-
-HTTP/1.0 200 OK
-Accept-Ranges: bytes
-Content-Length: 1679
-Content-Type: text/plain; charset=utf-8
-Last-Modified: Fri, 13 Jun 2014 04:57:05 GMT
-Date: Tue, 12 Apr 2016 18:02:56 GMT
-
------BEGIN RSA PRIVATE KEY-----
-(中略)
------END RSA PRIVATE KEY-----
-Connection closed by foreign host.
-</code></pre></div><p>ああ、僕の秘密鍵が・・・。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">$ telnet localhost 3000
+</span></span><span class="line"><span class="cl">Trying ::1...
+</span></span><span class="line"><span class="cl">Connected to localhost.
+</span></span><span class="line"><span class="cl">Escape character is &#39;^]&#39;.
+</span></span><span class="line"><span class="cl">GET /static/../../../.ssh/id_rsa HTTP/1.0
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">HTTP/1.0 200 OK
+</span></span><span class="line"><span class="cl">Accept-Ranges: bytes
+</span></span><span class="line"><span class="cl">Content-Length: 1679
+</span></span><span class="line"><span class="cl">Content-Type: text/plain; charset=utf-8
+</span></span><span class="line"><span class="cl">Last-Modified: Fri, 13 Jun 2014 04:57:05 GMT
+</span></span><span class="line"><span class="cl">Date: Tue, 12 Apr 2016 18:02:56 GMT
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">-----BEGIN RSA PRIVATE KEY-----
+</span></span><span class="line"><span class="cl">(中略)
+</span></span><span class="line"><span class="cl">-----END RSA PRIVATE KEY-----
+</span></span><span class="line"><span class="cl">Connection closed by foreign host.
+</span></span></code></pre></div><p>ああ、僕の秘密鍵が・・・。</p>
 <h2 id="脆弱性を回避する">脆弱性を回避する</h2>
 <h3 id="go16以降を使う">Go1.6以降を使う</h3>
 <p>Go1.6以降では修正されており、
 同じコードをGo1.6でコンパイルしてcurlで叩くと400が帰ってきます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain">$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
-* About to connect() to localhost port 3000 (#0)
-*   Trying ::1... connected
-* Connected to localhost (::1) port 3000 (#0)
-&gt; GET /static/../../../.ssh/id_rsa HTTP/1.1
-&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
-&gt; Host: localhost:3000
-&gt; Accept: */*
-&gt; 
-&lt; HTTP/1.1 400 Bad Request
-&lt; Content-Type: text/plain; charset=utf-8
-&lt; X-Content-Type-Options: nosniff
-&lt; Date: Tue, 12 Apr 2016 18:12:46 GMT
-&lt; Content-Length: 17
-&lt; 
-invalid URL path
-* Connection #0 to host localhost left intact
-* Closing connection #0
-</code></pre></div><h3 id="httpservemuxを使う"><code>http.ServeMux</code>を使う</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
+</span></span><span class="line"><span class="cl">* About to connect() to localhost port 3000 (#0)
+</span></span><span class="line"><span class="cl">*   Trying ::1... connected
+</span></span><span class="line"><span class="cl">* Connected to localhost (::1) port 3000 (#0)
+</span></span><span class="line"><span class="cl">&gt; GET /static/../../../.ssh/id_rsa HTTP/1.1
+</span></span><span class="line"><span class="cl">&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
+</span></span><span class="line"><span class="cl">&gt; Host: localhost:3000
+</span></span><span class="line"><span class="cl">&gt; Accept: */*
+</span></span><span class="line"><span class="cl">&gt; 
+</span></span><span class="line"><span class="cl">&lt; HTTP/1.1 400 Bad Request
+</span></span><span class="line"><span class="cl">&lt; Content-Type: text/plain; charset=utf-8
+</span></span><span class="line"><span class="cl">&lt; X-Content-Type-Options: nosniff
+</span></span><span class="line"><span class="cl">&lt; Date: Tue, 12 Apr 2016 18:12:46 GMT
+</span></span><span class="line"><span class="cl">&lt; Content-Length: 17
+</span></span><span class="line"><span class="cl">&lt; 
+</span></span><span class="line"><span class="cl">invalid URL path
+</span></span><span class="line"><span class="cl">* Connection #0 to host localhost left intact
+</span></span><span class="line"><span class="cl">* Closing connection #0
+</span></span></code></pre></div><h3 id="httpservemuxを使う"><code>http.ServeMux</code>を使う</h3>
 <p><code>http.ServeMux</code>にはパスの正規化機能が組み込まれており、
 正規化されていないURLにアクセスが来た場合は自動的リダイレクトしてくれるようです。
 HTTPハンドラに渡ってくるときには、必ず相対パスが含まれていない状態になっています。
 (これに最初は気が付かず、脆弱性が再現しないので困ってた。)</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
-
-<span class="kn">import</span> <span class="s">&#34;net/http&#34;</span>
-
-<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
-  <span class="c1">// 内部でhttp.ServeMuxを使ってくれる
-</span><span class="c1"></span>  <span class="nx">http</span><span class="p">.</span><span class="nf">HandleFunc</span><span class="p">(</span><span class="s">&#34;/static/&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
-    <span class="c1">// r.URLには相対パスが含まれない形で渡ってくる
-</span><span class="c1"></span>    <span class="nx">http</span><span class="p">.</span><span class="nf">ServeFile</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">,</span> <span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
-  <span class="p">})</span>
-  <span class="nx">http</span><span class="p">.</span><span class="nf">ListenAndServe</span><span class="p">(</span><span class="s">&#34;:3000&#34;</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
-<span class="p">}</span>
-</code></pre></div><p>相対パスを含んだリクエストを投げてもアクセスはできません。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain">$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
-* About to connect() to localhost port 3000 (#0)
-*   Trying ::1... connected
-* Connected to localhost (::1) port 3000 (#0)
-&gt; GET /static/../../../.ssh/id_rsa HTTP/1.1
-&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
-&gt; Host: localhost:3000
-&gt; Accept: */*
-&gt; 
-&lt; HTTP/1.1 301 Moved Permanently
-&lt; Location: /.ssh/id_rsa
-&lt; Date: Tue, 12 Apr 2016 18:14:49 GMT
-&lt; Content-Length: 47
-&lt; Content-Type: text/html; charset=utf-8
-&lt; 
-&lt;a href=&#34;/.ssh/id_rsa&#34;&gt;Moved Permanently&lt;/a&gt;.
-
-* Connection #0 to host localhost left intact
-* Closing connection #0
-</code></pre></div><h3 id="httpfileserverを使う"><code>http.FileServer</code>を使う</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="s">&#34;net/http&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="c1">// 内部でhttp.ServeMuxを使ってくれる
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="nx">http</span><span class="p">.</span><span class="nf">HandleFunc</span><span class="p">(</span><span class="s">&#34;/static/&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// r.URLには相対パスが含まれない形で渡ってくる
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">http</span><span class="p">.</span><span class="nf">ServeFile</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">,</span> <span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
+</span></span><span class="line"><span class="cl">  <span class="p">})</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">http</span><span class="p">.</span><span class="nf">ListenAndServe</span><span class="p">(</span><span class="s">&#34;:3000&#34;</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>相対パスを含んだリクエストを投げてもアクセスはできません。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
+</span></span><span class="line"><span class="cl">* About to connect() to localhost port 3000 (#0)
+</span></span><span class="line"><span class="cl">*   Trying ::1... connected
+</span></span><span class="line"><span class="cl">* Connected to localhost (::1) port 3000 (#0)
+</span></span><span class="line"><span class="cl">&gt; GET /static/../../../.ssh/id_rsa HTTP/1.1
+</span></span><span class="line"><span class="cl">&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
+</span></span><span class="line"><span class="cl">&gt; Host: localhost:3000
+</span></span><span class="line"><span class="cl">&gt; Accept: */*
+</span></span><span class="line"><span class="cl">&gt; 
+</span></span><span class="line"><span class="cl">&lt; HTTP/1.1 301 Moved Permanently
+</span></span><span class="line"><span class="cl">&lt; Location: /.ssh/id_rsa
+</span></span><span class="line"><span class="cl">&lt; Date: Tue, 12 Apr 2016 18:14:49 GMT
+</span></span><span class="line"><span class="cl">&lt; Content-Length: 47
+</span></span><span class="line"><span class="cl">&lt; Content-Type: text/html; charset=utf-8
+</span></span><span class="line"><span class="cl">&lt; 
+</span></span><span class="line"><span class="cl">&lt;a href=&#34;/.ssh/id_rsa&#34;&gt;Moved Permanently&lt;/a&gt;.
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">* Connection #0 to host localhost left intact
+</span></span><span class="line"><span class="cl">* Closing connection #0
+</span></span></code></pre></div><h3 id="httpfileserverを使う"><code>http.FileServer</code>を使う</h3>
 <p><code>http.Dir</code>と<code>http.FileServer</code>を使うとルートディレクトリを指定でき、
 その外へはアクセスできなくなるので想定外のファイルが見えてしまうことはありません。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
-
-<span class="kn">import</span> <span class="p">(</span>
-  <span class="s">&#34;net/http&#34;</span>
-  <span class="s">&#34;strings&#34;</span>
-<span class="p">)</span>
-
-<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
-  <span class="nx">fileServer</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nf">StripPrefix</span><span class="p">(</span><span class="s">&#34;/static/&#34;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nf">FileServer</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nf">Dir</span><span class="p">(</span><span class="s">&#34;static&#34;</span><span class="p">)))</span>
-  <span class="nx">http</span><span class="p">.</span><span class="nf">ListenAndServe</span><span class="p">(</span><span class="s">&#34;:3000&#34;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nf">HandlerFunc</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
-    <span class="k">if</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">HasPrefix</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">,</span> <span class="s">&#34;/static/&#34;</span><span class="p">)</span> <span class="p">{</span>
-      <span class="nx">fileServer</span><span class="p">.</span><span class="nf">ServeHTTP</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">)</span>
-    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-      <span class="nx">http</span><span class="p">.</span><span class="nf">NotFound</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">)</span>
-	<span class="p">}</span>
-  <span class="p">}))</span>
-<span class="p">}</span>
-</code></pre></div><p>相対パスを含んだURLにアクセスしても404になって見れません。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain">$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
-* About to connect() to localhost port 3000 (#0)
-*   Trying ::1... connected
-* Connected to localhost (::1) port 3000 (#0)
-&gt; GET /static/../../../.ssh/id_rsa HTTP/1.1
-&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
-&gt; Host: localhost:3000
-&gt; Accept: */*
-&gt; 
-&lt; HTTP/1.1 404 Not Found
-&lt; Content-Type: text/plain; charset=utf-8
-&lt; X-Content-Type-Options: nosniff
-&lt; Date: Tue, 12 Apr 2016 18:39:34 GMT
-&lt; Content-Length: 19
-&lt; 
-404 page not found
-* Connection #0 to host localhost left intact
-* Closing connection #0
-</code></pre></div><h3 id="httpservefileに定数を渡す"><code>http.ServeFile</code>に定数を渡す</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">  <span class="s">&#34;net/http&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="s">&#34;strings&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">fileServer</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nf">StripPrefix</span><span class="p">(</span><span class="s">&#34;/static/&#34;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nf">FileServer</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nf">Dir</span><span class="p">(</span><span class="s">&#34;static&#34;</span><span class="p">)))</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">http</span><span class="p">.</span><span class="nf">ListenAndServe</span><span class="p">(</span><span class="s">&#34;:3000&#34;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nf">HandlerFunc</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">HasPrefix</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="p">,</span> <span class="s">&#34;/static/&#34;</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">fileServer</span><span class="p">.</span><span class="nf">ServeHTTP</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">http</span><span class="p">.</span><span class="nf">NotFound</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}))</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>相対パスを含んだURLにアクセスしても404になって見れません。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">$ curl -v http://localhost:3000/static/../../../.ssh/id_rsa
+</span></span><span class="line"><span class="cl">* About to connect() to localhost port 3000 (#0)
+</span></span><span class="line"><span class="cl">*   Trying ::1... connected
+</span></span><span class="line"><span class="cl">* Connected to localhost (::1) port 3000 (#0)
+</span></span><span class="line"><span class="cl">&gt; GET /static/../../../.ssh/id_rsa HTTP/1.1
+</span></span><span class="line"><span class="cl">&gt; User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.19.1 Basic ECC zlib/1.2.3 libidn/1.18 libssh2/1.4.2
+</span></span><span class="line"><span class="cl">&gt; Host: localhost:3000
+</span></span><span class="line"><span class="cl">&gt; Accept: */*
+</span></span><span class="line"><span class="cl">&gt; 
+</span></span><span class="line"><span class="cl">&lt; HTTP/1.1 404 Not Found
+</span></span><span class="line"><span class="cl">&lt; Content-Type: text/plain; charset=utf-8
+</span></span><span class="line"><span class="cl">&lt; X-Content-Type-Options: nosniff
+</span></span><span class="line"><span class="cl">&lt; Date: Tue, 12 Apr 2016 18:39:34 GMT
+</span></span><span class="line"><span class="cl">&lt; Content-Length: 19
+</span></span><span class="line"><span class="cl">&lt; 
+</span></span><span class="line"><span class="cl">404 page not found
+</span></span><span class="line"><span class="cl">* Connection #0 to host localhost left intact
+</span></span><span class="line"><span class="cl">* Closing connection #0
+</span></span></code></pre></div><h3 id="httpservefileに定数を渡す"><code>http.ServeFile</code>に定数を渡す</h3>
 <p>どうしても特定のファイルを指定したい場合は、<code>http.ServeFile</code>に渡すファイルパスを定数で指定するべきです。
 例えば、「<a href="http://stackoverflow.com/questions/25945538/go-golang-to-serve-a-specific-html-file">Go Golang to serve a specific html file</a>」の質問者が上げている例を
 正しく書きなおすと以下のようになると思います。</p>
@@ -323,17 +323,17 @@ Serves the html file in static directory.</p>
 <p>I want to do something like:</p>
 <p><code>http.Handle(&quot;/hello&quot;, http.FileServer(http.Dir(&quot;static/hello.html&quot;)))</code></p>
 </blockquote>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
-
-<span class="kn">import</span> <span class="s">&#34;net/http&#34;</span>
-
-<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
-  <span class="nx">http</span><span class="p">.</span><span class="nf">HandleFunc</span><span class="p">(</span><span class="s">&#34;/hello&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
-    <span class="nx">http</span><span class="p">.</span><span class="nf">ServeFile</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">,</span> <span class="s">&#34;static/hello.html&#34;</span><span class="p">)</span>
-  <span class="p">})</span>
-  <span class="nx">http</span><span class="p">.</span><span class="nf">ListenAndServe</span><span class="p">(</span><span class="s">&#34;:3000&#34;</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
-<span class="p">}</span>
-</code></pre></div><p>回答者がActually, do not do thatとコメントしているのは<code>http.ServeFile</code>に<code>r.URL.Path[1:]</code>を渡すことで、
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="s">&#34;net/http&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">http</span><span class="p">.</span><span class="nf">HandleFunc</span><span class="p">(</span><span class="s">&#34;/hello&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">http</span><span class="p">.</span><span class="nf">ServeFile</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="nx">r</span><span class="p">,</span> <span class="s">&#34;static/hello.html&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">})</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">http</span><span class="p">.</span><span class="nf">ListenAndServe</span><span class="p">(</span><span class="s">&#34;:3000&#34;</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>回答者がActually, do not do thatとコメントしているのは<code>http.ServeFile</code>に<code>r.URL.Path[1:]</code>を渡すことで、
 <code>http.ServeFile</code>自体が悪いわけではありません。
 正しく安全に使いましょう。</p>
 <h2 id="まとめ">まとめ</h2>
@@ -345,15 +345,15 @@ Serves the html file in static directory.</p>
 </ul>
 <h2 id="まとめのまとめ">まとめのまとめ</h2>
 <p><a href="https://golang.org/pkg/net/http/#example_FileServer">godocのexample</a>どおりにやるのが一番。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
-
-<span class="kn">import</span> <span class="s">&#34;net/http&#34;</span>
-
-<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
-  <span class="nx">http</span><span class="p">.</span><span class="nf">HandleFunc</span><span class="p">(</span><span class="s">&#34;/static/&#34;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nf">StripPrefix</span><span class="p">(</span><span class="s">&#34;/static/&#34;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nf">FileServer</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nf">Dir</span><span class="p">(</span><span class="s">&#34;static&#34;</span><span class="p">))))</span>
-  <span class="nx">http</span><span class="p">.</span><span class="nf">ListenAndServe</span><span class="p">(</span><span class="s">&#34;:3000&#34;</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
-<span class="p">}</span>
-</code></pre></div>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="s">&#34;net/http&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">http</span><span class="p">.</span><span class="nf">HandleFunc</span><span class="p">(</span><span class="s">&#34;/static/&#34;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nf">StripPrefix</span><span class="p">(</span><span class="s">&#34;/static/&#34;</span><span class="p">,</span> <span class="nx">http</span><span class="p">.</span><span class="nf">FileServer</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nf">Dir</span><span class="p">(</span><span class="s">&#34;static&#34;</span><span class="p">))))</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">http</span><span class="p">.</span><span class="nf">ListenAndServe</span><span class="p">(</span><span class="s">&#34;:3000&#34;</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div>
         </div>
         
 

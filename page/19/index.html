@@ -33,7 +33,7 @@
   <meta name="author" content="ICHINOSE Shogo">
 
   
-  <meta name="generator" content="Hugo 0.91.2" />
+  <meta name="generator" content="Hugo 0.120.4">
 
 
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
@@ -137,11 +137,11 @@ MathJax = {
         
           <p>ぴっぴ先輩が「Go言語で発行したクエリを確認したい」って言ってて、 「MySQL使っているならGeneral Logを吐けばよいのでは？」と返したんだけども、 もっと汎用的な方法はないものかと考えてみました。
 Golangの database/sql はどんなDBでも対応できるよう、ドライバを自由に入れ替えることができます。 ドライバは単にdatabase/sql/driverにあるインターフェースを満たしている何かなので、 ユーザが自由に作ることができるし、interfaceを経由して直接呼び出すことも可能です。 この仕組を使って、別のドライバにそのまま渡すプロキシを作れば、ログを吐けるのでは？ということでやってみました。
- go-sql-proxy  使い方 まず最初にgo-sql-proxyをドライバとして登録します。
+go-sql-proxy 使い方 まず最初にgo-sql-proxyをドライバとして登録します。
 hooks := &amp;proxy.Hooks{ // Hook functions here(Open, Exec, Query, etc.) } sql.Register(&#34;new-proxy-name&#34;, proxy.NewProxy(&amp;another.Driver{}, hooks)) あとは登録したドライバと使って新しいDBハンドラを開くだけです。
 db, err := sql.Open(&#34;new-proxy-name&#34;, dataSourceName) このハンドラを使ってクエリ実行を行うと、Hooksで登録した関数が呼び出されます。 元のドライバを直接使った場合と同じように振る舞うので、既存のコードを一切変えること無くHookを差し込めて便利！
 トレーサの例 簡単なトレーサを書いてみるとこんな感じ。 発行したSQLのクエリをログに吐き出します。
-package proxy import ( &#34;database/sql&#34; &#34;database/sql/driver&#34; &#34;log&#34; &#34;github.com/mattn/go-sqlite3&#34; &#34;github.com/shogo82148/txmanager&#34; ) func main() { sql.Register(&#34;sqlite3-proxy&#34;, NewProxy(&amp;sqlite3.SQLiteDriver{}, &amp;Hooks{ Open: func(conn *Conn) error { log.Println(&#34;Open&#34;) return nil }, Exec: func(stmt *Stmt, args []driver.Value, result driver.</p>
+package proxy import ( &#34;database/sql&#34; &#34;database/sql/driver&#34; &#34;log&#34; &#34;github.com/mattn/go-sqlite3&#34; &#34;github.com/shogo82148/txmanager&#34; ) func main() { sql.Register(&#34;sqlite3-proxy&#34;, NewProxy(&amp;sqlite3.SQLiteDriver{}, &amp;Hooks{ Open: func(conn *Conn) error { log.Println(&#34;Open&#34;) return nil }, Exec: func(stmt *Stmt, args []driver.Value, result driver.Result) error { log.</p>
           
             <footer>
               <a href="https://shogo82148.github.io/blog/2015/05/13/golang-sql-proxy/" rel="full-article">Read On &rarr;</a>
@@ -171,9 +171,9 @@ package proxy import ( &#34;database/sql&#34; &#34;database/sql/driver&#34; &#34
 
         
           <p>Golangのdatabase/sqlはBeginとCommitでトランザクションの制御を行うことができます。 クエリの実行が確実に成功するのであれば難しくは無いのですが、 トランザクション内でエラーが発生場合、確実にトランザクションを終了させるのは少し面倒です。 また、ネストができないので、「トランザクションの中から呼び出しても外から呼び出しても、関数の中はトランザクション内」みたいなことができません。 PerlにはDBIx-TransactionManagerというものがあるのですが、 このGolang版が欲しくなったので作ってみました。
- txmanager  簡単な使い方 sql.DB をラップした txmanager.DB を使います。 Begin, Commit する代わりに TxBegin, TxCommit を使ってトランザクションを開始・終了すると txmanagerの管理下になります。 確実にトランザクションが終了させるために、トランザクションを開始したらdefer tx.TxFinish()を忘れないように。
-import ( &#34;database/sql&#34; &#34;github.com/shogo82148/txmanager&#34; ) func Example(db *sql.DB) { dbm := txmanager.NewDB(db) // トランザクション開始 	tx, _ := dbm.TxBegin() defer tx.TxFinish() // INSERTはトランザクションの中で実行される 	_, err := tx.Exec(&#34;INSERT INTO t1 (id) VALUES(1)&#34;) if err != nil { tx.TxRollback() } tx.TxCommit() } 実際にはこれに加えてエラー処理も必要です。 txmanager.Do を使うと、トランザクションの開始処理・終了をtxmangerがやってくれるので少し楽になります。
-import ( &#34;database/sql&#34; &#34;github.</p>
+txmanager 簡単な使い方 sql.DB をラップした txmanager.DB を使います。 Begin, Commit する代わりに TxBegin, TxCommit を使ってトランザクションを開始・終了すると txmanagerの管理下になります。 確実にトランザクションが終了させるために、トランザクションを開始したらdefer tx.TxFinish()を忘れないように。
+import ( &#34;database/sql&#34; &#34;github.com/shogo82148/txmanager&#34; ) func Example(db *sql.DB) { dbm := txmanager.NewDB(db) // トランザクション開始 tx, _ := dbm.TxBegin() defer tx.TxFinish() // INSERTはトランザクションの中で実行される _, err := tx.Exec(&#34;INSERT INTO t1 (id) VALUES(1)&#34;) if err != nil { tx.TxRollback() } tx.TxCommit() } 実際にはこれに加えてエラー処理も必要です。 txmanager.Do を使うと、トランザクションの開始処理・終了をtxmangerがやってくれるので少し楽になります。
+import ( &#34;database/sql&#34; &#34;github.com/shogo82148/txmanager&#34; ) func Example(db *sql.</p>
           
             <footer>
               <a href="https://shogo82148.github.io/blog/2015/05/09/go-txmanager/" rel="full-article">Read On &rarr;</a>
@@ -269,7 +269,7 @@ package main import ( &#34;image&#34; &#34;image/color/palette&#34; &#34;image/g
 
         
           <p>Fisher-Yates shuffleを使ってシャッフルライブラリ作ってみました。
- https://github.com/shogo82148/go-shuffle  標準ライブラリのsortと似たような感じで使えます。 デフォルトでintとfloat64とstringのシャッフルに対応していて、 他の型をシャッフルしたい場合はインターフェースを実装してね、って感じです。 実装が簡単なので、インターフェース定義する手間とシャッフルのアルゴリズム自前で書く手間ほとんど一緒ではという気もするけど、 まあライブラリ作成の練習ってことで。
+https://github.com/shogo82148/go-shuffle 標準ライブラリのsortと似たような感じで使えます。 デフォルトでintとfloat64とstringのシャッフルに対応していて、 他の型をシャッフルしたい場合はインターフェースを実装してね、って感じです。 実装が簡単なので、インターフェース定義する手間とシャッフルのアルゴリズム自前で書く手間ほとんど一緒ではという気もするけど、 まあライブラリ作成の練習ってことで。
 で、ここからが本題。 Fisher-Yates shuffleの名前は以前から知ってたけど、 この前某プロジェクトで以下のようなshuffleの実装を発見。
 package main import &#34;math/rand&#34; func shuffle(a []int) { for i := range a { j := rand.Intn(i + 1) a[i], a[j] = a[j], a[i] } } Fisher-Yates shuffleと似ているけど、なにかが違う。 ちゃんとシャッフルされているのか気になったので検証してみました。
 検証 n個の数列をシャッフルすることを考えます。 シャッフルの後i番目の要素がj番目に移動する確率を $P_n(i, j)$ と定義します(golangのコードにあわせて0-originで考えます)。
@@ -313,7 +313,7 @@ nginxにレスポンス吐かせる Nginxのレスポンスタイムをパーセ
 MySQLにSlowQuery吐かせる トップページが重いっぽいというのはわかったものの、 どのクエリが重いかまでは分からない(もちろんコード読んでたので検討はついてたけど)ので、 処理に0.1秒以上かかっているクエリを吐くようにしました。
 インデックスの追加 既存のコードに触れずにお手軽ってことで、まずはDBにインデックスを張るところから。 workload10で、99583から101033にスコアアップ！ まあ、他のボトルネックを潰していない段階だとこんなもんでしょうね・・・。
 ループクエリ・無駄クエリの削除 明らかに無駄クエリっぽいところがあったのでそこを修正しました。
- 投稿100件取得したあとに、100回ユーザ名の取得処理をしている  JOINを使って書き換えました 実行計画が狂って逆に遅くなるという事態に陥ったので、IGNORE INDEXとかして頑張った   ユーザの投稿を全取得してるのに、最新1件の情報しか使ってないところ  LIMITをつけて制限   全投稿をCOUNTしているところ  せっかくGolang使ってるんだから楽しようと、グローバル変数に突っ込んでcount++してみた    「グローバル変数に突っ込んでみた」対策みたいに、下手にアプリサーバで情報を保持すると DBとアプリサーバに差ができてしまうので、実運用では避けるべきテクニックですね。 あとになって考えると、ベンチ回す前にアプリサーバの再起動忘れてたのにベンチ通ってたので、 投稿数数えなくてもよかったのでは・・・。
+投稿100件取得したあとに、100回ユーザ名の取得処理をしている JOINを使って書き換えました 実行計画が狂って逆に遅くなるという事態に陥ったので、IGNORE INDEXとかして頑張った ユーザの投稿を全取得してるのに、最新1件の情報しか使ってないところ LIMITをつけて制限 全投稿をCOUNTしているところ せっかくGolang使ってるんだから楽しようと、グローバル変数に突っ込んでcount++してみた 「グローバル変数に突っ込んでみた」対策みたいに、下手にアプリサーバで情報を保持すると DBとアプリサーバに差ができてしまうので、実運用では避けるべきテクニックですね。 あとになって考えると、ベンチ回す前にアプリサーバの再起動忘れてたのにベンチ通ってたので、 投稿数数えなくてもよかったのでは・・・。
 nginxによる静的ファイルの配信 cssとかjsをGolangでかえしていたので、nginxで返すようにしました。 これで724338から802905(workload:100)にScoreアップ！
 画像の縮小 Twitterらしく投稿には100x100程度のサイズのアイコンが表示されるんですが、 元画像が1000x1000程度だったので縮小しました。 ただ、ベンチが画像にアクセスしにこないので、まったくの効果なし。 最終計測では結局元画像に戻しました。 実運用では確かに効果があると思うんですが、まずはログを見て判断しろという教訓ですね。
 まとめ あとはworkloadの調整とかやって最終スコアは935519でした。 2位にはなったものの、インデックス追加とかループクエリの削除とか最低限のことが何とか出来たって感じです。 もっと精進します。
@@ -344,16 +344,17 @@ tech kayac へのポストまだかな〜</p>
         
           <p>Perlで特定の文字列の出現回数を調べたくなって、調べてみたメモ。
 ググるとすぐに見つかった。 perlで指定文字列の出現回数を取得する(正規表現)
- 指定文字列の出現回数は正規表現を使って
+指定文字列の出現回数は正規表現を使って
 $count++ while($str =~ m/$pattern/g);
 もしくは
 $count = (() = $str =~ m/$pattern/g);
- が、一瞬何をやっているのか把握できない・・・。 こういう意味なのかなーって予想はしてみたけど、あってるか一応調査。
+が、一瞬何をやっているのか把握できない・・・。 こういう意味なのかなーって予想はしてみたけど、あってるか一応調査。
 whileを使った方法 //g をスカラーコンテキストの中でマッチさせると、 前回マッチした場所を覚えておいてくれて、次のマッチでその場所から検索を再開してくれるらしい。 (Using regular expressions in Perl - perlretut) マッチした場所は pos で取得可能。
 my $str = &#34;hoge fuga foo bar&#34;; while ($str =~ m/[a-z]+/g) { say pos $str; } whileを後置にして、ループの回数を数えるようにすれば、最初の方法になる。
 ループを使わない方法 これが一番謎だった。
 //g をリストコンテキストで評価すると、マッチした文字列がリストになって帰ってくるらしい。 (Quote-Like Operators - perlop)
-複数の変数に一括して代入するときに ($foo, $bar) = (1, 2) みたいな書き方をするけど、 () = ... の部分はこれの代入先の変数が一個もないケース。 要するに「リストコンテキストで評価してね」という意味のイディオムみたい。</p>
+複数の変数に一括して代入するときに ($foo, $bar) = (1, 2) みたいな書き方をするけど、 () = ... の部分はこれの代入先の変数が一個もないケース。 要するに「リストコンテキストで評価してね」という意味のイディオムみたい。
+まとめると、以下のような処理を簡略化して一行にしたのがループを使わない方法みたいです。</p>
           
             <footer>
               <a href="https://shogo82148.github.io/blog/2015/04/09/count-substrings-in-perl/" rel="full-article">Read On &rarr;</a>
@@ -417,10 +418,10 @@ Internal compiler error. See the console log for more information. output was: U
           <p>いつもテスト実行でお世話になっているtravisさんがC#をサポートしていました。
 以前から C#をサポートして欲しいという要望はあったのですが、 2014年12月あたりからついに使えるようになってたみたいです。
 以前はC言語のフリをして、設定ファルで頑張ってmonoをインストールする必要があったのですが、
-## Travis CI Integrationlanguage:cinstall:- sudo apt-get install mono-devel mono-gmcsscript:- xbuild hogehoge.sln今はlanguageにcsharpを設定して、solutionを指定するだけです。
-## Travis CI Integrationlanguage:csharpsolution:hogehoge.slnMiniMeggagePack もこちらの設定を使うようにしてみました。
+## Travis CI Integration language: c install: - sudo apt-get install mono-devel mono-gmcs script: - xbuild hogehoge.sln 今はlanguageにcsharpを設定して、solutionを指定するだけです。
+## Travis CI Integration language: csharp solution: hogehoge.sln MiniMeggagePack もこちらの設定を使うようにしてみました。
 nunitを使ってテストする場合は結局sudo apt-get install nunit-consoleする必要があるみたいですが、 複数バージョンのmonoでテストできたりしていい感じです。 ただ、ドキュメントにはmono2.10.8もサポートしているとあるのにmonoのインストールが404で失敗したり、 他のバージョンでも時たまmonoのインストールにコケたり、 3.8.0でnunitのテストが上手く動かなかったり、不安定な感じがしてます。 徐々に改善していくといいなー。
-参考  Building a C#, F#, or Visual Basic Project  </p>
+参考 Building a C#, F#, or Visual Basic Project </p>
           
         
       </article>
@@ -448,12 +449,12 @@ nunitを使ってテストする場合は結局sudo apt-get install nunit-consol
           <p>ExcelやGoogle Spreadsheetを使って作ったデータをプログラムに取り込むのにcsv形式が便利でよく使っているんですが、 gitで履歴管理をしてもdiffが見づらい・・・。 gitのdiffがかなり自由にカスタマイズできることを知ったので、いろいろいじってみたメモ。
 例として、以下のようなcsvファイルを編集することを考えます。
 id,name,param_a,param_b,param_c,param_d,param_e 101,hoge,314,159,265,358,979 102,fuga,271,828,182,845,904 一行目は列の見出しになっていて、プログラムからは列番号ではなくparam_dの様に指定する、 という作りになってます。 id: 101の行のparam_dの数値に変更が入った場合、普通のgitだと以下のようになります。
-diff --git a/hogehoge.csv b/hogehoge.csv index c8dbd17..37f4ff5 100644 --- a/hogehoge.csv +++ b/hogehoge.csv @@ -1,3 +1,3 @@ id,name,param_a,param_b,param_c,param_d,param_e -101,hoge,314,159,265,358,979 +101,hoge,314,159,265,359,979  102,fuga,271,828,182,845,904 二行目に何か変更があったことはわかりますが、 param_d だとはすぐにはわかりませんね・・・
+diff --git a/hogehoge.csv b/hogehoge.csv index c8dbd17..37f4ff5 100644 --- a/hogehoge.csv +++ b/hogehoge.csv @@ -1,3 +1,3 @@ id,name,param_a,param_b,param_c,param_d,param_e -101,hoge,314,159,265,358,979 +101,hoge,314,159,265,359,979 102,fuga,271,828,182,845,904 二行目に何か変更があったことはわかりますが、 param_d だとはすぐにはわかりませんね・・・
 YAMLに変換して比較する バイナリファイルであっても差分が確認できるよう、 git-diffを実行する前に変換ツールを実行する機能があります。 拡張子がcsvのファイルに対してこの機能が働くように.gitattributesに以下の行を足します。
 *.csv diff=csv .git/config に変換ツールの設定を追加します。 key: valueの形式になっていると見やすそうなので、変換先の形式にはyamlを選びました。
 [diff &#34;csv&#34;] textconv = csv2yaml ここで指定しているcsv2yamlは自前で用意する必要があります。 インターネット上をさまよえば同名のツールはいくらでもありそうですが、今回は自分でgoを使って書きました。 csv2yaml.goをコンパイルしてパスの通る場所においておきましょう。 csv2yamlは自分のよく使うcsvのフォーマットにあわせて以下のようなカスタマイズをしてあります。
- idという名前のキーを必ず最初にする それ以外のキーはアルファベット順にソートする  この状態でgit diffを実行すると以下のようになります。
-diff --git a/hogehoge.csv b/hogehoge.csv index c8dbd17..37f4ff5 100644 --- a/hogehoge.csv +++ b/hogehoge.</p>
+idという名前のキーを必ず最初にする それ以外のキーはアルファベット順にソートする この状態でgit diffを実行すると以下のようになります。
+diff --git a/hogehoge.csv b/hogehoge.csv index c8dbd17..37f4ff5 100644 --- a/hogehoge.csv +++ b/hogehoge.csv @@ -3,7 +3,7 @@ param_a: &#34;314&#34; param_b: &#34;159&#34; param_c: &#34;265&#34; - param_d: &#34;358&#34; + param_d: &#34;359&#34; param_e: &#34;979&#34; - id: &#34;102&#34; name: fuga これなら param_d が変更されたとすぐに分かりますね。</p>
           
             <footer>
               <a href="https://shogo82148.github.io/blog/2015/03/24/git-diff-csv/" rel="full-article">Read On &rarr;</a>

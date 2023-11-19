@@ -33,7 +33,7 @@
   <meta name="author" content="ICHINOSE Shogo">
 
   
-  <meta name="generator" content="Hugo 0.91.2" />
+  <meta name="generator" content="Hugo 0.120.4">
 
 
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
@@ -148,70 +148,70 @@ MathJax = {
 </ul>
 <h2 id="使い方">使い方</h2>
 <p>まず最初にgo-sql-proxyをドライバとして登録します。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="nx">hooks</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">proxy</span><span class="p">.</span><span class="nx">Hooks</span><span class="p">{</span>
-	<span class="c1">// Hook functions here(Open, Exec, Query, etc.)
-</span><span class="c1"></span><span class="p">}</span>
-<span class="nx">sql</span><span class="p">.</span><span class="nf">Register</span><span class="p">(</span><span class="s">&#34;new-proxy-name&#34;</span><span class="p">,</span> <span class="nx">proxy</span><span class="p">.</span><span class="nf">NewProxy</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">another</span><span class="p">.</span><span class="nx">Driver</span><span class="p">{},</span> <span class="nx">hooks</span><span class="p">))</span>
-</code></pre></div><p>あとは登録したドライバと使って新しいDBハンドラを開くだけです。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="nx">db</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">sql</span><span class="p">.</span><span class="nf">Open</span><span class="p">(</span><span class="s">&#34;new-proxy-name&#34;</span><span class="p">,</span> <span class="nx">dataSourceName</span><span class="p">)</span>
-</code></pre></div><p>このハンドラを使ってクエリ実行を行うと、Hooksで登録した関数が呼び出されます。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="nx">hooks</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">proxy</span><span class="p">.</span><span class="nx">Hooks</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="c1">// Hook functions here(Open, Exec, Query, etc.)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="nx">sql</span><span class="p">.</span><span class="nf">Register</span><span class="p">(</span><span class="s">&#34;new-proxy-name&#34;</span><span class="p">,</span> <span class="nx">proxy</span><span class="p">.</span><span class="nf">NewProxy</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">another</span><span class="p">.</span><span class="nx">Driver</span><span class="p">{},</span> <span class="nx">hooks</span><span class="p">))</span>
+</span></span></code></pre></div><p>あとは登録したドライバと使って新しいDBハンドラを開くだけです。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="nx">db</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">sql</span><span class="p">.</span><span class="nf">Open</span><span class="p">(</span><span class="s">&#34;new-proxy-name&#34;</span><span class="p">,</span> <span class="nx">dataSourceName</span><span class="p">)</span>
+</span></span></code></pre></div><p>このハンドラを使ってクエリ実行を行うと、Hooksで登録した関数が呼び出されます。
 元のドライバを直接使った場合と同じように振る舞うので、既存のコードを一切変えること無くHookを差し込めて便利！</p>
 <h2 id="トレーサの例">トレーサの例</h2>
 <p>簡単なトレーサを書いてみるとこんな感じ。
 発行したSQLのクエリをログに吐き出します。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">proxy</span>
-
-<span class="kn">import</span> <span class="p">(</span>
-	<span class="s">&#34;database/sql&#34;</span>
-	<span class="s">&#34;database/sql/driver&#34;</span>
-	<span class="s">&#34;log&#34;</span>
-
-	<span class="s">&#34;github.com/mattn/go-sqlite3&#34;</span>
-	<span class="s">&#34;github.com/shogo82148/txmanager&#34;</span>
-<span class="p">)</span>
-
-<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
-	<span class="nx">sql</span><span class="p">.</span><span class="nf">Register</span><span class="p">(</span><span class="s">&#34;sqlite3-proxy&#34;</span><span class="p">,</span> <span class="nf">NewProxy</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">sqlite3</span><span class="p">.</span><span class="nx">SQLiteDriver</span><span class="p">{},</span> <span class="o">&amp;</span><span class="nx">Hooks</span><span class="p">{</span>
-		<span class="nx">Open</span><span class="p">:</span> <span class="kd">func</span><span class="p">(</span><span class="nx">conn</span> <span class="o">*</span><span class="nx">Conn</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
-			<span class="nx">log</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;Open&#34;</span><span class="p">)</span>
-			<span class="k">return</span> <span class="kc">nil</span>
-		<span class="p">},</span>
-		<span class="nx">Exec</span><span class="p">:</span> <span class="kd">func</span><span class="p">(</span><span class="nx">stmt</span> <span class="o">*</span><span class="nx">Stmt</span><span class="p">,</span> <span class="nx">args</span> <span class="p">[]</span><span class="nx">driver</span><span class="p">.</span><span class="nx">Value</span><span class="p">,</span> <span class="nx">result</span> <span class="nx">driver</span><span class="p">.</span><span class="nx">Result</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
-			<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;Exec: %s; args = %v\n&#34;</span><span class="p">,</span> <span class="nx">stmt</span><span class="p">.</span><span class="nx">QueryString</span><span class="p">,</span> <span class="nx">args</span><span class="p">)</span>
-			<span class="k">return</span> <span class="kc">nil</span>
-		<span class="p">},</span>
-		<span class="nx">Query</span><span class="p">:</span> <span class="kd">func</span><span class="p">(</span><span class="nx">stmt</span> <span class="o">*</span><span class="nx">Stmt</span><span class="p">,</span> <span class="nx">args</span> <span class="p">[]</span><span class="nx">driver</span><span class="p">.</span><span class="nx">Value</span><span class="p">,</span> <span class="nx">rows</span> <span class="nx">driver</span><span class="p">.</span><span class="nx">Rows</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
-			<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;Query: %s; args = %v\n&#34;</span><span class="p">,</span> <span class="nx">stmt</span><span class="p">.</span><span class="nx">QueryString</span><span class="p">,</span> <span class="nx">args</span><span class="p">)</span>
-			<span class="k">return</span> <span class="kc">nil</span>
-		<span class="p">},</span>
-		<span class="nx">Begin</span><span class="p">:</span> <span class="kd">func</span><span class="p">(</span><span class="nx">conn</span> <span class="o">*</span><span class="nx">Conn</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
-			<span class="nx">log</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;Begin&#34;</span><span class="p">)</span>
-			<span class="k">return</span> <span class="kc">nil</span>
-		<span class="p">},</span>
-		<span class="nx">Commit</span><span class="p">:</span> <span class="kd">func</span><span class="p">(</span><span class="nx">tx</span> <span class="o">*</span><span class="nx">Tx</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
-			<span class="nx">log</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;Commit&#34;</span><span class="p">)</span>
-			<span class="k">return</span> <span class="kc">nil</span>
-		<span class="p">},</span>
-		<span class="nx">Rollback</span><span class="p">:</span> <span class="kd">func</span><span class="p">(</span><span class="nx">tx</span> <span class="o">*</span><span class="nx">Tx</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
-			<span class="nx">log</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;Rollback&#34;</span><span class="p">)</span>
-			<span class="k">return</span> <span class="kc">nil</span>
-		<span class="p">},</span>
-	<span class="p">}))</span>
-
-	<span class="nx">db</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">sql</span><span class="p">.</span><span class="nf">Open</span><span class="p">(</span><span class="s">&#34;sqlite3-proxy&#34;</span><span class="p">,</span> <span class="s">&#34;:memory:&#34;</span><span class="p">)</span>
-	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatalf</span><span class="p">(</span><span class="s">&#34;Open filed: %v&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
-	<span class="p">}</span>
-	<span class="k">defer</span> <span class="nx">db</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
-
-	<span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">db</span><span class="p">.</span><span class="nf">Exec</span><span class="p">(</span>
-		<span class="s">&#34;CREATE TABLE t1 (id INTEGER PRIMARY KEY)&#34;</span><span class="p">,</span>
-	<span class="p">)</span>
-	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
-	<span class="p">}</span>
-<span class="p">}</span>
-</code></pre></div><h2 id="おまけ機能">おまけ機能</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">proxy</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;database/sql&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;database/sql/driver&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;log&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;github.com/mattn/go-sqlite3&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;github.com/shogo82148/txmanager&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">sql</span><span class="p">.</span><span class="nf">Register</span><span class="p">(</span><span class="s">&#34;sqlite3-proxy&#34;</span><span class="p">,</span> <span class="nf">NewProxy</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">sqlite3</span><span class="p">.</span><span class="nx">SQLiteDriver</span><span class="p">{},</span> <span class="o">&amp;</span><span class="nx">Hooks</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">Open</span><span class="p">:</span> <span class="kd">func</span><span class="p">(</span><span class="nx">conn</span> <span class="o">*</span><span class="nx">Conn</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">log</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;Open&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">			<span class="k">return</span> <span class="kc">nil</span>
+</span></span><span class="line"><span class="cl">		<span class="p">},</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">Exec</span><span class="p">:</span> <span class="kd">func</span><span class="p">(</span><span class="nx">stmt</span> <span class="o">*</span><span class="nx">Stmt</span><span class="p">,</span> <span class="nx">args</span> <span class="p">[]</span><span class="nx">driver</span><span class="p">.</span><span class="nx">Value</span><span class="p">,</span> <span class="nx">result</span> <span class="nx">driver</span><span class="p">.</span><span class="nx">Result</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;Exec: %s; args = %v\n&#34;</span><span class="p">,</span> <span class="nx">stmt</span><span class="p">.</span><span class="nx">QueryString</span><span class="p">,</span> <span class="nx">args</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">			<span class="k">return</span> <span class="kc">nil</span>
+</span></span><span class="line"><span class="cl">		<span class="p">},</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">Query</span><span class="p">:</span> <span class="kd">func</span><span class="p">(</span><span class="nx">stmt</span> <span class="o">*</span><span class="nx">Stmt</span><span class="p">,</span> <span class="nx">args</span> <span class="p">[]</span><span class="nx">driver</span><span class="p">.</span><span class="nx">Value</span><span class="p">,</span> <span class="nx">rows</span> <span class="nx">driver</span><span class="p">.</span><span class="nx">Rows</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">log</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;Query: %s; args = %v\n&#34;</span><span class="p">,</span> <span class="nx">stmt</span><span class="p">.</span><span class="nx">QueryString</span><span class="p">,</span> <span class="nx">args</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">			<span class="k">return</span> <span class="kc">nil</span>
+</span></span><span class="line"><span class="cl">		<span class="p">},</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">Begin</span><span class="p">:</span> <span class="kd">func</span><span class="p">(</span><span class="nx">conn</span> <span class="o">*</span><span class="nx">Conn</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">log</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;Begin&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">			<span class="k">return</span> <span class="kc">nil</span>
+</span></span><span class="line"><span class="cl">		<span class="p">},</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">Commit</span><span class="p">:</span> <span class="kd">func</span><span class="p">(</span><span class="nx">tx</span> <span class="o">*</span><span class="nx">Tx</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">log</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;Commit&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">			<span class="k">return</span> <span class="kc">nil</span>
+</span></span><span class="line"><span class="cl">		<span class="p">},</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">Rollback</span><span class="p">:</span> <span class="kd">func</span><span class="p">(</span><span class="nx">tx</span> <span class="o">*</span><span class="nx">Tx</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">log</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;Rollback&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">			<span class="k">return</span> <span class="kc">nil</span>
+</span></span><span class="line"><span class="cl">		<span class="p">},</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}))</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="nx">db</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">sql</span><span class="p">.</span><span class="nf">Open</span><span class="p">(</span><span class="s">&#34;sqlite3-proxy&#34;</span><span class="p">,</span> <span class="s">&#34;:memory:&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatalf</span><span class="p">(</span><span class="s">&#34;Open filed: %v&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="k">defer</span> <span class="nx">db</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">db</span><span class="p">.</span><span class="nf">Exec</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">		<span class="s">&#34;CREATE TABLE t1 (id INTEGER PRIMARY KEY)&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><h2 id="おまけ機能">おまけ機能</h2>
 <p><code>proxy.NewTraceProxy</code> を使うと上記のコードと同様のプロキシを簡単につくれます。
 <code>db.Exec</code>, <code>db.Query</code> 等の呼び出しもとを報告するという便利機能付き。
 ただ、<code>logger.Output(6, &quot;Begin&quot;)</code> みたいな感じで「6個スタックトレースをさかのぼってログに表示」という実装をしているので、

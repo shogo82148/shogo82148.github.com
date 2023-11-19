@@ -33,7 +33,7 @@
   <meta name="author" content="ICHINOSE Shogo">
 
   
-  <meta name="generator" content="Hugo 0.91.2" />
+  <meta name="generator" content="Hugo 0.120.4">
 
 
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
@@ -142,62 +142,62 @@ MathJax = {
 なんでこんな挙動になるのかなーと気になったので、調査してみたメモです。</p>
 <h2 id="症状">症状</h2>
 <p>問題となったのはこんな感じのシェルスクリプトです。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="nv">FOO</span><span class="o">=</span><span class="k">$(</span><span class="nb">echo</span> <span class="s1">&#39;{}&#39;</span> <span class="p">|</span> jq<span class="k">)</span>
-</code></pre></div><p>普段開発で使用している macOS 上では <code>FOO={}</code> と展開されるのですが、 CloudShell 上では jq のヘルプメッセージが表示されます (2022-04-25現在)。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="c1"># CloudShell 上</span>
-$ <span class="nv">FOO</span><span class="o">=</span><span class="k">$(</span><span class="nb">echo</span> <span class="s1">&#39;{}&#39;</span> <span class="p">|</span> jq<span class="k">)</span>
-jq - commandline JSON processor <span class="o">[</span>version 1.5<span class="o">]</span>
-Usage: jq <span class="o">[</span>options<span class="o">]</span> &lt;jq filter&gt; <span class="o">[</span>file...<span class="o">]</span>
-
-<span class="o">(</span>...snip...<span class="o">)</span>
-</code></pre></div><h2 id="原因">原因</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="nv">FOO</span><span class="o">=</span><span class="k">$(</span><span class="nb">echo</span> <span class="s1">&#39;{}&#39;</span> <span class="p">|</span> jq<span class="k">)</span>
+</span></span></code></pre></div><p>普段開発で使用している macOS 上では <code>FOO={}</code> と展開されるのですが、 CloudShell 上では jq のヘルプメッセージが表示されます (2022-04-25現在)。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># CloudShell 上</span>
+</span></span><span class="line"><span class="cl">$ <span class="nv">FOO</span><span class="o">=</span><span class="k">$(</span><span class="nb">echo</span> <span class="s1">&#39;{}&#39;</span> <span class="p">|</span> jq<span class="k">)</span>
+</span></span><span class="line"><span class="cl">jq - commandline JSON processor <span class="o">[</span>version 1.5<span class="o">]</span>
+</span></span><span class="line"><span class="cl">Usage: jq <span class="o">[</span>options<span class="o">]</span> &lt;jq filter&gt; <span class="o">[</span>file...<span class="o">]</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="o">(</span>...snip...<span class="o">)</span>
+</span></span></code></pre></div><h2 id="原因">原因</h2>
 <p>直接の原因は引数を省略してしまったことです。
 jq の第一引数には jq の式が必要です。単に整形したい場合は <code>jq .</code> とすればOKです。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="nv">FOO</span><span class="o">=</span><span class="k">$(</span><span class="nb">echo</span> <span class="s1">&#39;{}&#39;</span> <span class="p">|</span> jq .<span class="k">)</span>
-</code></pre></div><h2 id="macos-と-cloudshell-の違い">macOS と CloudShell の違い</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="nv">FOO</span><span class="o">=</span><span class="k">$(</span><span class="nb">echo</span> <span class="s1">&#39;{}&#39;</span> <span class="p">|</span> jq .<span class="k">)</span>
+</span></span></code></pre></div><h2 id="macos-と-cloudshell-の違い">macOS と CloudShell の違い</h2>
 <p>スクリプトが動かない直接の原因はわかったものの、同じ jq なのに、なぜこのような違いが生まれるのか気になりますよね？
 というわけでソースコードを追ってみました。</p>
 <p>ヒントは問題のシェルスクリプトを実行したときに表示された、ヘルプメッセージにあります。
 CloudShell の jq は version 1.5 と少し古いバージョンです。
 一方、弊社では macOS の jq は brew 経由でインストールしているので、最新版の version 1.6 がインストールされています。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="c1"># macOS 上</span>
-$ jq
-jq - commandline JSON processor <span class="o">[</span>version 1.6<span class="o">]</span>
-
-Usage:	jq <span class="o">[</span>options<span class="o">]</span> &lt;jq filter&gt; <span class="o">[</span>file...<span class="o">]</span>
-	jq <span class="o">[</span>options<span class="o">]</span> --args &lt;jq filter&gt; <span class="o">[</span>strings...<span class="o">]</span>
-	jq <span class="o">[</span>options<span class="o">]</span> --jsonargs &lt;jq filter&gt; <span class="o">[</span>JSON_TEXTS...<span class="o">]</span>
-
-<span class="o">(</span>...snip...<span class="o">)</span>
-</code></pre></div><p>なるほど、この間になにか修正が入ったんだな？と、差分を確認してみました。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># macOS 上</span>
+</span></span><span class="line"><span class="cl">$ jq
+</span></span><span class="line"><span class="cl">jq - commandline JSON processor <span class="o">[</span>version 1.6<span class="o">]</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Usage:	jq <span class="o">[</span>options<span class="o">]</span> &lt;jq filter&gt; <span class="o">[</span>file...<span class="o">]</span>
+</span></span><span class="line"><span class="cl">	jq <span class="o">[</span>options<span class="o">]</span> --args &lt;jq filter&gt; <span class="o">[</span>strings...<span class="o">]</span>
+</span></span><span class="line"><span class="cl">	jq <span class="o">[</span>options<span class="o">]</span> --jsonargs &lt;jq filter&gt; <span class="o">[</span>JSON_TEXTS...<span class="o">]</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="o">(</span>...snip...<span class="o">)</span>
+</span></span></code></pre></div><p>なるほど、この間になにか修正が入ったんだな？と、差分を確認してみました。</p>
 <ul>
 <li><a href="https://github.com/stedolan/jq/compare/jq-1.5...jq-1.6">jq-1.5&hellip;jq-1.6</a></li>
 </ul>
 <p>挙動から推測するに「入出力が TTY か」で条件分岐しているんだろうなと当たりをつけ、差分をザーッと眺めてみると、ありました！
 usage を表示する部分が以下のように変更されていました。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-diff" data-lang="diff"><span class="gu">@@ -457,18 +558,12 @@ int main(int argc, char* argv[]) {
-</span><span class="gu"></span>   else
-     jq_set_attr(jq, jv_string(&#34;VERSION_DIR&#34;), jv_string_fmt(&#34;%.*s-master&#34;, (int)(strchr(JQ_VERSION, &#39;-&#39;) - JQ_VERSION), JQ_VERSION));
- 
-<span class="gd">-#if (!defined(WIN32) &amp;&amp; defined(HAVE_ISATTY)) || defined(HAVE__ISATTY)
-</span><span class="gd">-
-</span><span class="gd">-#if defined(HAVE__ISATTY) &amp;&amp; defined(isatty)
-</span><span class="gd">-#undef isatty
-</span><span class="gd">-#define isatty _isatty
-</span><span class="gd">-#endif
-</span><span class="gd">-
-</span><span class="gd">-  if (!program &amp;&amp; isatty(STDOUT_FILENO) &amp;&amp; !isatty(STDIN_FILENO))
-</span><span class="gd"></span><span class="gi">+#ifdef USE_ISATTY
-</span><span class="gi">+  if (!program &amp;&amp; (!isatty(STDOUT_FILENO) || !isatty(STDIN_FILENO)))
-</span><span class="gi"></span>     program = &#34;.&#34;;
- #endif
- 
-<span class="gd">-  if (!program) usage(2);
-</span><span class="gd"></span><span class="gi">+  if (!program) usage(2, 1);
-</span><span class="gi"></span> 
-   if (options &amp; FROM_FILE) {
-     char *program_origin = strdup(program);
-</code></pre></div><p><a href="https://github.com/stedolan/jq/blame/f9afa950e26f5d548d955f92e83e6b8e10cc8438/src/main.c#L608-L613">git blame して</a> この変更が入ったコミットを見てみると、
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-diff" data-lang="diff"><span class="line"><span class="cl"><span class="gu">@@ -457,18 +558,12 @@ int main(int argc, char* argv[]) {
+</span></span></span><span class="line"><span class="cl"><span class="gu"></span>   else
+</span></span><span class="line"><span class="cl">     jq_set_attr(jq, jv_string(&#34;VERSION_DIR&#34;), jv_string_fmt(&#34;%.*s-master&#34;, (int)(strchr(JQ_VERSION, &#39;-&#39;) - JQ_VERSION), JQ_VERSION));
+</span></span><span class="line"><span class="cl"> 
+</span></span><span class="line"><span class="cl"><span class="gd">-#if (!defined(WIN32) &amp;&amp; defined(HAVE_ISATTY)) || defined(HAVE__ISATTY)
+</span></span></span><span class="line"><span class="cl"><span class="gd">-
+</span></span></span><span class="line"><span class="cl"><span class="gd">-#if defined(HAVE__ISATTY) &amp;&amp; defined(isatty)
+</span></span></span><span class="line"><span class="cl"><span class="gd">-#undef isatty
+</span></span></span><span class="line"><span class="cl"><span class="gd">-#define isatty _isatty
+</span></span></span><span class="line"><span class="cl"><span class="gd">-#endif
+</span></span></span><span class="line"><span class="cl"><span class="gd">-
+</span></span></span><span class="line"><span class="cl"><span class="gd">-  if (!program &amp;&amp; isatty(STDOUT_FILENO) &amp;&amp; !isatty(STDIN_FILENO))
+</span></span></span><span class="line"><span class="cl"><span class="gd"></span><span class="gi">+#ifdef USE_ISATTY
+</span></span></span><span class="line"><span class="cl"><span class="gi">+  if (!program &amp;&amp; (!isatty(STDOUT_FILENO) || !isatty(STDIN_FILENO)))
+</span></span></span><span class="line"><span class="cl"><span class="gi"></span>     program = &#34;.&#34;;
+</span></span><span class="line"><span class="cl"> #endif
+</span></span><span class="line"><span class="cl"> 
+</span></span><span class="line"><span class="cl"><span class="gd">-  if (!program) usage(2);
+</span></span></span><span class="line"><span class="cl"><span class="gd"></span><span class="gi">+  if (!program) usage(2, 1);
+</span></span></span><span class="line"><span class="cl"><span class="gi"></span> 
+</span></span><span class="line"><span class="cl">   if (options &amp; FROM_FILE) {
+</span></span><span class="line"><span class="cl">     char *program_origin = strdup(program);
+</span></span></code></pre></div><p><a href="https://github.com/stedolan/jq/blame/f9afa950e26f5d548d955f92e83e6b8e10cc8438/src/main.c#L608-L613">git blame して</a> この変更が入ったコミットを見てみると、
 以下のプルリクエストで取り込まれたものでした。</p>
 <ul>
 <li><a href="https://github.com/stedolan/jq/pull/1030">Assume . if either stdin/on isatty() (fix #1028) #1030</a></li>

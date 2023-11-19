@@ -33,7 +33,7 @@
   <meta name="author" content="ICHINOSE Shogo">
 
   
-  <meta name="generator" content="Hugo 0.91.2" />
+  <meta name="generator" content="Hugo 0.120.4">
 
 
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
@@ -144,56 +144,56 @@ MathJax = {
 <p>どうやら Go 1.11 から判定基準が 「<a href="https://golang.org/pkg/sync/#Locker">sync.Locker</a> を実装しているか」に変わっていたようです。
 (修正コミット: <a href="https://github.com/golang/go/commit/c2eba53e7f80df21d51285879d51ab81bcfbf6bc">c2eba53</a>, Issue: <a href="https://github.com/golang/go/issues/26165">#26165</a>)</p>
 <p>というわけで、 macopy 構造体を以下のように変更する必要があります。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kd">type</span> <span class="nx">macopy</span> <span class="kd">struct</span><span class="p">{}</span>
-
-<span class="kd">func</span> <span class="p">(</span><span class="o">*</span><span class="nx">macopy</span><span class="p">)</span> <span class="nf">Lock</span><span class="p">()</span> <span class="p">{}</span>
-<span class="kd">func</span> <span class="p">(</span><span class="o">*</span><span class="nx">macopy</span><span class="p">)</span> <span class="nf">Unlock</span><span class="p">()</span> <span class="p">{}</span>
-</code></pre></div><p>追記ここまで</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">macopy</span> <span class="kd">struct</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="p">(</span><span class="o">*</span><span class="nx">macopy</span><span class="p">)</span> <span class="nf">Lock</span><span class="p">()</span> <span class="p">{}</span>
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="p">(</span><span class="o">*</span><span class="nx">macopy</span><span class="p">)</span> <span class="nf">Unlock</span><span class="p">()</span> <span class="p">{}</span>
+</span></span></code></pre></div><p>追記ここまで</p>
 <h2 id="目的">目的</h2>
 <p>深淵な理由で Go の構造体のコピーを禁止したい場合があると思います。
 kuiperbelt のケースでは、<a href="https://golang.org/pkg/sync/atomic/">sync/atomic パッケージ</a>を使ってフィールドを更新しているので、
 フィールドへの読み書きは必ず sync/atomic パッケージを使わなければなりません。
 sync/atomic パッケージを使わずに構造体をコピーするとレースコンディションが発生してしまうので、コピーを禁止する必要がありました。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="c1">// https://github.com/kuiperbelt/kuiperbelt/blob/e3c1432ed798716c8e88183518f9126951c227f3/stats.go#L20-L28
-</span><span class="c1"></span><span class="kd">type</span> <span class="nx">Stats</span> <span class="kd">struct</span> <span class="p">{</span>
-	<span class="nx">connections</span>        <span class="kt">int64</span>
-	<span class="nx">totalConnections</span>   <span class="kt">int64</span>
-	<span class="nx">totalMessages</span>      <span class="kt">int64</span>
-	<span class="nx">connectErrors</span>      <span class="kt">int64</span>
-	<span class="nx">messageErrors</span>      <span class="kt">int64</span>
-	<span class="nx">closingConnections</span> <span class="kt">int64</span>
-	<span class="nx">noCopy</span>             <span class="nx">macopy</span>
-<span class="p">}</span>
-
-<span class="c1">// atomic.AddInt64 を使っているので、s.connections の読み取り時には必ずこのメソッドを呼んで欲しい。
-</span><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">s</span> <span class="o">*</span><span class="nx">Stats</span><span class="p">)</span> <span class="nf">Connections</span><span class="p">()</span> <span class="kt">int64</span> <span class="p">{</span>
-  <span class="c1">// return s.connections ではレースコンディションになってしまう。
-</span><span class="c1"></span>	<span class="k">return</span> <span class="nx">atomic</span><span class="p">.</span><span class="nf">LoadInt64</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">s</span><span class="p">.</span><span class="nx">connections</span><span class="p">)</span>
-<span class="p">}</span>
-
-<span class="kd">func</span> <span class="p">(</span><span class="nx">s</span> <span class="o">*</span><span class="nx">Stats</span><span class="p">)</span> <span class="nf">ConnectEvent</span><span class="p">()</span> <span class="p">{</span>
-	<span class="nx">atomic</span><span class="p">.</span><span class="nf">AddInt64</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">s</span><span class="p">.</span><span class="nx">totalConnections</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-	<span class="nx">atomic</span><span class="p">.</span><span class="nf">AddInt64</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">s</span><span class="p">.</span><span class="nx">connections</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-<span class="p">}</span>
-</code></pre></div><h2 id="macopy-構造体の使い方">macopy 構造体の使い方</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// https://github.com/kuiperbelt/kuiperbelt/blob/e3c1432ed798716c8e88183518f9126951c227f3/stats.go#L20-L28
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">Stats</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">connections</span>        <span class="kt">int64</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">totalConnections</span>   <span class="kt">int64</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">totalMessages</span>      <span class="kt">int64</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">connectErrors</span>      <span class="kt">int64</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">messageErrors</span>      <span class="kt">int64</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">closingConnections</span> <span class="kt">int64</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">noCopy</span>             <span class="nx">macopy</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// atomic.AddInt64 を使っているので、s.connections の読み取り時には必ずこのメソッドを呼んで欲しい。
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">s</span> <span class="o">*</span><span class="nx">Stats</span><span class="p">)</span> <span class="nf">Connections</span><span class="p">()</span> <span class="kt">int64</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="c1">// return s.connections ではレースコンディションになってしまう。
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="k">return</span> <span class="nx">atomic</span><span class="p">.</span><span class="nf">LoadInt64</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">s</span><span class="p">.</span><span class="nx">connections</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="p">(</span><span class="nx">s</span> <span class="o">*</span><span class="nx">Stats</span><span class="p">)</span> <span class="nf">ConnectEvent</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">atomic</span><span class="p">.</span><span class="nf">AddInt64</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">s</span><span class="p">.</span><span class="nx">totalConnections</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">atomic</span><span class="p">.</span><span class="nf">AddInt64</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">s</span><span class="p">.</span><span class="nx">connections</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><h2 id="macopy-構造体の使い方">macopy 構造体の使い方</h2>
 <p>そこで登場するのが macopy 構造体です(いや、もちろん別の名前でもいいんですが)。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="c1">// https://github.com/kuiperbelt/kuiperbelt/blob/e3c1432ed798716c8e88183518f9126951c227f3/stats.go#L12-L18
-</span><span class="c1"></span>
-<span class="c1">// macopy may be embedded into structs which must not be copied
-</span><span class="c1">// after the first use.
-</span><span class="c1">// See https://github.com/golang/go/issues/8005#issuecomment-190753527
-</span><span class="c1">// for details.
-</span><span class="c1"></span><span class="kd">type</span> <span class="nx">macopy</span> <span class="kd">struct</span><span class="p">{}</span>
-
-<span class="kd">func</span> <span class="p">(</span><span class="o">*</span><span class="nx">macopy</span><span class="p">)</span> <span class="nf">Lock</span><span class="p">()</span> <span class="p">{}</span>
-</code></pre></div><p>ここで例えば以下のようなコードを書いてしまったとします。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">kuiperbelt</span>
-
-<span class="kd">func</span> <span class="nf">hoge</span><span class="p">()</span> <span class="p">{</span>
-	<span class="kd">var</span> <span class="nx">noCopy</span> <span class="nx">macopy</span>
-	<span class="nx">_</span> <span class="p">=</span> <span class="nx">noCopy</span>
-<span class="p">}</span>
-</code></pre></div><p>このコードを <code>go vet</code> でチェックすると、誤ってコピーしていることを指摘してくれます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// https://github.com/kuiperbelt/kuiperbelt/blob/e3c1432ed798716c8e88183518f9126951c227f3/stats.go#L12-L18
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">// macopy may be embedded into structs which must not be copied
+</span></span></span><span class="line"><span class="cl"><span class="c1">// after the first use.
+</span></span></span><span class="line"><span class="cl"><span class="c1">// See https://github.com/golang/go/issues/8005#issuecomment-190753527
+</span></span></span><span class="line"><span class="cl"><span class="c1">// for details.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">macopy</span> <span class="kd">struct</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="p">(</span><span class="o">*</span><span class="nx">macopy</span><span class="p">)</span> <span class="nf">Lock</span><span class="p">()</span> <span class="p">{}</span>
+</span></span></code></pre></div><p>ここで例えば以下のようなコードを書いてしまったとします。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">kuiperbelt</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">hoge</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="kd">var</span> <span class="nx">noCopy</span> <span class="nx">macopy</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">_</span> <span class="p">=</span> <span class="nx">noCopy</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>このコードを <code>go vet</code> でチェックすると、誤ってコピーしていることを指摘してくれます。</p>
 <pre tabindex="0"><code>$ go vet
 # github.com/kuiperbelt/kuiperbelt
 ./test.go:5: assignment copies lock value to _: kuiperbelt.macopy
@@ -204,14 +204,14 @@ Gopher なみなさんなら <code>go vet</code> は CI とかエディターの
 <h2 id="原理">原理</h2>
 <p>これはもともと <a href="https://golang.org/pkg/sync/#Mutex">sync.Mutex</a>構造体のコピーを防ぐための機能です。
 この機能がどうやって実装されているか <code>go vet</code> のコードをあさっていくと・・・</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="c1">// https://github.com/golang/go/blob/3868a371a85f2edbf2132d0bd5a6ed9193310dd7/src/cmd/vet/copylock.go#L240-L244
-</span><span class="c1"></span>
-	<span class="k">if</span> <span class="nx">plock</span> <span class="o">:=</span> <span class="nx">types</span><span class="p">.</span><span class="nf">NewMethodSet</span><span class="p">(</span><span class="nx">types</span><span class="p">.</span><span class="nf">NewPointer</span><span class="p">(</span><span class="nx">typ</span><span class="p">)).</span><span class="nf">Lookup</span><span class="p">(</span><span class="nx">tpkg</span><span class="p">,</span> <span class="s">&#34;Lock&#34;</span><span class="p">);</span> <span class="nx">plock</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-		<span class="k">if</span> <span class="nx">lock</span> <span class="o">:=</span> <span class="nx">types</span><span class="p">.</span><span class="nf">NewMethodSet</span><span class="p">(</span><span class="nx">typ</span><span class="p">).</span><span class="nf">Lookup</span><span class="p">(</span><span class="nx">tpkg</span><span class="p">,</span> <span class="s">&#34;Lock&#34;</span><span class="p">);</span> <span class="nx">lock</span> <span class="o">==</span> <span class="kc">nil</span> <span class="p">{</span>
-			<span class="k">return</span> <span class="p">[]</span><span class="nx">types</span><span class="p">.</span><span class="nx">Type</span><span class="p">{</span><span class="nx">typ</span><span class="p">}</span>
-		<span class="p">}</span>
-	<span class="p">}</span>
-</code></pre></div><p><code>sync.Mutex</code>構造体のコピーをチェックしているのではなく、
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// https://github.com/golang/go/blob/3868a371a85f2edbf2132d0bd5a6ed9193310dd7/src/cmd/vet/copylock.go#L240-L244
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">plock</span> <span class="o">:=</span> <span class="nx">types</span><span class="p">.</span><span class="nf">NewMethodSet</span><span class="p">(</span><span class="nx">types</span><span class="p">.</span><span class="nf">NewPointer</span><span class="p">(</span><span class="nx">typ</span><span class="p">)).</span><span class="nf">Lookup</span><span class="p">(</span><span class="nx">tpkg</span><span class="p">,</span> <span class="s">&#34;Lock&#34;</span><span class="p">);</span> <span class="nx">plock</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="k">if</span> <span class="nx">lock</span> <span class="o">:=</span> <span class="nx">types</span><span class="p">.</span><span class="nf">NewMethodSet</span><span class="p">(</span><span class="nx">typ</span><span class="p">).</span><span class="nf">Lookup</span><span class="p">(</span><span class="nx">tpkg</span><span class="p">,</span> <span class="s">&#34;Lock&#34;</span><span class="p">);</span> <span class="nx">lock</span> <span class="o">==</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="k">return</span> <span class="p">[]</span><span class="nx">types</span><span class="p">.</span><span class="nx">Type</span><span class="p">{</span><span class="nx">typ</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">		<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span></code></pre></div><p><code>sync.Mutex</code>構造体のコピーをチェックしているのではなく、
 <code>Lock</code> メソッドが存在している型のコピーをチェックしていることがわかります。</p>
 <p>というわけで、<code>sync.Mutex</code>構造体にかぎらず、<a href="https://github.com/kuiperbelt/kuiperbelt/blob/e3c1432ed798716c8e88183518f9126951c227f3/stats.go#L16"><code>Lock</code>メソッドを実装</a>さえしていれば OK なので、自作可能というわけです。</p>
 <h2 id="まとめ">まとめ</h2>

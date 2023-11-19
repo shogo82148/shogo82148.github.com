@@ -33,7 +33,7 @@
   <meta name="author" content="ICHINOSE Shogo">
 
   
-  <meta name="generator" content="Hugo 0.91.2" />
+  <meta name="generator" content="Hugo 0.120.4">
 
 
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
@@ -152,95 +152,95 @@ Twitterに呟いたってどうせ誰もやってくれない気がするので�
 <li>Grumpy <a href="https://github.com/google/grumpy/tree/d8d01899f5eedf99602887567aaeb39a9154bf68">d8d01899f5</a></li>
 </ul>
 <p>Grumpyのインストール方法はREADMEにある通り。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash">make
-<span class="nb">export</span> <span class="nv">GOPATH</span><span class="o">=</span><span class="nv">$PWD</span>/build
-<span class="nb">export</span> <span class="nv">PYTHONPATH</span><span class="o">=</span><span class="nv">$PWD</span>/build/lib/python2.7/site-packages
-</code></pre></div><p>ただ個人的な環境問題としてPythonのバージョン管理に利用しているpyenvとの相性が悪いらしく、
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">make
+</span></span><span class="line"><span class="cl"><span class="nb">export</span> <span class="nv">GOPATH</span><span class="o">=</span><span class="nv">$PWD</span>/build
+</span></span><span class="line"><span class="cl"><span class="nb">export</span> <span class="nv">PYTHONPATH</span><span class="o">=</span><span class="nv">$PWD</span>/build/lib/python2.7/site-packages
+</span></span></code></pre></div><p>ただ個人的な環境問題としてPythonのバージョン管理に利用しているpyenvとの相性が悪いらしく、
 pyenvが管理しているPythonへのパスを直接通す必要がありました。
 (これがないとPythonスクリプトがなぜかbashに処理される。なんかこの問題最近Twitterで見たような・・・)</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="nb">export</span> <span class="nv">PATH</span><span class="o">=</span><span class="nv">$HOME</span>/.pyenv/versions/2.7.13/bin:<span class="nv">$PATH</span>
-</code></pre></div><h2 id="モンテカルロ法を並列実行してみる">モンテカルロ法を並列実行してみる</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="nb">export</span> <span class="nv">PATH</span><span class="o">=</span><span class="nv">$HOME</span>/.pyenv/versions/2.7.13/bin:<span class="nv">$PATH</span>
+</span></span></code></pre></div><h2 id="モンテカルロ法を並列実行してみる">モンテカルロ法を並列実行してみる</h2>
 <p>まず、並列処理性能について検証してみましょう。
 モンテカルロ法の各試行は独立しているので、並列実行にするのは容易です。
 Python2のthreadingモジュールを使って並列実行してみましょう。</p>
 <h3 id="コード">コード</h3>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="c1">#coding:utf-8</span>
-<span class="c1"># モンテカルロ法 Pure Python 並列版</span>
-<span class="kn">import</span> <span class="nn">threading</span>
-<span class="kn">import</span> <span class="nn">random</span>
-<span class="kn">import</span> <span class="nn">sys</span>
-
-<span class="k">class</span> <span class="nc">MyThread</span><span class="p">(</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">):</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="nb">super</span><span class="p">(</span><span class="n">MyThread</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
-
-    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="n">r</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">Random</span><span class="p">()</span>
-        <span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
-        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">xrange</span><span class="p">(</span><span class="n">num</span><span class="p">):</span>
-            <span class="n">x</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">random</span><span class="p">()</span>
-            <span class="n">y</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">random</span><span class="p">()</span>
-
-            <span class="k">if</span> <span class="n">x</span> <span class="o">*</span> <span class="n">x</span> <span class="o">+</span> <span class="n">y</span> <span class="o">*</span> <span class="n">y</span> <span class="o">&lt;=</span> <span class="mf">1.0</span><span class="p">:</span>
-                <span class="n">c</span> <span class="o">+=</span> <span class="mi">1</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">c</span> <span class="o">=</span> <span class="n">c</span>
-
-
-<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&#34;__main__&#34;</span><span class="p">:</span>
-    <span class="n">num</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
-    <span class="n">para</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
-
-    <span class="n">threads</span> <span class="o">=</span> <span class="p">[]</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">xrange</span><span class="p">(</span><span class="n">para</span><span class="p">):</span>
-        <span class="n">t</span> <span class="o">=</span> <span class="n">MyThread</span><span class="p">()</span>
-        <span class="n">t</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
-        <span class="n">threads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
-
-    <span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
-    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">threads</span><span class="p">:</span>
-        <span class="n">t</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
-        <span class="n">c</span> <span class="o">+=</span> <span class="n">t</span><span class="o">.</span><span class="n">c</span>
-
-    <span class="nb">print</span> <span class="mf">4.0</span><span class="o">*</span><span class="n">c</span><span class="o">/</span><span class="p">(</span><span class="n">num</span><span class="o">*</span><span class="n">para</span><span class="p">)</span>
-</code></pre></div><p>並列度に比例した計算負荷がかかるようになってます。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="c1">#coding:utf-8</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># モンテカルロ法 Pure Python 並列版</span>
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">threading</span>
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">random</span>
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">sys</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">MyThread</span><span class="p">(</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">        <span class="nb">super</span><span class="p">(</span><span class="n">MyThread</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="bp">self</span><span class="o">.</span><span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">        <span class="n">r</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">Random</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">xrange</span><span class="p">(</span><span class="n">num</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">            <span class="n">x</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">random</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">            <span class="n">y</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">random</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">            <span class="k">if</span> <span class="n">x</span> <span class="o">*</span> <span class="n">x</span> <span class="o">+</span> <span class="n">y</span> <span class="o">*</span> <span class="n">y</span> <span class="o">&lt;=</span> <span class="mf">1.0</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">                <span class="n">c</span> <span class="o">+=</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl">        <span class="bp">self</span><span class="o">.</span><span class="n">c</span> <span class="o">=</span> <span class="n">c</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&#34;__main__&#34;</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">num</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+</span></span><span class="line"><span class="cl">    <span class="n">para</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">threads</span> <span class="o">=</span> <span class="p">[]</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">xrange</span><span class="p">(</span><span class="n">para</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">        <span class="n">t</span> <span class="o">=</span> <span class="n">MyThread</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="n">t</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="n">threads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">threads</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="n">t</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="n">c</span> <span class="o">+=</span> <span class="n">t</span><span class="o">.</span><span class="n">c</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nb">print</span> <span class="mf">4.0</span><span class="o">*</span><span class="n">c</span><span class="o">/</span><span class="p">(</span><span class="n">num</span><span class="o">*</span><span class="n">para</span><span class="p">)</span>
+</span></span></code></pre></div><p>並列度に比例した計算負荷がかかるようになってます。
 理想的な並列処理が行えていれば、並列度に関わらず同じ実時間で実行されるはずです。</p>
 <h3 id="cpythonでの結果">CPythonでの結果</h3>
 <p>CPythonでtimeを使って雑に測定した結果です。
 並列度を4倍にしたら実行時間も4倍になっています。
 また、実時間と実行時間が大体おなじで、まったく並列実行できていません。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"># 並列度1で実行した場合(CPython)
-$ time python con_monte.py 300000 1
-3.14529333333
-real    0m0.358s
-user    0m0.279s
-sys 0m0.032s
-
-# 並列度4で実行した場合(CPython)
-$ time python con_monte.py 300000 4
-3.14382666667
-real    0m1.261s
-user    0m1.124s
-sys 0m0.441s
-</code></pre></div><p>CPythonを利用しているひとにはおなじみの<a href="https://ja.wikipedia.org/wiki/%E3%82%B0%E3%83%AD%E3%83%BC%E3%83%90%E3%83%AB%E3%82%A4%E3%83%B3%E3%82%BF%E3%83%97%E3%83%AA%E3%82%BF%E3%83%AD%E3%83%83%E3%82%AF">グローバルインタプリタロック(GIL: Global Interpreter Lock)</a>の影響ですね。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl"># 並列度1で実行した場合(CPython)
+</span></span><span class="line"><span class="cl">$ time python con_monte.py 300000 1
+</span></span><span class="line"><span class="cl">3.14529333333
+</span></span><span class="line"><span class="cl">real    0m0.358s
+</span></span><span class="line"><span class="cl">user    0m0.279s
+</span></span><span class="line"><span class="cl">sys 0m0.032s
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"># 並列度4で実行した場合(CPython)
+</span></span><span class="line"><span class="cl">$ time python con_monte.py 300000 4
+</span></span><span class="line"><span class="cl">3.14382666667
+</span></span><span class="line"><span class="cl">real    0m1.261s
+</span></span><span class="line"><span class="cl">user    0m1.124s
+</span></span><span class="line"><span class="cl">sys 0m0.441s
+</span></span></code></pre></div><p>CPythonを利用しているひとにはおなじみの<a href="https://ja.wikipedia.org/wiki/%E3%82%B0%E3%83%AD%E3%83%BC%E3%83%90%E3%83%AB%E3%82%A4%E3%83%B3%E3%82%BF%E3%83%97%E3%83%AA%E3%82%BF%E3%83%AD%E3%83%83%E3%82%AF">グローバルインタプリタロック(GIL: Global Interpreter Lock)</a>の影響ですね。
 CPythonのスレッドはI/Oの並列化には向いていますが、計算の並列化には向いていません。</p>
 <h3 id="grumpyでの結果">Grumpyでの結果</h3>
 <p>次にGrumpyで測定した結果です。
 並列度を4倍にしたところ、実行時間は2倍程度になりました。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"># 並列度1で実行した場合(Grumpy)
-$ time ./con_monte_darwin_amd64 300000 1
-3.1441733333333333
-real    0m16.129s
-user    0m16.787s
-sys 0m0.125s
-
-# 並列度4で実行した場合(Grumpy)
-$ time ./con_monte_darwin_amd64 300000 4
-3.1401766666666666
-real    0m33.935s
-user    1m45.979s
-sys 0m0.654s
-</code></pre></div><p>実時間4倍までは行かなかったので、理想的な並列計算には及ばないものの、
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl"># 並列度1で実行した場合(Grumpy)
+</span></span><span class="line"><span class="cl">$ time ./con_monte_darwin_amd64 300000 1
+</span></span><span class="line"><span class="cl">3.1441733333333333
+</span></span><span class="line"><span class="cl">real    0m16.129s
+</span></span><span class="line"><span class="cl">user    0m16.787s
+</span></span><span class="line"><span class="cl">sys 0m0.125s
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"># 並列度4で実行した場合(Grumpy)
+</span></span><span class="line"><span class="cl">$ time ./con_monte_darwin_amd64 300000 4
+</span></span><span class="line"><span class="cl">3.1401766666666666
+</span></span><span class="line"><span class="cl">real    0m33.935s
+</span></span><span class="line"><span class="cl">user    1m45.979s
+</span></span><span class="line"><span class="cl">sys 0m0.654s
+</span></span></code></pre></div><p>実時間4倍までは行かなかったので、理想的な並列計算には及ばないものの、
 CPythonよりは並列化の効果が出ていそうです。
 実のところ、Goも計算の並列化よりI/Oの並列化・並行処理のほうが得意なんですよね(GILよりはまし)。</p>
 <p>手元の4コアのMBAで試した結果なので、コア数が多いとまた結果が変わってくるかもしれません。</p>
@@ -248,147 +248,147 @@ CPythonよりは並列化の効果が出ていそうです。
 <p>次にGoのパッケージを呼び出す機能を試してみます。
 Pythonのrandomパッケージではなく、Goのmath/randパッケージを使ってモンテカルロ法を実行してみます。</p>
 <h3 id="コード-1">コード</h3>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="c1">#coding:utf-8</span>
-<span class="c1"># モンテカルロ法 Python+Go 並列版</span>
-<span class="kn">import</span> <span class="nn">threading</span>
-<span class="kn">import</span> <span class="nn">random</span>
-<span class="kn">import</span> <span class="nn">sys</span>
-<span class="kn">from</span> <span class="nn">__go__.time</span> <span class="kn">import</span> <span class="n">Now</span>
-<span class="kn">from</span> <span class="nn">__go__.math.rand</span> <span class="kn">import</span> <span class="n">New</span><span class="p">,</span> <span class="n">NewSource</span>
-
-
-<span class="k">class</span> <span class="nc">MyThread</span><span class="p">(</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">):</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="nb">super</span><span class="p">(</span><span class="n">MyThread</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
-
-    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="n">r</span> <span class="o">=</span> <span class="n">New</span><span class="p">(</span><span class="n">NewSource</span><span class="p">(</span><span class="n">Now</span><span class="p">()</span><span class="o">.</span><span class="n">UnixNano</span><span class="p">()))</span>
-        <span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
-        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">xrange</span><span class="p">(</span><span class="n">num</span><span class="p">):</span>
-            <span class="n">x</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">Float64</span><span class="p">()</span>
-            <span class="n">y</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">Float64</span><span class="p">()</span>
-
-            <span class="k">if</span> <span class="n">x</span> <span class="o">*</span> <span class="n">x</span> <span class="o">+</span> <span class="n">y</span> <span class="o">*</span> <span class="n">y</span> <span class="o">&lt;=</span> <span class="mf">1.0</span><span class="p">:</span>
-                <span class="n">c</span> <span class="o">+=</span> <span class="mi">1</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">c</span> <span class="o">=</span> <span class="n">c</span>
-
-
-<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&#34;__main__&#34;</span><span class="p">:</span>
-    <span class="n">num</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
-    <span class="n">para</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
-
-    <span class="n">threads</span> <span class="o">=</span> <span class="p">[]</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">xrange</span><span class="p">(</span><span class="n">para</span><span class="p">):</span>
-        <span class="n">t</span> <span class="o">=</span> <span class="n">MyThread</span><span class="p">()</span>
-        <span class="n">t</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
-        <span class="n">threads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
-
-    <span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
-    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">threads</span><span class="p">:</span>
-        <span class="n">t</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
-        <span class="n">c</span> <span class="o">+=</span> <span class="n">t</span><span class="o">.</span><span class="n">c</span>
-
-    <span class="nb">print</span> <span class="mf">4.0</span><span class="o">*</span><span class="n">c</span><span class="o">/</span><span class="p">(</span><span class="n">num</span><span class="o">*</span><span class="n">para</span><span class="p">)</span>
-</code></pre></div><h3 id="grumpyでの結果-1">Grumpyでの結果</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="c1">#coding:utf-8</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># モンテカルロ法 Python+Go 並列版</span>
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">threading</span>
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">random</span>
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">sys</span>
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">__go__.time</span> <span class="kn">import</span> <span class="n">Now</span>
+</span></span><span class="line"><span class="cl"><span class="kn">from</span> <span class="nn">__go__.math.rand</span> <span class="kn">import</span> <span class="n">New</span><span class="p">,</span> <span class="n">NewSource</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">MyThread</span><span class="p">(</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">        <span class="nb">super</span><span class="p">(</span><span class="n">MyThread</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="bp">self</span><span class="o">.</span><span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">        <span class="n">r</span> <span class="o">=</span> <span class="n">New</span><span class="p">(</span><span class="n">NewSource</span><span class="p">(</span><span class="n">Now</span><span class="p">()</span><span class="o">.</span><span class="n">UnixNano</span><span class="p">()))</span>
+</span></span><span class="line"><span class="cl">        <span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">xrange</span><span class="p">(</span><span class="n">num</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">            <span class="n">x</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">Float64</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">            <span class="n">y</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">Float64</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">            <span class="k">if</span> <span class="n">x</span> <span class="o">*</span> <span class="n">x</span> <span class="o">+</span> <span class="n">y</span> <span class="o">*</span> <span class="n">y</span> <span class="o">&lt;=</span> <span class="mf">1.0</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">                <span class="n">c</span> <span class="o">+=</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl">        <span class="bp">self</span><span class="o">.</span><span class="n">c</span> <span class="o">=</span> <span class="n">c</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&#34;__main__&#34;</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">num</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+</span></span><span class="line"><span class="cl">    <span class="n">para</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">threads</span> <span class="o">=</span> <span class="p">[]</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">xrange</span><span class="p">(</span><span class="n">para</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">        <span class="n">t</span> <span class="o">=</span> <span class="n">MyThread</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="n">t</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="n">threads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">threads</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="n">t</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="n">c</span> <span class="o">+=</span> <span class="n">t</span><span class="o">.</span><span class="n">c</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nb">print</span> <span class="mf">4.0</span><span class="o">*</span><span class="n">c</span><span class="o">/</span><span class="p">(</span><span class="n">num</span><span class="o">*</span><span class="n">para</span><span class="p">)</span>
+</span></span></code></pre></div><h3 id="grumpyでの結果-1">Grumpyでの結果</h3>
 <p>Grumpyでの実行結果です。
 CPythonには遠く及ばないものの、もとのコードの8倍速くらいにはなりました。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"># 並列度1で実行した場合(Grumpy)
-$ time ./con_monte_go_darwin_amd64 300000 1
-3.1388133333333332
-real    0m1.921s
-user    0m2.006s
-sys 0m0.029s
-
-# 並列度4で実行した場合(Grumpy)
-$ time ./con_monte_go_darwin_amd64 300000 4
-3.143743333333333
-real    0m4.115s
-user    0m12.855s
-sys 0m0.096s
-</code></pre></div><h2 id="竹内関数を並列実行してみる">竹内関数を並列実行してみる</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl"># 並列度1で実行した場合(Grumpy)
+</span></span><span class="line"><span class="cl">$ time ./con_monte_go_darwin_amd64 300000 1
+</span></span><span class="line"><span class="cl">3.1388133333333332
+</span></span><span class="line"><span class="cl">real    0m1.921s
+</span></span><span class="line"><span class="cl">user    0m2.006s
+</span></span><span class="line"><span class="cl">sys 0m0.029s
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"># 並列度4で実行した場合(Grumpy)
+</span></span><span class="line"><span class="cl">$ time ./con_monte_go_darwin_amd64 300000 4
+</span></span><span class="line"><span class="cl">3.143743333333333
+</span></span><span class="line"><span class="cl">real    0m4.115s
+</span></span><span class="line"><span class="cl">user    0m12.855s
+</span></span><span class="line"><span class="cl">sys 0m0.096s
+</span></span></code></pre></div><h2 id="竹内関数を並列実行してみる">竹内関数を並列実行してみる</h2>
 <p>竹内関数を並列実行した場合も試してみました。</p>
 <h3 id="コード-2">コード</h3>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="c1">#coding:utf-8</span>
-<span class="c1"># 竹内関数 Pure Python 並列版</span>
-<span class="kn">import</span> <span class="nn">sys</span>
-<span class="kn">import</span> <span class="nn">threading</span>
-
-<span class="k">def</span> <span class="nf">tak</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">z</span><span class="p">):</span>
-    <span class="k">if</span> <span class="n">x</span> <span class="o">&lt;=</span> <span class="n">y</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">y</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">tak</span><span class="p">(</span><span class="n">tak</span><span class="p">((</span><span class="n">x</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="n">y</span> <span class="p">,</span> <span class="n">z</span><span class="p">),</span> <span class="n">tak</span><span class="p">((</span><span class="n">y</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="n">z</span> <span class="p">,</span> <span class="n">x</span><span class="p">),</span> <span class="n">tak</span><span class="p">((</span><span class="n">z</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span>
-
-<span class="k">class</span> <span class="nc">MyThread</span><span class="p">(</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">):</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">):</span>
-        <span class="nb">super</span><span class="p">(</span><span class="n">MyThread</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">a</span> <span class="o">=</span> <span class="n">a</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">b</span> <span class="o">=</span> <span class="n">b</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">c</span> <span class="o">=</span> <span class="n">c</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">result</span> <span class="o">=</span> <span class="mi">0</span>
-
-    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">result</span> <span class="o">=</span> <span class="n">tak</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">c</span><span class="p">)</span>
-
-<span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
-    <span class="n">a</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
-    <span class="n">b</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
-    <span class="n">c</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span>
-    <span class="n">para</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">4</span><span class="p">])</span>
-
-    <span class="n">threads</span> <span class="o">=</span> <span class="p">[]</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">xrange</span><span class="p">(</span><span class="n">para</span><span class="p">):</span>
-        <span class="n">t</span> <span class="o">=</span> <span class="n">MyThread</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">)</span>
-        <span class="n">t</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
-        <span class="n">threads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
-
-    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">threads</span><span class="p">:</span>
-        <span class="n">t</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
-        <span class="nb">print</span> <span class="n">t</span><span class="o">.</span><span class="n">result</span>
-
-<span class="k">if</span> <span class="vm">__name__</span><span class="o">==</span><span class="s2">&#34;__main__&#34;</span><span class="p">:</span>
-    <span class="n">main</span><span class="p">()</span>
-</code></pre></div><p>モンテカルロ法と同様に、理想的な並列処理が行えていれば、並列度に関わらず同じ実時間で実行されるはずです。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="c1">#coding:utf-8</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># 竹内関数 Pure Python 並列版</span>
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">sys</span>
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">threading</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">tak</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">z</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="n">x</span> <span class="o">&lt;=</span> <span class="n">y</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="n">y</span>
+</span></span><span class="line"><span class="cl">    <span class="k">else</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="n">tak</span><span class="p">(</span><span class="n">tak</span><span class="p">((</span><span class="n">x</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="n">y</span> <span class="p">,</span> <span class="n">z</span><span class="p">),</span> <span class="n">tak</span><span class="p">((</span><span class="n">y</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="n">z</span> <span class="p">,</span> <span class="n">x</span><span class="p">),</span> <span class="n">tak</span><span class="p">((</span><span class="n">z</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">MyThread</span><span class="p">(</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">        <span class="nb">super</span><span class="p">(</span><span class="n">MyThread</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="bp">self</span><span class="o">.</span><span class="n">a</span> <span class="o">=</span> <span class="n">a</span>
+</span></span><span class="line"><span class="cl">        <span class="bp">self</span><span class="o">.</span><span class="n">b</span> <span class="o">=</span> <span class="n">b</span>
+</span></span><span class="line"><span class="cl">        <span class="bp">self</span><span class="o">.</span><span class="n">c</span> <span class="o">=</span> <span class="n">c</span>
+</span></span><span class="line"><span class="cl">        <span class="bp">self</span><span class="o">.</span><span class="n">result</span> <span class="o">=</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">        <span class="bp">self</span><span class="o">.</span><span class="n">result</span> <span class="o">=</span> <span class="n">tak</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">c</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+</span></span><span class="line"><span class="cl">    <span class="n">a</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+</span></span><span class="line"><span class="cl">    <span class="n">b</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+</span></span><span class="line"><span class="cl">    <span class="n">c</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span>
+</span></span><span class="line"><span class="cl">    <span class="n">para</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">4</span><span class="p">])</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">threads</span> <span class="o">=</span> <span class="p">[]</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">xrange</span><span class="p">(</span><span class="n">para</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">        <span class="n">t</span> <span class="o">=</span> <span class="n">MyThread</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="n">t</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="n">threads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">threads</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="n">t</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="nb">print</span> <span class="n">t</span><span class="o">.</span><span class="n">result</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="vm">__name__</span><span class="o">==</span><span class="s2">&#34;__main__&#34;</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">main</span><span class="p">()</span>
+</span></span></code></pre></div><p>モンテカルロ法と同様に、理想的な並列処理が行えていれば、並列度に関わらず同じ実時間で実行されるはずです。</p>
 <h3 id="cpythonでの結果-1">CPythonでの結果</h3>
 <p>CPythonでの結果です。
 モンテカルロ法の場合と同様に、
 並列度を4倍にしたら実行時間も4倍になっています。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"># 並列度1で実行した場合(CPython)
-$ time python con_take.py 11 10 0 1
-11
-real    0m1.529s
-user    0m1.498s
-sys 0m0.028s
-
-# 並列度4で実行した場合(CPython)
-$ time python con_take.py 11 10 0 4
-11
-11
-11
-11
-real    0m7.333s
-user    0m6.620s
-sys 0m2.565s
-</code></pre></div><h3 id="grumpyでの結果-2">Grumpyでの結果</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl"># 並列度1で実行した場合(CPython)
+</span></span><span class="line"><span class="cl">$ time python con_take.py 11 10 0 1
+</span></span><span class="line"><span class="cl">11
+</span></span><span class="line"><span class="cl">real    0m1.529s
+</span></span><span class="line"><span class="cl">user    0m1.498s
+</span></span><span class="line"><span class="cl">sys 0m0.028s
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"># 並列度4で実行した場合(CPython)
+</span></span><span class="line"><span class="cl">$ time python con_take.py 11 10 0 4
+</span></span><span class="line"><span class="cl">11
+</span></span><span class="line"><span class="cl">11
+</span></span><span class="line"><span class="cl">11
+</span></span><span class="line"><span class="cl">11
+</span></span><span class="line"><span class="cl">real    0m7.333s
+</span></span><span class="line"><span class="cl">user    0m6.620s
+</span></span><span class="line"><span class="cl">sys 0m2.565s
+</span></span></code></pre></div><h3 id="grumpyでの結果-2">Grumpyでの結果</h3>
 <p>Grumpyでの結果です。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"># 並列度1で実行した場合(Grumpy)
-$ time ./con_take_darwin_amd64 11 10 0 1
-11
-real    0m0.988s
-user    0m0.988s
-sys 0m0.018s
-
-# 並列度4で実行した場合(Grumpy)
-$ time ./con_take_darwin_amd64 11 10 0 4
-11
-11
-11
-11
-real    0m2.031s
-user    0m7.135s
-sys 0m0.031s
-</code></pre></div><p><strong>(なんかCPythonより早くなったぞ？？？？)</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl"># 並列度1で実行した場合(Grumpy)
+</span></span><span class="line"><span class="cl">$ time ./con_take_darwin_amd64 11 10 0 1
+</span></span><span class="line"><span class="cl">11
+</span></span><span class="line"><span class="cl">real    0m0.988s
+</span></span><span class="line"><span class="cl">user    0m0.988s
+</span></span><span class="line"><span class="cl">sys 0m0.018s
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"># 並列度4で実行した場合(Grumpy)
+</span></span><span class="line"><span class="cl">$ time ./con_take_darwin_amd64 11 10 0 4
+</span></span><span class="line"><span class="cl">11
+</span></span><span class="line"><span class="cl">11
+</span></span><span class="line"><span class="cl">11
+</span></span><span class="line"><span class="cl">11
+</span></span><span class="line"><span class="cl">real    0m2.031s
+</span></span><span class="line"><span class="cl">user    0m7.135s
+</span></span><span class="line"><span class="cl">sys 0m0.031s
+</span></span></code></pre></div><p><strong>(なんかCPythonより早くなったぞ？？？？)</strong></p>
 <p>最初に紹介した記事でも、
 モンテカルロ法のベンチマークではCPythonがGrumpyの数十倍の速度で圧倒的勝利でしたが、
 竹内関数のベンチマークではその差は縮まっています。

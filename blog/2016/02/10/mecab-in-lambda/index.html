@@ -33,7 +33,7 @@
   <meta name="author" content="ICHINOSE Shogo">
 
   
-  <meta name="generator" content="Hugo 0.91.2" />
+  <meta name="generator" content="Hugo 0.120.4">
 
 
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
@@ -161,74 +161,74 @@ API Gatewayなどで外部に公開した場合、第三者が何でもし放題
 </ul>
 <p>「環境変数を設定してから自分自身をexecし直す方法」と「<code>ctypes</code>を使って絶対パス指定で読み込む方法」が紹介されています。
 前者の方がvoteは多いですがLambdaでこれをやるのは大変そうなので、後者で試してみます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="c1"># preload libmecab</span>
-<span class="kn">import</span> <span class="nn">os</span>
-<span class="kn">import</span> <span class="nn">ctypes</span>
-<span class="n">libdir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">(),</span> <span class="s1">&#39;local&#39;</span><span class="p">,</span> <span class="s1">&#39;lib&#39;</span><span class="p">)</span>
-<span class="n">libmecab</span> <span class="o">=</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">cdll</span><span class="o">.</span><span class="n">LoadLibrary</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">libdir</span><span class="p">,</span> <span class="s1">&#39;libmecab.so&#39;</span><span class="p">))</span>
-</code></pre></div><p>一度読み込んでしまったライブラリは再利用されるため、
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="c1"># preload libmecab</span>
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">os</span>
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">ctypes</span>
+</span></span><span class="line"><span class="cl"><span class="n">libdir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">(),</span> <span class="s1">&#39;local&#39;</span><span class="p">,</span> <span class="s1">&#39;lib&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="n">libmecab</span> <span class="o">=</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">cdll</span><span class="o">.</span><span class="n">LoadLibrary</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">libdir</span><span class="p">,</span> <span class="s1">&#39;libmecab.so&#39;</span><span class="p">))</span>
+</span></span></code></pre></div><p>一度読み込んでしまったライブラリは再利用されるため、
 <code>import MeCab</code>はここで読み込んだライブラリにリンクされます(importの順番が重要なの闇な感じがする)。
 <code>LD_LIBRARY_PATH</code>が正しく設定されている必要はありません。</p>
 <p>さて、これで<code>lambda_function.py</code>と<code>tokenizer.py</code>が分かれている必要がなくなったので、二つを合体してみましょう。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="c1"># coding=utf-8</span>
-<span class="kn">import</span> <span class="nn">os</span>
-<span class="kn">import</span> <span class="nn">settings</span>
-
-<span class="kn">import</span> <span class="nn">logging</span>
-<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
-<span class="n">logger</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">LOG_LEVEL</span><span class="p">)</span>
-
-<span class="c1"># preload libmecab</span>
-<span class="kn">import</span> <span class="nn">ctypes</span>
-<span class="n">libdir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">(),</span> <span class="s1">&#39;local&#39;</span><span class="p">,</span> <span class="s1">&#39;lib&#39;</span><span class="p">)</span>
-<span class="n">libmecab</span> <span class="o">=</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">cdll</span><span class="o">.</span><span class="n">LoadLibrary</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">libdir</span><span class="p">,</span> <span class="s1">&#39;libmecab.so&#39;</span><span class="p">))</span>
-
-<span class="kn">import</span> <span class="nn">MeCab</span>
-
-<span class="c1"># prepare Tagger</span>
-<span class="n">dicdir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">(),</span> <span class="s1">&#39;local&#39;</span><span class="p">,</span> <span class="s1">&#39;lib&#39;</span><span class="p">,</span> <span class="s1">&#39;mecab&#39;</span><span class="p">,</span> <span class="s1">&#39;dic&#39;</span><span class="p">,</span> <span class="s1">&#39;ipadic&#39;</span><span class="p">)</span>
-<span class="n">rcfile</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">(),</span> <span class="s1">&#39;local&#39;</span><span class="p">,</span> <span class="s1">&#39;etc&#39;</span><span class="p">,</span> <span class="s1">&#39;mecabrc&#39;</span><span class="p">)</span>
-<span class="n">default_tagger</span> <span class="o">=</span> <span class="n">MeCab</span><span class="o">.</span><span class="n">Tagger</span><span class="p">(</span><span class="s2">&#34;-d</span><span class="si">{}</span><span class="s2"> -r</span><span class="si">{}</span><span class="s2">&#34;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">dicdir</span><span class="p">,</span> <span class="n">rcfile</span><span class="p">))</span>
-<span class="n">unk_tagger</span> <span class="o">=</span> <span class="n">MeCab</span><span class="o">.</span><span class="n">Tagger</span><span class="p">(</span><span class="s2">&#34;-d</span><span class="si">{}</span><span class="s2"> -r</span><span class="si">{}</span><span class="s2"> --unk-feature 未知語,*,*,*,*,*,*,*,*&#34;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">dicdir</span><span class="p">,</span> <span class="n">rcfile</span><span class="p">))</span>
-
-<span class="n">DEFAULT_STOPTAGS</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;BOS/EOS&#39;</span><span class="p">]</span>
-
-<span class="k">def</span> <span class="nf">lambda_handler</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
-    <span class="n">sentence</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;sentence&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">)</span>
-    <span class="n">stoptags</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;stoptags&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;,&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="n">DEFAULT_STOPTAGS</span>
-    <span class="n">unk_feature</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;unk_feature&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
-
-    <span class="n">tokens</span> <span class="o">=</span> <span class="p">[]</span>
-    <span class="n">tagger</span> <span class="o">=</span> <span class="n">unk_tagger</span> <span class="k">if</span> <span class="n">unk_feature</span> <span class="k">else</span> <span class="n">default_tagger</span>
-    <span class="n">node</span> <span class="o">=</span> <span class="n">tagger</span><span class="o">.</span><span class="n">parseToNode</span><span class="p">(</span><span class="n">sentence</span><span class="p">)</span>
-    <span class="k">while</span> <span class="n">node</span><span class="p">:</span>
-        <span class="n">feature</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">feature</span> <span class="o">+</span> <span class="s1">&#39;,*,*&#39;</span>
-        <span class="n">part_of_speech</span> <span class="o">=</span> <span class="n">get_part_of_speech</span><span class="p">(</span><span class="n">feature</span><span class="p">)</span>
-        <span class="n">reading</span> <span class="o">=</span> <span class="n">get_reading</span><span class="p">(</span><span class="n">feature</span><span class="p">)</span>
-        <span class="n">base_form</span> <span class="o">=</span> <span class="n">get_base_form</span><span class="p">(</span><span class="n">feature</span><span class="p">)</span>
-        <span class="n">token</span> <span class="o">=</span> <span class="p">{</span>
-            <span class="s2">&#34;surface&#34;</span><span class="p">:</span> <span class="n">node</span><span class="o">.</span><span class="n">surface</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">),</span>
-            <span class="s2">&#34;feature&#34;</span><span class="p">:</span> <span class="n">node</span><span class="o">.</span><span class="n">feature</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">),</span>
-            <span class="s2">&#34;pos&#34;</span><span class="p">:</span> <span class="n">part_of_speech</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">),</span>
-            <span class="s2">&#34;reading&#34;</span><span class="p">:</span> <span class="n">reading</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">),</span>
-            <span class="s2">&#34;baseform&#34;</span><span class="p">:</span> <span class="n">base_form</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">),</span>
-            <span class="s2">&#34;stat&#34;</span><span class="p">:</span> <span class="n">node</span><span class="o">.</span><span class="n">stat</span><span class="p">,</span>
-        <span class="p">}</span>
-
-        <span class="k">if</span> <span class="n">part_of_speech</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">stoptags</span><span class="p">:</span>
-            <span class="n">tokens</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">token</span><span class="p">)</span>
-        <span class="n">node</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">next</span>
-    <span class="k">return</span> <span class="p">{</span><span class="s2">&#34;tokens&#34;</span><span class="p">:</span> <span class="n">tokens</span><span class="p">}</span>
-
-<span class="k">def</span> <span class="nf">get_part_of_speech</span><span class="p">(</span><span class="n">feature</span><span class="p">):</span>
-    <span class="k">return</span> <span class="s1">&#39;-&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">v</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">feature</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;,&#39;</span><span class="p">)[:</span><span class="mi">4</span><span class="p">]</span> <span class="k">if</span> <span class="n">v</span> <span class="o">!=</span> <span class="s1">&#39;*&#39;</span><span class="p">])</span>
-
-<span class="k">def</span> <span class="nf">get_reading</span><span class="p">(</span><span class="n">feature</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">feature</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;,&#39;</span><span class="p">)[</span><span class="mi">7</span><span class="p">]</span>
-
-<span class="k">def</span> <span class="nf">get_base_form</span><span class="p">(</span><span class="n">feature</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">feature</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;,&#39;</span><span class="p">)[</span><span class="mi">6</span><span class="p">]</span>
-</code></pre></div><h2 id="試してみる">試してみる</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="c1"># coding=utf-8</span>
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">os</span>
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">settings</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">logging</span>
+</span></span><span class="line"><span class="cl"><span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="n">logger</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">LOG_LEVEL</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># preload libmecab</span>
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">ctypes</span>
+</span></span><span class="line"><span class="cl"><span class="n">libdir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">(),</span> <span class="s1">&#39;local&#39;</span><span class="p">,</span> <span class="s1">&#39;lib&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="n">libmecab</span> <span class="o">=</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">cdll</span><span class="o">.</span><span class="n">LoadLibrary</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">libdir</span><span class="p">,</span> <span class="s1">&#39;libmecab.so&#39;</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">MeCab</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># prepare Tagger</span>
+</span></span><span class="line"><span class="cl"><span class="n">dicdir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">(),</span> <span class="s1">&#39;local&#39;</span><span class="p">,</span> <span class="s1">&#39;lib&#39;</span><span class="p">,</span> <span class="s1">&#39;mecab&#39;</span><span class="p">,</span> <span class="s1">&#39;dic&#39;</span><span class="p">,</span> <span class="s1">&#39;ipadic&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="n">rcfile</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">(),</span> <span class="s1">&#39;local&#39;</span><span class="p">,</span> <span class="s1">&#39;etc&#39;</span><span class="p">,</span> <span class="s1">&#39;mecabrc&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="n">default_tagger</span> <span class="o">=</span> <span class="n">MeCab</span><span class="o">.</span><span class="n">Tagger</span><span class="p">(</span><span class="s2">&#34;-d</span><span class="si">{}</span><span class="s2"> -r</span><span class="si">{}</span><span class="s2">&#34;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">dicdir</span><span class="p">,</span> <span class="n">rcfile</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="n">unk_tagger</span> <span class="o">=</span> <span class="n">MeCab</span><span class="o">.</span><span class="n">Tagger</span><span class="p">(</span><span class="s2">&#34;-d</span><span class="si">{}</span><span class="s2"> -r</span><span class="si">{}</span><span class="s2"> --unk-feature 未知語,*,*,*,*,*,*,*,*&#34;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">dicdir</span><span class="p">,</span> <span class="n">rcfile</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">DEFAULT_STOPTAGS</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;BOS/EOS&#39;</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">lambda_handler</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="n">sentence</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;sentence&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="n">stoptags</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;stoptags&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;,&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="n">DEFAULT_STOPTAGS</span>
+</span></span><span class="line"><span class="cl">    <span class="n">unk_feature</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;unk_feature&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">tokens</span> <span class="o">=</span> <span class="p">[]</span>
+</span></span><span class="line"><span class="cl">    <span class="n">tagger</span> <span class="o">=</span> <span class="n">unk_tagger</span> <span class="k">if</span> <span class="n">unk_feature</span> <span class="k">else</span> <span class="n">default_tagger</span>
+</span></span><span class="line"><span class="cl">    <span class="n">node</span> <span class="o">=</span> <span class="n">tagger</span><span class="o">.</span><span class="n">parseToNode</span><span class="p">(</span><span class="n">sentence</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">while</span> <span class="n">node</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="n">feature</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">feature</span> <span class="o">+</span> <span class="s1">&#39;,*,*&#39;</span>
+</span></span><span class="line"><span class="cl">        <span class="n">part_of_speech</span> <span class="o">=</span> <span class="n">get_part_of_speech</span><span class="p">(</span><span class="n">feature</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="n">reading</span> <span class="o">=</span> <span class="n">get_reading</span><span class="p">(</span><span class="n">feature</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="n">base_form</span> <span class="o">=</span> <span class="n">get_base_form</span><span class="p">(</span><span class="n">feature</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="n">token</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;surface&#34;</span><span class="p">:</span> <span class="n">node</span><span class="o">.</span><span class="n">surface</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;feature&#34;</span><span class="p">:</span> <span class="n">node</span><span class="o">.</span><span class="n">feature</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;pos&#34;</span><span class="p">:</span> <span class="n">part_of_speech</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;reading&#34;</span><span class="p">:</span> <span class="n">reading</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;baseform&#34;</span><span class="p">:</span> <span class="n">base_form</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">            <span class="s2">&#34;stat&#34;</span><span class="p">:</span> <span class="n">node</span><span class="o">.</span><span class="n">stat</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="n">part_of_speech</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">stoptags</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">            <span class="n">tokens</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">token</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="n">node</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">next</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="p">{</span><span class="s2">&#34;tokens&#34;</span><span class="p">:</span> <span class="n">tokens</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">get_part_of_speech</span><span class="p">(</span><span class="n">feature</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="s1">&#39;-&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">v</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">feature</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;,&#39;</span><span class="p">)[:</span><span class="mi">4</span><span class="p">]</span> <span class="k">if</span> <span class="n">v</span> <span class="o">!=</span> <span class="s1">&#39;*&#39;</span><span class="p">])</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">get_reading</span><span class="p">(</span><span class="n">feature</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">feature</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;,&#39;</span><span class="p">)[</span><span class="mi">7</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">get_base_form</span><span class="p">(</span><span class="n">feature</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">feature</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;,&#39;</span><span class="p">)[</span><span class="mi">6</span><span class="p">]</span>
+</span></span></code></pre></div><h2 id="試してみる">試してみる</h2>
 <p><a href="https://github.com/shogo82148/aws-lambda-ja-tokenizer">forkして上記の修正をいれたレポジトリ</a>を用意したので、READMEにしたがってzipファイルを作り、Lambdaに登録しましょう。
 雑なテストですが、Testボタンを5回押しみてログを見てみました。</p>
 <p>まずは元記事にあったオリジナルのコードから。</p>

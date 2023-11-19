@@ -33,7 +33,7 @@
   <meta name="author" content="ICHINOSE Shogo">
 
   
-  <meta name="generator" content="Hugo 0.91.2" />
+  <meta name="generator" content="Hugo 0.120.4">
 
 
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
@@ -151,179 +151,179 @@ VPCを利用することによりセキュリティーを担保しているの�
 <a href="https://shogo82148.github.io/blog/2021/06/06/perl-on-aws-app-runner/">AWS App Runner に Perl をデプロイしてみた</a> のときと同様、
 ソースコードは <a href="https://github.com/shogo82148/perl-on-aws-app-runner">shogo82148/perl-on-aws-app-runner</a> に置いてあります。</p>
 <p>こんな感じになりました。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="c1"># app.psgi</span>
-<span class="k">use</span> <span class="nn">DBI</span><span class="p">;</span>
-<span class="k">use</span> <span class="mf">5.34.0</span><span class="p">;</span>
-<span class="k">use</span> <span class="nn">feature</span> <span class="sx">qw(try)</span><span class="p">;</span>
-<span class="k">no</span> <span class="nn">warnings</span> <span class="s">&#34;experimental::try&#34;</span><span class="p">;</span>
-
-<span class="k">my</span> <span class="nv">$database</span> <span class="o">=</span> <span class="nv">$ENV</span><span class="p">{</span><span class="n">MYSQL_DATABASE</span><span class="p">};</span>
-<span class="k">my</span> <span class="nv">$host</span> <span class="o">=</span> <span class="nv">$ENV</span><span class="p">{</span><span class="n">MYSQL_HOST</span><span class="p">};</span>
-<span class="k">my</span> <span class="nv">$port</span> <span class="o">=</span> <span class="nv">$ENV</span><span class="p">{</span><span class="n">MYSQL_PORT</span><span class="p">};</span>
-<span class="k">my</span> <span class="nv">$user</span> <span class="o">=</span> <span class="nv">$ENV</span><span class="p">{</span><span class="n">MYSQL_USER</span><span class="p">};</span>
-<span class="k">my</span> <span class="nv">$password</span> <span class="o">=</span> <span class="nv">$ENV</span><span class="p">{</span><span class="n">MYSQL_PASSWORD</span><span class="p">};</span>
-
-<span class="c1"># initialize the database</span>
-<span class="n">try</span> <span class="p">{</span>
-    <span class="k">my</span> <span class="nv">$dbh</span> <span class="o">=</span> <span class="nn">DBI</span><span class="o">-&gt;</span><span class="nb">connect</span><span class="p">(</span>
-        <span class="s">&#34;DBI:mysql:;host=$host;port=$port&#34;</span><span class="p">,</span>
-        <span class="nv">$user</span><span class="p">,</span> <span class="nv">$password</span><span class="p">,</span>
-        <span class="p">{</span><span class="s">&#39;RaiseError&#39;</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">});</span>
-    <span class="nv">$dbh</span><span class="o">-&gt;</span><span class="k">do</span><span class="p">(</span><span class="s">&#34;CREATE DATABASE IF NOT EXISTS `$database`&#34;</span><span class="p">);</span>
-    <span class="nv">$dbh</span><span class="o">-&gt;</span><span class="k">do</span><span class="p">(</span><span class="s">&#34;CREATE TABLE IF NOT EXISTS `$database`.`access_count` (`id` INT PRIMARY KEY, `number` BIGINT)&#34;</span><span class="p">);</span>
-    <span class="nv">$dbh</span><span class="o">-&gt;</span><span class="n">disconnect</span><span class="p">();</span>
-<span class="p">}</span> <span class="n">catch</span> <span class="p">(</span><span class="nv">$e</span><span class="p">)</span> <span class="p">{</span>
-    <span class="n">say</span> <span class="bp">STDERR</span> <span class="nv">$e</span><span class="p">;</span>
-<span class="p">}</span>
-
-<span class="k">my</span> <span class="nv">$app</span> <span class="o">=</span> <span class="k">sub</span> <span class="p">{</span>
-    <span class="k">my</span> <span class="nv">$dbh</span> <span class="o">=</span> <span class="nn">DBI</span><span class="o">-&gt;</span><span class="nb">connect</span><span class="p">(</span>
-        <span class="s">&#34;DBI:mysql:database=$database;host=$host;port=$port&#34;</span><span class="p">,</span>
-        <span class="nv">$user</span><span class="p">,</span> <span class="nv">$password</span><span class="p">,</span>
-        <span class="p">{</span><span class="s">&#39;RaiseError&#39;</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">});</span>
-
-    <span class="c1"># begin a transaction</span>
-    <span class="nv">$dbh</span><span class="o">-&gt;</span><span class="p">{</span><span class="n">AutoCommit</span><span class="p">}</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
-
-    <span class="c1"># fetch the access count</span>
-    <span class="k">my</span> <span class="nv">$sth</span> <span class="o">=</span> <span class="nv">$dbh</span><span class="o">-&gt;</span><span class="n">prepare</span><span class="p">(</span><span class="s">&#34;SELECT * FROM `access_count` WHERE `id` = 1 FOR UPDATE&#34;</span><span class="p">);</span>
-    <span class="nv">$sth</span><span class="o">-&gt;</span><span class="n">execute</span><span class="p">();</span>
-    <span class="k">my</span> <span class="nv">$row</span> <span class="o">=</span> <span class="nv">$sth</span><span class="o">-&gt;</span><span class="n">fetchrow_hashref</span><span class="p">();</span>
-
-    <span class="k">my</span> <span class="nv">$number</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
-    <span class="k">if</span> <span class="p">(</span><span class="nv">$row</span><span class="p">)</span> <span class="p">{</span>
-        <span class="c1"># increment</span>
-        <span class="nv">$number</span> <span class="o">=</span> <span class="nv">$row</span><span class="o">-&gt;</span><span class="p">{</span><span class="n">number</span><span class="p">};</span>
-        <span class="nv">$number</span><span class="o">++</span><span class="p">;</span>
-        <span class="nv">$dbh</span><span class="o">-&gt;</span><span class="k">do</span><span class="p">(</span><span class="s">&#34;UPDATE `access_count` SET `number` = ?&#34;</span><span class="p">,</span> <span class="nb">undef</span><span class="p">,</span> <span class="nv">$number</span><span class="p">);</span>
-    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-        <span class="c1"># create a new row</span>
-        <span class="nv">$number</span><span class="o">++</span><span class="p">;</span>
-        <span class="nv">$dbh</span><span class="o">-&gt;</span><span class="k">do</span><span class="p">(</span><span class="s">&#34;INSERT INTO `access_count` (`id`, `number`) VALUES (?, ?)&#34;</span><span class="p">,</span> <span class="nb">undef</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="nv">$number</span><span class="p">);</span>
-    <span class="p">}</span>
-
-    <span class="c1"># commit</span>
-    <span class="nv">$dbh</span><span class="o">-&gt;</span><span class="p">{</span><span class="n">AutoCommit</span><span class="p">}</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
-    <span class="nv">$dbh</span><span class="o">-&gt;</span><span class="n">disconnect</span><span class="p">();</span>
-    <span class="k">return</span> <span class="p">[</span><span class="mi">200</span><span class="p">,</span> <span class="p">[</span><span class="s">&#39;Content-Type&#39;</span> <span class="o">=&gt;</span> <span class="s">&#39;text/plain&#39;</span><span class="p">],</span> <span class="p">[</span><span class="s">&#34;$number\n&#34;</span><span class="p">]];</span>
-<span class="p">};</span>
-</code></pre></div><h2 id="dockerfile-を用意する">Dockerfile を用意する</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="line"><span class="cl"><span class="c1"># app.psgi</span>
+</span></span><span class="line"><span class="cl"><span class="k">use</span> <span class="nn">DBI</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">use</span> <span class="mf">5.34.0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">use</span> <span class="nn">feature</span> <span class="sx">qw(try)</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">no</span> <span class="nn">warnings</span> <span class="s">&#34;experimental::try&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">my</span> <span class="nv">$database</span> <span class="o">=</span> <span class="nv">$ENV</span><span class="p">{</span><span class="n">MYSQL_DATABASE</span><span class="p">};</span>
+</span></span><span class="line"><span class="cl"><span class="k">my</span> <span class="nv">$host</span> <span class="o">=</span> <span class="nv">$ENV</span><span class="p">{</span><span class="n">MYSQL_HOST</span><span class="p">};</span>
+</span></span><span class="line"><span class="cl"><span class="k">my</span> <span class="nv">$port</span> <span class="o">=</span> <span class="nv">$ENV</span><span class="p">{</span><span class="n">MYSQL_PORT</span><span class="p">};</span>
+</span></span><span class="line"><span class="cl"><span class="k">my</span> <span class="nv">$user</span> <span class="o">=</span> <span class="nv">$ENV</span><span class="p">{</span><span class="n">MYSQL_USER</span><span class="p">};</span>
+</span></span><span class="line"><span class="cl"><span class="k">my</span> <span class="nv">$password</span> <span class="o">=</span> <span class="nv">$ENV</span><span class="p">{</span><span class="n">MYSQL_PASSWORD</span><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># initialize the database</span>
+</span></span><span class="line"><span class="cl"><span class="n">try</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">my</span> <span class="nv">$dbh</span> <span class="o">=</span> <span class="nn">DBI</span><span class="o">-&gt;</span><span class="nb">connect</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="s">&#34;DBI:mysql:;host=$host;port=$port&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nv">$user</span><span class="p">,</span> <span class="nv">$password</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="p">{</span><span class="s">&#39;RaiseError&#39;</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">});</span>
+</span></span><span class="line"><span class="cl">    <span class="nv">$dbh</span><span class="o">-&gt;</span><span class="k">do</span><span class="p">(</span><span class="s">&#34;CREATE DATABASE IF NOT EXISTS `$database`&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="nv">$dbh</span><span class="o">-&gt;</span><span class="k">do</span><span class="p">(</span><span class="s">&#34;CREATE TABLE IF NOT EXISTS `$database`.`access_count` (`id` INT PRIMARY KEY, `number` BIGINT)&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="nv">$dbh</span><span class="o">-&gt;</span><span class="n">disconnect</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="n">catch</span> <span class="p">(</span><span class="nv">$e</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">say</span> <span class="bp">STDERR</span> <span class="nv">$e</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">my</span> <span class="nv">$app</span> <span class="o">=</span> <span class="k">sub</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">my</span> <span class="nv">$dbh</span> <span class="o">=</span> <span class="nn">DBI</span><span class="o">-&gt;</span><span class="nb">connect</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="s">&#34;DBI:mysql:database=$database;host=$host;port=$port&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nv">$user</span><span class="p">,</span> <span class="nv">$password</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="p">{</span><span class="s">&#39;RaiseError&#39;</span> <span class="o">=&gt;</span> <span class="mi">1</span><span class="p">});</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1"># begin a transaction</span>
+</span></span><span class="line"><span class="cl">    <span class="nv">$dbh</span><span class="o">-&gt;</span><span class="p">{</span><span class="n">AutoCommit</span><span class="p">}</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1"># fetch the access count</span>
+</span></span><span class="line"><span class="cl">    <span class="k">my</span> <span class="nv">$sth</span> <span class="o">=</span> <span class="nv">$dbh</span><span class="o">-&gt;</span><span class="n">prepare</span><span class="p">(</span><span class="s">&#34;SELECT * FROM `access_count` WHERE `id` = 1 FOR UPDATE&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="nv">$sth</span><span class="o">-&gt;</span><span class="n">execute</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">    <span class="k">my</span> <span class="nv">$row</span> <span class="o">=</span> <span class="nv">$sth</span><span class="o">-&gt;</span><span class="n">fetchrow_hashref</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">my</span> <span class="nv">$number</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="nv">$row</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="c1"># increment</span>
+</span></span><span class="line"><span class="cl">        <span class="nv">$number</span> <span class="o">=</span> <span class="nv">$row</span><span class="o">-&gt;</span><span class="p">{</span><span class="n">number</span><span class="p">};</span>
+</span></span><span class="line"><span class="cl">        <span class="nv">$number</span><span class="o">++</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="nv">$dbh</span><span class="o">-&gt;</span><span class="k">do</span><span class="p">(</span><span class="s">&#34;UPDATE `access_count` SET `number` = ?&#34;</span><span class="p">,</span> <span class="nb">undef</span><span class="p">,</span> <span class="nv">$number</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="c1"># create a new row</span>
+</span></span><span class="line"><span class="cl">        <span class="nv">$number</span><span class="o">++</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="nv">$dbh</span><span class="o">-&gt;</span><span class="k">do</span><span class="p">(</span><span class="s">&#34;INSERT INTO `access_count` (`id`, `number`) VALUES (?, ?)&#34;</span><span class="p">,</span> <span class="nb">undef</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="nv">$number</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1"># commit</span>
+</span></span><span class="line"><span class="cl">    <span class="nv">$dbh</span><span class="o">-&gt;</span><span class="p">{</span><span class="n">AutoCommit</span><span class="p">}</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="nv">$dbh</span><span class="o">-&gt;</span><span class="n">disconnect</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="p">[</span><span class="mi">200</span><span class="p">,</span> <span class="p">[</span><span class="s">&#39;Content-Type&#39;</span> <span class="o">=&gt;</span> <span class="s">&#39;text/plain&#39;</span><span class="p">],</span> <span class="p">[</span><span class="s">&#34;$number\n&#34;</span><span class="p">]];</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><h2 id="dockerfile-を用意する">Dockerfile を用意する</h2>
 <p>PSGI アプリを起動するのに <a href="https://metacpan.org/pod/Plack">Plack</a>、MySQL へ接続するのに <a href="https://metacpan.org/pod/DBD::mysql">DBD::mysql</a> を利用するので、
 cpanfile にこれらのパッケージへの依存を書いておきます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="c1"># cpanfile</span>
-<span class="n">requires</span> <span class="s">&#39;Plack&#39;</span><span class="p">;</span>
-<span class="n">requires</span> <span class="s">&#39;DBD::mysql&#39;</span><span class="p">;</span>
-</code></pre></div><p>Perl の公式イメージをベースに依存モジュールをインストールして<a href="https://metacpan.org/pod/distribution/Plack/script/plackup">plackup</a>するだけの
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="line"><span class="cl"><span class="c1"># cpanfile</span>
+</span></span><span class="line"><span class="cl"><span class="n">requires</span> <span class="s">&#39;Plack&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="n">requires</span> <span class="s">&#39;DBD::mysql&#39;</span><span class="p">;</span>
+</span></span></code></pre></div><p>Perl の公式イメージをベースに依存モジュールをインストールして<a href="https://metacpan.org/pod/distribution/Plack/script/plackup">plackup</a>するだけの
 簡単な Dockerfile を書きます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-dockerfile" data-lang="dockerfile"><span class="c"># Dockerfile</span><span class="err">
-</span><span class="err"></span><span class="k">FROM</span><span class="s"> perl:5.34.0</span><span class="err">
-</span><span class="err">
-</span><span class="err"></span><span class="k">WORKDIR</span><span class="s"> /usr/src/myapp</span><span class="err">
-</span><span class="err"></span><span class="k">COPY</span> cpanfile .<span class="err">
-</span><span class="err"></span><span class="k">RUN</span> cpanm --notest --installdeps .<span class="err">
-</span><span class="err"></span><span class="k">COPY</span> app.psgi .<span class="err">
-</span><span class="err">
-</span><span class="err"></span><span class="k">CMD</span> <span class="p">[</span> <span class="s2">&#34;plackup&#34;</span><span class="p">,</span> <span class="s2">&#34;app.psgi&#34;</span> <span class="p">]</span><span class="err">
-</span></code></pre></div><h2 id="手元で動作確認">手元で動作確認</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-dockerfile" data-lang="dockerfile"><span class="line"><span class="cl"><span class="c"># Dockerfile</span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err"></span><span class="k">FROM</span><span class="s"> perl:5.34.0</span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err"></span><span class="k">WORKDIR</span><span class="s"> /usr/src/myapp</span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err"></span><span class="k">COPY</span> cpanfile .<span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err"></span><span class="k">RUN</span> cpanm --notest --installdeps .<span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err"></span><span class="k">COPY</span> app.psgi .<span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err"></span><span class="k">CMD</span> <span class="p">[</span> <span class="s2">&#34;plackup&#34;</span><span class="p">,</span> <span class="s2">&#34;app.psgi&#34;</span> <span class="p">]</span><span class="err">
+</span></span></span></code></pre></div><h2 id="手元で動作確認">手元で動作確認</h2>
 <p>さて、一応ちゃんと動作するか手元で確認しておきましょう。
 今回のアプリは単体では動作せず MySQL が必要です。全部まとめて起動してくれる docker compose の設定を用意しました。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;3.8&#34;</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="nt">services</span><span class="p">:</span><span class="w">
-</span><span class="w">  </span><span class="nt">app</span><span class="p">:</span><span class="w">
-</span><span class="w">    </span><span class="nt">build</span><span class="p">:</span><span class="w">
-</span><span class="w">      </span><span class="nt">context</span><span class="p">:</span><span class="w"> </span><span class="l">.</span><span class="w">
-</span><span class="w">      </span><span class="nt">dockerfile</span><span class="p">:</span><span class="w"> </span><span class="l">Dockerfile</span><span class="w">
-</span><span class="w">    </span><span class="nt">depends_on</span><span class="p">:</span><span class="w">
-</span><span class="w">      </span><span class="nt">db</span><span class="p">:</span><span class="w">
-</span><span class="w">        </span><span class="nt">condition</span><span class="p">:</span><span class="w"> </span><span class="l">service_healthy</span><span class="w">
-</span><span class="w">    </span><span class="nt">ports</span><span class="p">:</span><span class="w">
-</span><span class="w">      </span>- <span class="s2">&#34;5000:5000&#34;</span><span class="w">
-</span><span class="w">    </span><span class="nt">environment</span><span class="p">:</span><span class="w">
-</span><span class="w">      </span>- <span class="l">MYSQL_USER=root</span><span class="w">
-</span><span class="w">      </span>- <span class="l">MYSQL_PASSWORD=hello-perl</span><span class="w">
-</span><span class="w">      </span>- <span class="l">MYSQL_DATABASE=hello-perl</span><span class="w">
-</span><span class="w">      </span>- <span class="l">MYSQL_HOST=db</span><span class="w">
-</span><span class="w">      </span>- <span class="l">MYSQL_PORT=3306</span><span class="w">
-</span><span class="w">  </span><span class="nt">db</span><span class="p">:</span><span class="w">
-</span><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l">mysql:8.0</span><span class="w">
-</span><span class="w">    </span><span class="nt">ports</span><span class="p">:</span><span class="w">
-</span><span class="w">      </span>- <span class="s2">&#34;3306:3306&#34;</span><span class="w">
-</span><span class="w">    </span><span class="nt">environment</span><span class="p">:</span><span class="w">
-</span><span class="w">      </span>- <span class="l">MYSQL_ROOT_PASSWORD=hello-perl</span><span class="w">
-</span><span class="w">    </span><span class="nt">healthcheck</span><span class="p">:</span><span class="w">
-</span><span class="w">      </span><span class="nt">test</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;mysqladmin ping&#34;</span><span class="w">
-</span><span class="w">      </span><span class="nt">interval</span><span class="p">:</span><span class="w"> </span><span class="l">30s</span><span class="w">
-</span><span class="w">      </span><span class="nt">start_period</span><span class="p">:</span><span class="w"> </span><span class="l">30s</span><span class="w">
-</span><span class="w">      </span><span class="nt">retries</span><span class="p">:</span><span class="w"> </span><span class="m">3</span><span class="w">
-</span></code></pre></div><p><code>docker-compose up</code> で起動します。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="gp">$ </span>docker-compose up
-<span class="go">[+] Running 3/2
-</span><span class="go"> ⠿ Network rds_default  Created 0.0s
-</span><span class="go"> ⠿ Container rds-db-1   Created 0.1s
-</span><span class="go"> ⠿ Container rds-app-1  Created 0.1s
-</span><span class="go">Attaching to rds-app-1, rds-db-1
-</span><span class="go">rds-db-1   | 2022-02-13 04:10:08+00:00 [Note] [Entrypoint]: Entrypoint script for MySQL Server 8.0.27-1debian10 started.
-</span><span class="go">rds-db-1   | 2022-02-13 04:10:08+00:00 [Note] [Entrypoint]: Switching to dedicated user &#39;mysql&#39;
-</span><span class="go">rds-db-1   | 2022-02-13 04:10:08+00:00 [Note] [Entrypoint]: Entrypoint script for MySQL Server 8.0.27-1debian10 started.
-</span><span class="go">rds-db-1   | 2022-02-13 04:10:08+00:00 [Note] [Entrypoint]: Initializing database files
-</span><span class="go">rds-db-1   | 2022-02-13T04:10:08.843268Z 0 [System] [MY-013169] [Server] /usr/sbin/mysqld (mysqld 8.0.27) initializing of server in progress as process 43
-</span><span class="go">rds-db-1   | 2022-02-13T04:10:08.851799Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.
-</span><span class="go">rds-db-1   | 2022-02-13T04:10:09.281619Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.
-</span><span class="go">rds-db-1   | 2022-02-13T04:10:10.378466Z 0 [Warning] [MY-013746] [Server] A deprecated TLS version TLSv1 is enabled for channel mysql_main
-</span><span class="go">rds-db-1   | 2022-02-13T04:10:10.378525Z 0 [Warning] [MY-013746] [Server] A deprecated TLS version TLSv1.1 is enabled for channel mysql_main
-</span><span class="go">rds-db-1   | 2022-02-13T04:10:10.418179Z 6 [Warning] [MY-010453] [Server] root@localhost is created with an empty password ! Please consider switching off the --initialize-insecure option.
-</span><span class="go">rds-db-1   | 2022-02-13 04:10:13+00:00 [Note] [Entrypoint]: Database files initialized
-</span><span class="go">rds-db-1   | 2022-02-13 04:10:13+00:00 [Note] [Entrypoint]: Starting temporary server
-</span><span class="go">rds-db-1   | 2022-02-13T04:10:14.018163Z 0 [System] [MY-010116] [Server] /usr/sbin/mysqld (mysqld 8.0.27) starting as process 92
-</span><span class="go">rds-db-1   | 2022-02-13T04:10:14.038481Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.
-</span><span class="go">rds-db-1   | 2022-02-13T04:10:14.197654Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.
-</span><span class="go">rds-db-1   | 2022-02-13T04:10:14.507648Z 0 [Warning] [MY-013746] [Server] A deprecated TLS version TLSv1 is enabled for channel mysql_main
-</span><span class="go">rds-db-1   | 2022-02-13T04:10:14.507763Z 0 [Warning] [MY-013746] [Server] A deprecated TLS version TLSv1.1 is enabled for channel mysql_main
-</span><span class="go">rds-db-1   | 2022-02-13T04:10:14.509226Z 0 [Warning] [MY-010068] [Server] CA certificate ca.pem is self signed.
-</span><span class="go">rds-db-1   | 2022-02-13T04:10:14.509350Z 0 [System] [MY-013602] [Server] Channel mysql_main configured to support TLS. Encrypted connections are now supported for this channel.
-</span><span class="go">rds-db-1   | 2022-02-13T04:10:14.513320Z 0 [Warning] [MY-011810] [Server] Insecure configuration for --pid-file: Location &#39;/var/run/mysqld&#39; in the path is accessible to all OS users. Consider choosing a different directory.
-</span><span class="go">rds-db-1   | 2022-02-13T04:10:14.558724Z 0 [System] [MY-011323] [Server] X Plugin ready for connections. Socket: /var/run/mysqld/mysqlx.sock
-</span><span class="go">rds-db-1   | 2022-02-13T04:10:14.559169Z 0 [System] [MY-010931] [Server] /usr/sbin/mysqld: ready for connections. Version: &#39;8.0.27&#39;  socket: &#39;/var/run/mysqld/mysqld.sock&#39;  port: 0  MySQL Community Server - GPL.
-</span><span class="go">rds-db-1   | 2022-02-13 04:10:14+00:00 [Note] [Entrypoint]: Temporary server started.
-</span><span class="go">rds-db-1   | Warning: Unable to load &#39;/usr/share/zoneinfo/iso3166.tab&#39; as time zone. Skipping it.
-</span><span class="go">rds-db-1   | Warning: Unable to load &#39;/usr/share/zoneinfo/leap-seconds.list&#39; as time zone. Skipping it.
-</span><span class="go">rds-db-1   | Warning: Unable to load &#39;/usr/share/zoneinfo/zone.tab&#39; as time zone. Skipping it.
-</span><span class="go">rds-db-1   | Warning: Unable to load &#39;/usr/share/zoneinfo/zone1970.tab&#39; as time zone. Skipping it.
-</span><span class="go">rds-db-1   | 
-</span><span class="go">rds-db-1   | 2022-02-13 04:10:17+00:00 [Note] [Entrypoint]: Stopping temporary server
-</span><span class="go">rds-db-1   | 2022-02-13T04:10:17.875669Z 10 [System] [MY-013172] [Server] Received SHUTDOWN from user root. Shutting down mysqld (Version: 8.0.27).
-</span><span class="go">rds-db-1   | 2022-02-13T04:10:19.165492Z 0 [System] [MY-010910] [Server] /usr/sbin/mysqld: Shutdown complete (mysqld 8.0.27)  MySQL Community Server - GPL.
-</span><span class="go">rds-db-1   | 2022-02-13 04:10:19+00:00 [Note] [Entrypoint]: Temporary server stopped
-</span><span class="go">rds-db-1   | 
-</span><span class="go">rds-db-1   | 2022-02-13 04:10:19+00:00 [Note] [Entrypoint]: MySQL init process done. Ready for start up.
-</span><span class="go">rds-db-1   | 
-</span><span class="go">rds-db-1   | 2022-02-13T04:10:20.142809Z 0 [System] [MY-010116] [Server] /usr/sbin/mysqld (mysqld 8.0.27) starting as process 1
-</span><span class="go">rds-db-1   | 2022-02-13T04:10:20.157983Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.
-</span><span class="go">rds-db-1   | 2022-02-13T04:10:20.315130Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.
-</span><span class="go">rds-db-1   | 2022-02-13T04:10:20.566846Z 0 [Warning] [MY-013746] [Server] A deprecated TLS version TLSv1 is enabled for channel mysql_main
-</span><span class="go">rds-db-1   | 2022-02-13T04:10:20.567039Z 0 [Warning] [MY-013746] [Server] A deprecated TLS version TLSv1.1 is enabled for channel mysql_main
-</span><span class="go">rds-db-1   | 2022-02-13T04:10:20.567886Z 0 [Warning] [MY-010068] [Server] CA certificate ca.pem is self signed.
-</span><span class="go">rds-db-1   | 2022-02-13T04:10:20.568117Z 0 [System] [MY-013602] [Server] Channel mysql_main configured to support TLS. Encrypted connections are now supported for this channel.
-</span><span class="go">rds-db-1   | 2022-02-13T04:10:20.576602Z 0 [Warning] [MY-011810] [Server] Insecure configuration for --pid-file: Location &#39;/var/run/mysqld&#39; in the path is accessible to all OS users. Consider choosing a different directory.
-</span><span class="go">rds-db-1   | 2022-02-13T04:10:20.619418Z 0 [System] [MY-011323] [Server] X Plugin ready for connections. Bind-address: &#39;::&#39; port: 33060, socket: /var/run/mysqld/mysqlx.sock
-</span><span class="go">rds-db-1   | 2022-02-13T04:10:20.619469Z 0 [System] [MY-010931] [Server] /usr/sbin/mysqld: ready for connections. Version: &#39;8.0.27&#39;  socket: &#39;/var/run/mysqld/mysqld.sock&#39;  port: 3306  MySQL Community Server - GPL.
-</span><span class="go">rds-app-1  | HTTP::Server::PSGI: Accepting connections at http://0:5000/
-</span></code></pre></div><p>&ldquo;http://localhost:5000&rdquo; にアクセスすると &ldquo;1&rdquo; と表示され、アクセスするごとにカウントが増えていきます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="gp">$ </span>curl http://localhost:5000
-<span class="go">1
-</span><span class="go"></span><span class="gp">$ </span>curl http://localhost:5000
-<span class="go">2
-</span><span class="go"></span><span class="gp">$ </span>curl http://localhost:5000
-<span class="go">3
-</span></code></pre></div><h2 id="ecr-に-push-する">ECR に Push する</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="line"><span class="cl"><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;3.8&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">services</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">app</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">build</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span><span class="nt">context</span><span class="p">:</span><span class="w"> </span><span class="l">.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span><span class="nt">dockerfile</span><span class="p">:</span><span class="w"> </span><span class="l">Dockerfile</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">depends_on</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span><span class="nt">db</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="nt">condition</span><span class="p">:</span><span class="w"> </span><span class="l">service_healthy</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">ports</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span>- <span class="s2">&#34;5000:5000&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">environment</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span>- <span class="l">MYSQL_USER=root</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span>- <span class="l">MYSQL_PASSWORD=hello-perl</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span>- <span class="l">MYSQL_DATABASE=hello-perl</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span>- <span class="l">MYSQL_HOST=db</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span>- <span class="l">MYSQL_PORT=3306</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">db</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l">mysql:8.0</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">ports</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span>- <span class="s2">&#34;3306:3306&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">environment</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span>- <span class="l">MYSQL_ROOT_PASSWORD=hello-perl</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">healthcheck</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span><span class="nt">test</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;mysqladmin ping&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span><span class="nt">interval</span><span class="p">:</span><span class="w"> </span><span class="l">30s</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span><span class="nt">start_period</span><span class="p">:</span><span class="w"> </span><span class="l">30s</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span><span class="nt">retries</span><span class="p">:</span><span class="w"> </span><span class="m">3</span><span class="w">
+</span></span></span></code></pre></div><p><code>docker-compose up</code> で起動します。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="line"><span class="cl"><span class="gp">$</span> docker-compose up
+</span></span><span class="line"><span class="cl"><span class="go">[+] Running 3/2
+</span></span></span><span class="line"><span class="cl"><span class="go"> ⠿ Network rds_default  Created 0.0s
+</span></span></span><span class="line"><span class="cl"><span class="go"> ⠿ Container rds-db-1   Created 0.1s
+</span></span></span><span class="line"><span class="cl"><span class="go"> ⠿ Container rds-app-1  Created 0.1s
+</span></span></span><span class="line"><span class="cl"><span class="go">Attaching to rds-app-1, rds-db-1
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13 04:10:08+00:00 [Note] [Entrypoint]: Entrypoint script for MySQL Server 8.0.27-1debian10 started.
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13 04:10:08+00:00 [Note] [Entrypoint]: Switching to dedicated user &#39;mysql&#39;
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13 04:10:08+00:00 [Note] [Entrypoint]: Entrypoint script for MySQL Server 8.0.27-1debian10 started.
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13 04:10:08+00:00 [Note] [Entrypoint]: Initializing database files
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13T04:10:08.843268Z 0 [System] [MY-013169] [Server] /usr/sbin/mysqld (mysqld 8.0.27) initializing of server in progress as process 43
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13T04:10:08.851799Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13T04:10:09.281619Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13T04:10:10.378466Z 0 [Warning] [MY-013746] [Server] A deprecated TLS version TLSv1 is enabled for channel mysql_main
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13T04:10:10.378525Z 0 [Warning] [MY-013746] [Server] A deprecated TLS version TLSv1.1 is enabled for channel mysql_main
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13T04:10:10.418179Z 6 [Warning] [MY-010453] [Server] root@localhost is created with an empty password ! Please consider switching off the --initialize-insecure option.
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13 04:10:13+00:00 [Note] [Entrypoint]: Database files initialized
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13 04:10:13+00:00 [Note] [Entrypoint]: Starting temporary server
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13T04:10:14.018163Z 0 [System] [MY-010116] [Server] /usr/sbin/mysqld (mysqld 8.0.27) starting as process 92
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13T04:10:14.038481Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13T04:10:14.197654Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13T04:10:14.507648Z 0 [Warning] [MY-013746] [Server] A deprecated TLS version TLSv1 is enabled for channel mysql_main
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13T04:10:14.507763Z 0 [Warning] [MY-013746] [Server] A deprecated TLS version TLSv1.1 is enabled for channel mysql_main
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13T04:10:14.509226Z 0 [Warning] [MY-010068] [Server] CA certificate ca.pem is self signed.
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13T04:10:14.509350Z 0 [System] [MY-013602] [Server] Channel mysql_main configured to support TLS. Encrypted connections are now supported for this channel.
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13T04:10:14.513320Z 0 [Warning] [MY-011810] [Server] Insecure configuration for --pid-file: Location &#39;/var/run/mysqld&#39; in the path is accessible to all OS users. Consider choosing a different directory.
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13T04:10:14.558724Z 0 [System] [MY-011323] [Server] X Plugin ready for connections. Socket: /var/run/mysqld/mysqlx.sock
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13T04:10:14.559169Z 0 [System] [MY-010931] [Server] /usr/sbin/mysqld: ready for connections. Version: &#39;8.0.27&#39;  socket: &#39;/var/run/mysqld/mysqld.sock&#39;  port: 0  MySQL Community Server - GPL.
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13 04:10:14+00:00 [Note] [Entrypoint]: Temporary server started.
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | Warning: Unable to load &#39;/usr/share/zoneinfo/iso3166.tab&#39; as time zone. Skipping it.
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | Warning: Unable to load &#39;/usr/share/zoneinfo/leap-seconds.list&#39; as time zone. Skipping it.
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | Warning: Unable to load &#39;/usr/share/zoneinfo/zone.tab&#39; as time zone. Skipping it.
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | Warning: Unable to load &#39;/usr/share/zoneinfo/zone1970.tab&#39; as time zone. Skipping it.
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13 04:10:17+00:00 [Note] [Entrypoint]: Stopping temporary server
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13T04:10:17.875669Z 10 [System] [MY-013172] [Server] Received SHUTDOWN from user root. Shutting down mysqld (Version: 8.0.27).
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13T04:10:19.165492Z 0 [System] [MY-010910] [Server] /usr/sbin/mysqld: Shutdown complete (mysqld 8.0.27)  MySQL Community Server - GPL.
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13 04:10:19+00:00 [Note] [Entrypoint]: Temporary server stopped
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13 04:10:19+00:00 [Note] [Entrypoint]: MySQL init process done. Ready for start up.
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13T04:10:20.142809Z 0 [System] [MY-010116] [Server] /usr/sbin/mysqld (mysqld 8.0.27) starting as process 1
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13T04:10:20.157983Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13T04:10:20.315130Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13T04:10:20.566846Z 0 [Warning] [MY-013746] [Server] A deprecated TLS version TLSv1 is enabled for channel mysql_main
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13T04:10:20.567039Z 0 [Warning] [MY-013746] [Server] A deprecated TLS version TLSv1.1 is enabled for channel mysql_main
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13T04:10:20.567886Z 0 [Warning] [MY-010068] [Server] CA certificate ca.pem is self signed.
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13T04:10:20.568117Z 0 [System] [MY-013602] [Server] Channel mysql_main configured to support TLS. Encrypted connections are now supported for this channel.
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13T04:10:20.576602Z 0 [Warning] [MY-011810] [Server] Insecure configuration for --pid-file: Location &#39;/var/run/mysqld&#39; in the path is accessible to all OS users. Consider choosing a different directory.
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13T04:10:20.619418Z 0 [System] [MY-011323] [Server] X Plugin ready for connections. Bind-address: &#39;::&#39; port: 33060, socket: /var/run/mysqld/mysqlx.sock
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-db-1   | 2022-02-13T04:10:20.619469Z 0 [System] [MY-010931] [Server] /usr/sbin/mysqld: ready for connections. Version: &#39;8.0.27&#39;  socket: &#39;/var/run/mysqld/mysqld.sock&#39;  port: 3306  MySQL Community Server - GPL.
+</span></span></span><span class="line"><span class="cl"><span class="go">rds-app-1  | HTTP::Server::PSGI: Accepting connections at http://0:5000/
+</span></span></span></code></pre></div><p>&ldquo;http://localhost:5000&rdquo; にアクセスすると &ldquo;1&rdquo; と表示され、アクセスするごとにカウントが増えていきます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="line"><span class="cl"><span class="gp">$</span> curl http://localhost:5000
+</span></span><span class="line"><span class="cl"><span class="go">1
+</span></span></span><span class="line"><span class="cl"><span class="go"></span><span class="gp">$</span> curl http://localhost:5000
+</span></span><span class="line"><span class="cl"><span class="go">2
+</span></span></span><span class="line"><span class="cl"><span class="go"></span><span class="gp">$</span> curl http://localhost:5000
+</span></span><span class="line"><span class="cl"><span class="go">3
+</span></span></span></code></pre></div><h2 id="ecr-に-push-する">ECR に Push する</h2>
 <p><a href="https://console.aws.amazon.com/ecr/home">マネージメントコンソールで Amazon ECR を開いて</a> 新規レポジトリを作成、イメージをプッシュします。
 レポジトリを作成するとプッシュの手順が表示されるので、それにしたがいましょう。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="go">aws ecr get-login-password --region ap-northeast-1 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.ap-northeast-1.amazonaws.com
-</span><span class="go"></span><span class="gp">$ </span>docker build -t perl-test .
-<span class="go">docker tag perl-test:latest 123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/perl-test:latest
-</span><span class="go">docker push 123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/perl-test:latest
-</span></code></pre></div><h2 id="amazon-rds-aurora-mysql-互換クラスターを作成する">Amazon RDS Aurora MySQL 互換クラスターを作成する</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="line"><span class="cl"><span class="go">aws ecr get-login-password --region ap-northeast-1 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.ap-northeast-1.amazonaws.com
+</span></span></span><span class="line"><span class="cl"><span class="go"></span><span class="gp">$</span> docker build -t perl-test .
+</span></span><span class="line"><span class="cl"><span class="go">docker tag perl-test:latest 123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/perl-test:latest
+</span></span></span><span class="line"><span class="cl"><span class="go">docker push 123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/perl-test:latest
+</span></span></span></code></pre></div><h2 id="amazon-rds-aurora-mysql-互換クラスターを作成する">Amazon RDS Aurora MySQL 互換クラスターを作成する</h2>
 <p><a href="https://console.aws.amazon.com/rds/home">マネージメントコンソールで Amazon RDS を開いて</a> 新規クラスターを作成します。
 いつの間にかパスワードの自動生成ができるようになってますね？ 🤔
 後で使うので大事にメモっておきましょう。</p>

@@ -33,7 +33,7 @@
   <meta name="author" content="ICHINOSE Shogo">
 
   
-  <meta name="generator" content="Hugo 0.91.2" />
+  <meta name="generator" content="Hugo 0.120.4">
 
 
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
@@ -146,65 +146,65 @@ MathJax = {
 というか ↑ の記事もまだ考慮が足りない気がする。</p>
 <h2 id="ぼくのかんがえたさいきょうの-go-http-サーバー起動方法">ぼくのかんがえたさいきょうの Go HTTP サーバー起動方法</h2>
 <p>とりあえず完成形のコード。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
-
-<span class="kn">import</span> <span class="p">(</span>
-	<span class="s">&#34;context&#34;</span>
-	<span class="s">&#34;log&#34;</span>
-	<span class="s">&#34;net/http&#34;</span>
-	<span class="s">&#34;os&#34;</span>
-	<span class="s">&#34;os/signal&#34;</span>
-	<span class="s">&#34;syscall&#34;</span>
-	<span class="s">&#34;time&#34;</span>
-<span class="p">)</span>
-
-<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
-	<span class="c1">// シグナルを待ち受ける
-</span><span class="c1"></span>	<span class="nx">chSignal</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Signal</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-	<span class="nx">signal</span><span class="p">.</span><span class="nf">Notify</span><span class="p">(</span><span class="nx">chSignal</span><span class="p">,</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGINT</span><span class="p">,</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span><span class="p">)</span>
-	<span class="k">defer</span> <span class="nx">signal</span><span class="p">.</span><span class="nf">Stop</span><span class="p">(</span><span class="nx">chSignal</span><span class="p">)</span>
-
-	<span class="c1">// 起動したいサーバーを準備
-</span><span class="c1"></span>	<span class="nx">mux</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nf">NewServeMux</span><span class="p">()</span>
-	<span class="nx">mux</span><span class="p">.</span><span class="nf">HandleFunc</span><span class="p">(</span><span class="s">&#34;/&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
-		<span class="nx">fmt</span><span class="p">.</span><span class="nf">Fprintf</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="s">&#34;from pid %d.\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getpid</span><span class="p">())</span>
-	<span class="p">})</span>
-	<span class="nx">s</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Server</span><span class="p">{</span>
-		<span class="nx">Addr</span><span class="p">:</span>    <span class="s">&#34;:8080&#34;</span><span class="p">,</span>
-		<span class="nx">Handler</span><span class="p">:</span> <span class="nx">mux</span><span class="p">,</span>
-	<span class="p">}</span>
-	<span class="nx">http</span><span class="p">.</span><span class="nf">Handle</span><span class="p">(</span><span class="s">&#34;/&#34;</span><span class="p">,</span> <span class="nx">h</span><span class="p">)</span>
-
-	<span class="c1">// 別 goroutine で起動する
-</span><span class="c1"></span>	<span class="nx">chServe</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">error</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-	<span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
-		<span class="k">defer</span> <span class="nb">close</span><span class="p">(</span><span class="nx">chServe</span><span class="p">)</span>
-		<span class="nx">chServe</span> <span class="o">&lt;-</span> <span class="nx">s</span><span class="p">.</span><span class="nf">ListenAndServe</span><span class="p">()</span>
-	<span class="p">}()</span>
-
-	<span class="k">select</span> <span class="p">{</span>
-	<span class="k">case</span> <span class="nx">err</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">chServe</span><span class="p">:</span>
-		<span class="c1">// ListenAndServe はたまに失敗するので、失敗したら死んでほしい
-</span><span class="c1"></span>		<span class="c1">// 他のプロセスが使用しているポートを開いたときとか
-</span><span class="c1"></span>		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
-	<span class="k">case</span> <span class="o">&lt;-</span><span class="nx">chSignal</span><span class="p">:</span>
-	<span class="p">}</span>
-
-	<span class="nx">signal</span><span class="p">.</span><span class="nf">Stop</span><span class="p">(</span><span class="nx">chSignal</span><span class="p">)</span>
-
-	<span class="c1">// Graceful Shutdown 開始
-</span><span class="c1"></span>	<span class="nx">ctx</span><span class="p">,</span> <span class="nx">cancel</span> <span class="o">:=</span> <span class="nx">context</span><span class="p">.</span><span class="nf">WithTimeout</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nf">Background</span><span class="p">(),</span> <span class="mi">30</span><span class="o">*</span><span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">)</span>
-	<span class="k">defer</span> <span class="nf">cancel</span><span class="p">()</span>
-	<span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">s</span><span class="p">.</span><span class="nf">Shutdown</span><span class="p">(</span><span class="nx">ctx</span><span class="p">);</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
-	<span class="p">}</span>
-
-	<span class="c1">// HTTPサーバーが完全に終了するのを待つ
-</span><span class="c1"></span>	<span class="c1">// (OSがリソース閉じてくれるはずだけど、お行儀よく）
-</span><span class="c1"></span>	<span class="nx">s</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
-	<span class="o">&lt;-</span><span class="nx">chServe</span> <span class="c1">// http.ErrServerClosed が返ってくるのがわかっているので、特に何もしない。
-</span><span class="c1"></span><span class="p">}</span>
-</code></pre></div><p>大事なのは、<code>ListenAndServe</code> がサーバーの起動に失敗したときはプロセスを終了させること。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;context&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;log&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;net/http&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;os&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;os/signal&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;syscall&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;time&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="c1">// シグナルを待ち受ける
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="nx">chSignal</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Signal</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">signal</span><span class="p">.</span><span class="nf">Notify</span><span class="p">(</span><span class="nx">chSignal</span><span class="p">,</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGINT</span><span class="p">,</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">defer</span> <span class="nx">signal</span><span class="p">.</span><span class="nf">Stop</span><span class="p">(</span><span class="nx">chSignal</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="c1">// 起動したいサーバーを準備
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="nx">mux</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nf">NewServeMux</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">mux</span><span class="p">.</span><span class="nf">HandleFunc</span><span class="p">(</span><span class="s">&#34;/&#34;</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">w</span> <span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span> <span class="nx">r</span> <span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">fmt</span><span class="p">.</span><span class="nf">Fprintf</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span> <span class="s">&#34;from pid %d.\n&#34;</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getpid</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl">	<span class="p">})</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">s</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Server</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">Addr</span><span class="p">:</span>    <span class="s">&#34;:8080&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">Handler</span><span class="p">:</span> <span class="nx">mux</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">http</span><span class="p">.</span><span class="nf">Handle</span><span class="p">(</span><span class="s">&#34;/&#34;</span><span class="p">,</span> <span class="nx">h</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="c1">// 別 goroutine で起動する
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="nx">chServe</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">error</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="k">defer</span> <span class="nb">close</span><span class="p">(</span><span class="nx">chServe</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">chServe</span> <span class="o">&lt;-</span> <span class="nx">s</span><span class="p">.</span><span class="nf">ListenAndServe</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="k">select</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="k">case</span> <span class="nx">err</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">chServe</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">		<span class="c1">// ListenAndServe はたまに失敗するので、失敗したら死んでほしい
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>		<span class="c1">// 他のプロセスが使用しているポートを開いたときとか
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">case</span> <span class="o">&lt;-</span><span class="nx">chSignal</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="nx">signal</span><span class="p">.</span><span class="nf">Stop</span><span class="p">(</span><span class="nx">chSignal</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="c1">// Graceful Shutdown 開始
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="nx">ctx</span><span class="p">,</span> <span class="nx">cancel</span> <span class="o">:=</span> <span class="nx">context</span><span class="p">.</span><span class="nf">WithTimeout</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nf">Background</span><span class="p">(),</span> <span class="mi">30</span><span class="o">*</span><span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">defer</span> <span class="nf">cancel</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">s</span><span class="p">.</span><span class="nf">Shutdown</span><span class="p">(</span><span class="nx">ctx</span><span class="p">);</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="c1">// HTTPサーバーが完全に終了するのを待つ
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="c1">// (OSがリソース閉じてくれるはずだけど、お行儀よく）
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="nx">s</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="o">&lt;-</span><span class="nx">chServe</span> <span class="c1">// http.ErrServerClosed が返ってくるのがわかっているので、特に何もしない。
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><p>大事なのは、<code>ListenAndServe</code> がサーバーの起動に失敗したときはプロセスを終了させること。
 HTTP サーバーとしての役割を果たさないのに、プロセスだけ生き残っても仕方がないのでね。</p>
 <p>ただし <code>ListenAndServe</code> がエラーを返したらプロセス即終了、という訳にはいかない。
 たとえば、<code>Shutdown</code> を呼び出すと <code>ListenAndServe</code> は <code>http.ErrServerClosed</code> エラーで終了してしまう。

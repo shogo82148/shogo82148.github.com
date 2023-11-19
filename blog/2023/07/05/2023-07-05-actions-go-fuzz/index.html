@@ -33,7 +33,7 @@
   <meta name="author" content="ICHINOSE Shogo">
 
   
-  <meta name="generator" content="Hugo 0.91.2" />
+  <meta name="generator" content="Hugo 0.120.4">
 
 
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
@@ -146,133 +146,133 @@ Fuzzテストが増えてきたので、毎回手元でFuzzテストを実行す
 <p><a href="https://go.dev/doc/tutorial/fuzz">Fuzzingのチュートリアル</a>のコードで試してみましょう。</p>
 <h3 id="テスト対象の関数を書く">テスト対象の関数を書く</h3>
 <p><code>main.go</code> に文字列を反転させるコードを書きます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="c1">// main.go
-</span><span class="c1"></span><span class="kn">package</span> <span class="nx">main</span>
-
-<span class="kd">func</span> <span class="nf">Reverse</span><span class="p">(</span><span class="nx">s</span> <span class="kt">string</span><span class="p">)</span> <span class="kt">string</span> <span class="p">{</span>
-    <span class="nx">b</span> <span class="o">:=</span> <span class="p">[]</span><span class="nb">byte</span><span class="p">(</span><span class="nx">s</span><span class="p">)</span>
-    <span class="k">for</span> <span class="nx">i</span><span class="p">,</span> <span class="nx">j</span> <span class="o">:=</span> <span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="nx">b</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">;</span> <span class="nx">i</span> <span class="p">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="nx">b</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span><span class="p">;</span> <span class="nx">i</span><span class="p">,</span> <span class="nx">j</span> <span class="p">=</span> <span class="nx">i</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="nx">j</span><span class="o">-</span><span class="mi">1</span> <span class="p">{</span>
-        <span class="nx">b</span><span class="p">[</span><span class="nx">i</span><span class="p">],</span> <span class="nx">b</span><span class="p">[</span><span class="nx">j</span><span class="p">]</span> <span class="p">=</span> <span class="nx">b</span><span class="p">[</span><span class="nx">j</span><span class="p">],</span> <span class="nx">b</span><span class="p">[</span><span class="nx">i</span><span class="p">]</span>
-    <span class="p">}</span>
-    <span class="k">return</span> <span class="nb">string</span><span class="p">(</span><span class="nx">b</span><span class="p">)</span>
-<span class="p">}</span>
-</code></pre></div><p>チュートリアルを進めていくとわかるのですが、このコードは「マルチバイト文字を正しく処理できない」というバグがあります。
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// main.go
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Reverse</span><span class="p">(</span><span class="nx">s</span> <span class="kt">string</span><span class="p">)</span> <span class="kt">string</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">b</span> <span class="o">:=</span> <span class="p">[]</span><span class="nb">byte</span><span class="p">(</span><span class="nx">s</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">i</span><span class="p">,</span> <span class="nx">j</span> <span class="o">:=</span> <span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="nx">b</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">;</span> <span class="nx">i</span> <span class="p">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="nx">b</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span><span class="p">;</span> <span class="nx">i</span><span class="p">,</span> <span class="nx">j</span> <span class="p">=</span> <span class="nx">i</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="nx">j</span><span class="o">-</span><span class="mi">1</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">b</span><span class="p">[</span><span class="nx">i</span><span class="p">],</span> <span class="nx">b</span><span class="p">[</span><span class="nx">j</span><span class="p">]</span> <span class="p">=</span> <span class="nx">b</span><span class="p">[</span><span class="nx">j</span><span class="p">],</span> <span class="nx">b</span><span class="p">[</span><span class="nx">i</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nb">string</span><span class="p">(</span><span class="nx">b</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>チュートリアルを進めていくとわかるのですが、このコードは「マルチバイト文字を正しく処理できない」というバグがあります。
 このバグをFuzzingを使って見つけてもらいましょう。</p>
 <h3 id="fuzzテストを書く">Fuzzテストを書く</h3>
 <p><code>Reverse</code>を2回実行すると同じ文字列に戻るはずです。
 このことを確認するテストを書きます。</p>
 <p>さらに、入力がUTF-8としてValidであるなら、出力もValidであって欲しいです。
 これもテストで確認します。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="kn">package</span> <span class="nx">main</span>
-
-<span class="kd">func</span> <span class="nf">FuzzReverse</span><span class="p">(</span><span class="nx">f</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">F</span><span class="p">)</span> <span class="p">{</span>
-	<span class="nx">testcases</span> <span class="o">:=</span> <span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">&#34;Hello, world&#34;</span><span class="p">,</span> <span class="s">&#34; &#34;</span><span class="p">,</span> <span class="s">&#34;!12345&#34;</span><span class="p">}</span>
-	<span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">tc</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">testcases</span> <span class="p">{</span>
-		<span class="nx">f</span><span class="p">.</span><span class="nf">Add</span><span class="p">(</span><span class="nx">tc</span><span class="p">)</span> <span class="c1">// Use f.Add to provide a seed corpus
-</span><span class="c1"></span>	<span class="p">}</span>
-	<span class="nx">f</span><span class="p">.</span><span class="nf">Fuzz</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">,</span> <span class="nx">orig</span> <span class="kt">string</span><span class="p">)</span> <span class="p">{</span>
-		<span class="nx">rev</span> <span class="o">:=</span> <span class="nf">Reverse</span><span class="p">(</span><span class="nx">orig</span><span class="p">)</span>
-		<span class="nx">doubleRev</span> <span class="o">:=</span> <span class="nf">Reverse</span><span class="p">(</span><span class="nx">rev</span><span class="p">)</span>
-		<span class="k">if</span> <span class="nx">orig</span> <span class="o">!=</span> <span class="nx">doubleRev</span> <span class="p">{</span>
-			<span class="nx">t</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;Before: %q, after: %q&#34;</span><span class="p">,</span> <span class="nx">orig</span><span class="p">,</span> <span class="nx">doubleRev</span><span class="p">)</span>
-		<span class="p">}</span>
-		<span class="k">if</span> <span class="nx">utf8</span><span class="p">.</span><span class="nf">ValidString</span><span class="p">(</span><span class="nx">orig</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="p">!</span><span class="nx">utf8</span><span class="p">.</span><span class="nf">ValidString</span><span class="p">(</span><span class="nx">rev</span><span class="p">)</span> <span class="p">{</span>
-			<span class="nx">t</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;Reverse produced invalid UTF-8 string %q&#34;</span><span class="p">,</span> <span class="nx">rev</span><span class="p">)</span>
-		<span class="p">}</span>
-	<span class="p">})</span>
-<span class="p">}</span>
-</code></pre></div><h3 id="workflowを書く">Workflowを書く</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">FuzzReverse</span><span class="p">(</span><span class="nx">f</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">F</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">testcases</span> <span class="o">:=</span> <span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">&#34;Hello, world&#34;</span><span class="p">,</span> <span class="s">&#34; &#34;</span><span class="p">,</span> <span class="s">&#34;!12345&#34;</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">tc</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">testcases</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">f</span><span class="p">.</span><span class="nf">Add</span><span class="p">(</span><span class="nx">tc</span><span class="p">)</span> <span class="c1">// Use f.Add to provide a seed corpus
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">f</span><span class="p">.</span><span class="nf">Fuzz</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">,</span> <span class="nx">orig</span> <span class="kt">string</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">rev</span> <span class="o">:=</span> <span class="nf">Reverse</span><span class="p">(</span><span class="nx">orig</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">doubleRev</span> <span class="o">:=</span> <span class="nf">Reverse</span><span class="p">(</span><span class="nx">rev</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="k">if</span> <span class="nx">orig</span> <span class="o">!=</span> <span class="nx">doubleRev</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">t</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;Before: %q, after: %q&#34;</span><span class="p">,</span> <span class="nx">orig</span><span class="p">,</span> <span class="nx">doubleRev</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="p">}</span>
+</span></span><span class="line"><span class="cl">		<span class="k">if</span> <span class="nx">utf8</span><span class="p">.</span><span class="nf">ValidString</span><span class="p">(</span><span class="nx">orig</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="p">!</span><span class="nx">utf8</span><span class="p">.</span><span class="nf">ValidString</span><span class="p">(</span><span class="nx">rev</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">t</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;Reverse produced invalid UTF-8 string %q&#34;</span><span class="p">,</span> <span class="nx">rev</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="p">})</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><h3 id="workflowを書く">Workflowを書く</h3>
 <p><a href="https://github.com/shogo82148/actions-go-fuzz">shogo82148/actions-go-fuzz</a>には「モジュール内の<code>func FuzzTest</code>をすべて見つけるためのアクション」と「実際にFuzzingを行うアクション」の2つが含まれています。
 この2つのアクションを使って、モジュール内のすべてのFuzzテストにFuzzingを行うワークフローを書きます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;fuzz&#34;</span><span class="w">
-</span><span class="w"></span><span class="nt">on</span><span class="p">:</span><span class="w">
-</span><span class="w">  </span><span class="nt">workflow_dispatch</span><span class="p">:</span><span class="w">
-</span><span class="w">  </span><span class="nt">schedule</span><span class="p">:</span><span class="w">
-</span><span class="w">    </span>- <span class="nt">cron</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;36 2 * * 1,4&#34;</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="nt">permissions</span><span class="p">:</span><span class="w">
-</span><span class="w">  </span><span class="nt">contents</span><span class="p">:</span><span class="w"> </span><span class="l">write</span><span class="w">
-</span><span class="w">  </span><span class="nt">pull-requests</span><span class="p">:</span><span class="w"> </span><span class="l">write</span><span class="w">
-</span><span class="w">
-</span><span class="w"></span><span class="nt">jobs</span><span class="p">:</span><span class="w">
-</span><span class="w">  </span><span class="c"># モジュール内の func FuzzTest をすべて見つけるためのジョブ</span><span class="w">
-</span><span class="w">  </span><span class="nt">list</span><span class="p">:</span><span class="w">
-</span><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l">ubuntu-latest</span><span class="w">
-</span><span class="w">    </span><span class="nt">timeout-minutes</span><span class="p">:</span><span class="w"> </span><span class="m">10</span><span class="w">
-</span><span class="w">    </span><span class="nt">steps</span><span class="p">:</span><span class="w">
-</span><span class="w">      </span>- <span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">actions/checkout@v3</span><span class="w">
-</span><span class="w">      </span>- <span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">actions/setup-go@v4</span><span class="w">
-</span><span class="w">        </span><span class="nt">with</span><span class="p">:</span><span class="w">
-</span><span class="w">          </span><span class="nt">go-version</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;stable&#34;</span><span class="w">
-</span><span class="w">      </span>- <span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l">list</span><span class="w">
-</span><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">shogo82148/actions-go-fuzz/list@v0</span><span class="w">
-</span><span class="w">    </span><span class="nt">outputs</span><span class="p">:</span><span class="w">
-</span><span class="w">      </span><span class="nt">fuzz-tests</span><span class="p">:</span><span class="w"> </span><span class="l">${{steps.list.outputs.fuzz-tests}}</span><span class="w">
-</span><span class="w">
-</span><span class="w">  </span><span class="c"># 実際にFuzzingを行うジョブ</span><span class="w">
-</span><span class="w">  </span><span class="nt">fuzz</span><span class="p">:</span><span class="w">
-</span><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l">ubuntu-latest</span><span class="w">
-</span><span class="w">    </span><span class="nt">timeout-minutes</span><span class="p">:</span><span class="w"> </span><span class="m">360</span><span class="w">
-</span><span class="w">    </span><span class="nt">needs</span><span class="p">:</span><span class="w"> </span><span class="l">list</span><span class="w">
-</span><span class="w">    </span><span class="nt">strategy</span><span class="p">:</span><span class="w">
-</span><span class="w">      </span><span class="nt">fail-fast</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="w">
-</span><span class="w">      </span><span class="nt">matrix</span><span class="p">:</span><span class="w">
-</span><span class="w">        </span><span class="nt">include</span><span class="p">:</span><span class="w"> </span><span class="l">${{fromJson(needs.list.outputs.fuzz-tests)}}</span><span class="w">
-</span><span class="w">    </span><span class="nt">steps</span><span class="p">:</span><span class="w">
-</span><span class="w">      </span>- <span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">actions/checkout@v3</span><span class="w">
-</span><span class="w">      </span>- <span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">actions/setup-go@v4</span><span class="w">
-</span><span class="w">        </span><span class="nt">with</span><span class="p">:</span><span class="w">
-</span><span class="w">          </span><span class="nt">go-version</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;stable&#34;</span><span class="w">
-</span><span class="w">      </span>- <span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">shogo82148/actions-go-fuzz/run@v0</span><span class="w">
-</span><span class="w">        </span><span class="nt">with</span><span class="p">:</span><span class="w">
-</span><span class="w">          </span><span class="nt">packages</span><span class="p">:</span><span class="w"> </span><span class="l">${{ matrix.package }}</span><span class="w">
-</span><span class="w">          </span><span class="nt">fuzz-regexp</span><span class="p">:</span><span class="w"> </span><span class="l">${{ matrix.func }}</span><span class="w">
-</span><span class="w">          </span><span class="nt">fuzz-time</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;355m&#34;</span><span class="w">
-</span></code></pre></div><h3 id="実行する">実行する</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="line"><span class="cl"><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;fuzz&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">on</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">workflow_dispatch</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">schedule</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span>- <span class="nt">cron</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;36 2 * * 1,4&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">permissions</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">contents</span><span class="p">:</span><span class="w"> </span><span class="l">write</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">pull-requests</span><span class="p">:</span><span class="w"> </span><span class="l">write</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nt">jobs</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># モジュール内の func FuzzTest をすべて見つけるためのジョブ</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">list</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l">ubuntu-latest</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">timeout-minutes</span><span class="p">:</span><span class="w"> </span><span class="m">10</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">steps</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span>- <span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">actions/checkout@v3</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span>- <span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">actions/setup-go@v4</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="nt">with</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">          </span><span class="nt">go-version</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;stable&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span>- <span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l">list</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">shogo82148/actions-go-fuzz/list@v0</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">outputs</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span><span class="nt">fuzz-tests</span><span class="p">:</span><span class="w"> </span><span class="l">${{steps.list.outputs.fuzz-tests}}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># 実際にFuzzingを行うジョブ</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">fuzz</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l">ubuntu-latest</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">timeout-minutes</span><span class="p">:</span><span class="w"> </span><span class="m">360</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">needs</span><span class="p">:</span><span class="w"> </span><span class="l">list</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">strategy</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span><span class="nt">fail-fast</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span><span class="nt">matrix</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="nt">include</span><span class="p">:</span><span class="w"> </span><span class="l">${{fromJson(needs.list.outputs.fuzz-tests)}}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">steps</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span>- <span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">actions/checkout@v3</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span>- <span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">actions/setup-go@v4</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="nt">with</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">          </span><span class="nt">go-version</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;stable&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">      </span>- <span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">shogo82148/actions-go-fuzz/run@v0</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="nt">with</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">          </span><span class="nt">packages</span><span class="p">:</span><span class="w"> </span><span class="l">${{ matrix.package }}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">          </span><span class="nt">fuzz-regexp</span><span class="p">:</span><span class="w"> </span><span class="l">${{ matrix.func }}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">          </span><span class="nt">fuzz-time</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;355m&#34;</span><span class="w">
+</span></span></span></code></pre></div><h3 id="実行する">実行する</h3>
 <p>実行するとすぐに<a href="https://go.dev/security/fuzz/#glos-failing-input">failing input</a>を見つけてくれます。
 アクションは<a href="https://go.dev/security/fuzz/#glos-failing-input">failing input</a>を見つけると、その内容をコミットして、プルリクエストを作ってくれます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-diff" data-lang="diff">From a61ed4471d7058448f3985aa939bda29dcd51040 Mon Sep 17 00:00:00 2001
-From: &#34;github-actions[bot]&#34;
- &lt;41898282+github-actions[bot]@users.noreply.github.com&gt;
-Date: Mon, 3 Jul 2023 14:53:24 +0000
-Subject: [PATCH] Add a new fuzz input data for FuzzReverse in example/fuzz.
-
-`go test -run=FuzzReverse/636ca16883e1fa24 example/fuzz` failed with the following output:
-
-```
-<span class="gd">--- FAIL: FuzzReverse (0.00s)
-</span><span class="gd"></span>    --- FAIL: FuzzReverse/636ca16883e1fa24 (0.00s)
-        reverse_test.go:40: Reverse produced invalid UTF-8 string &#34;\xa2\xd4&#34;
-FAIL
-FAIL	example/fuzz	0.003s
-FAIL
-
-```
-
-This fuzz data is generated by [actions-go-fuzz](https://github.com/shogo82148/actions-go-fuzz).
-<span class="gd">---
-</span><span class="gd"></span> .../testdata/fuzz/testdata/fuzz/FuzzReverse/636ca16883e1fa24    | 2 ++
- 1 file changed, 2 insertions(+)
- create mode 100644 testdata/fuzz/testdata/fuzz/FuzzReverse/636ca16883e1fa24
-
-<span class="gh">diff --git a/testdata/fuzz/testdata/fuzz/FuzzReverse/636ca16883e1fa24 b/testdata/fuzz/testdata/fuzz/FuzzReverse/636ca16883e1fa24
-</span><span class="gh"></span>new file mode 100644
-<span class="gh">index 0000000..8106293
-</span><span class="gh"></span><span class="gd">--- /dev/null
-</span><span class="gd"></span><span class="gi">+++ b/testdata/fuzz/testdata/fuzz/FuzzReverse/636ca16883e1fa24
-</span><span class="gi"></span><span class="gu">@@ -0,0 +1,2 @@
-</span><span class="gu"></span><span class="gi">+go test fuzz v1
-</span><span class="gi">+string(&#34;Ԣ&#34;)
-</span></code></pre></div><p>プルリクエストには「エラーを再現するためのコマンド」と「その実行結果」が含まれているので、
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-diff" data-lang="diff"><span class="line"><span class="cl">From a61ed4471d7058448f3985aa939bda29dcd51040 Mon Sep 17 00:00:00 2001
+</span></span><span class="line"><span class="cl">From: &#34;github-actions[bot]&#34;
+</span></span><span class="line"><span class="cl"> &lt;41898282+github-actions[bot]@users.noreply.github.com&gt;
+</span></span><span class="line"><span class="cl">Date: Mon, 3 Jul 2023 14:53:24 +0000
+</span></span><span class="line"><span class="cl">Subject: [PATCH] Add a new fuzz input data for FuzzReverse in example/fuzz.
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">`go test -run=FuzzReverse/636ca16883e1fa24 example/fuzz` failed with the following output:
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">```
+</span></span><span class="line"><span class="cl"><span class="gd">--- FAIL: FuzzReverse (0.00s)
+</span></span></span><span class="line"><span class="cl"><span class="gd"></span>    --- FAIL: FuzzReverse/636ca16883e1fa24 (0.00s)
+</span></span><span class="line"><span class="cl">        reverse_test.go:40: Reverse produced invalid UTF-8 string &#34;\xa2\xd4&#34;
+</span></span><span class="line"><span class="cl">FAIL
+</span></span><span class="line"><span class="cl">FAIL	example/fuzz	0.003s
+</span></span><span class="line"><span class="cl">FAIL
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">```
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">This fuzz data is generated by [actions-go-fuzz](https://github.com/shogo82148/actions-go-fuzz).
+</span></span><span class="line"><span class="cl"><span class="gs">---
+</span></span></span><span class="line"><span class="cl"><span class="gs"></span> .../testdata/fuzz/testdata/fuzz/FuzzReverse/636ca16883e1fa24    | 2 ++
+</span></span><span class="line"><span class="cl"> 1 file changed, 2 insertions(+)
+</span></span><span class="line"><span class="cl"> create mode 100644 testdata/fuzz/testdata/fuzz/FuzzReverse/636ca16883e1fa24
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="gh">diff --git a/testdata/fuzz/testdata/fuzz/FuzzReverse/636ca16883e1fa24 b/testdata/fuzz/testdata/fuzz/FuzzReverse/636ca16883e1fa24
+</span></span></span><span class="line"><span class="cl"><span class="gh"></span>new file mode 100644
+</span></span><span class="line"><span class="cl"><span class="gh">index 0000000..8106293
+</span></span></span><span class="line"><span class="cl"><span class="gh"></span><span class="gd">--- /dev/null
+</span></span></span><span class="line"><span class="cl"><span class="gd"></span><span class="gi">+++ b/testdata/fuzz/testdata/fuzz/FuzzReverse/636ca16883e1fa24
+</span></span></span><span class="line"><span class="cl"><span class="gi"></span><span class="gu">@@ -0,0 +1,2 @@
+</span></span></span><span class="line"><span class="cl"><span class="gu"></span><span class="gi">+go test fuzz v1
+</span></span></span><span class="line"><span class="cl"><span class="gi">+string(&#34;Ԣ&#34;)
+</span></span></span></code></pre></div><p>プルリクエストには「エラーを再現するためのコマンド」と「その実行結果」が含まれているので、
 手元にpullしてコマンドを叩けばすぐに再現できます。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain">$ go test -run=FuzzReverse/636ca16883e1fa24 example/fuzz
---- FAIL: FuzzReverse (0.00s)
-    --- FAIL: FuzzReverse/636ca16883e1fa24 (0.00s)
-        reverse_test.go:40: Reverse produced invalid UTF-8 string &#34;\xa2\xd4&#34;
-FAIL
-FAIL	example/fuzz	0.003s
-FAIL
-</code></pre></div><p>あとはこのテストが通るよう直すだけです。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">$ go test -run=FuzzReverse/636ca16883e1fa24 example/fuzz
+</span></span><span class="line"><span class="cl">--- FAIL: FuzzReverse (0.00s)
+</span></span><span class="line"><span class="cl">    --- FAIL: FuzzReverse/636ca16883e1fa24 (0.00s)
+</span></span><span class="line"><span class="cl">        reverse_test.go:40: Reverse produced invalid UTF-8 string &#34;\xa2\xd4&#34;
+</span></span><span class="line"><span class="cl">FAIL
+</span></span><span class="line"><span class="cl">FAIL	example/fuzz	0.003s
+</span></span><span class="line"><span class="cl">FAIL
+</span></span></code></pre></div><p>あとはこのテストが通るよう直すだけです。</p>
 <h2 id="セキュリティー上の注意">セキュリティー上の注意</h2>
 <p>一般的に<a href="https://go.dev/security/fuzz/#glos-failing-input">failing input</a>は脆弱性に関わる情報なので、一般公開されることはありません。
 悪い人に見つかって悪用される可能性があるからです。
@@ -281,14 +281,14 @@ FAIL
 <p>GitHub上で完結させるためにプルリクエストを選びましたが、
 本来であれば非公開でメンテナーに通知がされるべきです。
 そこで、Slackで通知するオプションも追加しました。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml">- <span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">shogo82148/actions-go-fuzz/run@v0</span><span class="w">
-</span><span class="w">  </span><span class="nt">with</span><span class="p">:</span><span class="w">
-</span><span class="w">    </span><span class="nt">packages</span><span class="p">:</span><span class="w"> </span><span class="l">${{ matrix.package }}</span><span class="w">
-</span><span class="w">    </span><span class="nt">fuzz-regexp</span><span class="p">:</span><span class="w"> </span><span class="l">${{ matrix.func }}</span><span class="w">
-</span><span class="w">    </span><span class="nt">fuzz-time</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;355m&#34;</span><span class="w">
-</span><span class="w">    </span><span class="nt">report-method</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;slack&#34;</span><span class="w">
-</span><span class="w">    </span><span class="nt">webhook-url</span><span class="p">:</span><span class="w"> </span><span class="l">${{ secrets.SLACK_INCOMING_WEBHOOK }}</span><span class="w">
-</span></code></pre></div><p>Incoming Webhook発行の手間が増えますが、セキュリティーが気になる方はご利用ください。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="line"><span class="cl">- <span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l">shogo82148/actions-go-fuzz/run@v0</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">with</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">packages</span><span class="p">:</span><span class="w"> </span><span class="l">${{ matrix.package }}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">fuzz-regexp</span><span class="p">:</span><span class="w"> </span><span class="l">${{ matrix.func }}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">fuzz-time</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;355m&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">report-method</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;slack&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">webhook-url</span><span class="p">:</span><span class="w"> </span><span class="l">${{ secrets.SLACK_INCOMING_WEBHOOK }}</span><span class="w">
+</span></span></span></code></pre></div><p>Incoming Webhook発行の手間が増えますが、セキュリティーが気になる方はご利用ください。</p>
 <p>本当にセキュリティーを気にするなら<a href="https://github.com/google/oss-fuzz">OSS-Fuzz</a>に参加してもいいかもしれませんね。
 （参加の仕方知らないけど・・・）</p>
 <h2 id="実行スケジュール">実行スケジュール</h2>
