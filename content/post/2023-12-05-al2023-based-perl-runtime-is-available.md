@@ -7,6 +7,11 @@ comments: true
 categories: [perl, aws, aws-lambda]
 ---
 
+この記事は、[Perl Advent Calendar 2023](https://qiita.com/advent-calendar/2023/perl) 5日目の記事です。
+4日目は[@doikoji](https://qiita.com/doikoji)で「[ChatGPTとperl：古のCGIスクリプトを現代的な環境に合わせて再生させようとした話](https://qiita.com/doikoji/items/ee4be53cb3fa95dcc649)」でした。
+
+-----
+
 AWS LambdaにAmazon Linux 2023ベースのカスタムランタイムが追加されました。
 これはつまり・・・
 
@@ -159,6 +164,11 @@ AWS Runtimeではさらに容量を削減するために `dnf` の軽量版で�
 
 あとはtzdataが未インストールなこと（同僚がGoのデプロイでハマっていた）。
 日時を扱うようなプログラムを書く場合は注意してください。
+
+-----
+
+明日6日目は（TODO: 埋める）で「（TODO: 埋める）」です。
+お楽しみに！
 
 ## 参考
 
