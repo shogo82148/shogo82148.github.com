@@ -27,7 +27,6 @@ categories: [github]
 今回お世話になったツールたちです。
 
 - [GitHub Pages]
-- [GitHub Copilot Chat]
 - [BudouX]
 
 ### GitHub Pages
@@ -44,25 +43,6 @@ categories: [github]
 - [Managing a custom domain for your GitHub Pages site](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site)
 
 お手軽なので、今後なにかに使えるかもしれないですね。
-
-### GitHub Copilot Chat
-
-今回の一番の立役者 [GitHub Copilot Chat]。
-翻訳作業のほとんどすべて彼（？）にお願いしました。
-これがなければ翻訳なんて大変な作業は考えもしなかったでしょう。
-
-[GitHub Copilot Chat]の翻訳は、非常に自然で、ほとんど手直しが不要です。
-変換結果をボタンひとつで取り込む機能もあるので、スムーズに翻訳作業を進められます。
-
-唯一問題点が・・・「Translate the selected text into Japanese.」と聞くと、今日現在以下のように返答されます。
-
-> Sorry, but I can only assist with programming related questions.
-
-「いや、今扱っているのはコードなんだ！」とアピールすると、翻訳してくれます。
-「Translate the selected text into Japanese. **The input and output is HTML code.**」
-
-GitHubさん、英語のドキュメントを読むのもプログラミングの大事な作業なんです。
-翻訳も許して！
 
 ### BudouX
 
@@ -89,8 +69,6 @@ GitHubさん、英語のドキュメントを読むのもプログラミング�
 
 - [choosealicense.shogo82148.com](https://choosealicense.shogo82148.com/)
 
-[GitHub Copilot Chat] すごい便利！
-
 ## 参考
 
 - [ChooseALicense.com]
@@ -98,11 +76,9 @@ GitHubさん、英語のドキュメントを読むのもプログラミング�
 - [オープンソースライセンスの日本語参考訳](https://licenses.opensource.jp/)
 - [Managing a custom domain for your GitHub Pages site](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site)
 - [GitHub Pages]
-- [GitHub Copilot Chat]
 - [BudouX]
 
 [GitHub Pages]: https://docs.github.com/en/pages
-[GitHub Copilot Chat]: https://docs.github.com/en/copilot/github-copilot-chat
 [ChooseALicense.com]: https://choosealicense.com
 [BudouX]: https://github.com/google/budoux
 [choosealicense.shogo82148.com]: https://choosealicense.shogo82148.com/
