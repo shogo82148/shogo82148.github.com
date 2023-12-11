@@ -167,7 +167,7 @@ AWS Runtimeではさらに容量を削減するために `dnf` の軽量版で�
 
 -----
 
-明日6日目は（TODO: 埋める）で「（TODO: 埋める）」です。
+明日6日目は（[id:papix](https://profile.hatena.ne.jp/papix/)）で「[MySQLのDATETIMEをとにかく素早くPerlのDateTimeオブジェクトにしたい](https://papix.hatenablog.com/entry/2023/12/07/010810)」です。
 お楽しみに！
 
 ## 参考
