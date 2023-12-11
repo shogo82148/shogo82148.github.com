@@ -1,11 +1,16 @@
 ---
 layout: post
 title: "ExifToolがすごいという話"
-slug: 2023-12-08-introduce-exiftool
-date: 2023-12-08 21:39:00 +0900
+slug: 2023-12-11-introduce-exiftool
+date: 2023-12-11 21:20:00 +0900
 comments: true
 categories: [perl]
 ---
+
+この記事は、[Perl Advent Calendar 2023](https://qiita.com/advent-calendar/2023/perl) 11日目の記事です。
+10日目は[id:papix](https://profile.hatena.ne.jp/papix/)で「[Perlの｢後置if｣について](https://papix.hatenablog.com/entry/2023/12/10/120000)」でした。
+
+-----
 
 ふと「[Exif](https://ja.wikipedia.org/wiki/Exchangeable_image_file_format)の中身を確認したいな」と思ったときに
 [ExifTool](https://exiftool.org/)というツールの存在を知りました。
@@ -17,16 +22,18 @@ categories: [perl]
 みなさんがスマホで撮った写真にはたいていExifが埋め込まれています。
 「何時何分に撮ったか」という情報はもちろん、F値やシャッタースピードなどの細かい撮影条件などが含まれています。
 
-一番注意が必要なのは「位置情報」ですね。GPSによってかなり正確な位置情報がExifに記録されます。
+一番注意が必要なのは「位置情報」ですね。今どきのスマホにはGPSが積まれているので、かなり正確な位置情報がExifに記録されます。
 SNSなどに公開するときは要注意です。
+事前にどんな情報が書き込まれているかチェックするべきでしょう。
 
-[ExifTool](https://exiftool.org/)はExifを確認したり編集したりするためのツールです。
+そんなとき活躍するのが[ExifTool](https://exiftool.org/)。
+Exifを確認したり編集したりするためのツールです。
 
 ## ExifToolはPerl製！！
 
-なぜPerlアドベントカレンダーでExifToolを取り上げるかというと、**ExifToolはPerl製**なんですね。
+なぜPerlアドベントカレンダーでExifToolを取り上げるかというと、**ExifToolはPerl製** なんですね。
 
-CPANにも上がっているので、以下のコマンドでインストール可能です。
+CPANにも上がっているので、[cpanm](https://metacpan.org/dist/App-cpanminus/view/lib/App/cpanminus/fatscript.pm) でインストール可能です。
 
 ```
 cpanm Image::ExifTool
@@ -148,12 +155,11 @@ Lens ID                         : iPhone 15 Pro back triple camera 6.86mm f/1.78
 
 ~~（カメラのことはよく知らないので書いてある意味はさっぱりですが）~~
 iPhone 15 Proで撮影したことなどが読み取れますね。
-
-機械可読なフォーマットを意識しており、`:` で区切ってあげれば簡単にメタデータを利用てきます。
+リサイズするときに位置情報は削除されたようです。これで一安心。
 
 ## Perlスクリプトから呼び出す
 
-ExifToolはPerlのモジュールとして呼び出すことも可能です。
+ExifToolはPerl製なので、Perlのモジュールとして呼び出すことも可能です。
 たとえば「撮影に使ったレンズのモデルを知りたい」という場合は、以下のようなプログラムを書くと取得できます。
 
 ```perl
@@ -175,17 +181,38 @@ exiftool -htmlDump 2023-12-06-advent-calendar1.jpeg > dump.html
 
 HTMLの中身はちょっとリッチな16進数ダンプです。
 マウスオーバーすると該当データの意味や値を教えてくれます。
+Exifのデコーダーを自作したくなったときとかに便利ですね。
 
-![2023年アドベントカレンダーの16進数ダンプ](/images/2023-12-08-dump.jpeg)
+![2023年アドベントカレンダーの16進数ダンプ](/images/2023-12-11-dump.jpeg)
 
-HTMLの実物はこちら→[dump.html](/files/2023-12-08-dump.html)
+HTMLの実物はこちら→[dump.html](/files/2023-12-11-dump.html)
 
-個人的に便利だったのは、 **ちょっと壊れたExifを入力してもそこそこ動くこと** 。
+個人的にうれしいポイントは **ちょっと壊れたExifを入力してもそこそこ動くこと** 。
 Exifデータを操作するプログラムを作っていると、
 どうしても自作プログラムが壊れたExifを出力することがあります。
 `-htmlDump` オプションを使うと、壊れた箇所が一発でわかるので、
 プログラムの修正がとても楽でした。
 
+## ExifTool Meta Information Repository
+
+さらにExifToolがすごいのは対応しているメタデータの種類。
+Exifは元々デジタルカメラのメタデータを保存する規格で、メーカーごとに独自拡張があります。
+ExifToolは一部の独自拡張も解釈してくれます。
+
+それを支えているのが [ExifTool Meta Information Repository](https://exiftool.org/sample_images.html)。
+各メーカーのExifのサンプルを収集しているページです。
+今日（2023-12-11）現在で **106メーカー、7005機種** のExifが収録されています。
+これだけのサンプルを集める執念には感服です。
+
+## まとめ
+
+Exifデータを読み書きする[ExifTool](https://exiftool.org/)の紹介をしました。
+Perlから簡単に扱うことができるので、Exifを扱うスクリプトを書くのにぜひ活用してください。
+
+-----
+
+明日12日目はTBDで「TBD」です。
+お楽しみに！
 
 ## 参考
 
