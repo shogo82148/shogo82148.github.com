@@ -211,7 +211,7 @@ Perlから簡単に扱うことができるので、Exifを扱うスクリプト
 
 -----
 
-明日12日目はTBDで「TBD」です。
+明日12日目は[@shogo82148](https://twitter.com/shogo82148)で「[Perl 5.38 の「シグネチャのデフォルト式の定義性論理和と論理和」を試してみた](https://shogo82148.github.io/blog/2023/12/12/2023-12-12-or-assignment-default-expressions-in-signatures)」です。
 お楽しみに！
 
 ## 参考
