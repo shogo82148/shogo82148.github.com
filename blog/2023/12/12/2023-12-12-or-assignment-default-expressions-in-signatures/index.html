@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono&display=swap" rel="stylesheet"> 
+
+  
+  <title>Perl 5.38 の「シグネチャのデフォルト式の定義性論理和と論理和」を試してみた</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="ICHINOSE Shogo">
+
+  
+  <meta name="generator" content="Hugo 0.120.4">
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-40R0PCLKVF');
+</script>
+
+
+<script>
+MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']]
+  },
+  svg: {
+    fontCache: 'global'
+  }
+};
+</script>
+
+<script type="text/javascript" id="MathJax-script" async
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+</script>
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Dec 12, 2023
+     - 2 minute read 
+     - <a href="https://shogo82148.github.io/blog/2023/12/12/2023-12-12-or-assignment-default-expressions-in-signatures/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a>
+    
+  </p>
+  <h1 class="entry-title">
+     Perl 5.38 の「シグネチャのデフォルト式の定義性論理和と論理和」を試してみた 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>この記事は、<a href="https://qiita.com/advent-calendar/2023/perl">Perl Advent Calendar 2023</a> 12日目の記事です。
+11日目は<a href="https://twitter.com/shogo82148">@shogo82148</a>で「<a href="https://shogo82148.github.io/blog/2023/12/11/2023-12-11-introduce-exiftool/">ExifToolがすごいという話</a>」でした。</p>
+<hr>
+<p>アドベントカレンダーのネタを探して<a href="https://metacpan.org/dist/perl/view/pod/perldelta.pod">perldelta</a>をさまよい歩くいっちーです。</p>
+<p>Perl 5.38.0 から、「シグネチャーのデフォルト式に定義性論理和と論理和が使えるようになった」という記載を見つけたので試してみます。</p>
+<h2 id="定義性論理和と論理和">定義性論理和と論理和</h2>
+<p>「定義性論理和と論理和」と聞いてもピンとこなかったので、一応おさらい。
+いわゆる <code>//</code> 演算子と <code>||</code> 演算子のことです（発音できない）。
+英語で defined-or, logical-or と言ったほうが馴染み深い人も多いかもしれません。</p>
+<p>「定義性論理和」の和訳は &lt;perldoc.jp&gt; を参考にしました。
+<a href="https://perldoc.jp/docs/perl/5.38.0/perlop.pod#Logical32Defined-Or">perlop</a> の担当をしたひとも
+日本訳に相当苦労したことでしょう・・・。</p>
+<h3 id="論理和">論理和</h3>
+<p>論理和はどちらか一方が真ならば真を、それ以外の場合は偽を返す演算子です。
+これは他のプログラミング言語と同じなので、みなさんおなじみだと思います。</p>
+<p>Perlがおもしろいのは <code>true</code>, <code>false</code> というキーワードが（まだ）ないということですね。
+<code>0</code>, <code>&quot;0&quot;</code>, <code>undef</code> は真、それ以外はすべて偽として認識されます。</p>
+<p><code>true</code>, <code>false</code> の代わりに <code>1</code>, <code>0</code> を使って、 <code>||</code> の挙動を確かめてみましょう。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="line"><span class="cl"><span class="k">use</span> <span class="mf">5.38.0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">say</span> <span class="mi">0</span> <span class="o">||</span> <span class="mi">0</span><span class="p">;</span> <span class="c1"># 0</span>
+</span></span><span class="line"><span class="cl"><span class="n">say</span> <span class="mi">0</span> <span class="o">||</span> <span class="mi">1</span><span class="p">;</span> <span class="c1"># 1</span>
+</span></span><span class="line"><span class="cl"><span class="n">say</span> <span class="mi">1</span> <span class="o">||</span> <span class="mi">0</span><span class="p">;</span> <span class="c1"># 1</span>
+</span></span><span class="line"><span class="cl"><span class="n">say</span> <span class="mi">1</span> <span class="o">||</span> <span class="mi">1</span><span class="p">;</span> <span class="c1"># 1</span>
+</span></span></code></pre></div><h3 id="論理和の短絡評価">論理和の短絡評価</h3>
+<p><code>||</code> 演算子は短絡評価を行います。
+たとえば <code>1 || $a</code> という式があったら、<code>$a</code> にどんな値が入っていても真なので、<code>$a</code>の評価を行いません。</p>
+<p>さらに <code>||</code> 演算子は <strong>最後に評価した値</strong> を、そのまま式自体の値として返します。
+そのままの値を返すので、たとえば以下のように文字列を <code>||</code> 演算子にわたすと、そのまま文字列が返ってきます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="line"><span class="cl"><span class="k">use</span> <span class="mf">5.38.0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">say</span> <span class="s">&#34;Hello&#34;</span> <span class="o">||</span> <span class="s">&#34;World&#34;</span><span class="p">;</span> <span class="c1"># Hello</span>
+</span></span><span class="line"><span class="cl"><span class="n">say</span> <span class="nb">undef</span> <span class="o">||</span> <span class="s">&#34;World&#34;</span><span class="p">;</span> <span class="c1"># World</span>
+</span></span></code></pre></div><h3 id="デフォルト値の論理和を使う">デフォルト値の論理和を使う</h3>
+<p>論理和のこの性質を利用して、「引数を省略したらデフォルト値を使用する」というイディオムが編み出されました。</p>
+<p>たとえば以下のような、「名前を渡すとその人に挨拶をする関数」を考えてみましょう。
+ただし、引数を省略した場合はWorldに挨拶するものとします。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="line"><span class="cl"><span class="k">use</span> <span class="mf">5.38.0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">sub</span> <span class="nf">hello</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">my</span> <span class="p">(</span><span class="nv">$name</span><span class="p">)</span> <span class="o">=</span> <span class="nv">@_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="c1"># $name = $name || &#34;World&#34;; と同じ</span>
+</span></span><span class="line"><span class="cl">    <span class="c1"># $nameが省略された場合 &#34;World&#34; を代入する</span>
+</span></span><span class="line"><span class="cl">    <span class="nv">$name</span> <span class="o">||=</span> <span class="s">&#34;World&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">say</span> <span class="s">&#34;Hello, $name!&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">hello</span><span class="p">(</span><span class="s">&#34;Shogo&#34;</span><span class="p">);</span> <span class="c1"># Hello, Shogo!</span>
+</span></span><span class="line"><span class="cl"><span class="n">hello</span><span class="p">();</span> <span class="c1"># Hello, World!</span>
+</span></span></code></pre></div><h3 id="定義性論理和">定義性論理和</h3>
+<p>しかしこの関数には重大なバグがあります。
+<strong>「0」さんに挨拶できないのです！</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="line"><span class="cl"><span class="k">use</span> <span class="mf">5.38.0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">sub</span> <span class="nf">hello</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">my</span> <span class="p">(</span><span class="nv">$name</span><span class="p">)</span> <span class="o">=</span> <span class="nv">@_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="c1"># &#34;0&#34; は偽として判断されるので、&#34;World&#34;が代入される</span>
+</span></span><span class="line"><span class="cl">    <span class="nv">$name</span> <span class="o">||=</span> <span class="s">&#34;World&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">say</span> <span class="s">&#34;Hello, $name!&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">hello</span><span class="p">(</span><span class="s">&#34;0&#34;</span><span class="p">);</span> <span class="c1"># Hello, World!</span>
+</span></span></code></pre></div><p>このような問題に対応するために、<code>undef</code> のみを偽として扱う演算子が導入されました。
+それが定義性論理和 <code>//</code> 演算子です。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="line"><span class="cl"><span class="k">use</span> <span class="mf">5.38.0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">sub</span> <span class="nf">hello</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">my</span> <span class="p">(</span><span class="nv">$name</span><span class="p">)</span> <span class="o">=</span> <span class="nv">@_</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="nv">$name</span> <span class="sr">//</span><span class="o">=</span> <span class="s">&#34;World&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">say</span> <span class="s">&#34;Hello, $name!&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">hello</span><span class="p">(</span><span class="s">&#34;0&#34;</span><span class="p">);</span> <span class="c1"># Hello, 0!</span>
+</span></span></code></pre></div><p>やったね、「0」さん！</p>
+<h2 id="シグネチャのデフォルト式を使う">シグネチャのデフォルト式を使う</h2>
+<p>現代のPerlは <strong>関数に引数リストを持てる！！</strong> ので、以下のように書き直すことができます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="line"><span class="cl"><span class="k">use</span> <span class="mf">5.38.0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">sub</span> <span class="nf">hello</span><span class="p">($name = &#34;World&#34;) {</span>
+</span></span><span class="line"><span class="cl">    <span class="n">say</span> <span class="s">&#34;Hello, $name!&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 名前を渡すと挨拶してくれる</span>
+</span></span><span class="line"><span class="cl"><span class="n">hello</span><span class="p">(</span><span class="s">&#34;Shogo&#34;</span><span class="p">);</span> <span class="c1"># Hello, Shogo!</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 名前を省略するとデフォルト値を使ってくれる</span>
+</span></span><span class="line"><span class="cl"><span class="n">hello</span><span class="p">();</span> <span class="c1"># Hello, World!</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># &#34;0&#34; も正しく扱える</span>
+</span></span><span class="line"><span class="cl"><span class="n">hello</span><span class="p">(</span><span class="s">&#34;0&#34;</span><span class="p">);</span> <span class="c1"># Hello, 0!</span>
+</span></span></code></pre></div><h2 id="シグネチャのデフォルト式に論理和を使う">シグネチャのデフォルト式に論理和を使う</h2>
+<p>万能に思えるデフォルト式ですが、ひとつ問題があります。
+「デフォルト値を指定しない」という意図で <code>undef</code> を渡すと、意図した通りには動きません。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="line"><span class="cl"><span class="k">use</span> <span class="mf">5.38.0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">sub</span> <span class="nf">hello</span><span class="p">($name = &#34;World&#34;) {</span>
+</span></span><span class="line"><span class="cl">    <span class="n">say</span> <span class="s">&#34;Hello, $name!&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">hello</span><span class="p">(</span><span class="s">&#34;Shogo&#34;</span><span class="p">);</span> <span class="c1"># Hello, Shogo!</span>
+</span></span><span class="line"><span class="cl"><span class="n">hello</span><span class="p">();</span> <span class="c1"># Hello, World!</span>
+</span></span><span class="line"><span class="cl"><span class="n">hello</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span> <span class="c1"># Hello, 0!</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># デフォルト値を使ってほしいのに、 $name = undef として実行されてしまう</span>
+</span></span><span class="line"><span class="cl"><span class="n">hello</span><span class="p">(</span><span class="nb">undef</span><span class="p">);</span> <span class="c1"># Use of uninitialized value $name in concatenation (.) or string at perlsub.pl line 4.</span>
+</span></span></code></pre></div><hr>
+<p>（ここまでが前置き、ここから本題）Perl 5.38からは、以下のように関数を定義することで解決できます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="line"><span class="cl"><span class="k">use</span> <span class="mf">5.38.0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">sub</span> <span class="nf">hello</span><span class="p">($name //= &#34;World&#34;) {</span>
+</span></span><span class="line"><span class="cl">    <span class="n">say</span> <span class="s">&#34;Hello, $name!&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">hello</span><span class="p">(</span><span class="s">&#34;Shogo&#34;</span><span class="p">);</span> <span class="c1"># Hello, Shogo!</span>
+</span></span><span class="line"><span class="cl"><span class="n">hello</span><span class="p">();</span> <span class="c1"># Hello, World!</span>
+</span></span><span class="line"><span class="cl"><span class="n">hello</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span> <span class="c1"># Hello, 0!</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># デフォルト値を使ってくれる</span>
+</span></span><span class="line"><span class="cl"><span class="n">hello</span><span class="p">(</span><span class="nb">undef</span><span class="p">);</span> <span class="c1"># Hello, World!</span>
+</span></span></code></pre></div><h2 id="まとめ">まとめ</h2>
+<p>Perl 5.38から以下のような関数定義が可能になりました。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="line"><span class="cl"><span class="k">use</span> <span class="mf">5.38.0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">sub</span> <span class="nf">hello</span><span class="p">($name //= &#34;World&#34;) {</span>
+</span></span><span class="line"><span class="cl">    <span class="n">say</span> <span class="s">&#34;Hello, $name!&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p><code>hello(undef)</code> みたいな呼び出し方だとありがたみを感じませんが、変数を渡してあげると便利かもしれませんね。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="line"><span class="cl"><span class="k">use</span> <span class="mf">5.38.0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">sub</span> <span class="nf">hello</span><span class="p">($name //= &#34;World&#34;) {</span>
+</span></span><span class="line"><span class="cl">    <span class="n">say</span> <span class="s">&#34;Hello, $name!&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">hello</span><span class="p">(</span><span class="nv">$ARGV</span><span class="p">[</span><span class="mi">0</span><span class="p">]);</span>
+</span></span></code></pre></div><hr>
+<p>明日13日目は<a href="https://qiita.com/doikoji">@doikoji</a>で「低レベルPerlスクリプトのススメ」です。
+お楽しみに！</p>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://metacpan.org/dist/perl/view/pod/perl5380delta.pod">perl5380delta</a></li>
+<li><a href="https://perldoc.jp/docs/perl/5.38.0/perlop.pod#Logical32Defined-Or">perlop - 論理定義性和</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">ICHINOSE Shogo</span></span>
+    
+    <time>Dec 12, 2023</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2023/12/11/2023-12-11-introduce-exiftool/" title="ExifToolがすごいという話">ExifToolがすごいという話</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2023/12/12/2023-12-12-or-assignment-default-expressions-in-signatures/">Perl 5.38 の「シグネチャのデフォルト式の定義性論理和と論理和」を試してみた</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/12/11/2023-12-11-introduce-exiftool/">ExifToolがすごいという話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/12/06/2023-12-06-advent-calendar/">今年もアドベントカレンダー（物理）買いました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/12/05/2023-12-05-al2023-based-perl-runtime-is-available/">Amazon Linux 2023ベースのAWS Lambda Perl Runtimeを公開しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/11/18/2023-11-18-url-compressor-for-qr-code/">URL圧縮サイトを作ってみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/11/09/2023-11-09-build-mysql-rpm/">Amazon Linux 2023でMySQLをパッケージングする</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/10/21/2023-10-21-op-sync/">1Passwordで管理しているシークレットを各種サービスに同期するプログラムを書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/10/15/2023-10-15-float16/">半精度浮動小数点数をあつかうGoのライブラリを書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/10/01/2023-10-01-github-actions-notify-slack/">Slack Incoming Webhook を GitHub Actions Secrets へ突っ込むのに疲れた俺達は</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2023 ICHINOSE Shogo - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+</body>
+
+</html>
+
