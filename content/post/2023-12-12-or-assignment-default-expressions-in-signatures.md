@@ -205,7 +205,7 @@ hello($ARGV[0]);
 
 -----
 
-明日13日目は[@doikoji](https://qiita.com/doikoji)で「低レベルPerlスクリプトのススメ」です。
+明日13日目は[@doikoji](https://qiita.com/doikoji)で「[低レベルPerlスクリプトのススメ ～ 「readtsv」の紹介](https://qiita.com/doikoji/items/482e90b6b12a9713c418)」です。
 お楽しみに！
 
 ## 参考
