@@ -84,6 +84,11 @@ Perl 5.36 から引数リストの書き方が変わりました。
 それに合わせてプロトタイプの書き方も変わっています。
 新しい方法にも慣れていきましょう！
 
+-----
+
+明日22日目は[@shogo82148](https://twitter.com/shogo82148)で「[PerlのHTTP::Tinyがv0.083からデフォルトでTLSの証明書を検証するようになった件](https://shogo82148.github.io/blog/2023/12/27/2023-12-27-perl-http-tiny-now-verify-tls/)」です。
+お楽しみに！
+
 ## 参考
 
 - [perlsub - perldoc.perl.org](https://perldoc.perl.org/perlsub#Prototypes)
