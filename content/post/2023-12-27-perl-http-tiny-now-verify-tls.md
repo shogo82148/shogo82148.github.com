@@ -116,3 +116,8 @@ HTTP::Tiny 0.083未満では **TLSの証明書検証が行われません。**
 
 明日23日目は[@doikoji](https://qiita.com/doikoji)で「[【さらばpptxよ】perlとJavaScriptとHTMLで超手軽にスライドを作る](https://qiita.com/doikoji/items/b0d850349a6640d0c396)」です。
 お楽しみに！
+
+## 参考
+
+- [SSL environment controls, and warn about insecure connections #151](https://github.com/chansen/p5-http-tiny/pull/151)
+- [Changes for version 0.084](https://metacpan.org/release/DAGOLDEN/HTTP-Tiny-0.084)
