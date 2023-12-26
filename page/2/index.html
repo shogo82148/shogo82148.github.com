@@ -120,6 +120,43 @@ MathJax = {
         
 
 <header>
+  <p class="meta">Oct 21, 2023
+     - 2 minute read 
+     - <a href="https://shogo82148.github.io/blog/2023/10/21/2023-10-21-op-sync/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a><a class="label" href="https://shogo82148.github.io/categories/1password/">1password </a><a class="label" href="https://shogo82148.github.io/categories/github/">github </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2023/10/21/2023-10-21-op-sync/">1Passwordで管理しているシークレットを各種サービスに同期するプログラムを書いた</a>
+  </h1>
+</header>
+
+        
+          <p>弊社では各種シークレットは1Passwordで管理しています。 シークレットの棚卸し作業をしていて不便を感じたので、 1Passwordで管理しているシークレットを各種サービスに同期するプログラムを書いてみました。
+shogo82148/op-sync 背景 何が困るって、シークレットの出処がわからないこと。
+たとえばCI/CDサービスのシークレット管理機能にシークレットが登録されている場合、 ヒントが FIREBASE_SECRET という名前だけ、ということがよくあります。 このヒントだけだと、Firebaseで使われていそうなのはわかる・・・でもFirebaseのプロジェクトたくさんあるんだよな、どれだろう・・・ってなります。 プロジェクト名やサービスアカウント名までわからないと、シークレットの出処を特定できません。
+1Passwordにはシークレットの出処をメモとして残しておけるので、 せめて「このシークレットは、1Passwordのこの項目と対応しています」という情報が分かれば特定が簡単になります。
+「シークレットと1Passwordの項目の対応付け」、ちょっとしたテキストを書くだけで十分なんですが、それができないのが人間というもの・・・。 そこでさらに推し進めて「シークレットと1Passwordの項目の対応付け」を機械可読な形式にして、「1Passwordの項目からシークレットの自動反映」を行います。 普段から自動反映する習慣をつけておけば、対応付けが漏れる心配はありません。
+使い方 1Passwordとの連携には1Password CLIを使用しています。 あらかじめインストールしておいてください。
+シークレットをファイルに書き出す Private Vaultに入っている、Testという名前のアイテムを読み出す設定例です。
+# .op-sync.yml secrets: MyPassword: type: template output: .envrc template: | MY_PASSWORD={{ op://Private/Test/password }} 1Password CLIでサインインして、 op-sync コマンドを叩けば 1Password からパスワードを引っ張ってきてファイルに書き出してくれます。
+$ eval $(op signin) Enter the password for shogo82148@gmail.com at my.1password.com: $ op-sync 2023/10/21 16:58:32 INFO 1password user information url=https://my.1password.com email=shogo82148@gmail.com The following changes will be applied: file &#34;.</p>
+          
+            <footer>
+              <a href="https://shogo82148.github.io/blog/2023/10/21/2023-10-21-op-sync/" rel="full-article">Read On &rarr;</a>
+            </footer>
+          
+        
+      </article>
+      
+      <article>
+        
+        
+
+<header>
   <p class="meta">Oct 15, 2023
      - 1 minute read 
      - <a href="https://shogo82148.github.io/blog/2023/10/15/2023-10-15-float16/#disqus_thread">Comments</a>
@@ -431,40 +468,6 @@ Node.js 18 がスキップされた話 ちなみに Node.js 16 と Node.js 20 �
         
       </article>
       
-      <article>
-        
-        
-
-<header>
-  <p class="meta">Sep 4, 2023
-     - 4 minute read 
-     - <a href="https://shogo82148.github.io/blog/2023/09/04/2023-09-04-generate-random-float/#disqus_thread">Comments</a>
-
-    
-    
-      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
-    
-  </p>
-  <h1 class="entry-title">
-    <a href="https://shogo82148.github.io/blog/2023/09/04/2023-09-04-generate-random-float/">ぼくのかんがえたさいきょうの[0.0, 1.0)の乱数を得るための方法</a>
-  </h1>
-</header>
-
-        
-          <p>Twitterもとい𝕏でこんなスライドが流れてきました。
-$[0.0, 1.0)$ の範囲を保証しつつ、浮動小数点数が表現可能なすべての値をとるのは難しい、というお話です。 なるほど・・・確かに改めて考えてみると「浮動小数点数が表現可能なすべての値」という条件は難しいですね。 でも、スライド中で紹介されていたアルゴリズムには、もうちょっと最適化の余地があるのでは？と考えてみました。
-Goの標準ライブラリでの実装 もとのスライドはC++の話っぽいけど、C++はよくわからないので、Go言語での実装を考えます。
-除算法 Goの標準ライブラリはスライド中で「除算法」と呼ばれている方法で乱数を生成します。
-Go 1.21.0 の実装: https://github.com/golang/go/blob/33d4a5105cf2b2d549922e909e9239a48b8cefcc/src/math/rand/rand.go#L188-L212 // Float64 returns, as a float64, a pseudo-random number in the half-open interval [0.0,1.0). func (r *Rand) Float64() float64 { // コメント略 again: f := float64(r.Int63()) / (1 &lt;&lt; 63) if f == 1 { goto again // resample; this branch is taken O(never) } return f } 除算法は大変シンプルですが、丸め誤差の影響で誤って 1.0 を返すことがあります。 Goは乱数を再生成することで、この問題を回避しています。
-過去の実装 実際 Go 1.2 までは 1.</p>
-          
-            <footer>
-              <a href="https://shogo82148.github.io/blog/2023/09/04/2023-09-04-generate-random-float/" rel="full-article">Read On &rarr;</a>
-            </footer>
-          
-        
-      </article>
-      
       
       
 
@@ -544,6 +547,8 @@ Go 1.21.0 の実装: https://github.com/golang/go/blob/33d4a5105cf2b2d549922e909
     
         <a href="/page/28/" class="label-pagination">28</a>
     
+        <a href="/page/29/" class="label-pagination">29</a>
+    
 
     
     
@@ -552,7 +557,7 @@ Go 1.21.0 の実装: https://github.com/golang/go/blob/33d4a5105cf2b2d549922e909
 
     
     
-        <a href="/page/28/" aria-label="Last"><i class="fa fa-angle-double-right fa-lg"></i></a>
+        <a href="/page/29/" aria-label="Last"><i class="fa fa-angle-double-right fa-lg"></i></a>
     
 
 </div>
@@ -611,10 +616,16 @@ Go 1.21.0 の実装: https://github.com/golang/go/blob/33d4a5105cf2b2d549922e909
           
             
               <li class="post">
-                <a href="/blog/2023/12/24/2023-12-24-perl-prototype/">5.36以降でのサブルーチンプロトタイプを復習する</a>
+                <a href="/blog/2023/12/27/2023-12-27-perl-http-tiny-now-verify-tls/">PerlのHTTP::Tinyがv0.083からデフォルトでTLSの証明書を検証するようになった件</a>
               </li>
             
           
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/12/24/2023-12-24-perl-prototype/">5.36以降でのサブルーチンプロトタイプを復習する</a>
+              </li>
             
           
             
@@ -656,12 +667,6 @@ Go 1.21.0 の実装: https://github.com/golang/go/blob/33d4a5105cf2b2d549922e909
             
               <li class="post">
                 <a href="/blog/2023/11/18/2023-11-18-url-compressor-for-qr-code/">URL圧縮サイトを作ってみた</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2023/11/09/2023-11-09-build-mysql-rpm/">Amazon Linux 2023でMySQLをパッケージングする</a>
               </li>
             
           

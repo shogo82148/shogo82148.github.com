@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono&display=swap" rel="stylesheet"> 
+
+  
+  <title>PerlのHTTP::Tinyがv0.083からデフォルトでTLSの証明書を検証するようになった件</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="ICHINOSE Shogo">
+
+  
+  <meta name="generator" content="Hugo 0.120.4">
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-40R0PCLKVF');
+</script>
+
+
+<script>
+MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']]
+  },
+  svg: {
+    fontCache: 'global'
+  }
+};
+</script>
+
+<script type="text/javascript" id="MathJax-script" async
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+</script>
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Dec 27, 2023
+     - 1 minute read 
+     - <a href="https://shogo82148.github.io/blog/2023/12/27/2023-12-27-perl-http-tiny-now-verify-tls/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a>
+    
+  </p>
+  <h1 class="entry-title">
+     PerlのHTTP::Tinyがv0.083からデフォルトでTLSの証明書を検証するようになった件 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>この記事は、<a href="https://qiita.com/advent-calendar/2023/perl">Perl Advent Calendar 2023</a> 22日目の記事（代打）です。
+21日目は<a href="https://twitter.com/shogo82148">@shogo82148</a>で「<a href="https://shogo82148.github.io/blog/2023/12/24/2023-12-24-perl-prototype/">5.36以降でのサブルーチンプロトタイプを復習する</a>」でした。</p>
+<hr>
+<p>万策尽きたいっちーです。
+そういえば今年こんなこともあったなーと思い出したので、メモとして残しておきます。</p>
+<h2 id="httptiny-0083からデフォルトでtlsの証明書を検証するようになりました">HTTP::Tiny 0.083からデフォルトでTLSの証明書を検証するようになりました</h2>
+<p>今年の6月11日リリースの HTTP::Tiny 0.083 からデフォルトで <strong>TLSの証明書を検証するようになりました！</strong></p>
+<h3 id="検証してみた">検証してみた</h3>
+<p>HTTP::TinyはPerlのコアモジュールに含まれている、超有名HTTPクライアントです。
+「えっ、むしろ今まで検証してなかったの？」って思いますよね。</p>
+<p>僕もそう思いました。というわけで証明書の検証していないことの検証してみましょう。</p>
+<p>まずはお手元に古いHTTP::Tinyを用意します。</p>
+<pre tabindex="0"><code>cpanm HTTP::Tiny@0.082
+</code></pre><p>検証には不正な証明書を返すサーバーが必要です。
+今回は <a href="https://badssl.com/">badssl.com</a> を利用しました。
+有効期限の切れたサイトへのアクセスを試してみます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="line"><span class="cl"><span class="c1"># get.pl</span>
+</span></span><span class="line"><span class="cl"><span class="k">use</span> <span class="nn">v5</span><span class="mf">.38</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">use</span> <span class="nn">HTTP::Tiny</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">my</span> <span class="nv">$response</span> <span class="o">=</span> <span class="nn">HTTP::Tiny</span><span class="o">-&gt;</span><span class="k">new</span><span class="o">-&gt;</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;https://expired.badssl.com/&#39;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="nb">die</span> <span class="s">&#34;Failed!\n&#34;</span> <span class="k">unless</span> <span class="nv">$response</span><span class="o">-&gt;</span><span class="p">{</span><span class="n">success</span><span class="p">};</span>
+</span></span><span class="line"><span class="cl"><span class="n">say</span> <span class="nv">$response</span><span class="o">-&gt;</span><span class="p">{</span><span class="n">content</span><span class="p">};</span>
+</span></span></code></pre></div><p>実行してみると・・・</p>
+<pre tabindex="0"><code>% perl get.pl
+&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+  &lt;meta charset=&#34;utf-8&#34;&gt;
+  &lt;meta name=&#34;viewport&#34; content=&#34;width=device-width, initial-scale=1&#34;&gt;
+  &lt;link rel=&#34;shortcut icon&#34; href=&#34;/icons/favicon-red.ico&#34;/&gt;
+  &lt;link rel=&#34;apple-touch-icon&#34; href=&#34;/icons/icon-red.png&#34;/&gt;
+  &lt;title&gt;expired.badssl.com&lt;/title&gt;
+  &lt;link rel=&#34;stylesheet&#34; href=&#34;/style.css&#34;&gt;
+  &lt;style&gt;body { background: red; }&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;div id=&#34;content&#34;&gt;
+  &lt;h1 style=&#34;font-size: 12vw;&#34;&gt;
+    expired.&lt;br&gt;badssl.com
+  &lt;/h1&gt;
+&lt;/div&gt;
+
+&lt;/body&gt;
+&lt;/html&gt;
+</code></pre><p><strong>不正な証明書なのにコンテンツにアクセスできてしまいました！！</strong></p>
+<h3 id="対応策1-検証オプションを有効化する">対応策1: 検証オプションを有効化する</h3>
+<p>HTTPクライアントの初期化時に <code>verify_SSL=&gt;1</code> オプションを渡すと、証明書の検証が有効になります。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="line"><span class="cl"><span class="k">use</span> <span class="nn">v5</span><span class="mf">.38</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">use</span> <span class="nn">HTTP::Tiny</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">my</span> <span class="nv">$response</span> <span class="o">=</span> <span class="nn">HTTP::Tiny</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span><span class="n">verify_SSL</span><span class="o">=&gt;</span><span class="mi">1</span><span class="p">)</span><span class="o">-&gt;</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;https://expired.badssl.com/&#39;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="nb">die</span> <span class="s">&#34;Failed!\n&#34;</span> <span class="k">unless</span> <span class="nv">$response</span><span class="o">-&gt;</span><span class="p">{</span><span class="n">success</span><span class="p">};</span>
+</span></span><span class="line"><span class="cl"><span class="n">say</span> <span class="nv">$response</span><span class="o">-&gt;</span><span class="p">{</span><span class="n">content</span><span class="p">};</span>
+</span></span></code></pre></div><pre tabindex="0"><code>% perl get.pl
+Failed!
+</code></pre><h3 id="対応策2-httptinyをアップデートする">対応策2: HTTP：：Tinyをアップデートする</h3>
+<p>前述のとおり、0.083でデフォルト値が変わりました。アップデートでも対応できるはずです。</p>
+<pre tabindex="0"><code>cpanm HTTP::Tiny@0.083
+</code></pre><pre tabindex="0"><code>% perl get.pl
+Failed!
+</code></pre><p>めでたしめでたし。</p>
+<h2 id="まとめ">まとめ</h2>
+<p>HTTP::Tiny 0.083未満では <strong>TLSの証明書検証が行われません。</strong>
+えっ令和5年にもなって・・・？という気持ちは拭えませんが、みなさんきちんとアップデートしましょう。</p>
+<hr>
+<p>明日23日目は<a href="https://qiita.com/doikoji">@doikoji</a>で「<a href="https://qiita.com/doikoji/items/b0d850349a6640d0c396">【さらばpptxよ】perlとJavaScriptとHTMLで超手軽にスライドを作る</a>」です。
+お楽しみに！</p>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">ICHINOSE Shogo</span></span>
+    
+    <time>Dec 27, 2023</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2023/12/24/2023-12-24-perl-prototype/" title="5.36以降でのサブルーチンプロトタイプを復習する">5.36以降でのサブルーチンプロトタイプを復習する</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2023/12/27/2023-12-27-perl-http-tiny-now-verify-tls/">PerlのHTTP::Tinyがv0.083からデフォルトでTLSの証明書を検証するようになった件</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/12/24/2023-12-24-perl-prototype/">5.36以降でのサブルーチンプロトタイプを復習する</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/12/21/2023-12-21-perl-asm/">Perlで超簡易アセンブラーを書いた話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/12/19/2023-12-19-itertools-on-golang/">PythonのitertoolsをGoに移植してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/12/12/2023-12-12-or-assignment-default-expressions-in-signatures/">Perl 5.38 の「シグネチャのデフォルト式の定義性論理和と論理和」を試してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/12/11/2023-12-11-introduce-exiftool/">ExifToolがすごいという話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/12/06/2023-12-06-advent-calendar/">今年もアドベントカレンダー（物理）買いました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/12/05/2023-12-05-al2023-based-perl-runtime-is-available/">Amazon Linux 2023ベースのAWS Lambda Perl Runtimeを公開しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/11/18/2023-11-18-url-compressor-for-qr-code/">URL圧縮サイトを作ってみた</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2023 ICHINOSE Shogo - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+</body>
+
+</html>
+
