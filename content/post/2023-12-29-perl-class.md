@@ -126,6 +126,11 @@ Perlにクラスがやってきました！
 実験的な導入ということもあり、本当に基本的なことができるのみが、大きな一歩を踏み出しました。
 今後の発展が楽しみですね。
 
+-----
+
+明日25日目は[@shogo82148](https://twitter.com/shogo82148)で「[AWS::LambdaがCanada West (Calgary) Regionで利用可能になりました](https://shogo82148.github.io/blog/2023/12/29/2023-12-29-p5-aws-lambda-is-available-on-ca-east-1/)」です。
+お楽しみに！
+
 ## 参考
 
 - [perlclass - Perl クラス構文リファレンス](https://perldoc.jp/docs/perl/5.38.0/perlclass.pod)
