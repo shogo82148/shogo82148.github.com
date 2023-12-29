@@ -1,8 +1,8 @@
 ---
 layout: post
 title: "PerlにClass構文がやってきた"
-slug: 2023-12-27-perl-http-tiny-now-verify-tls
-date: 2023-12-27 00:16:00 +0900
+slug: 2023-12-29-perl-class
+date: 2023-12-29 16:37:00 +0900
 comments: true
 categories: [perl]
 ---
