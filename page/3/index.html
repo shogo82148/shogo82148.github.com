@@ -120,6 +120,40 @@ MathJax = {
         
 
 <header>
+  <p class="meta">Sep 10, 2023
+     - 1 minute read 
+     - <a href="https://shogo82148.github.io/blog/2023/09/10/2023-09-10-logrus-slog-hook/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2023/09/10/2023-09-10-logrus-slog-hook/">log/slogにログを転送する logrus hook を書いた</a>
+  </h1>
+</header>
+
+        
+          <p>長らく構造化ログの仕組みが標準ライブラリになかったGoですが、 Go 1.21がリリースされて晴れて log/slog が使えるようになりました。 弊社ではlogrusを使っているので、log/slogを連携するためのフックを書きました。
+背景 弊社ではlogrusをメインに使っています。 特段困ったこともなく 素晴らしいライブラリだと思います！！！（大事） 強いて問題点を上げるとすれば、メンテナンスモードに入ってしまってあまり開発が活発でない、ということでしょうか。 重大なバグがあれば別ですが、新規機能の追加等は行わない方針のようです。
+一方 log/slog は公式ライブラリなので、log/slogの仕様を前提としたエコシステムが、今後発展してくでしょう。
+logrusを使いながらlog/slogのいいとこ取りとする方法はないか？と考えた結果作ったのが shogo82148/logrus-slog-hook です。
+SYNOPSIS sloghook.New で作成したフックを差し込むだけです。 logrusに流したログがlog/slogの設定で流れてきます。
+package main import ( &#34;io&#34; &#34;log/slog&#34; &#34;os&#34; sloghook &#34;github.com/shogo82148/logrus-slog-hook&#34; &#34;github.com/sirupsen/logrus&#34; ) func main() { h := slog.NewTextHandler(os.Stderr, nil) logrus.AddHook(sloghook.New(h)) // logrus も logrus-slog-hook もSTDERRに書き込むので、同じログが二回表示されてしまう。 // logrus側を止めて防止。 logrus.SetFormatter(sloghook.NewFormatter()) logrus.SetOutput(io.Discard) logrus.WithFields(logrus.Fields{ &#34;name&#34;: &#34;joe&#34;, &#34;age&#34;: 42, }).Error(&#34;Hello world!&#34;) // Output: // time=2023-09-10T23:32:41.229+09:00 level=ERROR msg=&#34;Hello world!&#34; age=42 name=joe } 注意点 logrusはエラーレベルが Trace, Debug, Info, Warn, Error, Panic, Fatal と7段階ありますが、 log/slogには Debug, Info, Warn, Error しかありません。 しかし実は整数をレベルを設定できるので、適当に割り当てました。</p>
+          
+            <footer>
+              <a href="https://shogo82148.github.io/blog/2023/09/10/2023-09-10-logrus-slog-hook/" rel="full-article">Read On &rarr;</a>
+            </footer>
+          
+        
+      </article>
+      
+      <article>
+        
+        
+
+<header>
   <p class="meta">Sep 8, 2023
      - 2 minute read 
      - <a href="https://shogo82148.github.io/blog/2023/09/08/2023-09-08-actions-checkout-v4/#disqus_thread">Comments</a>
@@ -434,41 +468,6 @@ base64dq そういうわけで「ふっかつのじゅもん」の影響を受�
         
       </article>
       
-      <article>
-        
-        
-
-<header>
-  <p class="meta">Jul 5, 2023
-     - 1 minute read 
-     - <a href="https://shogo82148.github.io/blog/2023/07/05/2023-07-05-github-used-by-counter/#disqus_thread">Comments</a>
-
-    
-    
-      - <a class="label" href="https://shogo82148.github.io/categories/github/">github </a>
-    
-  </p>
-  <h1 class="entry-title">
-    <a href="https://shogo82148.github.io/blog/2023/07/05/2023-07-05-github-used-by-counter/">GitHubのプロジェクトにUsed by counterを追加する</a>
-  </h1>
-</header>
-
-        
-          <p>GitHubのプロジェクトを見に行くと、サイドバーに「Used by（数字）」と書かれたセクションがあります。
-これの設定方法を知ったのでメモ。
-TL;DR レポジトリのナビゲーションバーから「Setting」をクリックし設定画面を開きます サイドバーから「Code security and analysis」を選択します 「Used by counter」という項目で、たくさん使ってもらっていそうなパッケージを選択します 背景 GitHub Actions上でFuzzingを実行するアクションを書いたでshogo82148/actions-go-fuzzというGitHub Actionを作りました。 このために作ったレポジトリの概要を眺めていると、いつの間にか「Used by 3」という表示が増えてました。 これ自体はおかしなことではありません。お試しで自分が過去に作ったレポジトリにshogo82148/actions-go-fuzzを導入したので、依存しているレポジトリは存在します。
-ずっと不思議だったのは、自分の作った他のGitHub Actionにはこの表示がないこと。 たとえば「actions-setup-perl」でGitHubを検索すると、それなりに使用例が出てきます。 しかし、shogo82148/actions-setup-perlには（この文章を書く前の時点では）「Used by（数字）」のセクションはありませんでした。
-原因 ただの趣味でやっているので別に利用者がいなくたって構わないんですが、 やっぱり利用者がいるとモチベーションが変わってくるじゃないですか。 そういうわけで、表示方法を探したところ公式ドキュメントにたどり着きました。
-Changing the &ldquo;Used by&rdquo; package ドキュメントによると、ひとつのレポジトリで複数のパッケージを提供していると、 このようなことが起こるそうです。
-shogo82148/actions-setup-perlの場合、GitHubの依存解析によって「JavaScriptのパッケージ」「GitHub Actionのパッケージ」の2つが検出されました。 shogo82148/actions-setup-perlはTypeScriptで実装されているので「JavaScriptのパッケージ」として認識されるのは仕方のないことです。 しかし、利用者はみんなGitHub Actionとして利用するので、実際に「JavaScriptのパッケージ」として利用する人はいません。 というかそういう使い方は想定していないので、使われていないのは正しい。 利用者がいないので、「Used by（数字）」の表示がなかったんですね。
-ドキュメントに記載されている通り、「Used by counter」の設定を変更すれば無事表示されます。 shogo82148/actions-setup-perlも「GitHub Actionのパッケージ」としてカウントされるよう設定を変更したので、 この記事を書いている時点では利用者数が表示されるようになりました。
-まとめ GitHubのレポジトリで利用者数が表示されるアレは「Used by counter」という名前らしい 設定の「Code security and analysis」から変更できるよ 個人的に「Code security and analysis」から変更できるというのは盲点でした。 「security」の文字だけ見て「セキュリティー関連の設定かー」と思っていたんですが、 なるほど「Code analysis（コード分析）」の設定も含まれているんですね。
-レポジトリの設定多すぎて覚えきれないよ・・・。
-参考 Changing the &ldquo;Used by&rdquo; package GitHub Actions上でFuzzingを実行するアクションを書いた shogo82148/actions-setup-perl </p>
-          
-        
-      </article>
-      
       
       
 
@@ -617,10 +616,16 @@ shogo82148/actions-setup-perlの場合、GitHubの依存解析によって「Jav
           
             
               <li class="post">
-                <a href="/blog/2023/12/29/2023-12-29-perl-class/">PerlにClass構文がやってきた</a>
+                <a href="/blog/2023/12/29/2023-12-29-p5-aws-lambda-is-available-on-ca-east-1/">AWS::LambdaがCanada West (Calgary) Regionで利用可能になりました</a>
               </li>
             
           
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/12/29/2023-12-29-perl-class/">PerlにClass構文がやってきた</a>
+              </li>
             
           
             
@@ -662,12 +667,6 @@ shogo82148/actions-setup-perlの場合、GitHubの依存解析によって「Jav
             
               <li class="post">
                 <a href="/blog/2023/12/06/2023-12-06-advent-calendar/">今年もアドベントカレンダー（物理）買いました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2023/12/05/2023-12-05-al2023-based-perl-runtime-is-available/">Amazon Linux 2023ベースのAWS Lambda Perl Runtimeを公開しました</a>
               </li>
             
           
