@@ -1,8 +1,8 @@
 ---
 layout: post
 title: "GoでForwarded Headerのパーサーを作った"
-slug: 2024-01-09-go-forwarded-header
-date: 2024-01-09 22:28:00 +0900
+slug: 2024-01-11-go-forwarded-header
+date: 2024-01-11 23:03:00 +0900
 comments: true
 categories: [go, golang]
 ---
