@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono&display=swap" rel="stylesheet"> 
+
+  
+  <title>GoでForwarded Headerのパーサーを作った</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="ICHINOSE Shogo">
+
+  
+  <meta name="generator" content="Hugo 0.120.4">
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-40R0PCLKVF');
+</script>
+
+
+<script>
+MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']]
+  },
+  svg: {
+    fontCache: 'global'
+  }
+};
+</script>
+
+<script type="text/javascript" id="MathJax-script" async
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+</script>
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Jan 11, 2024
+     - 1 minute read 
+     - <a href="https://shogo82148.github.io/blog/2024/01/11/2024-01-11-go-forwarded-header/#disqus_thread">Comments</a>
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
+    
+  </p>
+  <h1 class="entry-title">
+     GoでForwarded Headerのパーサーを作った 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>ちょっとした用事で Forwarded ヘッダーの解析をしたくなったので、解析ライブラリを書いてみました。</p>
+<ul>
+<li><a href="https://github.com/shogo82148/forwarded-header">shogo82148/forwarded-header</a></li>
+</ul>
+<h2 id="背景">背景</h2>
+<p>Amazon API GatewayのHTTP Proxy Integrationを利用しているプロジェクトで、
+クライアントのIPアドレスを知りたい用件がありました。</p>
+<p>リバースプロキシの運用に慣れている人なら、「クライアントのIPアドレスを取得したい」と聞いて真っ先に思いつくのは <a href="https://developer.mozilla.org/ja/docs/Web/HTTP/Headers/X-Forwarded-For">X-Forwarded-For ヘッダー</a>でしょう。
+しかし、HTTP Proxy Integrationはこのヘッダーを付与しません。</p>
+<p>なんとかIPアドレスを取得できないかと調べてみると、HTTP Proxy IntegrationはForwardedヘッダーを付与することがわかりました。</p>
+<ul>
+<li><a href="https://medium.com/@lancers/amazon-api-gateway-explaining-http-proxy-in-http-api-3ea0afe6b03c">Amazon API Gateway: Explaining HTTP Proxy in HTTP API</a></li>
+</ul>
+<p>Forwardedヘッダーは <a href="https://www.rfc-editor.org/info/rfc7239">RFC 7239</a> で標準化されているヘッダーです。
+リバースプロキシによって失われてしまう情報を補完するために利用します。</p>
+<ul>
+<li><a href="https://www.rfc-editor.org/info/rfc7239">RFC 7239: Forwarded HTTP Extension</a></li>
+<li><a href="https://shogo82148.github.io/rfc-translated-ja/rfc7239.html">RFC 7239: Forwarded HTTP拡張</a></li>
+<li><a href="https://developer.mozilla.org/ja/docs/Web/HTTP/Headers/Forwarded">Forwarded - MDN</a></li>
+</ul>
+<p>Forwardedヘッダーを見ればクライアントのIPアドレスもわかります。
+たとえば以下の例では <code>192.0.2.60</code> がクライアントのIPアドレスです。</p>
+<pre tabindex="0"><code>Forwarded: for=192.0.2.60; proto=http; by=203.0.113.43
+</code></pre><p>X-Forwarded-Forヘッダーは単純なカンマ区切りのテキストだったので、Split関数で十分でした。
+一方Forwardedヘッダーは構造化されているため、パーサーが必要です。
+そこまで複雑ではないので、実装してみました。</p>
+<h2 id="使い方">使い方</h2>
+<p>解析は <a href="https://pkg.go.dev/github.com/shogo82148/fowarded-header#Parse">Parse</a>関数を呼び出すだけです。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;fmt&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;net/http&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;os&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="nx">forwardedheader</span> <span class="s">&#34;github.com/shogo82148/forwarded-header&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">header</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">Header</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">header</span><span class="p">.</span><span class="nf">Set</span><span class="p">(</span><span class="s">&#34;Forwarded&#34;</span><span class="p">,</span> <span class="s">&#34;by=203.0.113.43;for=192.0.2.60;proto=http&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="c1">// parse the Forwarded Header
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="nx">parsed</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">forwardedheader</span><span class="p">.</span><span class="nf">Parse</span><span class="p">(</span><span class="nx">header</span><span class="p">.</span><span class="nf">Values</span><span class="p">(</span><span class="s">&#34;Forwarded&#34;</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">f</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">parsed</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">f</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="c1">// Output:
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="c1">// by=203.0.113.43;for=192.0.2.60;proto=http
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><p>解析済みの値を<a href="https://pkg.go.dev/github.com/shogo82148/fowarded-header#Encode">Encode</a>関数でエンコードすることもできます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;fmt&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;net/http&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;net/netip&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;os&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="nx">forwardedheader</span> <span class="s">&#34;github.com/shogo82148/forwarded-header&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="c1">// build the Forwarded Header
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="nx">forwarded</span> <span class="o">:=</span> <span class="p">[]</span><span class="o">*</span><span class="nx">forwardedheader</span><span class="p">.</span><span class="nx">Forwarded</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">For</span><span class="p">:</span> <span class="nx">forwardedheader</span><span class="p">.</span><span class="nx">Node</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">				<span class="nx">IP</span><span class="p">:</span> <span class="nx">netip</span><span class="p">.</span><span class="nf">MustParseAddr</span><span class="p">(</span><span class="s">&#34;192.0.2.60&#34;</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">			<span class="p">},</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">Proto</span><span class="p">:</span> <span class="s">&#34;http&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">By</span><span class="p">:</span> <span class="nx">forwardedheader</span><span class="p">.</span><span class="nx">Node</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">				<span class="nx">IP</span><span class="p">:</span> <span class="nx">netip</span><span class="p">.</span><span class="nf">MustParseAddr</span><span class="p">(</span><span class="s">&#34;203.0.113.43&#34;</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">			<span class="p">},</span>
+</span></span><span class="line"><span class="cl">		<span class="p">},</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">header</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">Header</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">header</span><span class="p">.</span><span class="nf">Set</span><span class="p">(</span><span class="s">&#34;Forwarded&#34;</span><span class="p">,</span> <span class="nx">forwardedheader</span><span class="p">.</span><span class="nf">Encode</span><span class="p">(</span><span class="nx">forwarded</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">header</span><span class="p">.</span><span class="nf">Write</span><span class="p">(</span><span class="nx">os</span><span class="p">.</span><span class="nx">Stdout</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="c1">// Output:
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="c1">// Forwarded: by=203.0.113.43;for=192.0.2.60;proto=http
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><h2 id="まとめ">まとめ</h2>
+<p>RFC 7239で定義されている ForwardedヘッダーのパーサーをGoで書きました。
+プロキシサーバーを経由している場合に、クライアントのIPアドレスを知るために使えます。</p>
+<hr>
+<p>しかし、Forwardedヘッダーってどの程度利用されているんですかね・・・？
+Forwardedヘッダーについてググっても、あまり情報が出てこないんですよね。
+このまま廃れてなくなってしまうのではないかと心配です。</p>
+<p>まあ、「クライアントのIPアドレスなんか気にするな」って話かもしれませんね。
+（でもこっちにも事情があってだな・・・）</p>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://github.com/shogo82148/forwarded-header">shogo82148/forwarded-header</a></li>
+<li><a href="https://docs.aws.amazon.com/ja_jp/elasticloadbalancing/latest/application/x-forwarded-headers.html">HTTP ヘッダーと Application Load Balancer</a></li>
+<li><a href="https://medium.com/@lancers/amazon-api-gateway-explaining-http-proxy-in-http-api-3ea0afe6b03c">Amazon API Gateway: Explaining HTTP Proxy in HTTP API</a></li>
+<li><a href="https://www.rfc-editor.org/info/rfc7239">RFC 7239: Forwarded HTTP Extension</a></li>
+<li><a href="https://shogo82148.github.io/rfc-translated-ja/rfc7239.html">RFC 7239: Forwarded HTTP拡張</a></li>
+<li><a href="https://developer.mozilla.org/ja/docs/Web/HTTP/Headers/X-Forwarded-For">X-Forwarded-For - MDN</a></li>
+<li><a href="https://developer.mozilla.org/ja/docs/Web/HTTP/Headers/Forwarded">Forwarded - MDN</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">ICHINOSE Shogo</span></span>
+    
+    <time>Jan 11, 2024</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2024/01/11/2024-01-11-not-found-resolve-endpoint-v2/" title="AWS SDK for Go v2にnot found ResolveEndpointV2と起こられたときの解決策">AWS SDK for Go v2にnot found ResolveEndpointV2と起こられたときの解決策</a>
+    
+
+    
+  </p>
+  
+    
+      <div id="disqus_thread"></div>
+<script type="text/javascript">
+  (function() {
+      
+      
+      
+      if (window.location.hostname == "localhost")
+          return;
+
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      var disqus_shortname = 'shogosblog';
+      dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="http://disqus.com/" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2024/01/11/2024-01-11-go-forwarded-header/">GoでForwarded Headerのパーサーを作った</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/01/11/2024-01-11-not-found-resolve-endpoint-v2/">AWS SDK for Go v2にnot found ResolveEndpointV2と起こられたときの解決策</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/12/29/2023-12-29-go-retry-meets-generics/">go-retry v1.2.0 リリースのお知らせ、ジェネリクスがやってきた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/12/29/2023-12-29-p5-aws-lambda-is-available-on-ca-east-1/">AWS::LambdaがCanada West (Calgary) Regionで利用可能になりました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/12/29/2023-12-29-perl-class/">PerlにClass構文がやってきた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/12/27/2023-12-27-perl-http-tiny-now-verify-tls/">PerlのHTTP::Tinyがv0.083からデフォルトでTLSの証明書を検証するようになった件</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/12/24/2023-12-24-perl-prototype/">5.36以降でのサブルーチンプロトタイプを復習する</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/12/21/2023-12-21-perl-asm/">Perlで超簡易アセンブラーを書いた話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2023/12/19/2023-12-19-itertools-on-golang/">PythonのitertoolsをGoに移植してみた</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2024 ICHINOSE Shogo - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+</body>
+
+</html>
+
