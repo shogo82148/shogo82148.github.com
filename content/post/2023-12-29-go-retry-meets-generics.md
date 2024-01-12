@@ -38,8 +38,7 @@ func DoSomethingWithRetry(ctx context.Context) (Result, error) {
     return retry.DoValue(ctx, policy, func() (Result, error) {
         ctx, cancel := context.WithTimeout(ctx, time.Second)
         defer cancel()
-        res, err = DoSomething(ctx)
-        return err
+        return DoSomething(ctx)
     })
 }
 ```
@@ -94,7 +93,7 @@ func (p *Policy) randomJitter() time.Duration {
 }
 ```
 
-##　　まとめ
+## まとめ
 
 - 以下のような書き方ができるようになりました。
 
@@ -103,8 +102,7 @@ func DoSomethingWithRetry(ctx context.Context) (Result, error) {
     return retry.DoValue(ctx, policy, func() (Result, error) {
         ctx, cancel := context.WithTimeout(ctx, time.Second)
         defer cancel()
-        res, err = DoSomething(ctx)
-        return err
+        return DoSomething(ctx)
     })
 }
 ```
