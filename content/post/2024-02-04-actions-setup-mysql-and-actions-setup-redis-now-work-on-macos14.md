@@ -49,17 +49,17 @@ x64と同じ手順でビルドしたところ、いくつかのバージョン�
 そのようなバージョンにはいくつかパッチを当てました。
 Perl は素直にビルドが通ってすごいですね。まあ、だいたい [Devel::PatchPerl](https://metacpan.org/pod/Devel::PatchPerl) のおかげ。
 
-### Xcode に付属する clang を使って MySQL をビルドするように修正
+### Xcodeに付属するclangを使ってMySQLをビルドするように修正
 
-x86上では　brew で新しい Clang をインストールしてビルドに使っていました。
-MySQL 8.0 に C++20 の新しい構文が使用されており、Xcode に付属する Clang は古すぎてビルドできなかったためです。
+x86上ではbrewで新しいClangをインストールしてビルドに使っていました。
+MySQL 8.0にC++20の新しい構文が使用されており、Xcode に付属するClangは古すぎてビルドできなかったためです。
 
 しかし `macos-14` ではリンクに失敗してしまいました。
 エラーメッセージでググったところ以下のIssueがヒットしました。
 
 - [Pyenv Failing to install Python 3.12 on OSX Sonoma (MB Air M2): "ld: archive member '/' not a mach-o file" #2862](https://github.com/pyenv/pyenv/issues/2862)
 
-「Xcode に付属する Clang を使用せよ」とのこと。
+「Xcodeに付属するClangを使用せよ」とのこと。
 `macos-14` の Clang は十分に新しいので、この方法で解決しました。
 
 ### MariaDBにPCRE2を同梱しました
@@ -77,10 +77,10 @@ MariaDBのビルドも必要です。
 
 [PCRE2](https://github.com/PCRE2Project/pcre2)のファイルっぽいので、PCRE2をインストールして解決しました。
 
-### 古い Redis　がmacos-14でビルドできない
+### 古いRedis　がmacos-14でビルドできない
 
-古い Redis が `macos-14` でビルドできない問題に遭遇しました。
-最新版の Redis では修正されているので、バックポートして修正しました。
+古いRedisが `macos-14` でビルドできない問題に遭遇しました。
+最新版のRedisでは修正されているので、バックポートして修正しました。
 
 - [Fix compile on macOS 13 #12611](https://github.com/redis/redis/pull/12611)
 
