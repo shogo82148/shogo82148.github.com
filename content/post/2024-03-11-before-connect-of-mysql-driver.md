@@ -71,7 +71,7 @@ func main() {
     }
 
     // 接続設定を書き換える
-    config.Passwd = config
+    config.Passwd = token
     return nil
   }
   if err := mycnf.Apply(mysql.BeforeConnect(beforeConnect)); err != nil {
