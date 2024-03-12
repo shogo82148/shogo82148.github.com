@@ -132,6 +132,8 @@ func main() {
 }
 ```
 
+Amazon RDS 証明書もダウンロードして、ライブラリに組み込んであります。
+
 ## まとめ
 
 - [go-sql-driver/mysql v1.8.0](https://github.com/go-sql-driver/mysql/releases/tag/v1.8.0) に BeforeConnect オプションが追加されました
