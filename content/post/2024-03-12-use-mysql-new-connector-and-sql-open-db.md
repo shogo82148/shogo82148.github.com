@@ -13,7 +13,7 @@ categories: [mysql, go, golang]
 ## 昔からある書き方
 
 go-sql-driver/mysql のDSNを文字列結合で実現するのは意外と大変なので、
-某所ではDSNの生成を [mysql.Config](https://pkg.go.dev/github.com/go-sql-driver/mysql@v1.8.0#Config) を使って行っています。
+某所ではDSN(Data Source Name)の生成を [mysql.Config](https://pkg.go.dev/github.com/go-sql-driver/mysql@v1.8.0#Config) を使って行っています。
 
 ```go
 // DSNの生成
@@ -55,11 +55,12 @@ db := sql.OpenDB(conn)
 [mysql.Config](https://pkg.go.dev/github.com/go-sql-driver/mysql@v1.8.0#Config) には文字列にシリアライズできないフィールドが存在するからです。
 そのためDSNに変換したときに、情報のロスが起こります。
 
-たとえば先日 BeforeConnect オプションの紹介をしました。
+たとえば先日 `BeforeConnect` オプションの紹介をしました。
 
 - [GoのMySQLドライバーにBeforeConnectが追加されました](https://shogo82148.github.io/blog/2024/03/11/2024-03-11-before-connect-of-mysql-driver/)
 
 しかしこのオプションはDSNでは表現できません。
+`BeforeConnect` オプションにはGoの関数を指定するのですが、Goの関数は文字列にシリアライズすることができないからです。
 そのため「古い書き方」ではうまく動作せず、「新しい書き方」のみで意図した挙動となります。
 
 ## まとめ
