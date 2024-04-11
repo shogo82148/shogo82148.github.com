@@ -11,7 +11,7 @@ categories: [javascript, AjaxIME]
 Ajaxを使ってIMEを実現した[AjaxIME](http://ajaxime.chasen.org/)がFireFoxでは動くのに最新版のChromeで動かない。
 動くように少しいじってみた。
 
-- [Chrome17対応版AjaxIME](http://shogo82148.github.com/AjaxIME/)
+- [Chrome17対応版AjaxIME](https://shogo82148.github.io/AjaxIME/)
 
 <!-- more -->
 

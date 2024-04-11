@@ -109,7 +109,7 @@ var comp = ccv.detect_objects({
 
 ## 組み合わせる
 
-組み合わせるとこんな感じ [リアルタイムにテンション上げる](http://shogo82148.github.com/tension-upper/)
+組み合わせるとこんな感じ [リアルタイムにテンション上げる](https://shogo82148.github.io/tension-upper/)
 
 元の位置から少しずれた場所に顔画像を重ねることでブレた感じにしてます．
 周りの人からテンションの上がり具合が足りないと言われてしましました．

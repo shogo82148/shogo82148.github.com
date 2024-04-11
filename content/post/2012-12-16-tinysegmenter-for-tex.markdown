@@ -68,7 +68,7 @@ TinySegmeneterは元の文章の一部を切り取ってハッシュに入れる
 
 TinySegmenterMakerでは自由にモデルを差し替えることができます．
 以前JavaScript版のTinySegmenterを使って，
-[聞こえますか…自動生成…してみた…よ…](http://shogo82148.github.com/blog/2012/12/05/kikoemasuka/)
+[聞こえますか…自動生成…してみた…よ…](https://shogo82148.github.io/blog/2012/12/05/kikoemasuka/)
 ということをしてみました．
 LaTeXだってできるはず．
 
