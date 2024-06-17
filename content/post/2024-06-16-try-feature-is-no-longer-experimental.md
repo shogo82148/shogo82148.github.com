@@ -27,7 +27,7 @@ try {
 
 実行結果は以下の通りです。
 
-```
+```plain
 catch: dead at try-catch.pl line 4.
 ```
 
