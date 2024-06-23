@@ -120,6 +120,46 @@ MathJax = {
         
 
 <header>
+  <p class="meta">Nov 9, 2013
+     - 1 minute read 
+    
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/isucon/">isucon </a><a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2013/11/09/isucon3/">ISUCON3の本戦に参加してきた</a>
+  </h1>
+</header>
+
+        
+          <p>ISUCON3の予選を何とか通過し、 本戦へと参戦してきました。
+大会中の方針とか考えたこととかメモ。
+お題 Tw○tter&ndash;likeな画像投稿サービス ユーザをフォローできる フォローしたユーザが画像を投稿すると、タイムラインに画像が流れる 公開範囲を全員に公開・フォロワーのみに公開・自分だけに公開から選べる タイムラインはロングポーリングを使ってリアルタイム反映 JSON-APIが用意されていて、Javascriptから叩く 使用できるサーバは5台 画像を扱うお題と聞いて、会場がざわめきました。
+MySQLのクエリを見てみる 開始直後、鍵を用意したり、gitのレポジトリを立てたりなんだりした後、 一回目の計測。
+topコマンドで走っているプロセスを見ていると、大量のconvertが！！ プロセス名とお題から考えるに、こいつら確実にImage Magickだ・・・。 CPUのほとんどが画像の変換にくわれていたので、 まずは「どこかでキャッシュする」作戦をとることに。 キャッシュするならフロントに近いほうがいいだろうということで、 フロントのnginxでキャッシュする作戦をとることにしました (アクセス制限があるimageは難しいかもしれないけど、全部publicなiconならすぐできるだろうとこのときは思ってました)。
+僕はnginxがconvertを駆逐してくれると信じて、MySQLに投げているクエリを中心にPerlのコードを見てました。 役割分担はこんな感じ。
+サーバの設定とか(@mackee_wさん) nginxでキャッシュする設定(@9reさん) コード読む、主にMySQLに投げてるクエリとか(@shogo82148) 毎回、ひどいクエリが仕込まれているようなイメージがあったけど、 今回はそこまでひどくない。 クエリチューニング全然効果なさそうと判断して、次の作戦を考えることにしました。
+No Image Magick, use Imager! やっぱり一番のボトルネックは画像変換。 nginxでキャッシュするとはいえ軽いほうがいいよね、ということで、 外部プロセスで実行している画像変換をImagerを使ってPerlと同じプロセスでやる作戦。
+Imagerに置き換え後ベンチにかけたら、若干スコアが・・・上がった・・・ような・・・？ しかし、画像が変化していると怒られて、スコアは無効。 画像エラーを修正するコストと、スコアの上がり具合を見て、Image Magickのままにすることにしました。
+予選でも同じように外部プロセス起動している部分をPerlのライブラリにしたけど、 その時はあっさり動いた。 あれは外部プロセス起動をやめたらスコア上がると思い込ませるための布石だったんだ・・・。 (今回の場合、プロセスの起動より画像の変換のほうが重いので、スコアが上がらないのは当たり前)
+いろいろ諦めてPerl側でファイルキャッシュ Imagerはテストを通らず、nginxの設定キャッシュ設定も上手く動作しなかったので、 Perlでファイルキャッシュする方針に変更。 convertの結果にmvで適当な場所にコピーして保存。 これだけでスコアが5倍くらいに跳ね上がり、一気に上位に浮上！ 最初からやっておくべきだった・・・。 もうちょっと早ければ特別賞もらえたかもしれないのに。
+rsync! rsync! ファイルキャッシュの作業をやっている間に、@mackee_wさんがnfsの設定をやってくれたので、 アップロードされたファイルやキャッシュファイルの保存先をnfsに変更。
+あとは物量作戦でいくしかないだろうということで、rsyncで他のサーバにコピーして調整を繰り返してた。 (並行してnginxのキャッシュ設定にも再チャレンジしてたけど、nginx力が足りなかった)
+最終結果 テストFAILした!! No Score!!
+なんかこんなの前もあった！
+反省点 画像変換をGETでやってたけど、POSTでやったほうがよかったかも nginxについて勉強しよう nfsについて勉強しよう </p>
+          
+        
+      </article>
+      
+      <article>
+        
+        
+
+<header>
   <p class="meta">Oct 30, 2013
      - 1 minute read 
     
@@ -419,38 +459,6 @@ use utf8; use warnings; use strict; use 5.014; use Redis::Hash; tie my %my_hash,
         
       </article>
       
-      <article>
-        
-        
-
-<header>
-  <p class="meta">Jul 13, 2013
-     - 3 minute read 
-    
-
-    
-    
-      - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a>
-    
-  </p>
-  <h1 class="entry-title">
-    <a href="https://shogo82148.github.io/blog/2013/07/13/random-sample/">ランダム抽出アルゴリズムについて考える</a>
-  </h1>
-</header>
-
-        
-          <p>数日前に社内IRCで「スマートな非復元抽出の方法はないか」と話題になったので、 ランダムサンプリングのアルゴリズムについて調べたり考えたりしてみた。
-復元抽出 非復元抽出の手法って調べてもなかなか出てこない・・・。 ひとまず、復元抽出についてまとめてみましょう。
-線形検索 一番簡単な実装方法。 どの区間に入るかを線形検索して求める。 選択肢の個数nとすると計算量はO(n)。
-use strict; use warnings; use List::Util qw(sum); sub linear_search_method { my $weights = shift; my $num = shift; my $sum = sum @$weights; my $length = @$weights; my @a; for (1..$num) { my $r = rand($sum); for my $i(0..$length-1) { $r -= $weights-&gt;[$i]; if($r &lt; 0) { push @a, $i; last; } } } return \@a; } print join &#39;, &#39;, @{linear_search_method [1,2,3], 100}; バイナリサーチ あらかじめ累積分布表を作っておき、どの区間に入るかをバイナリサーチ。 準備にO(n)、選択に O(log n)かかる。</p>
-          
-            <footer>
-              <a href="https://shogo82148.github.io/blog/2013/07/13/random-sample/" rel="full-article">Read On &rarr;</a>
-            </footer>
-          
-        
-      </article>
-      
       
       
 
@@ -600,6 +608,12 @@ use strict; use warnings; use List::Util qw(sum); sub linear_search_method { my 
           
           
             
+              <li class="post">
+                <a href="/blog/2024/06/23/2024-06-23-publish-to-npm-and-jsr/">npmとjsrにパッケージを公開してみた (認証バッジ付)</a>
+              </li>
+            
+          
+            
           
             
               <li class="post">
@@ -646,12 +660,6 @@ use strict; use warnings; use List::Util qw(sum); sub linear_search_method { my 
             
               <li class="post">
                 <a href="/blog/2024/02/01/2024-02-01-actions-setup-perl-now-works-on-macos14/">actions-setup-perlがApple M1上で動くようになりました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2024/01/11/2024-01-11-go-forwarded-header/">GoでForwarded Headerのパーサーを作った</a>
               </li>
             
           
