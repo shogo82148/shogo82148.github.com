@@ -97,7 +97,7 @@ deno coverage --lcov > coverage.lcov
 
 テスト関連のワークフローをまとめると、次のようになります。
 
-- https://github.com/shogo82148/limit-concurrency/blob/27807ffaf50f1863b0f2a691ce3bb6b0b67f7c7f/.github/workflows/test.yaml#L1-L21
+- [.github/workflows/test.yaml#L1-L21](https://github.com/shogo82148/limit-concurrency/blob/27807ffaf50f1863b0f2a691ce3bb6b0b67f7c7f/.github/workflows/test.yaml#L1-L21)
 
 ```yaml
 on:
@@ -178,7 +178,7 @@ npmはあくまでもJavaScriptのレジストリなので、TypeScriptのモジ
 
 dnt用の設定ファイルを用意します。
 
-- https://github.com/shogo82148/limit-concurrency/blob/27807ffaf50f1863b0f2a691ce3bb6b0b67f7c7f/scripts/build_npm.ts
+- [scripts/build_npm.ts](https://github.com/shogo82148/limit-concurrency/blob/27807ffaf50f1863b0f2a691ce3bb6b0b67f7c7f/scripts/build_npm.ts)
 
 ```typescript
 // ex. scripts/build_npm.ts
@@ -279,7 +279,7 @@ permissions:
 
 あとは GitHub Actions ワークフローの中で `deno publish && npm publish` するだけです。
 
-- https://github.com/shogo82148/limit-concurrency/blob/27807ffaf50f1863b0f2a691ce3bb6b0b67f7c7f/scripts/publish.sh
+- [scripts/publish.sh](https://github.com/shogo82148/limit-concurrency/blob/27807ffaf50f1863b0f2a691ce3bb6b0b67f7c7f/scripts/publish.sh)
 
 ```bash
 #!/bin/bash
