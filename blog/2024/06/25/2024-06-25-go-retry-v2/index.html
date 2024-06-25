@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono&display=swap" rel="stylesheet"> 
+
+  
+  <title>go-retry v2 リリースのお知らせ</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="ICHINOSE Shogo">
+
+  
+  <meta name="generator" content="Hugo 0.120.4">
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-40R0PCLKVF');
+</script>
+
+
+<script>
+MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']]
+  },
+  svg: {
+    fontCache: 'global'
+  }
+};
+</script>
+
+<script type="text/javascript" id="MathJax-script" async
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+</script>
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Jun 25, 2024
+     - 1 minute read 
+    
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
+    
+  </p>
+  <h1 class="entry-title">
+     go-retry v2 リリースのお知らせ 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p><a href="https://github.com/shogo82148/go-retry">shogo82148/go-retry</a> は指数的バックオフを行ってくれるライブラリです。</p>
+<ul>
+<li><a href="https://shogo82148.github.io/blog/2019/07/22/go-retry/">Goで指数的バックオフをやってくれるgo-retryを書いた</a></li>
+</ul>
+<p>v2へメジャーバージョンアップをリリースしました。
+破壊的な変更が入っているのでお知らせします。</p>
+<h2 id="エラーのtemporaryメソッドをチェックしなくなりました">エラーのTemporaryメソッドをチェックしなくなりました</h2>
+<p>DoメソッドやDoValue関数のエラーハンドリングの挙動が変更になります。</p>
+<h3 id="v1-までの挙動">v1 までの挙動</h3>
+<p>v1のDoメソッドは戻り値のエラーが Temporary メソッドを実装している場合、
+その実行結果によってリトライの挙動を変えていました。
+Temporary メソッドが <code>true</code> を返した場合はリトライを続行します。
+<code>false</code> を返した場合はそれ以上のリトライは無意味と判断し、リトライ処理を中断します。</p>
+<p>この挙動は <a href="https://pkg.go.dev/net#Error">net.Error</a> を参考に実装したものでした。
+ネットワーク処理中に回復不可能なエラーが発生した場合に、リトライが自動的に中断されることを期待して実装しました。</p>
+<h3 id="v2-からの挙動">v2 からの挙動</h3>
+<p>しかし、残念ながら Go 1.18 から <a href="https://github.com/golang/go/commit/a53e3d5f885ca7a0df1cd6cf65faa5b63a802dce">Temporary メソッドは非推奨になってしまいました</a>。
+Temporaryの意味はあいまいで、利用者の意図した通りの結果を得られるとは限りません。
+実際に「リトライして欲しいときにリトライしてくれない」という報告を受けました。</p>
+<p>そういうわけで、エラーのTemporaryメソッドの戻り値は信用せず、呼ばないよう変更しました。</p>
+<h2 id="v1からv2への移行">v1からv2への移行</h2>
+<p>多くのケースでは、インポートパスを <code>github.com/shogo82148/go-retry</code> から <code>github.com/shogo82148/go-retry/v2</code> に変更するだけでOKなはずです。</p>
+<p>万が一v1と同じ挙動を維持したい場合は、以下のように書き換えてください。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// v1 code
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">policy</span><span class="p">.</span><span class="nf">Do</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="kt">error</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nf">DoSomething</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// v2 code
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">policy</span><span class="p">.</span><span class="nf">Do</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="kt">error</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">err</span> <span class="o">:=</span> <span class="nf">DoSomething</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kd">interface</span> <span class="nx">temporary</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">Temporary</span><span class="p">()</span> <span class="kt">bool</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">tmp</span> <span class="nx">temporary</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">errors</span><span class="p">.</span><span class="nf">As</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">tmp</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="p">!</span><span class="nx">tmp</span><span class="p">.</span><span class="nf">Temporary</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="nx">retry</span><span class="p">.</span><span class="nf">MarkPermanent</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">err</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><h2 id="まとめ">まとめ</h2>
+<p><a href="https://github.com/shogo82148/go-retry">shogo82148/go-retry</a>の v2 をリリースしました。
+意図せずリトライが中断される不具合が修正されていますが、破壊的な変更が含まれているので注意してください。
+リトライを中断したいときは、明示的に <code>retry.MarkPermanent</code> を呼び出してください。</p>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://github.com/shogo82148/go-retry">shogo82148/go-retry</a></li>
+<li><a href="https://shogo82148.github.io/blog/2019/07/22/go-retry/">Goで指数的バックオフをやってくれるgo-retryを書いた</a></li>
+<li><a href="https://shogo82148.github.io/blog/2023/12/29/2023-12-29-go-retry-meets-generics/">go-retry v1.2.0 リリースのお知らせ、ジェネリクスがやってきた</a></li>
+<li><a href="https://pkg.go.dev/net#Error">net.Error</a></li>
+<li><a href="https://github.com/golang/go/commit/a53e3d5f885ca7a0df1cd6cf65faa5b63a802dce">net: deprecate (net.Error).Temporary</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">ICHINOSE Shogo</span></span>
+    
+    <time>Jun 25, 2024</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2024/06/23/2024-06-23-publish-to-npm-and-jsr/" title="npmとjsrにパッケージを公開してみた (認証バッジ付)">npmとjsrにパッケージを公開してみた (認証バッジ付)</a>
+    
+
+    
+  </p>
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2024/06/25/2024-06-25-go-retry-v2/">go-retry v2 リリースのお知らせ</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/06/23/2024-06-23-publish-to-npm-and-jsr/">npmとjsrにパッケージを公開してみた (認証バッジ付)</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/06/22/2024-06-22-limit-concurrency-in-typescript/">TypeScriptで同時実行数を制限しながら並行実行する</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/03/27/2024-03-27-use-cryptographically-secure-random/">鍵生成には暗号論的に安全な乱数を使おう</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/03/20/2024-03-20-go-mysql-pool/">GoでMySQLを使ったテストを書くときにつかうユーティリティーライブラリを作った</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/03/12/2024-03-12-use-mysql-new-connector-and-sql-open-db/">GoのMySQLドライバーを使うときはmysql.NewConnectorとsql.OpenDBを使おう</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/03/11/2024-03-11-before-connect-of-mysql-driver/">GoのMySQLドライバーにBeforeConnectが追加されました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/02/06/2024-02-06-introduce-ridgenative-and-lambtrip/">AWS Lambda Function URLsのイベントをnet/httpで扱えるridgenativeとlambtripを書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/02/04/2024-02-04-actions-setup-mysql-and-actions-setup-redis-now-work-on-macos14/">actions-setup-mysqlとactions-setup-redisがApple M1上で動くようになりました</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2024 ICHINOSE Shogo - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+</body>
+
+</html>
+
