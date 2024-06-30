@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono&display=swap" rel="stylesheet"> 
+
+  
+  <title>GitHub Artifact Attestations を試してみた</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="ICHINOSE Shogo">
+
+  
+  <meta name="generator" content="Hugo 0.120.4">
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-40R0PCLKVF');
+</script>
+
+
+<script>
+MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']]
+  },
+  svg: {
+    fontCache: 'global'
+  }
+};
+</script>
+
+<script type="text/javascript" id="MathJax-script" async
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+</script>
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Jun 30, 2024
+     - 2 minute read 
+    
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/github/">github </a>
+    
+  </p>
+  <h1 class="entry-title">
+     GitHub Artifact Attestations を試してみた 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>GitHub Artifact Attestations が正式リリースされました。</p>
+<ul>
+<li><a href="https://github.blog/changelog/2024-06-25-artifact-attestations-is-generally-available/">GitHub Artifact Attestations is generally available</a></li>
+</ul>
+<p><a href="https://github.blog/2024-05-02-introducing-artifact-attestations-now-in-public-beta/">ベータ公開</a> から2カ月足らずでの正式リリースです。
+早いですね。それだけ力を入れているということでしょうか。</p>
+<p>なんか難しい単語（attestations とか provenanceとか）が並んでいて正直良くわからんのですが、とりあえず試してみましょう。</p>
+<h2 id="署名してみる">署名してみる</h2>
+<p>「<a href="https://shogo82148.github.io/blog/2018/06/20/s3cli-mini/">S3からファイルを落とすだけのツールを作った</a>」で作成した、
+<a href="https://github.com/shogo82148/s3cli-mini">s3cli-mini</a> で試してみます。</p>
+<p>s3cli-miniのリリース処理は GitHub Actions 上で実行しています。
+ビルドしたバイナリーは以下のリンクからダウンロード可能です。</p>
+<ul>
+<li><a href="https://github.com/shogo82148/s3cli-mini/releases/tag/v0.0.15">v0.0.15 - GitHub Releases</a></li>
+</ul>
+<p>しかしこのバイナリーは本当に GitHub Actions 上でビルドしたものでしょうか？
+リリースバイナリーはあとから差し替えも可能です。僕が悪意のあるコードを密かに忍ばせ、再ビルドし、上書きしているかもしれません。
+僕に悪意がなくとも、僕がうっかりクレデンシャルを流出させてしまい、悪意のある第三者によって上書きされるかもしれません。</p>
+<p>そんな心配を解決するのが Artifact Attestations です。</p>
+<p>使い方は簡単で、リリースのワークフローに <a href="https://github.com/actions/attest-build-provenance">actions/attest-build-provenance</a> を呼ぶステップを追加するだけです。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-diff" data-lang="diff"><span class="line"><span class="cl"><span class="gh">diff --git a/.github/workflows/release.yml b/.github/workflows/release.yml
+</span></span></span><span class="line"><span class="cl"><span class="gh">index b5b65f4..31f2d6c 100644
+</span></span></span><span class="line"><span class="cl"><span class="gh"></span><span class="gd">--- a/.github/workflows/release.yml
+</span></span></span><span class="line"><span class="cl"><span class="gd"></span><span class="gi">+++ b/.github/workflows/release.yml
+</span></span></span><span class="line"><span class="cl"><span class="gi"></span><span class="gu">@@ -10,6 +10,7 @@ jobs:
+</span></span></span><span class="line"><span class="cl"><span class="gu"></span>     permissions:
+</span></span><span class="line"><span class="cl">       contents: write
+</span></span><span class="line"><span class="cl">       id-token: write
+</span></span><span class="line"><span class="cl"><span class="gi">+      attestations: write
+</span></span></span><span class="line"><span class="cl"><span class="gi"></span> 
+</span></span><span class="line"><span class="cl">     runs-on: ubuntu-latest
+</span></span><span class="line"><span class="cl">     steps:
+</span></span><span class="line"><span class="cl"><span class="gu">@@ -35,3 +36,14 @@ jobs:
+</span></span></span><span class="line"><span class="cl"><span class="gu"></span>           args: release --clean
+</span></span><span class="line"><span class="cl">         env:
+</span></span><span class="line"><span class="cl">           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+</span></span><span class="line"><span class="cl"><span class="gi">+
+</span></span></span><span class="line"><span class="cl"><span class="gi">+      - name: Generate artifact attestation
+</span></span></span><span class="line"><span class="cl"><span class="gi">+        uses: actions/attest-build-provenance@v1
+</span></span></span><span class="line"><span class="cl"><span class="gi">+        with:
+</span></span></span><span class="line"><span class="cl"><span class="gi">+          subject-path: |
+</span></span></span><span class="line"><span class="cl"><span class="gi">+            dist/*.tar.gz
+</span></span></span><span class="line"><span class="cl"><span class="gi">+            dist/*.apk
+</span></span></span><span class="line"><span class="cl"><span class="gi">+            dist/*.deb
+</span></span></span><span class="line"><span class="cl"><span class="gi">+            dist/*.rpm
+</span></span></span><span class="line"><span class="cl"><span class="gi">+            dist/*.zip
+</span></span></span><span class="line"><span class="cl"><span class="gi">+            dist/checksums.txt
+</span></span></span></code></pre></div><p>s3cli-miniのビルドには <a href="https://goreleaser.com/">GoReleaser</a> を使っています。
+GoReleaser が <code>./dist/</code> に実行バイナリーを吐くので、それらを <code>subject-path</code> に指定します。</p>
+<p>また、<code>attestations: write</code> と <code>id-token: write</code> の権限が必要なので、忘れずに付与しておきましょう。</p>
+<h2 id="検証してみる">検証してみる</h2>
+<p>検証は <a href="https://cli.github.com/">GitHub CLI</a> で行います。
+まずは実行バイナリーをダウンロードしてきましょう。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">% curl -sSL -O https://github.com/shogo82148/s3cli-mini/releases/download/v0.0.15/s3cli-mini_0.0.15_darwin_arm64.tar.gz
+</span></span></code></pre></div><p><code>gh attestation verify</code> サブコマンドを使って検証を行います。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">% gh attestation verify s3cli-mini_0.0.15_darwin_arm64.tar.gz -R shogo82148/s3cli-mini
+</span></span><span class="line"><span class="cl">Loaded digest sha256:7452a6cd31d8a5588919c8806f425e37ad95752a4c148f2247e91d4451a91021 for file://s3cli-mini_0.0.15_darwin_arm64.tar.gz
+</span></span><span class="line"><span class="cl">Loaded 1 attestation from GitHub API
+</span></span><span class="line"><span class="cl">✓ Verification succeeded!
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">sha256:7452a6cd31d8a5588919c8806f425e37ad95752a4c148f2247e91d4451a91021 was attested by:
+</span></span><span class="line"><span class="cl">REPO                   PREDICATE_TYPE                  WORKFLOW
+</span></span><span class="line"><span class="cl">shogo82148/s3cli-mini  https://slsa.dev/provenance/v1  .github/workflows/release.yml@refs/tags/v0.0.15
+</span></span></code></pre></div><p>検証に成功しました！
+これでダウンロードしてきたバイナリーは、GitHub Actions上でビルドされたものだと証明できました。</p>
+<p>署名された記録は GitHub や Sigstore にも記録されており、以下のリンクから確認可能です。</p>
+<ul>
+<li><a href="https://github.com/shogo82148/s3cli-mini/attestations/1180249">s3cli-mini_0.0.15_darwin_arm64.tar.gz - Attestations</a></li>
+<li><a href="https://search.sigstore.dev/?logIndex=106381065">Rekor transparency log - Rekor Search</a></li>
+</ul>
+<h2 id="注意">注意</h2>
+<p><code>gh attestation verify</code> サブコマンドで検証できるのは、あくまでも <strong>「リリースがGitHub Actions上で行われた」という事実確認</strong> です。
+バイナリーが安全であることの保証にはなりません。
+レポジトリに悪意のあるコードが混入していれば、当然ながらそのバイナリーを使うのは危険です。
+検証結果を盲目的に信じないよう注意してください。</p>
+<h2 id="まとめ">まとめ</h2>
+<p>GitHub Artifact Attestations を試してみました。
+この機能を使うと、バイナリーがGitHub Actions上でビルドされたことの証明が簡単にできます。
+導入は簡単なので、ツールの開発者はぜひ利用してみてください。</p>
+<blockquote>
+<p>コードの森に新たな光が<br>
+🌟アーティファクト証明がもたらされた🍀<br>
+ビルドの正しさ、守られる道<br>
+冒険の終わりに、証明は道しるべ🌈<br>
+ラビットの力で、未来へ翔ける💫</p>
+<p>by <a href="https://coderabbit.ai/">CodeRabbit</a></p>
+</blockquote>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://github.blog/changelog/2024-06-25-artifact-attestations-is-generally-available/">GitHub Artifact Attestations is generally available</a></li>
+<li><a href="https://github.blog/2024-05-02-introducing-artifact-attestations-now-in-public-beta/">Introducing Artifact Attestations–now in public beta</a></li>
+<li><a href="https://github.com/actions/attest-build-provenance">actions/attest-build-provenance</a></li>
+<li><a href="https://shogo82148.github.io/blog/2018/06/20/s3cli-mini/">S3からファイルを落とすだけのツールを作った</a></li>
+<li><a href="https://github.com/shogo82148/s3cli-mini">shogo82148/s3cli-mini</a></li>
+<li><a href="https://goreleaser.com/">GoReleaser</a></li>
+<li><a href="https://cli.github.com/">GitHub CLI</a></li>
+<li><a href="https://github.com/shogo82148/s3cli-mini/attestations/1180249">s3cli-mini_0.0.15_darwin_arm64.tar.gz - Attestations</a></li>
+<li><a href="https://search.sigstore.dev/?logIndex=106381065">Rekor transparency log - Rekor Search</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">ICHINOSE Shogo</span></span>
+    
+    <time>Jun 30, 2024</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2024/06/25/2024-06-25-go-retry-v2/" title="go-retry v2 リリースのお知らせ">go-retry v2 リリースのお知らせ</a>
+    
+
+    
+  </p>
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2024/06/30/2024-06-30-try-artifact-attestations/">GitHub Artifact Attestations を試してみた</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/06/25/2024-06-25-go-retry-v2/">go-retry v2 リリースのお知らせ</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/06/23/2024-06-23-publish-to-npm-and-jsr/">npmとjsrにパッケージを公開してみた (認証バッジ付)</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/06/22/2024-06-22-limit-concurrency-in-typescript/">TypeScriptで同時実行数を制限しながら並行実行する</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/03/27/2024-03-27-use-cryptographically-secure-random/">鍵生成には暗号論的に安全な乱数を使おう</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/03/20/2024-03-20-go-mysql-pool/">GoでMySQLを使ったテストを書くときにつかうユーティリティーライブラリを作った</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/03/12/2024-03-12-use-mysql-new-connector-and-sql-open-db/">GoのMySQLドライバーを使うときはmysql.NewConnectorとsql.OpenDBを使おう</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/03/11/2024-03-11-before-connect-of-mysql-driver/">GoのMySQLドライバーにBeforeConnectが追加されました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/02/06/2024-02-06-introduce-ridgenative-and-lambtrip/">AWS Lambda Function URLsのイベントをnet/httpで扱えるridgenativeとlambtripを書いた</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2024 ICHINOSE Shogo - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+</body>
+
+</html>
+
