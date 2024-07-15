@@ -1,0 +1,158 @@
+---
+layout: post
+title: "MySQL8.0で近傍検索"
+slug: 2024-07-16-mysq8.0-gis
+date: 2017-07-16 07:33:00 +0900
+comments: true
+categories: [mysql]
+---
+
+「[Redis、PostgreSQL、MySQLで近傍検索](https://shogo82148.github.io/blog/2017/03/28/database-gis/)」を公開した当時は、
+MySQL 5.7 で検証を行いました。
+「MySQL 8.0 ではGIS関連も強化されているぞ！」という話を聞いていたので、MySQL 8.0でも検証してみます。
+（MySQL 8.0リリースから何年経ってるんだよというツッコミは置いておく）
+
+## 検証環境
+
+検証環境はDocker上で起動しました。
+バージョンは2024-07-16時点で8.0系列最新の8.0.38です。
+
+```plain
+mysql> SELECT VERSION();
++-----------+
+| VERSION() |
++-----------+
+| 8.0.38    |
++-----------+
+1 row in set (0.01 sec)
+```
+
+最新LTSの8.4.1がリリースされていますが、Amazon RDSでは未サポートです。
+マネージドサービスを利用したいので、ひとまず8.0で検証を行います。
+
+## テーブルの準備
+
+スキーマ定義でSRIDを指定できるようになりました。
+何が嬉しいかというと MySQL が「地球は丸い」ということを理解してくれます！
+
+``` sql
+CREATE DATABASE test;
+USE test;
+CREATE TABLE IF NOT EXISTS `geotable` (
+  `id`   int(10) UNSIGNED NOT NULL AUTO_INCREMENT,
+  `name` VARCHAR (255) NOT NULL,
+  `geom` POINT NOT NULL SRID 4326,
+  PRIMARY KEY (`id`),
+  SPATIAL KEY `geom` (`geom`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+SRIDは省略可能ですが、インデックスを利用するためには必須です。
+忘れずに指定しましょう。
+
+
+## データの準備
+
+「[Redis、PostgreSQL、MySQLで近傍検索](https://shogo82148.github.io/blog/2017/03/28/database-gis/)」したときと同じデータを挿入します。
+
+``` sql
+INSERT INTO geotable (name, geom) VALUES
+('上野駅', ST_GeomFromText('POINT(35.713768 139.777254)',4326)),
+('西郷隆盛像', ST_GeomFromText('POINT(35.711846 139.774029)',4326)),
+('上野の森美術館', ST_GeomFromText('POINT(35.712737 139.774744)',4326)),
+('不忍池弁財天', ST_GeomFromText('POINT(35.712351 139.770872)',4326)),
+('野口英世博士像', ST_GeomFromText('POINT(35.716293 139.775696)',4326)),
+('国立西洋美術館', ST_GeomFromText('POINT(35.71542 139.775803)',4326)),
+('国立科学博物館', ST_GeomFromText('POINT(35.716319 139.776544)',4326)),
+('東京都美術館', ST_GeomFromText('POINT(35.717186 139.772776)',4326)),
+('東京国立博物館', ST_GeomFromText('POINT(35.718883 139.776462)',4326)),
+('花やしき', ST_GeomFromText('POINT(35.71528 139.794547)',4326)),
+('雷門', ST_GeomFromText('POINT(35.710635 139.792692)',4326));
+```
+
+注意点は2つ。
+
+1つ目は挿入時にもSRIDの指定が必要なこと。省略するとデフォルトの0とみなされてしまいます。
+スキーマ定義と挿入データのSRIDが同じでないとエラーが発生するので注意です。
+
+```sql
+INSERT INTO geotable (name, geom) VALUES ('上野駅', ST_GeomFromText('POINT(139.777254 35.713768)'));
+```
+
+```plain
+ERROR 3643 (HY000): The SRID of the geometry does not match the SRID of the column 'geom'. The SRID of the geometry is 0, but the SRID of the column is 4326. Consider changing the SRID of the geometry or the SRID property of the column.
+```
+
+2つ目は緯度と経度の順番。PostgreSQLでは「経度、緯度」の順番ですが、MySQLは「緯度、経度」の順番になります。
+逆にすると緯度の範囲がおかしいと怒られます（日本の座標の場合）。
+
+```sql
+INSERT INTO geotable (name, geom) VALUES ('上野駅', ST_GeomFromText('POINT(139.777254 35.713768)',4326));
+```
+
+```plain
+ERROR 3617 (22S03): Latitude 139.777254 is out of range in function st_geomfromtext. It must be within [-90.000000, 90.000000].
+```
+
+
+## Geohashの計算
+
+Geohashの計算には引き続き `ST_GeoHash` 関数を使用できます。
+
+``` sql
+SELECT name, ST_AsText(geom), ST_GeoHash(geom, 11) FROM geotable;
+```
+
+``` plain
+mysql> SELECT name, ST_AsText(geom), ST_GeoHash(geom, 11) FROM geotable;
++-----------------------+-----------------------------+----------------------+
+| name                  | ST_AsText(geom)             | ST_GeoHash(geom, 11) |
++-----------------------+-----------------------------+----------------------+
+| 上野駅                | POINT(35.713768 139.777254) | xn77htqxy0f          |
+| 西郷隆盛像            | POINT(35.711846 139.774029) | xn77hthkdfw          |
+| 上野の森美術館        | POINT(35.712737 139.774744) | xn77htkcg8e          |
+| 不忍池弁財天          | POINT(35.712351 139.770872) | xn77ht4p92s          |
+| 野口英世博士像        | POINT(35.716293 139.775696) | xn77htvw3z9          |
+| 国立西洋美術館        | POINT(35.71542 139.775803)  | xn77htv9kkb          |
+| 国立科学博物館        | POINT(35.716319 139.776544) | xn77htynts3          |
+| 東京都美術館          | POINT(35.717186 139.772776) | xn77hw57twp          |
+| 東京国立博物館        | POINT(35.718883 139.776462) | xn77hwqjedk          |
+| 花やしき              | POINT(35.71528 139.794547)  | xn77jjg2949          |
+| 雷門                  | POINT(35.710635 139.792692) | xn77jhcvtbf          |
++-----------------------+-----------------------------+----------------------+
+11 rows in set (0.00 sec)
+```
+
+## 近傍検索
+
+「[Redis、PostgreSQL、MySQLで近傍検索](https://shogo82148.github.io/blog/2017/03/28/database-gis/)」では
+「矩形の範囲指定で大雑把に絞り込んだあとで `ST_Distance_Sphere` を使って詳細に絞り込む」という面倒なワークアラウンドを使っていました。
+
+しかし MySQL 8.0 では `ST_Buffer` が「地球は丸い」ことを考慮してくれるので、ワークアラウンドが不要になります！
+
+同様に `ST_Distance` も「地球は丸い」という事実を認識してくれるようになりました！
+`ST_Distance` と `ST_Distance_Sphere` とでは基準となる地理測地系が違うので、若干異なった数値を返します。
+複数の地理測地系が混在すると混乱の元になるので、 `ST_Distance` に統一したほうが良いと思います。
+
+```sql
+SET @ueno = ST_GeomFromText('POINT(35.713768 139.777254)',4326);
+SELECT
+    name,
+    ST_AsText(geom),
+    ST_Distance(@ueno, geom) as dist,
+FROM geotable
+WHERE ST_Within(geom, ST_Buffer(@ueno, 300))
+ORDER BY dist;
+```
+
+## まとめ
+
+MySQL 8.0 での近傍検索を検証してみました。
+MySQL 5.7 で必要だったワークアラウンドが不要になって、簡単にクエリーが書けます。
+
+## 参考
+
+- [11.4.1 空間データ型 - MySQL 8.0 リファレンスマニュアル](https://dev.mysql.com/doc/refman/8.0/ja/spatial-type-overview.html)([魚拓](https://megalodon.jp/2024-0716-0714-12/https://dev.mysql.com:443/doc/refman/8.0/ja/spatial-type-overview.html))
+- [MySQLで処理するGIS〜地球が丸いことを覚えたMySQL〜](https://speakerdeck.com/yoshiakiyamasaki/mysql-gis-foss4g-tokai-2023)
+- [MySQLでGISデータを扱う](https://qiita.com/onunu/items/59ef2c050b35773ced0d)
+- [Redis、PostgreSQL、MySQLで近傍検索](https://shogo82148.github.io/blog/2017/03/28/database-gis/)
