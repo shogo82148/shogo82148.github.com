@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono&display=swap" rel="stylesheet"> 
+
+  
+  <title>Firebase Functionsがデプロイできなくなった話</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="ICHINOSE Shogo">
+
+  
+  <meta name="generator" content="Hugo 0.120.4">
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-40R0PCLKVF');
+</script>
+
+
+<script>
+MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']]
+  },
+  svg: {
+    fontCache: 'global'
+  }
+};
+</script>
+
+<script type="text/javascript" id="MathJax-script" async
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+</script>
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Jul 16, 2024
+     - 1 minute read 
+    
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/firebase/">firebase </a>
+    
+  </p>
+  <h1 class="entry-title">
+     Firebase Functionsがデプロイできなくなった話 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>新規に立ち上げたプロジェクトで <code>firebase deploy</code> を実行したところ、以下のエラーを吐いて失敗してしまいました。</p>
+<blockquote>
+<p><code>Build failed: failed to Fetch: failed to download archive gs://gcf-sources-PROJECT_NUMBER-asia-northeast1/createUserOnUserCreate-5fd201fd-4b54-42b8-af5c-c3ca68fe3560/version-1/function-source.zip: Access to bucket gcf-sources-PROJECT_NUMBER-asia-northeast1 denied. You must grant Storage Object Viewer permission to PROJECT_NUMBER-compute@developer.gserviceaccount.com.</code></p>
+</blockquote>
+<h2 id="tldr">TL;DR</h2>
+<p>以下の設定を行います。</p>
+<ul>
+<li>サービスアカウント <code>PROJECT_NUMBER-compute@developer.gserviceaccount.com</code> に「Cloud Build サービス アカウント（<code>roles/cloudbuild.builds.builder</code>）」のロールを付与</li>
+<li>サービスアカウント <code>PROJECT_NAME@appspot.gserviceaccount.com</code> に「Firebase 管理者（<code>roles/firebase.admin</code>）」「サービス アカウント ユーザー（<code>roles/iam.serviceAccountUser</code>）」を付与</li>
+</ul>
+<h2 id="原因">原因</h2>
+<p>原因は「Code Buildのサービスアカウントの仕様が変更になった」ことと「デフォルトのサービスアカウントへの自動的なロール付与を無効にする設定になっていた」ことでした。</p>
+<h3 id="code-buildのサービスアカウントの仕様が変更になった">Code Buildのサービスアカウントの仕様が変更になった</h3>
+<p>今まではサービスアカウント <code>PROJECT_NUMBER@cloudbuild.gserviceaccount.com</code> の権限を使用してビルドしていたのが、
+サービスアカウント <code>PROJECT_NUMBER-compute@developer.gserviceaccount.com</code> に変更になりました。</p>
+<ul>
+<li><a href="https://blog.g-gen.co.jp/entry/cloud-build-service-account-changes">Cloud Buildサービスアカウントが仕様変更（2024年4月29日から）</a></li>
+</ul>
+<h3 id="デフォルトのサービスアカウントへの自動的なロール付与を無効にする設定になっていた">デフォルトのサービスアカウントへの自動的なロール付与を無効にする設定になっていた</h3>
+<p>一部のGoogle Cloudサービスでは、APIを有効化したときにデフォルトのサービスアカウントが自動的に生成されます。
+このとき生成されるサービスアカウントには編集者（<code>roles/editor</code>）が付与されます。</p>
+<p>しかし、今回問題になったプロジェクトでは、組織ポリシーでロール付与が無効になっていました。</p>
+<ul>
+<li><a href="https://cloud.google.com/resource-manager/docs/organization-policy/restricting-service-accounts?hl=ja#disable_service_account_default_grants">デフォルトのサービス アカウントへの自動的なロール付与を無効にする</a></li>
+</ul>
+<p>この設定の影響で、サービスアカウント <code>PROJECT_NUMBER-compute@developer.gserviceaccount.com</code> に一切権限がない状態でした。</p>
+<p>また、Firebase Functionsを実行するためのサービスアカウントにも一切権限がありませんでした。</p>
+<h2 id="対策">対策</h2>
+<p>各サービスアカウントに適切な権限を付与します。</p>
+<p>具体的には以下の権限を付与しました。</p>
+<ul>
+<li>サービスアカウント <code>PROJECT_NUMBER-compute@developer.gserviceaccount.com</code> に「Cloud Build サービス アカウント（<code>roles/cloudbuild.builds.builder</code>）」のロールを付与
+<ul>
+<li>Firebase Functions のビルドにだけ使用する想定なので、Cloud Buildに関する権限のみを付与</li>
+</ul>
+</li>
+<li>サービスアカウント <code>PROJECT_NAME@appspot.gserviceaccount.com</code> に「Firebase 管理者（<code>roles/firebase.admin</code>）」「サービス アカウント ユーザー（<code>roles/iam.serviceAccountUser</code>）」を付与
+<ul>
+<li>Firestoreへの読み書きを行いたかったので、Firebaseに関連する権限を付与</li>
+<li>「サービス アカウント ユーザー」は Firebase Functions で利用するために必要</li>
+</ul>
+</li>
+</ul>
+<h2 id="まとめ">まとめ</h2>
+<p>Firebase なんて <code>firebase init &amp;&amp; firebase deploy</code> でラクラク構築できるものと思ってましたが、
+現実はそう甘くはありませんでした。
+このエラーで一日溶かしたので、同じ現象にハマっているひとの参考になれば幸いです。</p>
+<blockquote>
+<p>デプロイの道は険しくとも<br>
+サービスアカウントに権限を追加し<br>
+エラーの原因を追い詰めて<br>
+成功の光が見えてくる<br>
+🎉🐇Firebase Functions、再び羽ばたこう! 🚀🎉</p>
+<p>by <a href="https://coderabbit.ai/">CodeRabbit</a></p>
+</blockquote>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://blog.g-gen.co.jp/entry/cloud-build-service-account-changes">Cloud Buildサービスアカウントが仕様変更（2024年4月29日から）</a>(<a href="https://megalodon.jp/2024-0716-1057-58/https://blog.g-gen.co.jp:443/entry/cloud-build-service-account-changes">魚拓</a>)</li>
+<li><a href="https://cloud.google.com/resource-manager/docs/organization-policy/restricting-service-accounts?hl=ja#disable_service_account_default_grants">デフォルトのサービス アカウントへの自動的なロール付与を無効にする</a>(<a href="https://megalodon.jp/2024-0716-1059-10/https://cloud.google.com:443/resource-manager/docs/organization-policy/restricting-service-accounts?hl=ja">魚拓</a>)</li>
+<li><a href="https://cloud.google.com/functions/docs/concepts/iam?hl=ja">IAM によるアクセス制御（第 2 世代）</a>(<a href="https://megalodon.jp/2024-0716-1101-26/https://cloud.google.com:443/functions/docs/concepts/iam?hl=ja">魚拓</a>)</li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">ICHINOSE Shogo</span></span>
+    
+    <time>Jul 16, 2024</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2024/07/16/2024-07-16-mysq8.0-gis/" title="MySQL8.0で近傍検索">MySQL8.0で近傍検索</a>
+    
+
+    
+  </p>
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2024/07/16/2024-07-16-cannot-deploy-firebase-function/">Firebase Functionsがデプロイできなくなった話</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/07/16/2024-07-16-mysq8.0-gis/">MySQL8.0で近傍検索</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/06/30/2024-06-30-try-artifact-attestations/">GitHub Artifact Attestations を試してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/06/25/2024-06-25-go-retry-v2/">go-retry v2 リリースのお知らせ</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/06/23/2024-06-23-publish-to-npm-and-jsr/">npmとjsrにパッケージを公開してみた (認証バッジ付)</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/06/22/2024-06-22-limit-concurrency-in-typescript/">TypeScriptで同時実行数を制限しながら並行実行する</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/03/27/2024-03-27-use-cryptographically-secure-random/">鍵生成には暗号論的に安全な乱数を使おう</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/03/20/2024-03-20-go-mysql-pool/">GoでMySQLを使ったテストを書くときにつかうユーティリティーライブラリを作った</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/03/12/2024-03-12-use-mysql-new-connector-and-sql-open-db/">GoのMySQLドライバーを使うときはmysql.NewConnectorとsql.OpenDBを使おう</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2024 ICHINOSE Shogo - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+</body>
+
+</html>
+

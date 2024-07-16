@@ -121,6 +121,45 @@ MathJax = {
 
 <header>
   <p class="meta">Jul 16, 2024
+     - 1 minute read 
+    
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/firebase/">firebase </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2024/07/16/2024-07-16-cannot-deploy-firebase-function/">Firebase Functionsがデプロイできなくなった話</a>
+  </h1>
+</header>
+
+        
+          <p>新規に立ち上げたプロジェクトで firebase deploy を実行したところ、以下のエラーを吐いて失敗してしまいました。
+Build failed: failed to Fetch: failed to download archive gs://gcf-sources-PROJECT_NUMBER-asia-northeast1/createUserOnUserCreate-5fd201fd-4b54-42b8-af5c-c3ca68fe3560/version-1/function-source.zip: Access to bucket gcf-sources-PROJECT_NUMBER-asia-northeast1 denied. You must grant Storage Object Viewer permission to PROJECT_NUMBER-compute@developer.gserviceaccount.com.
+TL;DR 以下の設定を行います。
+サービスアカウント PROJECT_NUMBER-compute@developer.gserviceaccount.com に「Cloud Build サービス アカウント（roles/cloudbuild.builds.builder）」のロールを付与 サービスアカウント PROJECT_NAME@appspot.gserviceaccount.com に「Firebase 管理者（roles/firebase.admin）」「サービス アカウント ユーザー（roles/iam.serviceAccountUser）」を付与 原因 原因は「Code Buildのサービスアカウントの仕様が変更になった」ことと「デフォルトのサービスアカウントへの自動的なロール付与を無効にする設定になっていた」ことでした。
+Code Buildのサービスアカウントの仕様が変更になった 今まではサービスアカウント PROJECT_NUMBER@cloudbuild.gserviceaccount.com の権限を使用してビルドしていたのが、 サービスアカウント PROJECT_NUMBER-compute@developer.gserviceaccount.com に変更になりました。
+Cloud Buildサービスアカウントが仕様変更（2024年4月29日から） デフォルトのサービスアカウントへの自動的なロール付与を無効にする設定になっていた 一部のGoogle Cloudサービスでは、APIを有効化したときにデフォルトのサービスアカウントが自動的に生成されます。 このとき生成されるサービスアカウントには編集者（roles/editor）が付与されます。
+しかし、今回問題になったプロジェクトでは、組織ポリシーでロール付与が無効になっていました。
+デフォルトのサービス アカウントへの自動的なロール付与を無効にする この設定の影響で、サービスアカウント PROJECT_NUMBER-compute@developer.gserviceaccount.com に一切権限がない状態でした。
+また、Firebase Functionsを実行するためのサービスアカウントにも一切権限がありませんでした。
+対策 各サービスアカウントに適切な権限を付与します。
+具体的には以下の権限を付与しました。</p>
+          
+            <footer>
+              <a href="https://shogo82148.github.io/blog/2024/07/16/2024-07-16-cannot-deploy-firebase-function/" rel="full-article">Read On &rarr;</a>
+            </footer>
+          
+        
+      </article>
+      
+      <article>
+        
+        
+
+<header>
+  <p class="meta">Jul 16, 2024
      - 3 minute read 
     
 
@@ -432,40 +471,6 @@ package main import ( &#34;context&#34; &#34;github.com/aws/aws-sdk-go-v2/config
         
       </article>
       
-      <article>
-        
-        
-
-<header>
-  <p class="meta">Feb 6, 2024
-     - 2 minute read 
-    
-
-    
-    
-      - <a class="label" href="https://shogo82148.github.io/categories/aws/">aws </a><a class="label" href="https://shogo82148.github.io/categories/aws-lambda/">aws-lambda </a><a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
-    
-  </p>
-  <h1 class="entry-title">
-    <a href="https://shogo82148.github.io/blog/2024/02/06/2024-02-06-introduce-ridgenative-and-lambtrip/">AWS Lambda Function URLsのイベントをnet/httpで扱えるridgenativeとlambtripを書いた</a>
-  </h1>
-</header>
-
-        
-          <p>AWS Lambda関数をGoの標準ライブラリのインターフェイスに変換するライブラリを作りました。
-http.Handler 実装: shogo82148/ridgenative http.RoundTripper 実装: shogo82148/lambtrip ridgenative Lambda Function URLsではリクエストとレスポンスがJSON形式になって渡ってきます。 これらをGo標準ライブラリの net/http.Request と net/http.ResponseWriter で扱えるように書いたアダプターが shogo82148/ridgenativeです。
-同じコードをHTTPサーバーやAWS Lambda上で動かす これのうれしいポイントは net/http.Handler の実装をひとつ用意すれば、 普通のHTTPサーバーとしても、AWS Lambda上でも動かすことができるという点です。
-たとえば以下のコードは go run main.go のように実行すると、 8080ポート上で動く普通のHTTPサーバーになります。
-package main import ( &#34;fmt&#34; &#34;net/http&#34; &#34;github.com/shogo82148/ridgenative&#34; ) func main() { http.HandleFunc(&#34;/hello&#34;, handleRoot) // httpの代わりにridgenativeを呼び出す ridgenative.ListenAndServe(&#34;:8080&#34;, nil) } func handleRoot(w http.ResponseWriter, r *http.Request) { w.Header().Set(&#34;Content-Type&#34;, &#34;text/plain&#34;) fmt.Fprintln(w, &#34;Hello World&#34;) } bootstrap という名前でコンパイルして、zipで固めてアップロードすれば、 Lambda Function URLsやAPI Gatewayで動くHTTP APIの完成です。
-GOOS=linux GOARCH=arm64 CGOENABLED=0 go build -o bootstrap main.</p>
-          
-            <footer>
-              <a href="https://shogo82148.github.io/blog/2024/02/06/2024-02-06-introduce-ridgenative-and-lambtrip/" rel="full-article">Read On &rarr;</a>
-            </footer>
-          
-        
-      </article>
-      
       
       
 
@@ -613,10 +618,16 @@ GOOS=linux GOARCH=arm64 CGOENABLED=0 go build -o bootstrap main.</p>
           
             
               <li class="post">
-                <a href="/blog/2024/07/16/2024-07-16-mysq8.0-gis/">MySQL8.0で近傍検索</a>
+                <a href="/blog/2024/07/16/2024-07-16-cannot-deploy-firebase-function/">Firebase Functionsがデプロイできなくなった話</a>
               </li>
             
           
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/07/16/2024-07-16-mysq8.0-gis/">MySQL8.0で近傍検索</a>
+              </li>
             
           
             
@@ -658,12 +669,6 @@ GOOS=linux GOARCH=arm64 CGOENABLED=0 go build -o bootstrap main.</p>
             
               <li class="post">
                 <a href="/blog/2024/03/12/2024-03-12-use-mysql-new-connector-and-sql-open-db/">GoのMySQLドライバーを使うときはmysql.NewConnectorとsql.OpenDBを使おう</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2024/03/11/2024-03-11-before-connect-of-mysql-driver/">GoのMySQLドライバーにBeforeConnectが追加されました</a>
               </li>
             
           
