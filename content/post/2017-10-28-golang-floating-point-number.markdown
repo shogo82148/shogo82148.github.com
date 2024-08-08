@@ -218,7 +218,7 @@ false
 
 ここでちょっとソースコードを覗いてみると・・・
 
-- [mpfloat.go](https://github.com/golang/go/blob/master/src/cmd/compile/internal/gc/mpfloat.go#L18)
+- [mpfloat.go](https://github.com/golang/go/blob/7df09b4a03f9e53334672674ba7983d5e7128646/src/cmd/compile/internal/gc/mpfloat.go#L18)
 
 512bitの精度で計算しているようです。
 $$512 \times \log 2 = 154.1273577...$$ なので、有効桁数150桁程度という予想通りです。
