@@ -2,7 +2,7 @@
 layout: post
 title: "denoland/dntがerror TS2304: Cannot find name 'ErrorOptions'で失敗する"
 slug: denoland-dnt-cannot-find-error-options
-date: 2024-08-12 18:39:00 +0900
+date: 2024-08-13 00:30:00 +0900
 comments: true
 categories: [typescript, javascript, deno]
 ---
