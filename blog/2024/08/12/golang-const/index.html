@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono&display=swap" rel="stylesheet"> 
+
+  
+  <title>Go言語の定数演算の精度が限界突破していた件</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="ICHINOSE Shogo">
+
+  
+  <meta name="generator" content="Hugo 0.120.4">
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-40R0PCLKVF');
+</script>
+
+
+<script>
+MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']]
+  },
+  svg: {
+    fontCache: 'global'
+  }
+};
+</script>
+
+<script type="text/javascript" id="MathJax-script" async
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+</script>
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Aug 12, 2024
+     - 3 minute read 
+    
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2024/08/12/golang-const/">Go言語の定数演算の精度が限界突破していた件</a>
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>元ネタ:</p>
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">[JavaScriptの問題]<br>var a = 0.3 - 0.2;<br>var b = 0.2 - 0.1;<br>var c = a==b;<br><br>cの中身はどれ？</p>&mdash; RAO(らお)@けもケP-31 (@RIORAO) <a href="https://twitter.com/RIORAO/status/922871767147749376?ref_src=twsrc%5Etfw">2017年10月24日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+<blockquote class="twitter-tweet" data-lang="ja"><p lang="ja" dir="ltr">正確な実数計算をやらされるJavaScriptくん <a href="https://twitter.com/hashtag/%E6%93%AC%E7%AB%9C%E6%88%AF%E7%94%BB?src=hash&amp;ref_src=twsrc%5Etfw">#擬竜戯画</a> <a href="https://t.co/ipE56C2YbV">pic.twitter.com/ipE56C2YbV</a></p>&mdash; RAO(らお)@けもケP-31 (@RIORAO) <a href="https://twitter.com/RIORAO/status/923599110262874112?ref_src=twsrc%5Etfw">2017年10月26日</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+<p>この件に関して、以下のような記事を書きました。</p>
+<ul>
+<li><a href="https://shogo82148.github.io/blog/2017/10/28/golang-floating-point-number/">Go言語の浮動小数点数のお話</a></li>
+</ul>
+<p>この記事のなかで「Goの定数は512bitの精度で計算されている」「有限精度のため、数学的な答えとは一致するとは限らない」というお話をしました。
+しかし某電柱様から「記事中のコードを最新のGoで実行すると、記事の内容とは異なった結果が得られる」という情報を得ました。</p>
+<h2 id="問題のコード">問題のコード</h2>
+<p>動作が異なると報告があったのは以下のコードです。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;fmt&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="kd">const</span> <span class="nx">a</span> <span class="p">=</span> <span class="mf">0.3</span> <span class="o">-</span> <span class="mf">0.2</span>
+</span></span><span class="line"><span class="cl">	<span class="kd">const</span> <span class="nx">b</span> <span class="p">=</span> <span class="mf">0.2</span> <span class="o">-</span> <span class="mf">0.1</span>
+</span></span><span class="line"><span class="cl">	<span class="kd">var</span> <span class="nx">c</span> <span class="p">=</span> <span class="nx">a</span> <span class="o">==</span> <span class="nx">b</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">c</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;%e\n&#34;</span><span class="p">,</span> <span class="nb">float64</span><span class="p">(</span><span class="nx">a</span><span class="o">-</span><span class="nx">b</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>数学的には <code>0.3 - 0.2 = 0.2 - 0.1 = 0</code> なので、<code>true</code> と <code>0.000000e+00</code> が表示されるはずです。
+しかし、「<a href="https://shogo82148.github.io/blog/2017/10/28/golang-floating-point-number/">Go言語の浮動小数点数のお話</a>」を書いた当時は以下のような結果が得られました
+（たぶん当時の最新バージョンの Go 1.9.2だと思う。正確なバージョンを記録していないとは不覚・・・）。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">false
+</span></span><span class="line"><span class="cl">9.322926e-156
+</span></span></code></pre></div><p>ところが最新のGo(Go 1.23rc2)では次のような結果となります。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">true
+</span></span><span class="line"><span class="cl">0.000000e+00
+</span></span></code></pre></div><p>数学的には正しい結果ですが、バージョンによって挙動が違うというのは妙な話です。</p>
+<h2 id="挙動が変わった原因を調べる">挙動が変わった原因を調べる</h2>
+<p>いったいいつから挙動が変わっていたのでしょう？気になりますね。</p>
+<h3 id="いろんなgoのバージョンを試してみる">いろんなGoのバージョンを試してみる</h3>
+<p>手当たりしだいにいろんなGoのバージョンで試してみました。その結果、Go 1.17 から現在の挙動になったことがわかりました。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">% docker run -v &#34;$PWD:/go&#34; golang:1.16 go run main.go
+</span></span><span class="line"><span class="cl">false
+</span></span><span class="line"><span class="cl">9.322926e-156
+</span></span><span class="line"><span class="cl">% docker run -v &#34;$PWD:/go&#34; golang:1.17 go run main.go
+</span></span><span class="line"><span class="cl">true
+</span></span><span class="line"><span class="cl">0.000000e+00
+</span></span></code></pre></div><h3 id="git-bisectしてみる">git-bisectしてみる</h3>
+<p>では具体的にどのような変更が加えられたのでしょう？
+ひとつひとつコミットを調べていくのは大変です。そこで登場するのが <code>git-bisect</code> 先生です。</p>
+<p>まずは、Go 1.17 以降で実行すると Exit Code 1 で終了、Go 1.16 以前で実行すると Exit Code 0 で終了するよう、コードを修正します。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;fmt&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;os&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="kd">const</span> <span class="nx">a</span> <span class="p">=</span> <span class="mf">0.3</span> <span class="o">-</span> <span class="mf">0.2</span>
+</span></span><span class="line"><span class="cl">	<span class="kd">const</span> <span class="nx">b</span> <span class="p">=</span> <span class="mf">0.2</span> <span class="o">-</span> <span class="mf">0.1</span>
+</span></span><span class="line"><span class="cl">	<span class="kd">var</span> <span class="nx">c</span> <span class="p">=</span> <span class="nx">a</span> <span class="o">==</span> <span class="nx">b</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">c</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;%e\n&#34;</span><span class="p">,</span> <span class="nb">float64</span><span class="p">(</span><span class="nx">a</span><span class="o">-</span><span class="nx">b</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">c</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">os</span><span class="p">.</span><span class="nf">Exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Goをソースコードからビルドし、さきほどのコードを実行するスクリプトを組みます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="cp">#!/usr/bin/env bash
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="nb">set</span> -uexo pipefail
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># build Go</span>
+</span></span><span class="line"><span class="cl"><span class="nb">cd</span> src
+</span></span><span class="line"><span class="cl">./make.bash <span class="o">||</span> <span class="nb">true</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nb">cd</span> ../.bisect
+</span></span><span class="line"><span class="cl">../bin/go run main.go
+</span></span></code></pre></div><p>Goをソースコードからビルドする環境を整えましょう。
+GoはGo言語で書かれているので、Goの実行環境を用意すればよいはずです。</p>
+<p>ところが何も考えずに最新版の Go 1.23rc2 で Go 1.16, Go 1.17 をビルドしたところ失敗してしまいました。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">Building Go cmd/dist using /usr/local/go. (go1.23rc2 darwin/arm64)
+</span></span><span class="line"><span class="cl">Building Go toolchain1 using /usr/local/go.
+</span></span><span class="line"><span class="cl">Building Go bootstrap cmd/go (go_bootstrap) using Go toolchain1.
+</span></span><span class="line"><span class="cl">Building Go toolchain2 using go_bootstrap and Go toolchain1.
+</span></span><span class="line"><span class="cl">Building Go toolchain3 using go_bootstrap and Go toolchain2.
+</span></span><span class="line"><span class="cl">Building packages and commands for darwin/arm64.
+</span></span><span class="line"><span class="cl"># time/tzdata
+</span></span><span class="line"><span class="cl">/Users/shogo/src/github.com/golang/go/src/time/tzdata/zzipdata.go:5:7: zipdata redeclared in this block
+</span></span><span class="line"><span class="cl">	/Users/shogo/src/github.com/golang/go/src/time/tzdata/zipdata.go:7089:2: previous declaration
+</span></span><span class="line"><span class="cl">go tool dist: FAILED: /Users/shogo/src/github.com/golang/go/pkg/tool/darwin_arm64/go_bootstrap install -gcflags=all= -ldflags=all= std cmd: exit status 2
+</span></span></code></pre></div><p>そこでブートストラップに必要な最低バージョン（Go 1.4）を利用することにしました。
+ここまでの作業は ARM64 版 macOSでやってきたのですが、困ったことに Go 1.4 リリース当時は ARM64 版 macOS なんて存在しません。
+存在しない環境の実行バイナリが手に入るわけもなく・・・。
+しかし今は便利なもので Docker Desktop を使えば、x64 Linux の実行環境が手に入ります。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">% docker run --rm -it -v &#34;$PWD:/go&#34; golang:1.4 bash
+</span></span><span class="line"><span class="cl">WARNING: The requested image&#39;s platform (linux/amd64) does not match the detected host platform (linux/arm64/v8) and no specific platform was requested
+</span></span></code></pre></div><p>ここまで準備を整えれば、あとは <code>git-bisect</code> 先生が全部自動でやってくれます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl"># git bisect start go1.17 go1.16   # go1.16 から go1.17 の間に変更があったことがわかっているので、そのバージョンのタグを指定する
+</span></span><span class="line"><span class="cl"># git bisect run .bisect/bisect.sh # 変更が起こったバージョンを特定する
+</span></span></code></pre></div><h3 id="問題のコミットを特定する">問題のコミットを特定する</h3>
+<p>結果、以下のコミットで現在の挙動になったことが判明しました。</p>
+<ul>
+<li><a href="https://github.com/golang/go/commit/6a4739ccc5198449d58d2e90a040c4fb908b3cb0">[dev.regabi] cmd/compile: enable rational constant arithmetic</a></li>
+</ul>
+<p>「有理数の定数演算を有効化する」という内容で、どうやら <a href="https://pkg.go.dev/math/big#Rat">big.Rat</a> を利用して演算するよう変更されたようです。
+これはつまり、有理数の範囲であれば <strong>実質無限の精度で計算できる</strong> わけです。
+こんな改善が入っていたとは知らなかった！</p>
+<p>というわけで、途中で分数が入ってくるような計算であっても、数学的な演算と同じ結果が得られます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;fmt&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="kd">const</span> <span class="nx">a</span> <span class="p">=</span> <span class="mi">1</span> <span class="o">/</span> <span class="mf">3.0</span>
+</span></span><span class="line"><span class="cl">	<span class="kd">const</span> <span class="nx">b</span> <span class="p">=</span> <span class="mf">0.1</span> <span class="o">/</span> <span class="mf">0.3</span>
+</span></span><span class="line"><span class="cl">	<span class="kd">var</span> <span class="nx">c</span> <span class="p">=</span> <span class="nx">a</span> <span class="o">==</span> <span class="nx">b</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">c</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;%e\n&#34;</span><span class="p">,</span> <span class="nb">float64</span><span class="p">(</span><span class="nx">a</span><span class="o">-</span><span class="nx">b</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">	<span class="c1">// Output:
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="c1">// true
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="c1">// 0.000000e+00
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><h2 id="goの仕様を確認する">Goの仕様を確認する</h2>
+<p>とはいえ、この挙動に過度に依存してしまうのは禁物です。
+Goの言語仕様では「浮動小数点数の定数は最低256bitの精度を持つ」とだけ定義されています。</p>
+<ul>
+<li><a href="https://go.dev/ref/spec#Constants">Constants - The Go Programming Language Specification</a></li>
+</ul>
+<blockquote>
+<p>Represent floating-point constants, including the parts of a complex constant, with a mantissa of at least 256 bits and a signed binary exponent of at least 16 bits.</p>
+</blockquote>
+<p>また、最終的に <code>float64</code> や <code>float32</code> に変換されると、丸めが発生することにも注意が必要です。</p>
+<h2 id="まとめ">まとめ</h2>
+<p>「<a href="https://shogo82148.github.io/blog/2017/10/28/golang-floating-point-number/">Go言語の浮動小数点数のお話</a>」の記事の中で、
+「Goの定数は512bitの精度で計算されている」と紹介しましたが、Go 1.17 以降この制限はなくなりました。
+有理数の範囲であれば正確な数値を得られます。</p>
+<p>ただし、この挙動は<strong>Goの言語仕様で定義されていません</strong>。過度に依存しないよう気をつけましょう。</p>
+<p>あと、こういう検証記事を書くときには、使用したツールのバージョンを書くのを忘れずに！ ＠過去の自分。
+追試するときに困ります！
+今回の検証では以下の環境で検証を行いました。</p>
+<ul>
+<li>Go 1.23rc2</li>
+<li>Docker version 24.0.6, build ed223bc</li>
+<li>git version 2.1.4</li>
+<li>MacBook Pro 2021, Apple M1 Pro</li>
+</ul>
+<blockquote>
+<p>🐇 うさぎの耳で風を感じ、
+新しい知識が舞い込む日々。
+笑顔で数え、遊び心満載、
+Goの世界で、精度を探し。
+未来の道を共に進もう、
+変化の中で、みんなで成長！ 🌟</p>
+<p>by <a href="https://coderabbit.ai/">CodeRabbit</a></p>
+</blockquote>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://qiita.com/usamik26/items/cce867b3b139ea5568a6">git bisect で問題箇所を特定する</a></li>
+<li><a href="https://zenn.dev/mtmatma/articles/bea380d94cad4c">golang コンパイラのブートストラップ</a></li>
+<li><a href="https://github.com/golang/go/commit/6a4739ccc5198449d58d2e90a040c4fb908b3cb0">[dev.regabi] cmd/compile: enable rational constant arithmetic</a></li>
+<li><a href="https://go-review.googlesource.com/c/go/+/286215">286215: [dev.regabi] cmd/compile: enable rational constant arithmetic</a></li>
+<li><a href="https://pkg.go.dev/math/big#Rat">big.Rat</a></li>
+<li><a href="https://go.dev/ref/spec#Constants">Constants - The Go Programming Language Specification</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">ICHINOSE Shogo</span></span>
+    
+    <time>Aug 12, 2024</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2024/07/16/2024-07-16-cannot-deploy-firebase-function/" title="Firebase Functionsがデプロイできなくなった話">Firebase Functionsがデプロイできなくなった話</a>
+    
+
+    
+  </p>
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2024/08/12/golang-const/">Go言語の定数演算の精度が限界突破していた件</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/07/16/2024-07-16-cannot-deploy-firebase-function/">Firebase Functionsがデプロイできなくなった話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/07/16/2024-07-16-mysq8.0-gis/">MySQL8.0で近傍検索</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/06/30/2024-06-30-try-artifact-attestations/">GitHub Artifact Attestations を試してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/06/25/2024-06-25-go-retry-v2/">go-retry v2 リリースのお知らせ</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/06/23/2024-06-23-publish-to-npm-and-jsr/">npmとjsrにパッケージを公開してみた (認証バッジ付)</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/06/22/2024-06-22-limit-concurrency-in-typescript/">TypeScriptで同時実行数を制限しながら並行実行する</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/03/27/2024-03-27-use-cryptographically-secure-random/">鍵生成には暗号論的に安全な乱数を使おう</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/03/20/2024-03-20-go-mysql-pool/">GoでMySQLを使ったテストを書くときにつかうユーティリティーライブラリを作った</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2024 ICHINOSE Shogo - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+</body>
+
+</html>
+

@@ -120,6 +120,43 @@ MathJax = {
         
 
 <header>
+  <p class="meta">Sep 19, 2015
+     - 1 minute read 
+    
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a><a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2015/09/19/faster-perl-test-with-go-lang/">Go言語でPerlのテストを早くする</a>
+  </h1>
+</header>
+
+        
+          <p>Test::mysqld::Multiというモジュールを書いてみたみたいな涙ぐましい努力により5分で終わるようになったテストですが、 プロジェクトのコードも増えて人も増えた影響で、 テスト時間が約7分まで伸び、テストのキューに10個近く並んで順番待ちさせられるという状況になってしまいした。
+この状況を解決すべく go-prove というものを書いてみたので、そのご紹介です。
+proveが遅い理由 proveがテストの結果を読むところがブロッキングI/Oになっているらしく、そのせいで遅くなっているらしいです。
+Perl-Toolchain-Gang/Test-Harness#30 実際に結果読んでいるところはこの辺ですかね。 selectとか使っていてなるべくブロッキングしないような作りにはなっていそうですが、どこかでブロッキングしてしまっているようです。 今のプロジェクトだと32コアのCPUで32並列で動かしてもCPUを100%使い切ることができませんでした。
+Shunme ググるとShunmeというプロジェクトでproveの問題を解決しようという試みが行われているようです。
+Shunmeというperl用のテストハーネスモジュールを書き始めました magnolia-k/p5-Shunme しかし残念ながらproveのプラグイン機構はサポートしておらず、Formatterの指定オプションもないようです。 今のプロジェクトではプラグインでMySQLを立てたり、JUnitでテスト結果をフォーマットしたりということをしているので、そのままは使えなさそう。 ちょっと改造するにはソースコードの理解が大変そうなので断念。 「(逆に遅くなるときも有ります)」というところも気になりますね・・・。
+go-prove いろいろテストの実行方法を調べてはみましたが、どの方法も並行処理に苦労している模様。 テストファイル自体はただのPerlのスクリプトなので、実行して集計する部分は別にPerlにこだわる必要ないのでは？ 並行処理といえば今ならGolangでしょ！ってことでproveのGo実装を書いてみました。
+go-prove 例えば以下のようなテストをかいて、
+use Test::More; ok &#34;macopy&#34;; done_testing; go-proveコマンドと実行すると、JUnit形式でテスト結果が出力されます。
+$ go-prove 2015/09/19 21:45:44 start t/macopy.t 2015/09/19 21:45:44 finish t/macopy.t &lt;testsuites&gt; &lt;testsuite tests=&#34;1&#34; failures=&#34;0&#34; time=&#34;0.225&#34; name=&#34;t_macopy_t&#34;&gt; &lt;properties&gt;&lt;/properties&gt; &lt;testcase classname=&#34;t_macopy_t&#34; name=&#34;&#34; time=&#34;0.225&#34;&gt;&lt;/testcase&gt; &lt;/testsuite&gt; &lt;/testsuites&gt; go-prove -j 32とするとgoroutineを32個生成して、32並列でテストを実行してくれます。 I/Oの処理をGolangのランタイムがよしなにやってくれるので、楽ちんです。
+また、今のプロジェクトではApp::Prove::Plugin::MySQLPoolを使っているので、それ相当の機能をgo-prove -plugin mysqldで使えるようにしました。 プラグインを有効にするとMySQLサーバを立ち上げて、その接続先情報をGO_PROVE_MYSQLD環境変数に設定してくれます。
+実際にプロジェクトのコードで試してみたところ7分かかっていたテストが4分を切るようになりました。 CPUの使用率も100%近くになって、有効活用できているようです。
+まとめ Perl製のproveは並列実行に弱い Goで書きなおしてCPUをフル活用できるようになった 早くはなるものの、既存のテストコードに手を加える必要があってちょっと怖いかなと思ったので、プロジェクトへの組み込みはやってません。 まあ本番環境で走るものではないので、ある程度動くことが確認できたら置き換えてみたいですね。</p>
+          
+        
+      </article>
+      
+      <article>
+        
+        
+
+<header>
   <p class="meta">Aug 30, 2015
      - 2 minute read 
     
@@ -406,40 +443,6 @@ package main import ( &#34;fmt&#34; &#34;log&#34; &#34;net/http&#34; &#34;os&#34
         
       </article>
       
-      <article>
-        
-        
-
-<header>
-  <p class="meta">Apr 25, 2015
-     - 2 minute read 
-    
-
-    
-    
-      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
-    
-  </p>
-  <h1 class="entry-title">
-    <a href="https://shogo82148.github.io/blog/2015/04/25/quantize-image-in-golang/">Go言語で画像の減色を行う</a>
-  </h1>
-</header>
-
-        
-          <p>ちょっとGIFアニメを作りたくなって、最近Go触ってるしGoでやってみよう！とやってみたメモ。 ImageMagikでいいじゃん説もあるけど、最終的にツールとして配布したいなってことでGoです。
-主に減色まわりについて。
-2021-12-07修正
-昨今のアレコレ(LOSING LENA)の関係で記事中の Lenna さんの画像をマンドリルに置き換えました。
-何はともあれ実装してみる 以前、「ターミナル操作の記録(ttyrec)からGIFアニメを生成するツールを作った」という記事を見たので、 これを参考に実装してみる。
-package main import ( &#34;image&#34; &#34;image/color/palette&#34; &#34;image/gif&#34; _ &#34;image/png&#34; &#34;os&#34; ) func main() { reader, err := os.Open(&#34;Mandrill.png&#34;) if err != nil { return } defer reader.Close() img, _, err := image.Decode(reader) if err != nil { return } paletted := image.NewPaletted(img.Bounds(), palette.WebSafe) for y := img.Bounds().Min.Y; y &lt; img.Bounds().Max.Y; y++ { for x := img.Bounds().Min.X; x &lt; img.Bounds().Max.X; x++ { paletted.</p>
-          
-            <footer>
-              <a href="https://shogo82148.github.io/blog/2015/04/25/quantize-image-in-golang/" rel="full-article">Read On &rarr;</a>
-            </footer>
-          
-        
-      </article>
-      
       
       
 
@@ -590,10 +593,16 @@ package main import ( &#34;image&#34; &#34;image/color/palette&#34; &#34;image/g
           
             
               <li class="post">
-                <a href="/blog/2024/07/16/2024-07-16-cannot-deploy-firebase-function/">Firebase Functionsがデプロイできなくなった話</a>
+                <a href="/blog/2024/08/12/golang-const/">Go言語の定数演算の精度が限界突破していた件</a>
               </li>
             
           
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/07/16/2024-07-16-cannot-deploy-firebase-function/">Firebase Functionsがデプロイできなくなった話</a>
+              </li>
             
           
             
@@ -635,12 +644,6 @@ package main import ( &#34;image&#34; &#34;image/color/palette&#34; &#34;image/g
             
               <li class="post">
                 <a href="/blog/2024/03/20/2024-03-20-go-mysql-pool/">GoでMySQLを使ったテストを書くときにつかうユーティリティーライブラリを作った</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2024/03/12/2024-03-12-use-mysql-new-connector-and-sql-open-db/">GoのMySQLドライバーを使うときはmysql.NewConnectorとsql.OpenDBを使おう</a>
               </li>
             
           
