@@ -2,7 +2,7 @@
 layout: post
 title: "Structured Field Values のパーサーを書いた"
 slug: structured-field-values
-date: 2024-08-12 18:39:00 +0900
+date: 2024-08-13 00:33:00 +0900
 comments: true
 categories: [go, golang, typescript, javascript]
 ---
