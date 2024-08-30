@@ -19,6 +19,16 @@ AWSでアジアパシフィック（マレーシア）リージョンが利用�
 - Paws（x64）: `arn:aws:lambda:ap-southeast-5:445285296882:layer:perl-5-38-paws-al2023-x86_64:1`
 - Paws（arm64）: `arn:aws:lambda:ap-southeast-5:445285296882:layer:perl-5-38-paws-al2023-arm64:1`
 
+> 🐰新しい地域に、喜びの声、\
+> AWS Lambda、広がる希望。\
+> マレーシアの空に、夢が舞う、\
+> みんなで使おう、楽しいクラウド！\
+> うさぎも跳ねて、嬉しさ満点、\
+> これからの未来、共に進もう！ 🌟
+>
+> by [CodeRabbit](https://coderabbit.ai/)
+
+
 ## 参考
 
 - [Now open — AWS Asia Pacific (Malaysia) Region](https://aws.amazon.com/blogs/aws/now-open-aws-asia-pacific-malaysia-region/)
