@@ -1,0 +1,113 @@
+---
+layout: post
+title: "Perl 5.41から、UTF-8で書かれたソースコードにはuse utf8が必須になります"
+slug: perl-requires-use-utf8
+date: 2024-08-13 00:33:00 +0900
+comments: true
+categories: [perl]
+---
+
+Perl 5.41.2（開発版）から [source::encodingプラグマ](https://metacpan.org/release/ETHER/perl-5.41.2/view/lib/source/encoding.pm)が追加されました。
+このプラグマの追加により、UTF-8で書かれたソースコードでは `use utf8` が必須になります。
+
+## TL;DR
+
+ソースコードの先頭に `use utf8` って書いておけばOK。
+
+## use utf8の必須化
+
+たとえば以下のコードにはUTF-8の文字列が含まれていますが、 `use utf8` の指定がありません。
+
+```perl
+use v5.41;
+
+# こんにちは世界
+```
+
+このコードをPerl 5.41.2（開発版）で実行すると以下のようなエラーを吐いて終了します。
+
+```plain
+Use of non-ASCII character 0xE3 illegal when 'use source::encoding "ascii"' is in effect at hoge.pl line 3, at end of line
+Execution of hoge.pl aborted due to compilation errors.
+```
+
+コメントアウトしてあっても日本語は使えません。
+
+正しく実行するには `use utf8` を明示し、ソースコードがUTF-8で書かれていることを示す必要があります。
+
+```perl
+use v5.41;
+use utf8;
+
+# こんにちは世界
+```
+
+これは `use utf8` をうっかり書き忘れることを防ぐための処置だそうです。
+
+- [perldelta - what is new for perl v5.41.2](https://metacpan.org/release/ETHER/perl-5.41.2/view/pod/perldelta.pod)
+
+## source::encodingプラグマ
+
+`use utf8` 必須化の機能のみを制御するには、`source::encoding` プラグマを利用します。
+
+たとえばソースコードがASCIIで書かれていることを示すには以下のように書きます。
+
+```perl
+use source::encoding 'ascii';
+
+# You can use only ASCII characters.
+```
+
+`use source::encoding 'ascii'` が指定されているソースコードでASCIIコード範囲外の文字を使うとエラーになります。
+
+```perl
+use source::encoding 'ascii';
+
+# 日本語はエラーになる！
+```
+
+`use v5.41` feature bundle で `use source::encoding 'ascii'` も有効化されるため、
+`use v5.41` が使われているソースコード中で日本語を書くとエラーになります。
+
+日本語のようなASCII範囲外の文字を使いたい場合は `use source::encoding 'utf8'` と書いて、UTF-8でエンコードして保存します。
+
+```perl
+use source::encoding 'utf8'; # use utf8; と同じ
+
+# ASCII範囲外の文字が含まれていてもエラーにならない
+```
+
+`use utf8` は `use source::encoding 'utf8'` のシノニムなので、`use utf8` と書いても同じ効果を得られます。
+
+文字コードとして指定できるのは `ascii` と `utf8` のみです。
+他の文字コードには対応していません。
+
+```perl
+use source::encoding 'euc-jp'; # Bad argument for source::encoding: 'euc-jp'
+```
+
+## まとめ
+
+Perl 5.41.2（開発版）からsource::encodingプラグマが追加されました。
+このプラグマを利用することで、ソースコードに使用している文字コードを明示できます。
+Perl 5.41以降デフォルトの文字コードはASCIIとして解釈されます。
+ASCII範囲外の文字を使うには `use utf8` が必須となります。
+我々のような日本語話者にとっては大きな変更ですね。
+
+「難しすぎて何言っているかわからない」という人は、「ソースコードの先頭に `use utf8` って書いておけばOK」とだけ覚えておきましょう。
+
+なお検証に使用したのは開発版のPerlです。安定版では挙動が変わる可能性があります。
+
+> 🐇\
+> 新しいプラグマ、嬉しさ満載、\
+> Perlが進化し、未来も開け。\
+> エンコーディングの光、さあ照らせ、\
+> コードが踊り、心も弾む。\
+> ようこそ、変化の時よ！\
+> 🌟
+>
+> by [CodeRabbit](https://coderabbit.ai/)
+
+## 参考
+
+- [perldelta - what is new for perl v5.41.2](https://metacpan.org/release/ETHER/perl-5.41.2/view/pod/perldelta.pod)
