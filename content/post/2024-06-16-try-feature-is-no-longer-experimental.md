@@ -52,3 +52,4 @@ Perl 5.38 までの try/catch については以下の記事を参照。
 - [Perl 5.34.0 の try-catch を触ってみる](https://shogo82148.github.io/blog/2021/12/09/perl-try-catch/)
 - [try/catch feature is no longer experimental](https://metacpan.org/release/HAARG/perl-5.40.0/view/pod/perldelta.pod#try/catch-feature-is-no-longer-experimental)
 - [The :5.40 feature bundle adds try](https://metacpan.org/release/HAARG/perl-5.40.0/view/pod/perldelta.pod#The-:5.40-feature-bundle-adds-try)
+- [try/catch (5.34〜) - 2024年秋のPerl](https://speakerdeck.com/charsbar/2024nian-qiu-noperl?slide=27)
