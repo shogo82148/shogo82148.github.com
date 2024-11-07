@@ -39,6 +39,14 @@ Perl 5.38 までの try/catch については以下の記事を参照。
 
 - [Perl 5.34.0 の try-catch を触ってみる](https://shogo82148.github.io/blog/2021/12/09/perl-try-catch/)
 
+> 新しい風が吹く、Perlの空に\
+> tryとcatchで一筋の光\
+> 例外処理が簡単に\
+> バグも恐れず、コードも輝く\
+> 未来を照らす、5.40
+>
+> by CodeRabbit
+
 ## 参考
 
 - [Perl 5.34.0 の try-catch を触ってみる](https://shogo82148.github.io/blog/2021/12/09/perl-try-catch/)
