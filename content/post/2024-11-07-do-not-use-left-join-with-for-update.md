@@ -185,6 +185,16 @@ mysql> INSERT INTO `user_prefecture` (`user_id`, `prefecture_id`) VALUES (4, 15)
 
 <!-- TODO -->
 
+> 🐇うさぎの歌\
+> LEFT JOINとFOR UPDATE、\
+> 一緒に使うのはダメだよ、\
+> ロックの範囲、気をつけて、\
+> デッドロックの罠に、\
+> ひょっこりハマるかも、\
+> みんなで注意、楽しく学ぼう！ 🌟
+>
+> by [CodeRabbit](https://coderabbit.ai/)
+
 ## 参考
 
 - [MySQL DBロック自由自在！](https://zenn.dev/neinc_tech/articles/b71893a78064dd)
