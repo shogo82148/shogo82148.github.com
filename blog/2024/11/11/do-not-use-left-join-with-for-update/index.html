@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono&display=swap" rel="stylesheet"> 
+
+  
+  <title>LEFT JOINとFOR UPDATEを同時に使うのはやめよう</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="ICHINOSE Shogo">
+
+  
+  <meta name="generator" content="Hugo 0.120.4">
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-40R0PCLKVF');
+</script>
+
+
+<script>
+MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']]
+  },
+  svg: {
+    fontCache: 'global'
+  }
+};
+</script>
+
+<script type="text/javascript" id="MathJax-script" async
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+</script>
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Nov 11, 2024
+     - 4 minute read 
+    
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/mysql/">mysql </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2024/11/11/do-not-use-left-join-with-for-update/">LEFT JOINとFOR UPDATEを同時に使うのはやめよう</a>
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>LEFT JOIN を何度も繰り返し、さらに FOR UPDATE しているMySQLのクエリーを見かけました。
+毎回似たようなコメントをするのも面倒なので、そのようなクエリーの問題点をまとめておきます。
+たとえばこんな感じのクエリーです。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="o">`</span><span class="k">user</span><span class="o">`</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">LEFT</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="o">`</span><span class="n">user_prefecture</span><span class="o">`</span><span class="w"> </span><span class="k">USING</span><span class="w"> </span><span class="p">(</span><span class="o">`</span><span class="n">user_id</span><span class="o">`</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">LEFT</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="o">`</span><span class="n">prefecture</span><span class="o">`</span><span class="w"> </span><span class="k">USING</span><span class="w"> </span><span class="p">(</span><span class="o">`</span><span class="n">prefecture_id</span><span class="o">`</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">WHERE</span><span class="w"> </span><span class="o">`</span><span class="k">user</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">user_id</span><span class="o">`</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="k">FOR</span><span class="w"> </span><span class="k">UPDATE</span><span class="p">;</span><span class="w">
+</span></span></span></code></pre></div><h2 id="tldr">TL;DR</h2>
+<p>以下の理由から、LEFT JOINとFOR UPDATEを同時に使うのはやめたほうがよい。</p>
+<ul>
+<li>そもそもロックの範囲を間違えている可能性が高い</li>
+<li>デッドロックの危険性が高まる</li>
+<li>ギャップロックの可能性がある</li>
+</ul>
+<p>FOR UPDATE はロックの獲得のみに使用し、関連する情報を取得するのは別クエリーに分けよう。</p>
+<h2 id="left-joinとfor-updateを同時に使うのはやめよう">LEFT JOINとFOR UPDATEを同時に使うのはやめよう</h2>
+<p>検証用に簡単なテーブルを作ってみます。</p>
+<p>ユーザーは自分の居住地（都道府県）を設定できます。
+自分の居住地を明かしたくないユーザーは、居住地を設定を省略することも可能です。
+このような要件をもとに以下のようなテーブルを定義してみました。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="c1">-- ユーザー
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">CREATE</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="o">`</span><span class="k">user</span><span class="o">`</span><span class="w"> </span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="o">`</span><span class="n">user_id</span><span class="o">`</span><span class="w"> </span><span class="nb">BIGINT</span><span class="w"> </span><span class="k">PRIMARY</span><span class="w"> </span><span class="k">KEY</span><span class="w"> </span><span class="n">AUTO_INCREMENT</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="o">`</span><span class="n">name</span><span class="o">`</span><span class="w"> </span><span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">191</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">-- 都道府県のマスターデータ
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">CREATE</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="o">`</span><span class="n">prefecture</span><span class="o">`</span><span class="w"> </span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="o">`</span><span class="n">prefecture_id</span><span class="o">`</span><span class="w"> </span><span class="nb">INTEGER</span><span class="w"> </span><span class="k">PRIMARY</span><span class="w"> </span><span class="k">KEY</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="o">`</span><span class="n">name</span><span class="o">`</span><span class="w"> </span><span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">191</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">-- ユーザーと都道府県の関連テーブル
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">CREATE</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="o">`</span><span class="n">user_prefecture</span><span class="o">`</span><span class="w"> </span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="o">`</span><span class="n">user_id</span><span class="o">`</span><span class="w"> </span><span class="nb">BIGINT</span><span class="w"> </span><span class="k">PRIMARY</span><span class="w"> </span><span class="k">KEY</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="o">`</span><span class="n">prefecture_id</span><span class="o">`</span><span class="w"> </span><span class="nb">INTEGER</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="k">CONSTRAINT</span><span class="w"> </span><span class="o">`</span><span class="n">user_prefecture_user</span><span class="o">`</span><span class="w"> </span><span class="k">FOREIGN</span><span class="w"> </span><span class="k">KEY</span><span class="w"> </span><span class="p">(</span><span class="o">`</span><span class="n">user_id</span><span class="o">`</span><span class="p">)</span><span class="w"> </span><span class="k">REFERENCES</span><span class="w"> </span><span class="o">`</span><span class="k">user</span><span class="o">`</span><span class="w"> </span><span class="p">(</span><span class="o">`</span><span class="n">user_id</span><span class="o">`</span><span class="p">),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="k">CONSTRAINT</span><span class="w"> </span><span class="o">`</span><span class="n">user_prefecture_prefecture</span><span class="o">`</span><span class="w"> </span><span class="k">FOREIGN</span><span class="w"> </span><span class="k">KEY</span><span class="w"> </span><span class="p">(</span><span class="o">`</span><span class="n">prefecture_id</span><span class="o">`</span><span class="p">)</span><span class="w"> </span><span class="k">REFERENCES</span><span class="w"> </span><span class="o">`</span><span class="n">prefecture</span><span class="o">`</span><span class="w"> </span><span class="p">(</span><span class="o">`</span><span class="n">prefecture_id</span><span class="o">`</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">-- 初期データ
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="o">`</span><span class="k">user</span><span class="o">`</span><span class="w"> </span><span class="p">(</span><span class="o">`</span><span class="n">name</span><span class="o">`</span><span class="p">)</span><span class="w"> </span><span class="k">VALUES</span><span class="w"> </span><span class="p">(</span><span class="s2">&#34;Ichinose&#34;</span><span class="p">),</span><span class="w"> </span><span class="p">(</span><span class="s2">&#34;Furusawa&#34;</span><span class="p">),</span><span class="w"> </span><span class="p">(</span><span class="s2">&#34;Inoriko&#34;</span><span class="p">),</span><span class="w"> </span><span class="p">(</span><span class="s2">&#34;Izu&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="o">`</span><span class="n">prefecture</span><span class="o">`</span><span class="w"> </span><span class="p">(</span><span class="o">`</span><span class="n">prefecture_id</span><span class="o">`</span><span class="p">,</span><span class="w"> </span><span class="o">`</span><span class="n">name</span><span class="o">`</span><span class="p">)</span><span class="w"> </span><span class="k">VALUES</span><span class="w"> </span><span class="p">(</span><span class="mi">15</span><span class="p">,</span><span class="w"> </span><span class="s2">&#34;新潟&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="o">`</span><span class="n">user_prefecture</span><span class="o">`</span><span class="w"> </span><span class="p">(</span><span class="o">`</span><span class="n">user_id</span><span class="o">`</span><span class="p">,</span><span class="w"> </span><span class="o">`</span><span class="n">prefecture_id</span><span class="o">`</span><span class="p">)</span><span class="w"> </span><span class="k">VALUES</span><span class="w"> </span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">15</span><span class="p">),</span><span class="w"> </span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">15</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><p>以下の初期データを投入してあります。</p>
+<ul>
+<li>ユーザー1は新潟県民</li>
+<li>ユーザー2は新潟県民</li>
+<li>ユーザー3は居住地未設定</li>
+<li>ユーザー4は居住地未設定</li>
+</ul>
+<p>検証は2024-11-07現在の最新LTSである MySQL 8.4.3 を利用しました。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">docker run -e MYSQL_ALLOW_EMPTY_PASSWORD=yes -p 3306:3306 -d mysql:8.4.3
+</span></span></code></pre></div><p>さて、このシステムでユーザーテーブルにロックをかける必要が出てきました。
+その後の処理で、ユーザーの居住地情報も必要になることがわかっています。
+そこで「ユーザーテーブルのロック」と「ユーザーの居住地情報の取得」を同時に行えば効率がよいと考え、以下のクエリーを書きました。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="o">`</span><span class="k">user</span><span class="o">`</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">LEFT</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="o">`</span><span class="n">user_prefecture</span><span class="o">`</span><span class="w"> </span><span class="k">USING</span><span class="w"> </span><span class="p">(</span><span class="o">`</span><span class="n">user_id</span><span class="o">`</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">LEFT</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="o">`</span><span class="n">prefecture</span><span class="o">`</span><span class="w"> </span><span class="k">USING</span><span class="w"> </span><span class="p">(</span><span class="o">`</span><span class="n">prefecture_id</span><span class="o">`</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">WHERE</span><span class="w"> </span><span class="o">`</span><span class="k">user</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">user_id</span><span class="o">`</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="k">FOR</span><span class="w"> </span><span class="k">UPDATE</span><span class="p">;</span><span class="w">
+</span></span></span></code></pre></div><h3 id="そもそもロックの範囲を間違えている可能性が高い">そもそもロックの範囲を間違えている可能性が高い</h3>
+<p>このクエリーを書いた人は「<code>user</code> テーブルのユーザー1のみロックがかかる」と考えているのかもしれません。
+しかし MySQL の実際の挙動は違います。<strong>関連するすべてのテーブルにもロックがかかります</strong>。
+<code>performance_schema.data_locks</code> テーブルを参照するとどこにロックが掛かっているかがわかります。
+先ほどのクエリーを使ってユーザー1のロックを獲得し、ロックの様子を確かめてみましょう。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="n">mysql</span><span class="o">&gt;</span><span class="w"> </span><span class="k">BEGIN</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">Query</span><span class="w"> </span><span class="n">OK</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="k">rows</span><span class="w"> </span><span class="n">affected</span><span class="w"> </span><span class="p">(</span><span class="mi">0</span><span class="p">.</span><span class="mi">00</span><span class="w"> </span><span class="n">sec</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">mysql</span><span class="o">&gt;</span><span class="w"> </span><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="o">`</span><span class="k">user</span><span class="o">`</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="o">-&gt;</span><span class="w"> </span><span class="k">LEFT</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="o">`</span><span class="n">user_prefecture</span><span class="o">`</span><span class="w"> </span><span class="k">USING</span><span class="w"> </span><span class="p">(</span><span class="o">`</span><span class="n">user_id</span><span class="o">`</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="o">-&gt;</span><span class="w"> </span><span class="k">LEFT</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="o">`</span><span class="n">prefecture</span><span class="o">`</span><span class="w"> </span><span class="k">USING</span><span class="w"> </span><span class="p">(</span><span class="o">`</span><span class="n">prefecture_id</span><span class="o">`</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="o">-&gt;</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="o">`</span><span class="k">user</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">user_id</span><span class="o">`</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="k">FOR</span><span class="w"> </span><span class="k">UPDATE</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">+</span><span class="c1">---------------+---------+----------+--------+
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="o">|</span><span class="w"> </span><span class="n">prefecture_id</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">user_id</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">name</span><span class="w">     </span><span class="o">|</span><span class="w"> </span><span class="n">name</span><span class="w">   </span><span class="o">|</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">+</span><span class="c1">---------------+---------+----------+--------+
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="o">|</span><span class="w">            </span><span class="mi">15</span><span class="w"> </span><span class="o">|</span><span class="w">       </span><span class="mi">1</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">Ichinose</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="err">新潟</span><span class="w">   </span><span class="o">|</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">+</span><span class="c1">---------------+---------+----------+--------+
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="mi">1</span><span class="w"> </span><span class="k">row</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="k">set</span><span class="w"> </span><span class="p">(</span><span class="mi">0</span><span class="p">.</span><span class="mi">00</span><span class="w"> </span><span class="n">sec</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">mysql</span><span class="o">&gt;</span><span class="w"> </span><span class="k">SELECT</span><span class="w"> </span><span class="n">OBJECT_NAME</span><span class="p">,</span><span class="n">INDEX_NAME</span><span class="p">,</span><span class="n">LOCK_TYPE</span><span class="p">,</span><span class="n">LOCK_MODE</span><span class="p">,</span><span class="n">LOCK_STATUS</span><span class="p">,</span><span class="n">LOCK_DATA</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">performance_schema</span><span class="p">.</span><span class="n">data_locks</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">+</span><span class="c1">-----------------+------------+-----------+---------------+-------------+-----------+
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="o">|</span><span class="w"> </span><span class="n">OBJECT_NAME</span><span class="w">     </span><span class="o">|</span><span class="w"> </span><span class="n">INDEX_NAME</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">LOCK_TYPE</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">LOCK_MODE</span><span class="w">     </span><span class="o">|</span><span class="w"> </span><span class="n">LOCK_STATUS</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">LOCK_DATA</span><span class="w"> </span><span class="o">|</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">+</span><span class="c1">-----------------+------------+-----------+---------------+-------------+-----------+
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="o">|</span><span class="w"> </span><span class="n">user_prefecture</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="k">NULL</span><span class="w">       </span><span class="o">|</span><span class="w"> </span><span class="k">TABLE</span><span class="w">     </span><span class="o">|</span><span class="w"> </span><span class="n">IX</span><span class="w">            </span><span class="o">|</span><span class="w"> </span><span class="k">GRANTED</span><span class="w">     </span><span class="o">|</span><span class="w"> </span><span class="k">NULL</span><span class="w">      </span><span class="o">|</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">|</span><span class="w"> </span><span class="k">user</span><span class="w">            </span><span class="o">|</span><span class="w"> </span><span class="k">NULL</span><span class="w">       </span><span class="o">|</span><span class="w"> </span><span class="k">TABLE</span><span class="w">     </span><span class="o">|</span><span class="w"> </span><span class="n">IX</span><span class="w">            </span><span class="o">|</span><span class="w"> </span><span class="k">GRANTED</span><span class="w">     </span><span class="o">|</span><span class="w"> </span><span class="k">NULL</span><span class="w">      </span><span class="o">|</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">|</span><span class="w"> </span><span class="n">prefecture</span><span class="w">      </span><span class="o">|</span><span class="w"> </span><span class="k">NULL</span><span class="w">       </span><span class="o">|</span><span class="w"> </span><span class="k">TABLE</span><span class="w">     </span><span class="o">|</span><span class="w"> </span><span class="n">IX</span><span class="w">            </span><span class="o">|</span><span class="w"> </span><span class="k">GRANTED</span><span class="w">     </span><span class="o">|</span><span class="w"> </span><span class="k">NULL</span><span class="w">      </span><span class="o">|</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">|</span><span class="w"> </span><span class="k">user</span><span class="w">            </span><span class="o">|</span><span class="w"> </span><span class="k">PRIMARY</span><span class="w">    </span><span class="o">|</span><span class="w"> </span><span class="n">RECORD</span><span class="w">    </span><span class="o">|</span><span class="w"> </span><span class="n">X</span><span class="p">,</span><span class="n">REC_NOT_GAP</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="k">GRANTED</span><span class="w">     </span><span class="o">|</span><span class="w"> </span><span class="mi">1</span><span class="w">         </span><span class="o">|</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">|</span><span class="w"> </span><span class="n">user_prefecture</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="k">PRIMARY</span><span class="w">    </span><span class="o">|</span><span class="w"> </span><span class="n">RECORD</span><span class="w">    </span><span class="o">|</span><span class="w"> </span><span class="n">X</span><span class="p">,</span><span class="n">REC_NOT_GAP</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="k">GRANTED</span><span class="w">     </span><span class="o">|</span><span class="w"> </span><span class="mi">1</span><span class="w">         </span><span class="o">|</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">|</span><span class="w"> </span><span class="n">prefecture</span><span class="w">      </span><span class="o">|</span><span class="w"> </span><span class="k">PRIMARY</span><span class="w">    </span><span class="o">|</span><span class="w"> </span><span class="n">RECORD</span><span class="w">    </span><span class="o">|</span><span class="w"> </span><span class="n">X</span><span class="p">,</span><span class="n">REC_NOT_GAP</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="k">GRANTED</span><span class="w">     </span><span class="o">|</span><span class="w"> </span><span class="mi">15</span><span class="w">        </span><span class="o">|</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">+</span><span class="c1">-----------------+------------+-----------+---------------+-------------+-----------+
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="mi">6</span><span class="w"> </span><span class="k">rows</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="k">set</span><span class="w"> </span><span class="p">(</span><span class="mi">0</span><span class="p">.</span><span class="mi">00</span><span class="w"> </span><span class="n">sec</span><span class="p">)</span><span class="w">
+</span></span></span></code></pre></div><p><code>user</code> テーブルだけでなく <code>user_prefecture</code>, <code>prefecture</code> テーブルにもロックがかかっていることが確認できます。</p>
+<p>とくに <code>prefecture</code> テーブルにロックがかかっているのは大問題です。
+なぜなら <code>prefecture</code> テーブルの情報は複数のユーザーで共有しているため、ロックの影響が他のユーザーにまで及んでしまうのです。
+今回の場合、「新潟に住んでいるユーザー全員」がロックの対象となります。
+試しに新潟在住のユーザー2のロックを取ってみましょう。以下のようにロック待ち状態になります。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="n">mysql</span><span class="o">&gt;</span><span class="w"> </span><span class="k">BEGIN</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">Query</span><span class="w"> </span><span class="n">OK</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="k">rows</span><span class="w"> </span><span class="n">affected</span><span class="w"> </span><span class="p">(</span><span class="mi">0</span><span class="p">.</span><span class="mi">00</span><span class="w"> </span><span class="n">sec</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">mysql</span><span class="o">&gt;</span><span class="w"> </span><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="o">`</span><span class="k">user</span><span class="o">`</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="o">-&gt;</span><span class="w"> </span><span class="k">LEFT</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="o">`</span><span class="n">user_prefecture</span><span class="o">`</span><span class="w"> </span><span class="k">USING</span><span class="w"> </span><span class="p">(</span><span class="o">`</span><span class="n">user_id</span><span class="o">`</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="o">-&gt;</span><span class="w"> </span><span class="k">LEFT</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="o">`</span><span class="n">prefecture</span><span class="o">`</span><span class="w"> </span><span class="k">USING</span><span class="w"> </span><span class="p">(</span><span class="o">`</span><span class="n">prefecture_id</span><span class="o">`</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="o">-&gt;</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="o">`</span><span class="k">user</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">user_id</span><span class="o">`</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="k">FOR</span><span class="w"> </span><span class="k">UPDATE</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">-- 関係ないはずのユーザー2までロック待ち情報になる
+</span></span></span></code></pre></div><p>このように、LEFT JOINとFOR UPDATEを同時に使ったクエリーは、意図しない範囲までロックを獲得している可能性があります。</p>
+<h3 id="デッドロックの危険性が高まる">デッドロックの危険性が高まる</h3>
+<p>MySQLは「スキャンしたインデックス」に対してロックを獲得するため、テーブルをまたいだロックは一度に獲得できません。
+スキャンしたテーブルから順番にロックを獲得します。
+そのため、テーブルをスキャンする順番が非常に重要です。異なった順番でロックをした場合、デッドロックの可能性があります。</p>
+<p>さて問題となったこのクエリーを再掲します。
+このクエリーでは、どのような順番でMySQLはテーブルをスキャンするでしょうか？</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="o">`</span><span class="k">user</span><span class="o">`</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">LEFT</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="o">`</span><span class="n">user_prefecture</span><span class="o">`</span><span class="w"> </span><span class="k">USING</span><span class="w"> </span><span class="p">(</span><span class="o">`</span><span class="n">user_id</span><span class="o">`</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">LEFT</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="o">`</span><span class="n">prefecture</span><span class="o">`</span><span class="w"> </span><span class="k">USING</span><span class="w"> </span><span class="p">(</span><span class="o">`</span><span class="n">prefecture_id</span><span class="o">`</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">WHERE</span><span class="w"> </span><span class="o">`</span><span class="k">user</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">user_id</span><span class="o">`</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="k">FOR</span><span class="w"> </span><span class="k">UPDATE</span><span class="p">;</span><span class="w">
+</span></span></span></code></pre></div><p>多くの人がクエリーに登場した順番でスキャンすることを期待するのではないでしょうか？
+今回の例では <code>user</code> → <code>user_prefecture</code> → <code>prefecture</code> の順番です。</p>
+<p>しかしそんな保証はどこにもありません。実は <strong>JOINした場合のテーブルのスキャン順序は決まっていない</strong> のです。
+スキャンの順番はMySQLの実行計画に依存します。
+期待と異なった順番でスキャンが行われた場合、デッドロックが起こります。</p>
+<h3 id="ギャップロックの可能性がある">ギャップロックの可能性がある</h3>
+<p><code>LEFT JOIN user_prefecture</code> という書き方は「<code>user</code> に対応する <code>user_prefecture</code> が存在しない可能性がある」ことを示唆しています。
+今回の例ではユーザー3とユーザー4が該当します。
+試しにユーザー3のロックを獲得してみましょう。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="n">mysql</span><span class="o">&gt;</span><span class="w"> </span><span class="k">BEGIN</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">Query</span><span class="w"> </span><span class="n">OK</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="k">rows</span><span class="w"> </span><span class="n">affected</span><span class="w"> </span><span class="p">(</span><span class="mi">0</span><span class="p">.</span><span class="mi">00</span><span class="w"> </span><span class="n">sec</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">mysql</span><span class="o">&gt;</span><span class="w"> </span><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="o">`</span><span class="k">user</span><span class="o">`</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="o">-&gt;</span><span class="w"> </span><span class="k">LEFT</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="o">`</span><span class="n">user_prefecture</span><span class="o">`</span><span class="w"> </span><span class="k">USING</span><span class="w"> </span><span class="p">(</span><span class="o">`</span><span class="n">user_id</span><span class="o">`</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="o">-&gt;</span><span class="w"> </span><span class="k">LEFT</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="o">`</span><span class="n">prefecture</span><span class="o">`</span><span class="w"> </span><span class="k">USING</span><span class="w"> </span><span class="p">(</span><span class="o">`</span><span class="n">prefecture_id</span><span class="o">`</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="o">-&gt;</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="o">`</span><span class="k">user</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">user_id</span><span class="o">`</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="k">FOR</span><span class="w"> </span><span class="k">UPDATE</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">+</span><span class="c1">---------------+---------+---------+------+
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="o">|</span><span class="w"> </span><span class="n">prefecture_id</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">user_id</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">name</span><span class="w">    </span><span class="o">|</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="o">|</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">+</span><span class="c1">---------------+---------+---------+------+
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="o">|</span><span class="w">          </span><span class="k">NULL</span><span class="w"> </span><span class="o">|</span><span class="w">       </span><span class="mi">3</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">Inoriko</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="k">NULL</span><span class="w"> </span><span class="o">|</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">+</span><span class="c1">---------------+---------+---------+------+
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="mi">1</span><span class="w"> </span><span class="k">row</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="k">set</span><span class="w"> </span><span class="p">(</span><span class="mi">0</span><span class="p">.</span><span class="mi">00</span><span class="w"> </span><span class="n">sec</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">mysql</span><span class="o">&gt;</span><span class="w"> </span><span class="k">SELECT</span><span class="w"> </span><span class="n">OBJECT_NAME</span><span class="p">,</span><span class="n">INDEX_NAME</span><span class="p">,</span><span class="n">LOCK_TYPE</span><span class="p">,</span><span class="n">LOCK_MODE</span><span class="p">,</span><span class="n">LOCK_STATUS</span><span class="p">,</span><span class="n">LOCK_DATA</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">performance_schema</span><span class="p">.</span><span class="n">data_locks</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">+</span><span class="c1">-----------------+------------+-----------+---------------+-------------+------------------------+
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="o">|</span><span class="w"> </span><span class="n">OBJECT_NAME</span><span class="w">     </span><span class="o">|</span><span class="w"> </span><span class="n">INDEX_NAME</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">LOCK_TYPE</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">LOCK_MODE</span><span class="w">     </span><span class="o">|</span><span class="w"> </span><span class="n">LOCK_STATUS</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">LOCK_DATA</span><span class="w">              </span><span class="o">|</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">+</span><span class="c1">-----------------+------------+-----------+---------------+-------------+------------------------+
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="o">|</span><span class="w"> </span><span class="n">user_prefecture</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="k">NULL</span><span class="w">       </span><span class="o">|</span><span class="w"> </span><span class="k">TABLE</span><span class="w">     </span><span class="o">|</span><span class="w"> </span><span class="n">IX</span><span class="w">            </span><span class="o">|</span><span class="w"> </span><span class="k">GRANTED</span><span class="w">     </span><span class="o">|</span><span class="w"> </span><span class="k">NULL</span><span class="w">                   </span><span class="o">|</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">|</span><span class="w"> </span><span class="k">user</span><span class="w">            </span><span class="o">|</span><span class="w"> </span><span class="k">NULL</span><span class="w">       </span><span class="o">|</span><span class="w"> </span><span class="k">TABLE</span><span class="w">     </span><span class="o">|</span><span class="w"> </span><span class="n">IX</span><span class="w">            </span><span class="o">|</span><span class="w"> </span><span class="k">GRANTED</span><span class="w">     </span><span class="o">|</span><span class="w"> </span><span class="k">NULL</span><span class="w">                   </span><span class="o">|</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">|</span><span class="w"> </span><span class="k">user</span><span class="w">            </span><span class="o">|</span><span class="w"> </span><span class="k">PRIMARY</span><span class="w">    </span><span class="o">|</span><span class="w"> </span><span class="n">RECORD</span><span class="w">    </span><span class="o">|</span><span class="w"> </span><span class="n">X</span><span class="p">,</span><span class="n">REC_NOT_GAP</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="k">GRANTED</span><span class="w">     </span><span class="o">|</span><span class="w"> </span><span class="mi">3</span><span class="w">                      </span><span class="o">|</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">|</span><span class="w"> </span><span class="n">user_prefecture</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="k">PRIMARY</span><span class="w">    </span><span class="o">|</span><span class="w"> </span><span class="n">RECORD</span><span class="w">    </span><span class="o">|</span><span class="w"> </span><span class="n">X</span><span class="w">             </span><span class="o">|</span><span class="w"> </span><span class="k">GRANTED</span><span class="w">     </span><span class="o">|</span><span class="w"> </span><span class="n">supremum</span><span class="w"> </span><span class="n">pseudo</span><span class="o">-</span><span class="n">record</span><span class="w"> </span><span class="o">|</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">+</span><span class="c1">-----------------+------------+-----------+---------------+-------------+------------------------+
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="mi">4</span><span class="w"> </span><span class="k">rows</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="k">set</span><span class="w"> </span><span class="p">(</span><span class="mi">0</span><span class="p">.</span><span class="mi">00</span><span class="w"> </span><span class="n">sec</span><span class="p">)</span><span class="w">
+</span></span></span></code></pre></div><p><code>LOCK_MODE</code> が <code>X</code> となっているロックは、ギャップロック（行と行の間にかかるロック）です。
+ギャップロックがかかった領域へINSERTしようとするとブロックされます。
+たとえば、この瞬間にユーザー4が居住地を設定したとしましょう。このような操作はブロックされます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="n">mysql</span><span class="o">&gt;</span><span class="w"> </span><span class="k">BEGIN</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">Query</span><span class="w"> </span><span class="n">OK</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="k">rows</span><span class="w"> </span><span class="n">affected</span><span class="w"> </span><span class="p">(</span><span class="mi">0</span><span class="p">.</span><span class="mi">00</span><span class="w"> </span><span class="n">sec</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">mysql</span><span class="o">&gt;</span><span class="w"> </span><span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="o">`</span><span class="n">user_prefecture</span><span class="o">`</span><span class="w"> </span><span class="p">(</span><span class="o">`</span><span class="n">user_id</span><span class="o">`</span><span class="p">,</span><span class="w"> </span><span class="o">`</span><span class="n">prefecture_id</span><span class="o">`</span><span class="p">)</span><span class="w"> </span><span class="k">VALUES</span><span class="w"> </span><span class="p">(</span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="mi">15</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">-- 関係ないはずのユーザー4の操作がブロックされる
+</span></span></span></code></pre></div><p>ギャップロックは行と行の間をロックするため、影響範囲が非常に広大になりがちです。
+ギャップロックは全力で回避しましょう。</p>
+<h3 id="解決策">解決策</h3>
+<p>「ユーザーテーブルのロック」と「ユーザーの居住地情報の取得」を別のクエリーとして実行しましょう。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="c1">-- ユーザーテーブルのロック
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="o">`</span><span class="k">user</span><span class="o">`</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="o">`</span><span class="n">user_id</span><span class="o">`</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="k">FOR</span><span class="w"> </span><span class="k">UPDATE</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">-- ユーザーの居住地情報の取得
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="o">`</span><span class="k">user</span><span class="o">`</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">LEFT</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="o">`</span><span class="n">user_prefecture</span><span class="o">`</span><span class="w"> </span><span class="k">USING</span><span class="w"> </span><span class="p">(</span><span class="o">`</span><span class="n">user_id</span><span class="o">`</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">LEFT</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="o">`</span><span class="n">prefecture</span><span class="o">`</span><span class="w"> </span><span class="k">USING</span><span class="w"> </span><span class="p">(</span><span class="o">`</span><span class="n">prefecture_id</span><span class="o">`</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">WHERE</span><span class="w"> </span><span class="o">`</span><span class="k">user</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">user_id</span><span class="o">`</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span></code></pre></div><p>クエリーが多くなってレイテンシーに影響があるのでは、と考えるかもしれませんが実際は軽微なものです。
+ロックにまつわる諸問題を踏むほうがダメージがでかいので、安全策で行きましょう。</p>
+<h3 id="余談">余談</h3>
+<p>以下のようにサブクエリーを使う解決方法もあります。
+これならクエリーの呼び出し回数は同じです。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="p">(</span><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="o">`</span><span class="k">user</span><span class="o">`</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="o">`</span><span class="k">user</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">user_id</span><span class="o">`</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="k">FOR</span><span class="w"> </span><span class="k">UPDATE</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="o">`</span><span class="n">u</span><span class="o">`</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">LEFT</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="o">`</span><span class="n">user_prefecture</span><span class="o">`</span><span class="w"> </span><span class="k">USING</span><span class="w"> </span><span class="p">(</span><span class="o">`</span><span class="n">user_id</span><span class="o">`</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">LEFT</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="o">`</span><span class="n">prefecture</span><span class="o">`</span><span class="w"> </span><span class="k">USING</span><span class="w"> </span><span class="p">(</span><span class="o">`</span><span class="n">prefecture_id</span><span class="o">`</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="n">mysql</span><span class="o">&gt;</span><span class="w"> </span><span class="k">BEGIN</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">Query</span><span class="w"> </span><span class="n">OK</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="k">rows</span><span class="w"> </span><span class="n">affected</span><span class="w"> </span><span class="p">(</span><span class="mi">0</span><span class="p">.</span><span class="mi">00</span><span class="w"> </span><span class="n">sec</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">mysql</span><span class="o">&gt;</span><span class="w"> </span><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="p">(</span><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="o">`</span><span class="k">user</span><span class="o">`</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="o">`</span><span class="k">user</span><span class="o">`</span><span class="p">.</span><span class="o">`</span><span class="n">user_id</span><span class="o">`</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="k">FOR</span><span class="w"> </span><span class="k">UPDATE</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="o">`</span><span class="n">u</span><span class="o">`</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="o">-&gt;</span><span class="w"> </span><span class="k">LEFT</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="o">`</span><span class="n">user_prefecture</span><span class="o">`</span><span class="w"> </span><span class="k">USING</span><span class="w"> </span><span class="p">(</span><span class="o">`</span><span class="n">user_id</span><span class="o">`</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="o">-&gt;</span><span class="w"> </span><span class="k">LEFT</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="o">`</span><span class="n">prefecture</span><span class="o">`</span><span class="w"> </span><span class="k">USING</span><span class="w"> </span><span class="p">(</span><span class="o">`</span><span class="n">prefecture_id</span><span class="o">`</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">+</span><span class="c1">---------------+---------+----------+--------+
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="o">|</span><span class="w"> </span><span class="n">prefecture_id</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">user_id</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">name</span><span class="w">     </span><span class="o">|</span><span class="w"> </span><span class="n">name</span><span class="w">   </span><span class="o">|</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">+</span><span class="c1">---------------+---------+----------+--------+
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="o">|</span><span class="w">            </span><span class="mi">15</span><span class="w"> </span><span class="o">|</span><span class="w">       </span><span class="mi">1</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">Ichinose</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="err">新潟</span><span class="w">   </span><span class="o">|</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">+</span><span class="c1">---------------+---------+----------+--------+
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="mi">1</span><span class="w"> </span><span class="k">row</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="k">set</span><span class="w"> </span><span class="p">(</span><span class="mi">0</span><span class="p">.</span><span class="mi">00</span><span class="w"> </span><span class="n">sec</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">mysql</span><span class="o">&gt;</span><span class="w"> </span><span class="k">SELECT</span><span class="w"> </span><span class="n">OBJECT_NAME</span><span class="p">,</span><span class="n">INDEX_NAME</span><span class="p">,</span><span class="n">LOCK_TYPE</span><span class="p">,</span><span class="n">LOCK_MODE</span><span class="p">,</span><span class="n">LOCK_STATUS</span><span class="p">,</span><span class="n">LOCK_DATA</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">performance_schema</span><span class="p">.</span><span class="n">data_locks</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">+</span><span class="c1">-------------+------------+-----------+---------------+-------------+-----------+
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="o">|</span><span class="w"> </span><span class="n">OBJECT_NAME</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">INDEX_NAME</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">LOCK_TYPE</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">LOCK_MODE</span><span class="w">     </span><span class="o">|</span><span class="w"> </span><span class="n">LOCK_STATUS</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">LOCK_DATA</span><span class="w"> </span><span class="o">|</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">+</span><span class="c1">-------------+------------+-----------+---------------+-------------+-----------+
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="o">|</span><span class="w"> </span><span class="k">user</span><span class="w">        </span><span class="o">|</span><span class="w"> </span><span class="k">NULL</span><span class="w">       </span><span class="o">|</span><span class="w"> </span><span class="k">TABLE</span><span class="w">     </span><span class="o">|</span><span class="w"> </span><span class="n">IX</span><span class="w">            </span><span class="o">|</span><span class="w"> </span><span class="k">GRANTED</span><span class="w">     </span><span class="o">|</span><span class="w"> </span><span class="k">NULL</span><span class="w">      </span><span class="o">|</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">|</span><span class="w"> </span><span class="k">user</span><span class="w">        </span><span class="o">|</span><span class="w"> </span><span class="k">PRIMARY</span><span class="w">    </span><span class="o">|</span><span class="w"> </span><span class="n">RECORD</span><span class="w">    </span><span class="o">|</span><span class="w"> </span><span class="n">X</span><span class="p">,</span><span class="n">REC_NOT_GAP</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="k">GRANTED</span><span class="w">     </span><span class="o">|</span><span class="w"> </span><span class="mi">1</span><span class="w">         </span><span class="o">|</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="o">+</span><span class="c1">-------------+------------+-----------+---------------+-------------+-----------+
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="mi">2</span><span class="w"> </span><span class="k">rows</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="k">set</span><span class="w"> </span><span class="p">(</span><span class="mi">0</span><span class="p">.</span><span class="mi">00</span><span class="w"> </span><span class="n">sec</span><span class="p">)</span><span class="w">
+</span></span></span></code></pre></div><p>しかし、ちょっとトリッキーな気もするので、個人的にはオススメしません。</p>
+<h2 id="まとめ">まとめ</h2>
+<p>以下の理由から、LEFT JOINとFOR UPDATEを同時に使うのはやめたほうがよい。</p>
+<ul>
+<li>そもそもロックの範囲を間違えている可能性が高い</li>
+<li>デッドロックの危険性が高まる</li>
+<li>ギャップロックの可能性がある</li>
+</ul>
+<p>FOR UPDATE はロックの獲得のみに使用し、関連する情報を取得するのは別クエリーに分けよう。</p>
+<blockquote>
+<p>🐇うさぎの歌<br>
+LEFT JOINとFOR UPDATE、<br>
+一緒に使うのはダメだよ、<br>
+ロックの範囲、気をつけて、<br>
+デッドロックの罠に、<br>
+ひょっこりハマるかも、<br>
+みんなで注意、楽しく学ぼう！ 🌟</p>
+<p>by <a href="https://coderabbit.ai/">CodeRabbit</a></p>
+</blockquote>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://zenn.dev/neinc_tech/articles/b71893a78064dd">MySQL DBロック自由自在！</a></li>
+<li><a href="https://zenn.dev/utsushiiro/articles/ada7dea55b4fb9">MySQLのdata_locksのLOCK_MODEに現れる値について</a></li>
+<li><a href="https://qiita.com/moshimo_good/items/40a203e830f05feb9b81">【行ロック】JOINしたテーブルの行ロックを改めて整理する</a></li>
+<li><a href="https://ngyuki.hatenablog.com/entry/20120425/p1">innodbでサブクエリを使ったときの FOR UPDATE のロックの範囲</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">ICHINOSE Shogo</span></span>
+    
+    <time>Nov 11, 2024</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2024/08/30/p5-aws-lambda-is-available-on-ap-southeast-5/" title="AWS::LambdaがAWS Asia Pacific (Malaysia) Regionで利用可能になりました">AWS::LambdaがAWS Asia Pacific (Malaysia) Regionで利用可能になりました</a>
+    
+
+    
+  </p>
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2024/11/11/do-not-use-left-join-with-for-update/">LEFT JOINとFOR UPDATEを同時に使うのはやめよう</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/08/30/p5-aws-lambda-is-available-on-ap-southeast-5/">AWS::LambdaがAWS Asia Pacific (Malaysia) Regionで利用可能になりました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/08/13/structured-field-values/">Structured Field Values のパーサーを書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/08/13/denoland-dnt-cannot-find-error-options/">denoland/dntがerror TS2304: Cannot find name &#39;ErrorOptions&#39;で失敗する</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/08/12/golang-const/">Go言語の定数演算の精度が限界突破していた件</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/07/16/2024-07-16-cannot-deploy-firebase-function/">Firebase Functionsがデプロイできなくなった話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/07/16/2024-07-16-mysq8.0-gis/">MySQL8.0で近傍検索</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/06/30/2024-06-30-try-artifact-attestations/">GitHub Artifact Attestations を試してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/06/25/2024-06-25-go-retry-v2/">go-retry v2 リリースのお知らせ</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2024 ICHINOSE Shogo - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+</body>
+
+</html>
+
