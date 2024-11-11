@@ -7,8 +7,8 @@ comments: true
 categories: [mysql]
 ---
 
-LEFT JOINの何個も繰り返し、FOR UPDATEをしているMySQLのクエリーをいくつか見かけました。
-毎回似たようなコメントをするのも面倒なので、まとめておきます。
+LEFT JOIN を何度も繰り返し、さらに FOR UPDATE しているMySQLのクエリーを見かけました。
+毎回似たようなコメントをするのも面倒なので、そのようなクエリーの問題点をまとめておきます。
 たとえばこんな感じのクエリーです。
 
 ```sql
@@ -31,8 +31,9 @@ FOR UPDATE はロックの獲得のみに使用し、関連する情報を取得
 ## LEFT JOINとFOR UPDATEを同時に使うのはやめよう
 
 検証用に簡単なテーブルを作ってみます。
-ユーザーの居住地（都道府県）を管理するテーブルを考えてみましょう。
-ユーザーは自分の居住地を設定しないこともできます。
+
+ユーザーは自分の居住地（都道府県）を設定できます。
+自分の居住地を明かしたくないユーザーは、居住地を設定を省略することも可能です。
 このような要件をもとに以下のようなテーブルを定義してみました。
 
 ```sql
@@ -124,8 +125,10 @@ mysql> SELECT OBJECT_NAME,INDEX_NAME,LOCK_TYPE,LOCK_MODE,LOCK_STATUS,LOCK_DATA F
 
 `user` テーブルだけでなく `user_prefecture`, `prefecture` テーブルにもロックがかかっていることが確認できます。
 
-ここで `prefecture` テーブルにロックがかかっているのは大問題です。
+とくに `prefecture` テーブルにロックがかかっているのは大問題です。
 なぜなら `prefecture` テーブルの情報は複数のユーザーで共有しているため、ロックの影響が他のユーザーにまで及んでしまうのです。
+今回の場合、「新潟に住んでいるユーザー全員」がロックの対象となります。
+試しに新潟在住のユーザー2のロックを取ってみましょう。以下のようにロック待ち状態になります。
 
 ```sql
 mysql> BEGIN;
@@ -138,17 +141,45 @@ mysql> SELECT * FROM `user`
 -- 関係ないはずのユーザー2までロック待ち情報になる
 ```
 
+このように、LEFT JOINとFOR UPDATEを同時に使ったクエリーは、意図しない範囲までロックを獲得している可能性があります。
+
 ### デッドロックの危険性が高まる
 
-<!-- TODO -->
+MySQLは「スキャンしたインデックス」に対してロックを獲得するため、テーブルをまたいだロックは一度に獲得できません。
+スキャンしたテーブルから順番にロックを獲得します。
+そのため、テーブルをスキャンする順番が非常に重要です。異なった順番でロックをした場合、デッドロックの可能性があります。
+
+さて問題となったこのクエリーを再掲します。
+このクエリーでは、どのような順番でMySQLはテーブルをスキャンするでしょうか？
+
+```sql
+SELECT * FROM `user`
+LEFT JOIN `user_prefecture` USING (`user_id`)
+LEFT JOIN `prefecture` USING (`prefecture_id`)
+WHERE `user`.`user_id` = 1 FOR UPDATE;
+```
+
+多くの人がクエリーに登場した順番でスキャンすることを期待するのではないでしょうか？
+今回の例では `user` → `user_prefecture` → `prefecture` の順番です。
+
+しかしそんな保証はどこにもありません。実は **JOINした場合のテーブルのスキャン順序は決まっていない** のです。
+スキャンの順番はMySQLの実行計画に依存します。
+期待と異なった順番でスキャンが行われた場合、デッドロックが起こります。
 
 ### ギャップロックの可能性がある
+
+`LEFT JOIN user_prefecture` という書き方は「`user` に対応する `user_prefecture` が存在しない可能性がある」ことを示唆しています。
+今回の例ではユーザー3とユーザー4が該当します。
+試しにユーザー3のロックを獲得してみましょう。
 
 ```sql
 mysql> BEGIN;
 Query OK, 0 rows affected (0.00 sec)
 
-mysql> SELECT * FROM `user` LEFT JOIN `user_prefecture` USING (`user_id`) LEFT JOIN `prefecture` USING (`prefecture_id`) WHERE `user`.`user_id` = 3 FOR UPDATE;
+mysql> SELECT * FROM `user`
+    -> LEFT JOIN `user_prefecture` USING (`user_id`)
+    -> LEFT JOIN `prefecture` USING (`prefecture_id`)
+    -> WHERE `user`.`user_id` = 3 FOR UPDATE;
 +---------------+---------+---------+------+
 | prefecture_id | user_id | name    | name |
 +---------------+---------+---------+------+
@@ -168,22 +199,85 @@ mysql> SELECT OBJECT_NAME,INDEX_NAME,LOCK_TYPE,LOCK_MODE,LOCK_STATUS,LOCK_DATA F
 4 rows in set (0.00 sec)
 ```
 
+`LOCK_MODE` が `X` となっているロックは、ギャップロック（行と行の間にかかるロック）です。
+ギャップロックがかかった領域へINSERTしようとするとブロックされます。
+たとえば、この瞬間にユーザー4が居住地を設定したとしましょう。このような操作はブロックされます。
+
 ```sql
 mysql> BEGIN;
 Query OK, 0 rows affected (0.00 sec)
 
-mysql> ININSERT INTO `user_prefecture` (`user_id`, `prefecture_id`) VALUES (4, 15);
-ERROR 1064 (42000): You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'ININSERT INTO `user_prefecture` (`user_id`, `prefecture_id`) VALUES (4, 15)' at line 1
 mysql> INSERT INTO `user_prefecture` (`user_id`, `prefecture_id`) VALUES (4, 15);
+-- 関係ないはずのユーザー4の操作がブロックされる
 ```
+
+ギャップロックは行と行の間をロックするため、影響範囲が非常に広大になりがちです。
+ギャップロックは全力で回避しましょう。
 
 ### 解決策
 
-<!-- TODO -->
+「ユーザーテーブルのロック」と「ユーザーの居住地情報の取得」を別のクエリーとして実行しましょう。
+
+```sql
+-- ユーザーテーブルのロック
+SELECT * FROM `user` WHERE `user_id` = 1 FOR UPDATE;
+
+-- ユーザーの居住地情報の取得
+SELECT * FROM `user`
+LEFT JOIN `user_prefecture` USING (`user_id`)
+LEFT JOIN `prefecture` USING (`prefecture_id`)
+WHERE `user`.`user_id` = 1;
+```
+
+クエリーが多くなってレイテンシーに影響があるのでは、と考えるかもしれませんが実際は軽微なものです。
+ロックにまつわる諸問題を踏むほうがダメージがでかいので、安全策で行きましょう。
+
+### 余談
+
+以下のようにサブクエリーを使う解決方法もあります。
+これならクエリーの呼び出し回数は同じです。
+
+```sql
+SELECT * FROM (SELECT * FROM `user` WHERE `user`.`user_id` = 1 FOR UPDATE) AS `u`
+LEFT JOIN `user_prefecture` USING (`user_id`)
+LEFT JOIN `prefecture` USING (`prefecture_id`);
+```
+
+```sql
+mysql> BEGIN;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> SELECT * FROM (SELECT * FROM `user` WHERE `user`.`user_id` = 1 FOR UPDATE) AS `u`
+    -> LEFT JOIN `user_prefecture` USING (`user_id`)
+    -> LEFT JOIN `prefecture` USING (`prefecture_id`);
++---------------+---------+----------+--------+
+| prefecture_id | user_id | name     | name   |
++---------------+---------+----------+--------+
+|            15 |       1 | Ichinose | 新潟   |
++---------------+---------+----------+--------+
+1 row in set (0.00 sec)
+
+mysql> SELECT OBJECT_NAME,INDEX_NAME,LOCK_TYPE,LOCK_MODE,LOCK_STATUS,LOCK_DATA FROM performance_schema.data_locks;
++-------------+------------+-----------+---------------+-------------+-----------+
+| OBJECT_NAME | INDEX_NAME | LOCK_TYPE | LOCK_MODE     | LOCK_STATUS | LOCK_DATA |
++-------------+------------+-----------+---------------+-------------+-----------+
+| user        | NULL       | TABLE     | IX            | GRANTED     | NULL      |
+| user        | PRIMARY    | RECORD    | X,REC_NOT_GAP | GRANTED     | 1         |
++-------------+------------+-----------+---------------+-------------+-----------+
+2 rows in set (0.00 sec)
+```
+
+しかし、ちょっとトリッキーな気もするので、個人的にはオススメしません。
 
 ## まとめ
 
-<!-- TODO -->
+以下の理由から、LEFT JOINとFOR UPDATEを同時に使うのはやめたほうがよい。
+
+- そもそもロックの範囲を間違えている可能性が高い
+- デッドロックの危険性が高まる
+- ギャップロックの可能性がある
+
+FOR UPDATE はロックの獲得のみに使用し、関連する情報を取得するのは別クエリーに分けよう。
 
 > 🐇うさぎの歌\
 > LEFT JOINとFOR UPDATE、\
