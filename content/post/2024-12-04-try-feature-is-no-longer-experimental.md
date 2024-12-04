@@ -1,8 +1,8 @@
 ---
 layout: post
 title: "Perl 5.40でtry/catch機能が安定版になりました"
-slug: 2024-06-16-try-feature-is-no-longer-experimental
-date: 2024-06-16 21:24:00 +0900
+slug: try-feature-is-no-longer-experimental
+date: 2024-12-04 00:00:00 +0900
 comments: true
 categories: [perl]
 ---
