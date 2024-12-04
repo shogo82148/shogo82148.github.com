@@ -7,6 +7,11 @@ comments: true
 categories: [perl]
 ---
 
+この記事は、[Perl Advent Calendar 2024](https://qiita.com/advent-calendar/2024/perl) 4日目の記事（代打）です。
+3日目は[@kfly8](https://qiita.com/kfly8)で「[Perlの型ライブラリのkuraと組み込みのclassを一緒に利用できるようになりました](https://kfly8.hatenablog.com/entry/2024/11/25/163553)」でした。
+
+-----
+
 [Perl 5.34.0 で導入されたtry/catch機能](https://shogo82148.github.io/blog/2021/12/09/perl-try-catch/)でしたが、今までは実験的機能の扱いでした。
 しかし、Perl 5.40.0でついに正式な言語機能として扱われることになりました！
 
@@ -46,6 +51,10 @@ Perl 5.38 までの try/catch については以下の記事を参照。
 > 未来を照らす、5.40
 >
 > by CodeRabbit
+
+-----
+
+明日25日目はTBDで「TBD」です。 お楽しみに！
 
 ## 参考
 
