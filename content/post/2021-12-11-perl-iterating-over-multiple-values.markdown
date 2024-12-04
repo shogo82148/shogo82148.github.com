@@ -32,12 +32,13 @@ plenv local 5.35.6
 ## ハッシュのキーとバリューのペアの一覧を出力する
 
 [Perl7関連で色々とゴタゴタがあった](https://shogo82148.github.io/blog/2021/05/22/perl-5.34-is-released/) 影響で、
-Perlの今後の機能拡張は [RFC(Requests For Comments)](https://github.com/Perl/RFCs) の形式を取っていく事になりました。
-この機能はそのRFCの記念すべき(？)第一号です！
+Perlの今後の機能拡張は ~~RFC(Requests For Comments)~~ [PPC(Proposed Perl Changes)](https://github.com/Perl/PPCs)
+の形式を取っていく事になりました（2024-06-18修正、RFCからPPCへ名前が変更されました）
+この機能はそのRFCの記念すべき（？）第一号です！
 
-- [Multiple-alias syntax for foreach](https://github.com/Perl/RFCs/blob/master/rfcs/rfc0001.md)
+- [Multiple-alias syntax for foreach](https://github.com/Perl/PPCs/blob/2cad4c197bcadc0faabcd44f3118c1c344d02279/ppcs/ppc0001-n-at-a-time-for.md)
 
-さて、プログラムを書いているとハッシュ(連想配列)の全要素に対して何か操作をしたいということは頻繁にあると思います。
+さて、プログラムを書いているとハッシュ（連想配列）の全要素に対して何か操作をしたいということは頻繁にあると思います。
 これまで Perl には専用の構文はなく、以下のように `while` 文と `each` を組み合わせて書く必要がありました。
 
 ```perl
