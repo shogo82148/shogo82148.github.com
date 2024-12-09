@@ -132,3 +132,4 @@ Perl 5.40.0 から、真偽値の排他的論理和を表す `^^` 演算子が�
 - [Perlと型とコンテキスト](https://qiita.com/karupanerura/items/361b620a123d80ad9fbe)
 - [New ^^ logical xor operator - perldelta v5.40.0](https://metacpan.org/release/HAARG/perl-5.40.0/view/pod/perldelta.pod#New-%5E%5E-logical-xor-operator)
 - [New logical xor operator, spelled ^^ #21996](https://github.com/Perl/perl5/pull/21996)
+- [perlop - perldoc.jp](https://perldoc.jp/docs/perl/5.40.0/perlop.pod)
