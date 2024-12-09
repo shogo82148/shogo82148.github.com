@@ -54,7 +54,7 @@ Perl 5.38 までの try/catch については以下の記事を参照。
 
 -----
 
-明日25日目はTBDで「TBD」です。 お楽しみに！
+明日5日目は[@shogo82148](https://twitter.com/shogo82148)で「[Perl 5.40に真偽値の排他的論理和を表す新しい演算子が導入されました](https://shogo82148.github.io/blog/2024/12/05/perl-logical-xor-operator/)」です。 お楽しみに！
 
 ## 参考
 
