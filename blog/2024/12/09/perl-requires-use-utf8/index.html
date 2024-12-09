@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono&display=swap" rel="stylesheet"> 
+
+  
+  <title>Perl 5.41から、UTF-8で書かれたソースコードにはuse utf8が必須になります</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="ICHINOSE Shogo">
+
+  
+  <meta name="generator" content="Hugo 0.120.4">
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-40R0PCLKVF');
+</script>
+
+
+<script>
+MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']]
+  },
+  svg: {
+    fontCache: 'global'
+  }
+};
+</script>
+
+<script type="text/javascript" id="MathJax-script" async
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+</script>
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Dec 9, 2024
+     - 1 minute read 
+    
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2024/12/09/perl-requires-use-utf8/">Perl 5.41から、UTF-8で書かれたソースコードにはuse utf8が必須になります</a>
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>この記事は、<a href="https://qiita.com/advent-calendar/2024/perl">Perl Advent Calendar 2024</a> 9日目の記事（穴埋め）です。
+8日目は<a href="https://qiita.com/xtetsuji">@xtetsuji(Tetsuji OGATA)</a>で「<a href="https://qiita.com/xtetsuji/items/f871b72ed900ab7662c2">時間を毎秒カウント出力するシェルスクリプトの遅れの考察</a>」でした。</p>
+<hr>
+<p>Perl 5.41.2（開発版）から <a href="https://metacpan.org/release/ETHER/perl-5.41.2/view/lib/source/encoding.pm">source::encodingプラグマ</a>が追加されました。
+このプラグマの追加により、UTF-8で書かれたソースコードでは <code>use utf8</code> が必須になります。</p>
+<h2 id="tldr">TL;DR</h2>
+<p>ソースコードの先頭に <code>use utf8</code> って書いておけばOK。</p>
+<h2 id="use-utf8の必須化">use utf8の必須化</h2>
+<p>たとえば以下のコードにはUTF-8の文字列が含まれていますが、 <code>use utf8</code> の指定がありません。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="line"><span class="cl"><span class="k">use</span> <span class="nn">v5</span><span class="mf">.41</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># こんにちは世界</span>
+</span></span></code></pre></div><p>このコードをPerl 5.41.2（開発版）で実行すると以下のようなエラーを吐いて終了します。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">Use of non-ASCII character 0xE3 illegal when &#39;use source::encoding &#34;ascii&#34;&#39; is in effect at hoge.pl line 3, at end of line
+</span></span><span class="line"><span class="cl">Execution of hoge.pl aborted due to compilation errors.
+</span></span></code></pre></div><p>コメントアウトしてあっても日本語は使えないんですね。</p>
+<p>正しく実行するには <code>use utf8</code> を明示し、ソースコードがUTF-8で書かれていることを示す必要があります。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="line"><span class="cl"><span class="k">use</span> <span class="nn">v5</span><span class="mf">.41</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">use</span> <span class="nn">utf8</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># こんにちは世界</span>
+</span></span></code></pre></div><p>これは <code>use utf8</code> をうっかり書き忘れることを防ぐための処置だそうです。</p>
+<ul>
+<li><a href="https://metacpan.org/release/ETHER/perl-5.41.2/view/pod/perldelta.pod">perldelta - what is new for perl v5.41.2</a></li>
+</ul>
+<h2 id="sourceencodingプラグマ">source::encodingプラグマ</h2>
+<p><code>use utf8</code> 必須化の機能のみを制御するには、<code>source::encoding</code> プラグマを利用します。</p>
+<p>たとえばソースコードがASCIIで書かれていることを示すには以下のように書きます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="line"><span class="cl"><span class="k">use</span> <span class="nn">source::encoding</span> <span class="s">&#39;ascii&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># You can use only ASCII characters.</span>
+</span></span></code></pre></div><p><code>use source::encoding 'ascii'</code> が指定されているソースコードでASCIIコード範囲外の文字を使うとエラーになります。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="line"><span class="cl"><span class="k">use</span> <span class="nn">source::encoding</span> <span class="s">&#39;ascii&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 日本語はエラーになる！</span>
+</span></span></code></pre></div><p><code>use v5.41</code> feature bundle で <code>use source::encoding 'ascii'</code> も有効化されるため、
+<code>use v5.41</code> が使われているソースコード中で日本語を書くとエラーになります。</p>
+<p>日本語のようなASCII範囲外の文字を使いたい場合は <code>use source::encoding 'utf8'</code> と書いて、UTF-8でエンコードして保存します。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="line"><span class="cl"><span class="k">use</span> <span class="nn">source::encoding</span> <span class="s">&#39;utf8&#39;</span><span class="p">;</span> <span class="c1"># use utf8; と同じ</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># ASCII範囲外の文字が含まれていてもエラーにならない</span>
+</span></span></code></pre></div><p><code>use utf8</code> は <code>use source::encoding 'utf8'</code> のシノニムなので、<code>use utf8</code> と書いても同じ効果を得られます。</p>
+<p>文字コードとして指定できるのは <code>ascii</code> と <code>utf8</code> のみです。
+他の文字コードには対応していません。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="line"><span class="cl"><span class="k">use</span> <span class="nn">source::encoding</span> <span class="s">&#39;euc-jp&#39;</span><span class="p">;</span> <span class="c1"># Bad argument for source::encoding: &#39;euc-jp&#39;</span>
+</span></span></code></pre></div><h2 id="まとめ">まとめ</h2>
+<p>以前から <code>use utf8</code> をつけて、ソースコードがUTF-8であることを明示できましたが、<code>use utf8</code> の設定は必須ではありませんでした。
+しかし、Perl 5.41.2（開発版）以降、ソースコードがUTF-8であるのにもかかわらず <code>use utf8</code> の指定を忘れると、エラーが発生するようになります。
+僕らのような日本語話者にとっては重要な変更ですね。</p>
+<p>「ここまでの話難しすぎて何言っているかわからない」という人は、「ソースコードの先頭に <code>use utf8</code> って書いておけばOK」とだけ覚えておきましょう。
+今どきutf-8以外のエンコーディングでソースコードを書く機会なんてないでしょうから（フラグ）。</p>
+<p>なお検証に使用したのは開発版のPerlです。安定版では挙動が変わる可能性があります。</p>
+<blockquote>
+<p>🐇<br>
+新しいプラグマ、嬉しさ満載、<br>
+Perlが進化し、未来も開け。<br>
+エンコーディングの光、さあ照らせ、<br>
+コードが踊り、心も弾む。<br>
+ようこそ、変化の時よ！<br>
+🌟</p>
+<p>by <a href="https://coderabbit.ai/">CodeRabbit</a></p>
+</blockquote>
+<hr>
+<p>明日10日目はTBDで「TBD」です。 お楽しみに！</p>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://metacpan.org/release/ETHER/perl-5.41.2/view/pod/perldelta.pod">perldelta - what is new for perl v5.41.2</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">ICHINOSE Shogo</span></span>
+    
+    <time>Dec 9, 2024</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2024/12/05/perl-logical-xor-operator/" title="Perl 5.40に真偽値の排他的論理和を表す新しい演算子が導入されました">Perl 5.40に真偽値の排他的論理和を表す新しい演算子が導入されました</a>
+    
+
+    
+  </p>
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2024/12/09/perl-requires-use-utf8/">Perl 5.41から、UTF-8で書かれたソースコードにはuse utf8が必須になります</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/12/05/perl-logical-xor-operator/">Perl 5.40に真偽値の排他的論理和を表す新しい演算子が導入されました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/12/04/try-feature-is-no-longer-experimental/">Perl 5.40でtry/catch機能が安定版になりました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/11/11/do-not-use-left-join-with-for-update/">LEFT JOINとFOR UPDATEを同時に使うのはやめよう</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/08/30/p5-aws-lambda-is-available-on-ap-southeast-5/">AWS::LambdaがAWS Asia Pacific (Malaysia) Regionで利用可能になりました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/08/13/structured-field-values/">Structured Field Values のパーサーを書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/08/13/denoland-dnt-cannot-find-error-options/">denoland/dntがerror TS2304: Cannot find name &#39;ErrorOptions&#39;で失敗する</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/08/12/golang-const/">Go言語の定数演算の精度が限界突破していた件</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/07/16/2024-07-16-cannot-deploy-firebase-function/">Firebase Functionsがデプロイできなくなった話</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2024 ICHINOSE Shogo - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+</body>
+
+</html>
+
