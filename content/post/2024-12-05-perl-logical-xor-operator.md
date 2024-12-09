@@ -53,7 +53,7 @@ sub say_bool($v) {
 say_bool false ^^ false;
 say_bool false ^^  true;
 say_bool  true ^^ false;
-say_bool false ^^ false;
+say_bool  true ^^  true;
 ```
 
 Perl 5.40 で実行してみると、真理値表通りの結果が得られましたね。
@@ -82,7 +82,7 @@ sub say_bool($v) {
 say_bool false xor false;
 say_bool false xor  true;
 say_bool  true xor false;
-say_bool false xor false;
+say_bool  true xor  true;
 ```
 
 ```plain
@@ -93,7 +93,7 @@ Useless use of logical xor in void context at xor-legacy.pl line 10.
 false
 false
 true
-false
+true
 ```
 
 正しく動作させるにはカッコを補う必要があります。
@@ -108,7 +108,7 @@ sub say_bool($v) {
 say_bool(false xor false);
 say_bool(false xor  true);
 say_bool( true xor false);
-say_bool(false xor false);
+say_bool( true xor  true);
 ```
 
 ## まとめ
