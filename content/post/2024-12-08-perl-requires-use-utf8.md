@@ -2,10 +2,15 @@
 layout: post
 title: "Perl 5.41から、UTF-8で書かれたソースコードにはuse utf8が必須になります"
 slug: perl-requires-use-utf8
-date: 2024-08-13 00:33:00 +0900
+date: 2024-12-08 22:37:00 +0900
 comments: true
 categories: [perl]
 ---
+
+この記事は、[Perl Advent Calendar 2024](https://qiita.com/advent-calendar/2024/perl) 8日目の記事（代打）です。
+7日目は[@MacOlin](https://qiita.com/MacOlin)で「[JSON::PPのdecodeメソッドの速度比較](https://qiita.com/MacOlin/items/9fff42686f6dac5b0f2e)」でした。
+
+-----
 
 Perl 5.41.2（開発版）から [source::encodingプラグマ](https://metacpan.org/release/ETHER/perl-5.41.2/view/lib/source/encoding.pm)が追加されました。
 このプラグマの追加により、UTF-8で書かれたソースコードでは `use utf8` が必須になります。
@@ -107,6 +112,10 @@ ASCII範囲外の文字を使うには `use utf8` が必須となります。
 > 🌟
 >
 > by [CodeRabbit](https://coderabbit.ai/)
+
+-----
+
+明日9日目はTBDで「TBD」です。 お楽しみに！
 
 ## 参考
 
