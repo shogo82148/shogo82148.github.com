@@ -1,8 +1,8 @@
 ---
 layout: post
 title: "Perlに真偽値の排他的論理和を表す新しい演算子が導入されました"
-slug: 2024-12-31-perl-logical-xor-operator
-date: 2024-12-31 21:24:00 +0900
+slug: perl-logical-xor-operator
+date: 2024-12-05 21:24:00 +0900
 comments: true
 categories: [perl]
 ---
