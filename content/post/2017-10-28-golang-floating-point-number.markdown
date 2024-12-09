@@ -185,6 +185,11 @@ Goのコンパイラは賢いので、 `var` であってもコンパイル時�
 
 ## 任意の精度で計算の限界に迫る
 
+**2024-08-12追記**
+以下の実行結果は2017-10-28時点での最新バージョン（多分 [go1.9.2](https://go.dev/doc/devel/release#go1.9)）の実行結果です。
+[最新のGoのバージョンでは異なった結果](https://shogo82148.github.io/blog/2024/08/12/golang-const/)が得られます。
+**追記ここまで**
+
 ここまでは `a` や `b` は `float64` という型を持っていました。
 次に以下のように書き換えて `a` も `b` も「型の無い定数」にしてみましょう。
 すると少し面白い結果が得られます。
@@ -218,7 +223,7 @@ false
 
 ここでちょっとソースコードを覗いてみると・・・
 
-- [mpfloat.go](https://github.com/golang/go/blob/master/src/cmd/compile/internal/gc/mpfloat.go#L18)
+- [mpfloat.go](https://github.com/golang/go/blob/7df09b4a03f9e53334672674ba7983d5e7128646/src/cmd/compile/internal/gc/mpfloat.go#L18)
 
 512bitの精度で計算しているようです。
 $$512 \times \log 2 = 154.1273577...$$ なので、有効桁数150桁程度という予想通りです。

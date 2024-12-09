@@ -18,7 +18,7 @@ categories:
 
 [おねえさんのコンピュータ][]からアクセスできます。
 
-[おねえさんのコンピュータ]: http://shogo82148.github.com/letscount/
+[おねえさんのコンピュータ]: https://shogo82148.github.io/letscount/
 
 ## 検索アルゴリズム
 HTML+CSSでコンピュータの画面を再現してみました。Javascriptを組むより、そっちの方に時間がかかった気がする。

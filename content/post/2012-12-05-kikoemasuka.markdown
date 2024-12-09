@@ -17,7 +17,7 @@ categories:
 [TinySegmenter](http://chasen.org/~taku/software/TinySegmenter/)で単語分割，
 ランダムに…を単語の間に挿入して出力してみた．
 
-- [聞こえますか…](http://shogo82148.github.com/kikoemasuka/)
+- [聞こえますか…](https://shogo82148.github.io/kikoemasuka/)
 
 この程度なら数十分あれば作れますね．
 

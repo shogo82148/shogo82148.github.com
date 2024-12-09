@@ -18,7 +18,7 @@ categories: [JavaScript, WebAudio]
 ## どんな感じのものなの？
 
 音声ファイルをテキトーに切り貼りできるライブラリです．
-[WaveZutaZutaJS](http://shogo82148.github.com/WaveZutaZutaJS/)にブラウザで実行出来るサンプルを置いたので
+[WaveZutaZutaJS](https://shogo82148.github.io/WaveZutaZutaJS/)にブラウザで実行出来るサンプルを置いたので
 実際試してみるのが一番わかりやすいと思います．
 適当な音声ファイルをドラッグ＆ドロップして，playボタンを押すと音が流れるので，いろいろ遊んでみてください．
 
