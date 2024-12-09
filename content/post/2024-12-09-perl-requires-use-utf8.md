@@ -2,13 +2,13 @@
 layout: post
 title: "Perl 5.41から、UTF-8で書かれたソースコードにはuse utf8が必須になります"
 slug: perl-requires-use-utf8
-date: 2024-12-08 22:37:00 +0900
+date: 2024-12-09 22:37:00 +0900
 comments: true
 categories: [perl]
 ---
 
-この記事は、[Perl Advent Calendar 2024](https://qiita.com/advent-calendar/2024/perl) 8日目の記事（代打）です。
-7日目は[@MacOlin](https://qiita.com/MacOlin)で「[JSON::PPのdecodeメソッドの速度比較](https://qiita.com/MacOlin/items/9fff42686f6dac5b0f2e)」でした。
+この記事は、[Perl Advent Calendar 2024](https://qiita.com/advent-calendar/2024/perl) 9日目の記事（穴埋め）です。
+8日目は[@xtetsuji(Tetsuji OGATA)](https://qiita.com/xtetsuji)で「[時間を毎秒カウント出力するシェルスクリプトの遅れの考察](https://qiita.com/xtetsuji/items/f871b72ed900ab7662c2)」でした。
 
 -----
 
@@ -114,7 +114,7 @@ use source::encoding 'euc-jp'; # Bad argument for source::encoding: 'euc-jp'
 
 -----
 
-明日9日目はTBDで「TBD」です。 お楽しみに！
+明日10日目はTBDで「TBD」です。 お楽しみに！
 
 ## 参考
 
