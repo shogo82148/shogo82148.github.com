@@ -188,6 +188,9 @@ Perl 5.40.0 から、真偽値の排他的論理和を表す `^^` 演算子が�
 >
 > by CodeRabbit
 
+-----
+
+明日6日目は[@MacOlin](https://qiita.com/MacOlin)で「[JSON::PPのencodeメソッドと日本語とutf8](https://qiita.com/MacOlin/items/81319a70aa950956e8a6)」です。 お楽しみに！
 
 ## 参考
 
