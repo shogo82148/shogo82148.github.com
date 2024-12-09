@@ -7,6 +7,11 @@ comments: true
 categories: [perl]
 ---
 
+この記事は、[Perl Advent Calendar 2024](https://qiita.com/advent-calendar/2024/perl) 5日目の記事（穴埋め）です。
+4日目は[@shogo82148](https://twitter.com/shogo82148)で「[Perl 5.40でtry/catch機能が安定版になりました](https://shogo82148.github.io/blog/2024/12/04/try-feature-is-no-longer-experimental/)」でした。
+
+-----
+
 Perl 5.40.0 から、真偽値の排他的論理和を表す `^^` 演算子が導入されました。
 
 ## 背景
