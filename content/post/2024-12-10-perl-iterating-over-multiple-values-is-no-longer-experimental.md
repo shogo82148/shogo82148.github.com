@@ -7,8 +7,8 @@ comments: true
 categories: [perl]
 ---
 
-この記事は、[Perl Advent Calendar 2024](https://qiita.com/advent-calendar/2024/perl) TBD日目の記事（穴埋め）です。
-TBD日目はTBDで「TBD」でした。
+この記事は、[Perl Advent Calendar 2024](https://qiita.com/advent-calendar/2024/perl) 10日目の記事（穴埋め）です。
+9日目は[@shogo82148](https://twitter.com/shogo82148)で「[Perl 5.41から、UTF-8で書かれたソースコードにはuse utf8が必須になります](https://shogo82148.github.io/blog/2024/12/09/perl-requires-use-utf8/)」でした。
 
 -----
 
@@ -81,7 +81,7 @@ Perl 5.40 からハッシュのキーとバリューのペアを取ってくる�
 
 -----
 
-明日10日目はTBDで「TBD」です。 お楽しみに！
+明日11日目はTBDで「TBD」です。 お楽しみに！
 
 ## 参考
 
