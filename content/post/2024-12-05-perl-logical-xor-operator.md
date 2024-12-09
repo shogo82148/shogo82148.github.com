@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Perlに真偽値の排他的論理和を表す新しい演算子が導入されました"
+title: "Perl 5.40に真偽値の排他的論理和を表す新しい演算子が導入されました"
 slug: perl-logical-xor-operator
 date: 2024-12-05 21:24:00 +0900
 comments: true
@@ -11,8 +11,7 @@ Perl 5.40.0 から、真偽値の排他的論理和を表す `^^` 演算子が�
 
 ## 背景
 
-Perl には「[コンテキスト（文脈）](https://qiita.com/karupanerura/items/361b620a123d80ad9fbe)
-」と呼ばれる概念があります。
+Perl には「[コンテキスト（文脈）](https://qiita.com/karupanerura/items/361b620a123d80ad9fbe)」と呼ばれる概念があります。
 Perlはプログラム内の文脈によって、今扱っているデータをどんな種類（数値なのか文字列なのか）で解釈するかを決定します。
 
 たとえば `$x + $y` は数値加算の演算子であり、`$x` や `$y` は数値コンテキストで解釈されます。
@@ -52,7 +51,7 @@ say_bool  true ^^ false;
 say_bool false ^^ false;
 ```
 
-真理値表通りの結果が得られましたね。
+Perl 5.40 で実行してみると、真理値表通りの結果が得られましたね。
 
 ```plain
 false
