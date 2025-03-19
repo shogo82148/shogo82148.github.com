@@ -54,7 +54,7 @@ print(tagger.parse("図書館にいた事がバレた"))
 しかしながら、使い勝手の良さや使用例の多さから今なお現役で利用されています。
 
 たとえば、先日リリースされたASMR[言葉は分からないが、やたら耳かきが上手い部族に捕まった。](https://www.dlsite.com/home/work/=/product_id/RJ01353912.html)の制作には
-[グロンギ語翻訳機](https://shogo82148.github.io/Grongish/)が利用されています。このバックエンドはMeCabです。
+[グロンギ語翻訳機](https://shogo82148.github.io/Grongish/)が利用されています。翻訳機のバックエンドはMeCabです。
 
 - [日本語とグロンギ語の相互翻訳やってみた](https://shogo82148.hatenablog.com/entry/2012/02/11/181441)
 - [MeCabをAWS Lambdaで動かす(2017年版)](https://shogo82148.github.io/blog/2017/12/06/mecab-in-lambda/)
@@ -66,7 +66,85 @@ OSやコンパイラのアップデートへの追従、バグフィックス等
 
 - [shogo82148/mecab](https://github.com/shogo82148/mecab)
 
-## なぜ今更Python Bindingをあげるのか
+## なぜ今更Python Bindingを公開するのか
 
 MeCabのPython Bindingには、すでに[mecab-python3](https://pypi.org/project/mecab-python3/)という素晴らしいモジュールがあります。
-しかしオリジナルのMeCabに依存しているため、「本当にこのままメンテナンスが続いていくか？」という点には疑問が残ります。
+しかしオリジナルのMeCabに依存しているため、「本当にこのままメンテナンスを続けていけるか？」という点には疑問が残ります。
+
+そこで自前のパッチを当てたMeCabを元に Python Binding を作ることにしました。
+
+## 公開までの作業
+
+Python Bindingのソースコード自体はオリジナルのMeCabに含まれています。
+追加で行った作業は「Wheelsの作成」「mecab-python3 互換にするための修正」「GitHub Actions によるアップロードの自動化」です。
+
+### Wheelsの作成
+
+Pythonにはビルド済みのモジュールを配布するための Wheels という仕組みがあります。
+とくにWindows上ではMeCabのビルドが大変なので、利用者の利便性のためには Wheels は必須です。
+[mecab-python3](https://pypi.org/project/mecab-python3/) が Wheels のビルドを GitHub Actions 上で自動化しているので、
+そのワークフローを大いに参考にさせていただきました。
+
+### mecab-python3 互換にするための修正
+
+オリジナルのMeCab Python Bindingは Tagger の引数が単純な空白区切りです。
+そのため以下のコードでは、設定ファイル `"mecabrc"` (`mecabrc` でないことに注意！)を読みに行ってしまい、うまく動きません。
+
+```python
+import MeCab
+
+# mecab-python3 では動くが、オリジナルのMeCabでは動かない！
+tagger = MeCab.Tagger('-r "mecabrc" -d "dicdir"')
+```
+
+mecab-python3 では、引数の解析に [shlex](https://docs.python.org/ja/3.13/library/shlex.html) モジュールを使っているので、このような差が生まれます。
+これは利用者が混乱するだろうと、[shlexの簡易C++移植板](https://github.com/shogo82148/shlex.cpp)を作成し組み込みました。
+
+### GitHub Actions によるアップロードの自動化
+
+Python Packaging User Guide に GitHub Actions からのアップロード方法がまとまってるので、それを参考にしました。
+
+- [GitHub Actions CI/CD ワークフローを用いてパッケージ配布物のリリースを公開する](https://packaging.python.org/ja/latest/guides/publishing-package-distribution-releases-using-github-actions-ci-cd-workflows/)
+
+[PyPI publish GitHub Action](https://github.com/marketplace/actions/pypi-publish) が GitHub Actions の OpenID Connect に対応しているので、シークレットの管理は不要です。
+大まかに以下のようなワークフローを書けばOKです。
+
+```yaml
+jobs:
+  pypi-publish:
+    name: Upload release to PyPI
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/<your-pypi-project-name>
+    permissions:
+      id-token: write  # OIDCを有効化するために必要
+    steps:
+    # distディレクトリーに成果物を展開する処理を書く
+
+    # dist/ 以下のファイルをPyPIにアップロードする
+    - name: Publish package distributions to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+```
+
+## まとめ
+
+MeCabのPython BindingをPyPIに上げました。
+
+- [mecab](https://pypi.org/project/mecab/)
+
+ぜひご利用ください。
+
+## 参考
+
+- [mecab](https://pypi.org/project/mecab/)
+- [mecab-python3](https://pypi.org/project/mecab-python3/)
+- [言葉は分からないが、やたら耳かきが上手い部族に捕まった。](https://www.dlsite.com/home/work/=/product_id/RJ01353912.html)
+- [グロンギ語翻訳機](https://shogo82148.github.io/Grongish/)
+- [日本語とグロンギ語の相互翻訳やってみた](https://shogo82148.hatenablog.com/entry/2012/02/11/181441)
+- [MeCabをAWS Lambdaで動かす(2017年版)](https://shogo82148.github.io/blog/2017/12/06/mecab-in-lambda/)
+- [shogo82148/mecab](https://github.com/shogo82148/mecab)
+- [SWIG](https://www.swig.org/)
+- [shlex.cpp](https://github.com/shogo82148/shlex.cpp)
+- [GitHub Actions CI/CD ワークフローを用いてパッケージ配布物のリリースを公開する](https://packaging.python.org/ja/latest/guides/publishing-package-distribution-releases-using-github-actions-ci-cd-workflows/)
+- [PyPI publish GitHub Action](https://github.com/marketplace/actions/pypi-publish)
