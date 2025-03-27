@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono&display=swap" rel="stylesheet"> 
+
+  
+  <title>CSVをGoの構造体にマッピングする</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="ICHINOSE Shogo">
+
+  
+  <meta name="generator" content="Hugo 0.120.4">
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-40R0PCLKVF');
+</script>
+
+
+<script>
+MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']]
+  },
+  svg: {
+    fontCache: 'global'
+  }
+};
+</script>
+
+<script type="text/javascript" id="MathJax-script" async
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+</script>
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Mar 27, 2025
+     - 2 minute read 
+    
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2025/03/27/convert-csv-to-structs-in-golang/">CSVをGoの構造体にマッピングする</a>
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p><a href="https://github.com/shogo82148/go-header-csv">shogo82148/go-header-csv</a>のv0.1.0をリリースしました。</p>
+<ul>
+<li><a href="https://github.com/shogo82148/go-header-csv">shogo82148/go-header-csv</a></li>
+</ul>
+<p>このライブラリについてブログで紹介していなかったので、<a href="https://github.com/shogo82148/go-header-csv">shogo82148/go-header-csv</a> の簡単な紹介と、v0.1.0での変更点についてお知らせします。</p>
+<h2 id="go-header-csvの紹介">go-header-csvの紹介</h2>
+<p>令和の世になってもCSVを扱いたいという要望はなくなることはありません。
+とくに一行目がフィールド名になっているCSVを扱うことが多いです。
+具体的には以下のようなイメージです。</p>
+<pre tabindex="0"><code class="language-csv" data-lang="csv">name,text
+Ed,Knock knock.
+Sam,Who&#39;s there?
+Ed,Go fmt.
+Sam,Go fmt who?
+Ed,Go fmt yourself!
+</code></pre><p>これを以下のような構造体に変換したい。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="p">[]</span><span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">Name</span> <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">Text</span> <span class="kt">string</span>
+</span></span><span class="line"><span class="cl"><span class="p">}{</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">Name</span><span class="p">:</span> <span class="s">&#34;Ed&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">Text</span><span class="p">:</span> <span class="s">&#34;Knock knock.&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">Name</span><span class="p">:</span> <span class="s">&#34;Sam&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">Text</span><span class="p">:</span> <span class="s">&#34;Who&#39;s there?&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">Name</span><span class="p">:</span> <span class="s">&#34;Ed&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">Text</span><span class="p">:</span> <span class="s">&#34;Go fmt.&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">Name</span><span class="p">:</span> <span class="s">&#34;Sam&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">Text</span><span class="p">:</span> <span class="s">&#34;Go fmt who?&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">Name</span><span class="p">:</span> <span class="s">&#34;Ed&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">Text</span><span class="p">:</span> <span class="s">&#34;Go fmt yourself!&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Go言語にも<a href="https://pkg.go.dev/encoding/csv">CSVを扱う標準パッケージ</a>はありますが、サポートしているのは <code>[][]string</code> への変換のみです。
+一行目を特別扱いしてくれる機能はありません。</p>
+<p>と、言うわけで作ったのが <a href="https://github.com/shogo82148/go-header-csv">shogo82148/go-header-csv</a> です。
+以下のようなコードで、CSVを構造体にマッピングしてくれます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">ExampleDecoder_DecodeAll</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">in</span> <span class="o">:=</span> <span class="s">`name,text
+</span></span></span><span class="line"><span class="cl"><span class="s">Ed,Knock knock.
+</span></span></span><span class="line"><span class="cl"><span class="s">Sam,Who&#39;s there?
+</span></span></span><span class="line"><span class="cl"><span class="s">Ed,Go fmt.
+</span></span></span><span class="line"><span class="cl"><span class="s">Sam,Go fmt who?
+</span></span></span><span class="line"><span class="cl"><span class="s">Ed,Go fmt yourself!
+</span></span></span><span class="line"><span class="cl"><span class="s">`</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">out</span> <span class="o">:=</span> <span class="p">[]</span><span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">Name</span> <span class="kt">string</span> <span class="s">`csv:&#34;name&#34;`</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">Text</span> <span class="kt">string</span> <span class="s">`csv:&#34;text&#34;`</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}{}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="nx">buf</span> <span class="o">:=</span> <span class="nx">bytes</span><span class="p">.</span><span class="nf">NewBufferString</span><span class="p">(</span><span class="nx">in</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">dec</span> <span class="o">:=</span> <span class="nx">headercsv</span><span class="p">.</span><span class="nf">NewDecoder</span><span class="p">(</span><span class="nx">buf</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">dec</span><span class="p">.</span><span class="nf">DecodeAll</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">out</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">v</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">out</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;%3s: %s\n&#34;</span><span class="p">,</span> <span class="nx">v</span><span class="p">.</span><span class="nx">Name</span><span class="p">,</span> <span class="nx">v</span><span class="p">.</span><span class="nx">Text</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="c1">// Output:
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="c1">//  Ed: Knock knock.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="c1">// Sam: Who&#39;s there?
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="c1">//  Ed: Go fmt.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="c1">// Sam: Go fmt who?
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="c1">//  Ed: Go fmt yourself!
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><h2 id="v010-での変更点">v0.1.0 での変更点</h2>
+<p>v0.0.2 までは、以下のようにパースに失敗するデータを読み込ませると、<code>strconv.ParseInt: parsing &quot;NaN&quot;: invalid syntax</code> とだけ表示され、問題のある箇所まではわかりませんでした。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;strings&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="nx">headercsv</span> <span class="s">&#34;github.com/shogo82148/go-header-csv&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">A</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">A</span> <span class="kt">int</span> <span class="s">`csv:&#34;a&#34;`</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">in</span> <span class="o">:=</span> <span class="s">`a
+</span></span></span><span class="line"><span class="cl"><span class="s">1
+</span></span></span><span class="line"><span class="cl"><span class="s">2
+</span></span></span><span class="line"><span class="cl"><span class="s">NaN
+</span></span></span><span class="line"><span class="cl"><span class="s">`</span>
+</span></span><span class="line"><span class="cl">	<span class="kd">var</span> <span class="nx">a</span> <span class="p">[]</span><span class="nx">A</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">dec</span> <span class="o">:=</span> <span class="nx">headercsv</span><span class="p">.</span><span class="nf">NewDecoder</span><span class="p">(</span><span class="nx">strings</span><span class="p">.</span><span class="nf">NewReader</span><span class="p">(</span><span class="nx">in</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">dec</span><span class="p">.</span><span class="nf">DecodeAll</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">a</span><span class="p">);</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>v0.1.0 からは以下のようにエラーのおきた行数、カラム、フィールド名をレポートしてくれます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">% go run main.go
+</span></span><span class="line"><span class="cl">panic: headercsv: decode error on line 4, column 1, field &#34;a&#34;: strconv.ParseInt: parsing &#34;NaN&#34;: invalid syntax
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">goroutine 1 [running]:
+</span></span><span class="line"><span class="cl">main.main()
+</span></span><span class="line"><span class="cl">	/Users/shogoichinose/tmp/2025-03-27-csv/main.go:22 +0x18c
+</span></span><span class="line"><span class="cl">exit status 2
+</span></span></code></pre></div><h2 id="まとめ">まとめ</h2>
+<p>CSVをGoの構造体に変換するライブラリを書きました。
+最新バージョンで解析エラーのあった位置を報告するようになったので、より使いやすくなりました。</p>
+<blockquote>
+<p>こんにちは、ウサギの私！<br>
+CSVの森にジャンプして、<br>
+構造体の花を見つけたよ。<br>
+エラーもキラリ光る、<br>
+行・列・フィールドでお祝いだ！ 🐰✨<br>
+新しい風がそよいでいるよ。<br>
+みんなにハッピーな一日を！</p>
+<p>by <a href="https://www.coderabbit.ai/">CodeRabbit</a></p>
+</blockquote>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://github.com/shogo82148/go-header-csv">shogo82148/go-header-csv</a></li>
+<li><a href="https://pkg.go.dev/encoding/csv">encoding/csv</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">ICHINOSE Shogo</span></span>
+    
+    <time>Mar 27, 2025</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2025/03/19/mecab-python-module-is-released/" title="MeCabのPython BindingをPyPIに上げた">MeCabのPython BindingをPyPIに上げた</a>
+    
+
+    
+  </p>
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2025/03/27/convert-csv-to-structs-in-golang/">CSVをGoの構造体にマッピングする</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/03/19/mecab-python-module-is-released/">MeCabのPython BindingをPyPIに上げた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/12/10/perl-iterating-over-multiple-values-is-no-longer-experimental/">Perl 5.40からiterating over multiple values at a time機能が安定版になりました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/12/09/perl-requires-use-utf8/">Perl 5.41から、UTF-8で書かれたソースコードにはuse utf8が必須になります</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/12/05/perl-logical-xor-operator/">Perl 5.40に真偽値の排他的論理和を表す新しい演算子が導入されました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/12/04/try-feature-is-no-longer-experimental/">Perl 5.40でtry/catch機能が安定版になりました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/11/11/do-not-use-left-join-with-for-update/">LEFT JOINとFOR UPDATEを同時に使うのはやめよう</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/08/30/p5-aws-lambda-is-available-on-ap-southeast-5/">AWS::LambdaがAWS Asia Pacific (Malaysia) Regionで利用可能になりました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/08/13/structured-field-values/">Structured Field Values のパーサーを書いた</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2025 ICHINOSE Shogo - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+</body>
+
+</html>
+
