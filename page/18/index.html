@@ -120,6 +120,44 @@ MathJax = {
         
 
 <header>
+  <p class="meta">Apr 13, 2017
+     - 3 minute read 
+    
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2017/04/13/go1-8-allocation/">Go言語のヒープに確保するデータの初期化コストについて調べてみた(Go1.8.1版)</a>
+  </h1>
+</header>
+
+        
+          <p>golangで
+p := new(Type)
+と
+p := &amp;Type{}
+の使い分けってどうするべきだろう?
+&mdash; MURAOKA Taro (@kaoriya) 2017年4月12日 こちらのツイートに対して、以下のベンチ結果が紹介されていました。
+Go言語のヒープに確保するデータの初期化コストについて調べてみた しかしhnakamur2さんも言及しているように、 これはGo1.2.2時の結果。 その後、GoのコンパイラがGo実装になったり、SSAが導入されたりと、 今のコンパイラの実装は当時とは全く違うものになっています。
+というわけで、現時点での最新のバージョン(Go1.8.1)で、同様の検証をおこなってみました。
+検証コード 検証に使用したコードはGo1.2.2のときと全く同じものです。
+// alloc_overhead.go package main type container struct { v [64]byte } func MakeContainer() *container { c := container{} return &amp;c } func MakeContainerOneLine() *container { return &amp;container{} } func MakeContainerNew() *container { return new(container) } func main() { _ = MakeContainer() _ = MakeContainerOneLine() _ = MakeContainerNew() } // alloc_overhead_test.</p>
+          
+            <footer>
+              <a href="https://shogo82148.github.io/blog/2017/04/13/go1-8-allocation/" rel="full-article">Read On &rarr;</a>
+            </footer>
+          
+        
+      </article>
+      
+      <article>
+        
+        
+
+<header>
   <p class="meta">Mar 28, 2017
      - 4 minute read 
     
@@ -425,47 +463,6 @@ package main import ( &#34;context&#34; &#34;database/sql&#34; &#34;github.com/s
         
       </article>
       
-      <article>
-        
-        
-
-<header>
-  <p class="meta">Jan 21, 2017
-     - 5 minute read 
-    
-
-    
-    
-      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
-    
-  </p>
-  <h1 class="entry-title">
-    <a href="https://shogo82148.github.io/blog/2017/01/21/golang-1-dot-8-graceful-shutdown/">Go1.8のGraceful Shutdownとgo-gracedownの対応</a>
-  </h1>
-</header>
-
-        
-          <p>Go1.8beta1が出た時に、Go1.8で追加される予定のGraceful Shutdownについて書く！ とTwitterに書き込んで早1ヶ月。 この前の金曜日にGo1.8rc2がリリースされ、正式リリースも間近になってきて、 さすがに書かねばという気持ちになって来たので、がんばって検証してみます。
-公式サポートで増える予定の機能 以前Go言語でGraceful Restartをするときに取りこぼしを少なくするで 紹介したようにshogo82148/go-gracedownというものを書きました。 あれから時は経ち、ついにGo1.8からはGraceful Shudownがbuild-inの機能として提供される予定です。 公式サポートが入ることによって、以下のような機能を使えるようになります。
-HTTP/2のGraceful Shutdownができる HTTP/2ではGOAWAYフレームという接続を切ることを通知する機能があります。 Go1.8からはシャットダウン時にこのGOAWAYフレームを送ってくれるようになります。 GOAWAYフレームはサーバ側から任意のタイミングで送ることができ、 どこまで正常に処理できたかをクライアントに伝えられるという利点があります。
-余談ですが、この機能はx/net/http2を利用している場合は動かないらしいです。 importしたときには動かないけどbundleしたときにだけ動く黒魔術が使われているためです。 覚えておいても今後絶対使うことはなさそう。というか使いたくない・・・。
-contextが使える go-gracedownを作った頃は、contextはまだ標準パッケージに取り込まれていなかったので対応していませんでした。 (1.7のリリース時に対応を怠っていただけとも言える) net/httpのシャットダウンはもちろんcontextに対応しています。 これにより、Graceful Shutdownを中断して強制終了する、 ということが簡単にできるようになります。
-公式サポートで変更になる予定の挙動 Keep-Aliveでのリクエストの挙動が少し変わります。 1.7以前のgo-gracedownでは、クライアントにKeep-Aliveが無効になったのを伝え、 クライアント側から接続を切るのを待つように実装してしました。 多少接続時間が延びたとしてもクライアント側でよくわからないエラーになるよりはマシだろ、との考えからです。
-1.8からはシャットダウン時にIdle状態(TCP接続は有効だけど、リクエストは処理していない状態)な接続は切断されます。 内部で使っているServer.SetKeepAlivesEnabledの 挙動が変更になったためです。
-Goの中の人的には「この挙動が原因で万が一トラブルになっても、クライアントがリトライしてくれるから大丈夫でしょ」とのことのようです。 サーバシャットダウン以外にもネットワークトラブル等でも接続は切れるので、 クライアント側で頑張ってというのは正論ですが、 どの程度エラーが増えるのかは気になるところです。
-go-gracedownの対応 go-gracedownはGo1.8でコンパイルされたときはbuild-inの機能を直接使うようになります。 中身はほとんどがインターフェースの互換性を保つためのコードなので、 機能的なメリットは完全になくなってしまいました・・・。 HTTP/2サポートも問題なく動くはずです。 逆にパッケージの依存が増えること以外はデメリットはないともいえます。
-Go1.7以下では今までの方法にフォールバックしてくれます。 というわけで、以下のような人には有用です。
-深淵な理由でGo1.7以下しか使えない人 Go1.8とGo1.7以下のサポートがどうしても必要な人 Go1.8にアップグレードしたけど、graceful shutdownの処理を書き換えるのがめんどくさい人 ところで、環境が悪いときに性能を落としたり機能を制限することをフォールバック(fall back)というわけですが、 逆に環境が良いときに性能を上げたり機能を拡張することはなんていうんですかね？ モデムでは通信環境が良いときに高速な通信方式に切り変えることを「フォールフォワード(fall forward)」というらしいです。 「Go1.8ではbild-inのGraceful Shutdownにフォールフォワードする」で使い方あってます？
-使い方 Server.Shutdownを使う Go(その3) Advent Calendarの 最終日の記事でも扱ってますが改めて。
-package main import ( &#34;context&#34; &#34;fmt&#34; &#34;log&#34; &#34;net&#34; &#34;net/http&#34; &#34;os&#34; &#34;os/signal&#34; &#34;syscall&#34; &#34;github.</p>
-          
-            <footer>
-              <a href="https://shogo82148.github.io/blog/2017/01/21/golang-1-dot-8-graceful-shutdown/" rel="full-article">Read On &rarr;</a>
-            </footer>
-          
-        
-      </article>
-      
       
       
 
@@ -551,6 +548,8 @@ package main import ( &#34;context&#34; &#34;fmt&#34; &#34;log&#34; &#34;net&#34
     
         <a href="/page/31/" class="label-pagination">31</a>
     
+        <a href="/page/32/" class="label-pagination">32</a>
+    
 
     
     
@@ -559,7 +558,7 @@ package main import ( &#34;context&#34; &#34;fmt&#34; &#34;log&#34; &#34;net&#34
 
     
     
-        <a href="/page/31/" aria-label="Last"><i class="fa fa-angle-double-right fa-lg"></i></a>
+        <a href="/page/32/" aria-label="Last"><i class="fa fa-angle-double-right fa-lg"></i></a>
     
 
 </div>
@@ -618,10 +617,16 @@ package main import ( &#34;context&#34; &#34;fmt&#34; &#34;log&#34; &#34;net&#34
           
             
               <li class="post">
-                <a href="/blog/2025/03/27/convert-csv-to-structs-in-golang/">CSVをGoの構造体にマッピングする</a>
+                <a href="/blog/2025/04/06/actions-setup-redis-verifies-build-provenance/">actions-setup-redisがBuild Provenanceの検証を行うようになりました</a>
               </li>
             
           
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/03/27/convert-csv-to-structs-in-golang/">CSVをGoの構造体にマッピングする</a>
+              </li>
             
           
             
@@ -663,12 +668,6 @@ package main import ( &#34;context&#34; &#34;fmt&#34; &#34;log&#34; &#34;net&#34
             
               <li class="post">
                 <a href="/blog/2024/08/30/p5-aws-lambda-is-available-on-ap-southeast-5/">AWS::LambdaがAWS Asia Pacific (Malaysia) Regionで利用可能になりました</a>
-              </li>
-            
-          
-            
-              <li class="post">
-                <a href="/blog/2024/08/13/structured-field-values/">Structured Field Values のパーサーを書いた</a>
               </li>
             
           

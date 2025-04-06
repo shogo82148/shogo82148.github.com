@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono&display=swap" rel="stylesheet"> 
+
+  
+  <title>actions-setup-redisがBuild Provenanceの検証を行うようになりました</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="ICHINOSE Shogo">
+
+  
+  <meta name="generator" content="Hugo 0.120.4">
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-40R0PCLKVF');
+</script>
+
+
+<script>
+MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']]
+  },
+  svg: {
+    fontCache: 'global'
+  }
+};
+</script>
+
+<script type="text/javascript" id="MathJax-script" async
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+</script>
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Apr 6, 2025
+     - 1 minute read 
+    
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/github/">github </a><a class="label" href="https://shogo82148.github.io/categories/github-actions/">github-actions </a>
+    
+  </p>
+  <h1 class="entry-title">
+     actions-setup-redisがBuild Provenanceの検証を行うようになりました 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p><a href="https://github.com/shogo82148/actions-setup-redis">shogo82148/actions-setup-redis</a> はRedisのバイナリーをGitHub Releasesからダウンロードしています。
+このバイナリーを<a href="https://github.blog/changelog/2024-06-25-artifact-attestations-is-generally-available/">GitHub Artifact Attestations</a>で署名して、
+ダウンロード時に検証するようにしました。</p>
+<h2 id="背景">背景</h2>
+<p>今年3月に発生したGitHub Actionsのサプライチェーン攻撃を受けての対応です。</p>
+<ul>
+<li><a href="https://github.com/reviewdog/reviewdog/issues/2079">[Security Advisory] Supply Chain Attack on reviewdog GitHub Actions during a specific time period #2079</a></li>
+<li><a href="https://www.wiz.io/blog/new-github-action-supply-chain-attack-reviewdog-action-setup">New GitHub Action supply chain attack: reviewdog/action-setup</a></li>
+<li><a href="https://unit42.paloaltonetworks.com/github-actions-supply-chain-attack/">GitHub Actions Supply Chain Attack: A Targeted Attack on Coinbase Expanded to the Widespread tj-actions/changed-files Incident: Threat Assessment (Updated 4/2)</a></li>
+<li><a href="https://zenn.dev/shunsuke_suzuki/articles/tj-actions-incident-2025">tj-actions のインシデントレポートを読んだ</a></li>
+</ul>
+<p>個人的には<a href="https://github.com/reviewdog/action-setup">reviewdog/action-setup</a>をよく利用しているので、びっくりしました。
+（<a href="https://github.com/reviewdog/action-setup/commit/3f401fe">インシデントレポートに自分のコミット</a>載ってるし）
+さいわい侵害を受けたのが日本時間深夜ということもあり、被害を受けたレポジトリーは見つかりませんでした。</p>
+<p>しかし、こういった攻撃が身近に迫っていることを、改めて感じた事件でした。
+自分自身もいくつかGitHub Actionsを公開しているので、他人事ではありません。
+少しでも安全に利用できるよう、何等かの対応をすることにしました。</p>
+<h2 id="対応">対応</h2>
+<h3 id="github-actionsのピン留め">GitHub Actionsのピン留め</h3>
+<p>今回の侵害事件においてもっとも効果がかるのはGitHub ActionsのSHA1ハッシュによりピン留めです。
+他の方もたくさんブログを書いてくれているので、そちらをどうぞ。</p>
+<ul>
+<li><a href="https://dev.classmethod.jp/articles/hardening-github-actions-with-pinact-commit-sha-semver/">GitHub Actionsの侵害・サプライチェーンリスクを軽減:pinactを使ってアクションをバージョンではなくハッシュ値で指定</a></li>
+<li><a href="https://developer.hatenastaff.com/entry/2025/03/17/200642">GitHub Actionsの外部Actionのバージョンをhash指定にし、可読性を維持しつつバージョンを上げる</a></li>
+<li><a href="https://techblog.kayac.com/2025-actionspin">GitHub Actionsの外部ActionでVersionTagを使ってるものを一括でCommitHashにしたい。</a></li>
+</ul>
+<p><a href="https://github.com/shogo82148/actions-setup-redis">shogo82148/actions-setup-redis</a> でも同様の対応を行いました。</p>
+<h3 id="redisバイナリーの署名">Redisバイナリーの署名</h3>
+<p>しかし <a href="https://github.com/shogo82148/actions-setup-redis">shogo82148/actions-setup-redis</a> においてはピン留めだけでは不十分です。
+GitHub Releasesからファイルをダウンロードしているので、このファイルが改竄される危険性が残っています。</p>
+<p>そこでこのバイナリーに対して<a href="https://github.com/actions/attest-build-provenance/">actions/attest-build-provenance</a>で署名をするようにしました。</p>
+<ul>
+<li>例: <a href="https://github.com/shogo82148/actions-setup-redis/attestations/6057503">https://github.com/shogo82148/actions-setup-redis/attestations/6057503</a></li>
+</ul>
+<h3 id="redisバイナリーの署名検証">Redisバイナリーの署名検証</h3>
+<p>アクションを使用する際に署名を検証します。
+検証には<a href="https://github.com/sigstore/sigstore-js">sigstore/sigstore-js</a>を利用しました。
+ただし、検証に必要な証明書を取ってきたり、証明書の拡張領域を読むのが面倒だったりしたので、その部分をまとめた簡単なラッパーを作成しました（GitHub公式で似たようなの出してくれないかな）。</p>
+<ul>
+<li><a href="https://github.com/shogo82148/attestation-verify-js">shogo82148/attestation-verify-js</a></li>
+</ul>
+<p>これでバイナリーが第三者に書き換えられるリスクを低減します。</p>
+<h2 id="まとめ">まとめ</h2>
+<p>3月のGitHub Actionsのインシデントを受け、公開しているGitHub Actionsのセキュリティー強化に乗り出しました。
+ひとまず <a href="https://github.com/shogo82148/actions-setup-redis">shogo82148/actions-setup-redis</a> では以下のような対応を行いました。</p>
+<ul>
+<li>GitHub Actionsのピン留め</li>
+<li>Redisバイナリーの署名</li>
+<li>Redisバイナリーの署名検証</li>
+</ul>
+<p>他のGitHub Actionsも安心して使えるよう工夫をしていきたいなと思ってます。</p>
+<blockquote>
+<p>こんにちは、私はウサギです🐇<br>
+新たな署名が息吹を運ぶよ<br>
+Redisのバイナリが安全に輝く<br>
+SHA1の守りと証明が舞い上がる<br>
+未来への跳躍、コードに希望を込めて<br>
+小さな私が見守る安心の軌跡だ！</p>
+<p>by <a href="https://www.coderabbit.ai/">CodeRabbit</a></p>
+</blockquote>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://github.com/shogo82148/actions-setup-redis">shogo82148/actions-setup-redis</a></li>
+<li><a href="https://shogo82148.github.io/blog/2024/06/30/2024-06-30-try-artifact-attestations/">GitHub Artifact Attestations を試してみた</a></li>
+<li><a href="https://github.blog/changelog/2024-06-25-artifact-attestations-is-generally-available/">Artifact Attestations is generally available</a></li>
+<li><a href="https://www.wiz.io/blog/new-github-action-supply-chain-attack-reviewdog-action-setup">New GitHub Action supply chain attack: reviewdog/action-setup</a></li>
+<li><a href="https://unit42.paloaltonetworks.com/github-actions-supply-chain-attack/">GitHub Actions Supply Chain Attack: A Targeted Attack on Coinbase Expanded to the Widespread tj-actions/changed-files Incident: Threat Assessment (Updated 4/2)</a></li>
+<li><a href="https://zenn.dev/shunsuke_suzuki/articles/tj-actions-incident-2025">tj-actions のインシデントレポートを読んだ</a></li>
+<li><a href="https://dev.classmethod.jp/articles/hardening-github-actions-with-pinact-commit-sha-semver/">GitHub Actionsの侵害・サプライチェーンリスクを軽減:pinactを使ってアクションをバージョンではなくハッシュ値で指定</a></li>
+<li><a href="https://developer.hatenastaff.com/entry/2025/03/17/200642">GitHub Actionsの外部Actionのバージョンをhash指定にし、可読性を維持しつつバージョンを上げる</a></li>
+<li><a href="https://techblog.kayac.com/2025-actionspin">GitHub Actionsの外部ActionでVersionTagを使ってるものを一括でCommitHashにしたい。</a></li>
+<li><a href="https://github.com/actions/attest-build-provenance/">actions/attest-build-provenance</a></li>
+<li><a href="https://github.com/sigstore/sigstore-js">sigstore/sigstore-js</a></li>
+<li><a href="https://github.com/shogo82148/attestation-verify-js">shogo82148/attestation-verify-js</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">ICHINOSE Shogo</span></span>
+    
+    <time>Apr 6, 2025</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2025/03/27/convert-csv-to-structs-in-golang/" title="CSVをGoの構造体にマッピングする">CSVをGoの構造体にマッピングする</a>
+    
+
+    
+  </p>
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2025/04/06/actions-setup-redis-verifies-build-provenance/">actions-setup-redisがBuild Provenanceの検証を行うようになりました</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/03/27/convert-csv-to-structs-in-golang/">CSVをGoの構造体にマッピングする</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/03/19/mecab-python-module-is-released/">MeCabのPython BindingをPyPIに上げた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/12/10/perl-iterating-over-multiple-values-is-no-longer-experimental/">Perl 5.40からiterating over multiple values at a time機能が安定版になりました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/12/09/perl-requires-use-utf8/">Perl 5.41から、UTF-8で書かれたソースコードにはuse utf8が必須になります</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/12/05/perl-logical-xor-operator/">Perl 5.40に真偽値の排他的論理和を表す新しい演算子が導入されました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/12/04/try-feature-is-no-longer-experimental/">Perl 5.40でtry/catch機能が安定版になりました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/11/11/do-not-use-left-join-with-for-update/">LEFT JOINとFOR UPDATEを同時に使うのはやめよう</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/08/30/p5-aws-lambda-is-available-on-ap-southeast-5/">AWS::LambdaがAWS Asia Pacific (Malaysia) Regionで利用可能になりました</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2025 ICHINOSE Shogo - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+</body>
+
+</html>
+
