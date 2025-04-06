@@ -32,7 +32,7 @@ categories: [github, github-actions]
 
 ### GitHub Actionsのピン留め
 
-今回の侵害事件においてもっとも効果がかるのはGitHub ActionsのSHA1ハッシュによりピン留めです。
+今回の侵害事件においてもっとも効果的なのはGitHub ActionsのSHA1ハッシュによりピン留めです。
 他の方もたくさんブログを書いてくれているので、そちらをどうぞ。
 
 - [GitHub Actionsの侵害・サプライチェーンリスクを軽減:pinactを使ってアクションをバージョンではなくハッシュ値で指定](https://dev.classmethod.jp/articles/hardening-github-actions-with-pinact-commit-sha-semver/)
