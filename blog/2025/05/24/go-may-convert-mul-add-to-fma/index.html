@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono&display=swap" rel="stylesheet"> 
+
+  
+  <title>Goは積和演算をFMAに変換する場合があるという話</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="ICHINOSE Shogo">
+
+  
+  <meta name="generator" content="Hugo 0.120.4">
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-40R0PCLKVF');
+</script>
+
+
+<script>
+MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']]
+  },
+  svg: {
+    fontCache: 'global'
+  }
+};
+</script>
+
+<script type="text/javascript" id="MathJax-script" async
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+</script>
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">May 24, 2025
+     - 6 minute read 
+    
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2025/05/24/go-may-convert-mul-add-to-fma/">Goは積和演算をFMAに変換する場合があるという話</a>
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <h2 id="tldr">TL;DR</h2>
+<ul>
+<li>Goは <code>x*y + z</code> を <code>math.FMA(x, y, z)</code> にコンパイルする場合がある</li>
+<li>再現性のある実行結果を得たい場合は <code>float64(x*y) + z</code> と書くか、明示的に <code>math.FMA(x, y, z)</code> を呼び出す</li>
+<li>再現性は求めずに速度を出したい場合は <code>x*y + z</code> と書く</li>
+</ul>
+<h2 id="fmaのバグ発生条件の謎">FMAのバグ発生条件の謎</h2>
+<p>先日Goに <code>math.FMA</code> のバグ修正のパッチを送りました。</p>
+<ul>
+<li><a href="https://shogo82148.github.io/blog/2025/05/20/update-of-math-fma-in-golang/">Goのmath.FMAの挙動を修正した</a></li>
+</ul>
+<p>ありがたいことにスッとマージしてもらえたのですが、実は発生条件にちょっと謎がありました。</p>
+<blockquote class="twitter-tweet"><p lang="ja" dir="ltr">検証の結果こんな感じです。<br><br>arm64のFMA命令: -0<br>arm64のmath.FMA: -0<br>x86_64のFMA命令: -0<br>x86_64のmath.FMA: 0<br><br>Pure Goで書かれた math.FMA の実行結果が変わるのが謎なんですよね 🤔</p>&mdash; f96fd3a0-bdb9-4f10-b69f-8f765c1d341c ICHINOSEShogo (@shogo82148) <a href="https://twitter.com/shogo82148/status/1924007984998515057?ref_src=twsrc%5Etfw">May 18, 2025</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script> 
+<p>問題となったのは以下のコードです。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;fmt&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;math&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">var</span> <span class="nx">portableFMA</span> <span class="p">=</span> <span class="nx">math</span><span class="p">.</span><span class="nx">FMA</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">math</span><span class="p">.</span><span class="nf">FMA</span><span class="p">(</span><span class="mh">0x1</span><span class="nx">p</span><span class="o">-</span><span class="mi">1022</span><span class="p">,</span> <span class="o">-</span><span class="mh">0x1</span><span class="nx">p</span><span class="o">-</span><span class="mi">1022</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nf">portableFMA</span><span class="p">(</span><span class="mh">0x1</span><span class="nx">p</span><span class="o">-</span><span class="mi">1022</span><span class="p">,</span> <span class="o">-</span><span class="mh">0x1</span><span class="nx">p</span><span class="o">-</span><span class="mi">1022</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>go version go1.24.3 darwin/arm64 で実行すると、以下のような結果になります。
+呼び出し方にかかわらず同じ結果が得られており、期待通りの結果です。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">-0
+</span></span><span class="line"><span class="cl">-0
+</span></span></code></pre></div><p>ところが、 go version go1.24.3 linux/amd64 で実行すると、以下のような結果になります。
+呼び出し方によって実行結果が異なっており、バグの再現を確認できます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">-0
+</span></span><span class="line"><span class="cl">0
+</span></span></code></pre></div><p>そう、このバグはamd64上でしか再現しないのです！</p>
+<h2 id="浮動小数点数の最適化に関する仕様">浮動小数点数の最適化に関する仕様</h2>
+<p>バグは解決したものの、amd64上でしか再現しない理由が気になっていました。
+FMAに関して特殊な仕様があるのか？と思い、Goの仕様を読んでみたら少しだけ理解が進みました。</p>
+<ul>
+<li><a href="https://go.dev/ref/spec#Floating_point_operators">Floating-point operators - The Go Programming Language Specification</a></li>
+</ul>
+<blockquote>
+<p>An implementation may combine multiple floating-point operations into a single fused operation, possibly across statements, and produce a result that differs from the value obtained by executing and rounding the instructions individually. An explicit floating-point type conversion rounds to the precision of the target type, preventing fusion that would discard that rounding.</p>
+<p>For instance, some architectures provide a &ldquo;fused multiply and add&rdquo; (FMA) instruction that computes x<em>y + z without rounding the intermediate result x</em>y. These examples show when a Go implementation can use that instruction:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// FMA allowed for computing r, because x*y is not explicitly rounded:
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">r</span>  <span class="p">=</span> <span class="nx">x</span><span class="o">*</span><span class="nx">y</span> <span class="o">+</span> <span class="nx">z</span>
+</span></span><span class="line"><span class="cl"><span class="nx">r</span>  <span class="p">=</span> <span class="nx">z</span><span class="p">;</span>   <span class="nx">r</span> <span class="o">+=</span> <span class="nx">x</span><span class="o">*</span><span class="nx">y</span>
+</span></span><span class="line"><span class="cl"><span class="nx">t</span>  <span class="p">=</span> <span class="nx">x</span><span class="o">*</span><span class="nx">y</span><span class="p">;</span> <span class="nx">r</span> <span class="p">=</span> <span class="nx">t</span> <span class="o">+</span> <span class="nx">z</span>
+</span></span><span class="line"><span class="cl"><span class="o">*</span><span class="nx">p</span> <span class="p">=</span> <span class="nx">x</span><span class="o">*</span><span class="nx">y</span><span class="p">;</span> <span class="nx">r</span> <span class="p">=</span> <span class="o">*</span><span class="nx">p</span> <span class="o">+</span> <span class="nx">z</span>
+</span></span><span class="line"><span class="cl"><span class="nx">r</span>  <span class="p">=</span> <span class="nx">x</span><span class="o">*</span><span class="nx">y</span> <span class="o">+</span> <span class="nb">float64</span><span class="p">(</span><span class="nx">z</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// FMA disallowed for computing r, because it would omit rounding of x*y:
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">r</span>  <span class="p">=</span> <span class="nb">float64</span><span class="p">(</span><span class="nx">x</span><span class="o">*</span><span class="nx">y</span><span class="p">)</span> <span class="o">+</span> <span class="nx">z</span>
+</span></span><span class="line"><span class="cl"><span class="nx">r</span>  <span class="p">=</span> <span class="nx">z</span><span class="p">;</span> <span class="nx">r</span> <span class="o">+=</span> <span class="nb">float64</span><span class="p">(</span><span class="nx">x</span><span class="o">*</span><span class="nx">y</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">t</span>  <span class="p">=</span> <span class="nb">float64</span><span class="p">(</span><span class="nx">x</span><span class="o">*</span><span class="nx">y</span><span class="p">);</span> <span class="nx">r</span> <span class="p">=</span> <span class="nx">t</span> <span class="o">+</span> <span class="nx">z</span>
+</span></span></code></pre></div></blockquote>
+<p>ChatGPT先生による和訳:</p>
+<blockquote>
+<p>実装によっては、複数の浮動小数点演算を1つの融合演算にまとめることがあり、文をまたいで行われることもあります。この場合、各命令を個別に実行して丸めた結果とは異なる値が生成される可能性があります。明示的な浮動小数点型変換は、変換先の型の精度に丸めを行うため、その丸めを無視するような融合は防がれます。</p>
+<p>たとえば、一部のアーキテクチャでは「融合積和演算（FMA）」命令が提供されており、これは中間結果である x*y を丸めることなく x*y + z を計算します。以下の例は、Go の実装がその命令を使用できる場合を示しています。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// x*y が明示的に丸められていないため、r の計算に FMA の使用が許可される例:
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">r</span>  <span class="p">=</span> <span class="nx">x</span><span class="o">*</span><span class="nx">y</span> <span class="o">+</span> <span class="nx">z</span>
+</span></span><span class="line"><span class="cl"><span class="nx">r</span>  <span class="p">=</span> <span class="nx">z</span><span class="p">;</span>   <span class="nx">r</span> <span class="o">+=</span> <span class="nx">x</span><span class="o">*</span><span class="nx">y</span>
+</span></span><span class="line"><span class="cl"><span class="nx">t</span>  <span class="p">=</span> <span class="nx">x</span><span class="o">*</span><span class="nx">y</span><span class="p">;</span> <span class="nx">r</span> <span class="p">=</span> <span class="nx">t</span> <span class="o">+</span> <span class="nx">z</span>
+</span></span><span class="line"><span class="cl"><span class="o">*</span><span class="nx">p</span> <span class="p">=</span> <span class="nx">x</span><span class="o">*</span><span class="nx">y</span><span class="p">;</span> <span class="nx">r</span> <span class="p">=</span> <span class="o">*</span><span class="nx">p</span> <span class="o">+</span> <span class="nx">z</span>
+</span></span><span class="line"><span class="cl"><span class="nx">r</span>  <span class="p">=</span> <span class="nx">x</span><span class="o">*</span><span class="nx">y</span> <span class="o">+</span> <span class="nb">float64</span><span class="p">(</span><span class="nx">z</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// x*y の丸めを省略してしまうため、r の計算に FMA の使用が許可されない例:
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">r</span>  <span class="p">=</span> <span class="nb">float64</span><span class="p">(</span><span class="nx">x</span><span class="o">*</span><span class="nx">y</span><span class="p">)</span> <span class="o">+</span> <span class="nx">z</span>
+</span></span><span class="line"><span class="cl"><span class="nx">r</span>  <span class="p">=</span> <span class="nx">z</span><span class="p">;</span> <span class="nx">r</span> <span class="o">+=</span> <span class="nb">float64</span><span class="p">(</span><span class="nx">x</span><span class="o">*</span><span class="nx">y</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">t</span>  <span class="p">=</span> <span class="nb">float64</span><span class="p">(</span><span class="nx">x</span><span class="o">*</span><span class="nx">y</span><span class="p">);</span> <span class="nx">r</span> <span class="p">=</span> <span class="nx">t</span> <span class="o">+</span> <span class="nx">z</span>
+</span></span></code></pre></div></blockquote>
+<p>要するに <code>x*y + z</code> を <code>math.FMA(x, y, z)</code> にコンパイルする場合があるということです。
+要注意なのは、この最適化はCPUアーキテクチャーに依存すること、そして、必ずしも最適化が行われるとは限らないということです。</p>
+<p>実はFMA関数の実装には <code>x*y + z</code> が使われています。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl">	<span class="c1">// https://github.com/golang/go/blob/go1.24.3/src/math/fma.go#L98-L101
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="c1">// Inf or NaN or zero involved. At most one rounding will occur.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="k">if</span> <span class="nx">x</span> <span class="o">==</span> <span class="mf">0.0</span> <span class="o">||</span> <span class="nx">y</span> <span class="o">==</span> <span class="mf">0.0</span> <span class="o">||</span> <span class="nx">z</span> <span class="o">==</span> <span class="mf">0.0</span> <span class="o">||</span> <span class="nx">bx</span><span class="o">&amp;</span><span class="nx">uvinf</span> <span class="o">==</span> <span class="nx">uvinf</span> <span class="o">||</span> <span class="nx">by</span><span class="o">&amp;</span><span class="nx">uvinf</span> <span class="o">==</span> <span class="nx">uvinf</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="k">return</span> <span class="nx">x</span><span class="o">*</span><span class="nx">y</span> <span class="o">+</span> <span class="nx">z</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span></code></pre></div><p>arm64アーキテクチャーはこれをFMAに最適化しますが、amd64アーキテクチャーでは最適化が行われません。
+これが前述の実行結果の違いにつながったのです。</p>
+<h2 id="fmaの性能を検証してみる">FMAの性能を検証してみる</h2>
+<p>さて、実行結果に差が出る理由はわかりました。
+しかし、なぜamd64ではFMAへの最適化が行われないのでしょう？
+単純に考えれば命令数の少ないFMAのほうが速そうです。
+ベンチマークを取って検証してみましょう。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;math&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;runtime&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;testing&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">var</span> <span class="nx">portableFMA</span> <span class="p">=</span> <span class="nx">math</span><span class="p">.</span><span class="nx">FMA</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">BenchmarkPortableFMA</span><span class="p">(</span><span class="nx">b</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">B</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="nx">b</span><span class="p">.</span><span class="nf">Loop</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">runtime</span><span class="p">.</span><span class="nf">KeepAlive</span><span class="p">(</span><span class="nf">portableFMA</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">BenchmarkMathFMA</span><span class="p">(</span><span class="nx">b</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">B</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="nx">b</span><span class="p">.</span><span class="nf">Loop</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">runtime</span><span class="p">.</span><span class="nf">KeepAlive</span><span class="p">(</span><span class="nx">math</span><span class="p">.</span><span class="nf">FMA</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">FMA</span><span class="p">(</span><span class="nx">x</span><span class="p">,</span> <span class="nx">y</span><span class="p">,</span> <span class="nx">z</span> <span class="kt">float64</span><span class="p">)</span> <span class="kt">float64</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="k">return</span> <span class="nx">math</span><span class="p">.</span><span class="nf">FMA</span><span class="p">(</span><span class="nx">x</span><span class="p">,</span> <span class="nx">y</span><span class="p">,</span> <span class="nx">z</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">BenchmarkFMA</span><span class="p">(</span><span class="nx">b</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">B</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="nx">b</span><span class="p">.</span><span class="nf">Loop</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">runtime</span><span class="p">.</span><span class="nf">KeepAlive</span><span class="p">(</span><span class="nf">FMA</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">mayFMA</span><span class="p">(</span><span class="nx">x</span><span class="p">,</span> <span class="nx">y</span><span class="p">,</span> <span class="nx">z</span> <span class="kt">float64</span><span class="p">)</span> <span class="kt">float64</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="k">return</span> <span class="nx">x</span><span class="o">*</span><span class="nx">y</span> <span class="o">+</span> <span class="nx">z</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">BenchmarkMayFMA</span><span class="p">(</span><span class="nx">b</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">B</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="nx">b</span><span class="p">.</span><span class="nf">Loop</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">runtime</span><span class="p">.</span><span class="nf">KeepAlive</span><span class="p">(</span><span class="nf">mayFMA</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">mulAdd</span><span class="p">(</span><span class="nx">x</span><span class="p">,</span> <span class="nx">y</span><span class="p">,</span> <span class="nx">z</span> <span class="kt">float64</span><span class="p">)</span> <span class="kt">float64</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="k">return</span> <span class="nb">float64</span><span class="p">(</span><span class="nx">x</span><span class="o">*</span><span class="nx">y</span><span class="p">)</span> <span class="o">+</span> <span class="nx">z</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">BenchmarkMulAdd</span><span class="p">(</span><span class="nx">b</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">B</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="nx">b</span><span class="p">.</span><span class="nf">Loop</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">runtime</span><span class="p">.</span><span class="nf">KeepAlive</span><span class="p">(</span><span class="nf">mulAdd</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><ul>
+<li><code>BenchmarkPortableFMA</code>: Pure Go で実装されたFMA</li>
+<li><code>BenchmarkMathFMA</code>: <code>math.FMA</code>、対応するアーキテクチャーであればFMA命令を利用する</li>
+<li><code>BenchmarkFMA</code>: <code>math.FMA</code> を呼び出す関数、<code>BenchmarkMathFMA</code> は関数呼び出しのオーバーヘッドを考慮しておらず公平ではないため追加</li>
+<li><code>BenchmarkMayFMA</code>: アーキテクチャーによってはFMA命令に最適化される・・・かもしれない</li>
+<li><code>BenchmarkMulAdd</code>: FMA命令を使わない積和演算</li>
+</ul>
+<h3 id="arm64アーキテクチャーでのベンチマーク結果">arm64アーキテクチャーでのベンチマーク結果</h3>
+<p>arm64アーキテクチャーの Apple M1 Pro 上でベンチマークを取った結果です。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">$ go test -bench .
+</span></span><span class="line"><span class="cl">goos: darwin
+</span></span><span class="line"><span class="cl">goarch: arm64
+</span></span><span class="line"><span class="cl">pkg: example.com
+</span></span><span class="line"><span class="cl">cpu: Apple M1 Pro
+</span></span><span class="line"><span class="cl">BenchmarkPortableFMA-10    	140746482	         8.526 ns/op
+</span></span><span class="line"><span class="cl">BenchmarkMathFMA-10        	1000000000	         1.000 ns/op
+</span></span><span class="line"><span class="cl">BenchmarkFMA-10            	566292946	         2.097 ns/op
+</span></span><span class="line"><span class="cl">BenchmarkMayFMA-10         	571696724	         2.097 ns/op
+</span></span><span class="line"><span class="cl">BenchmarkMulAdd-10         	573655584	         2.097 ns/op
+</span></span><span class="line"><span class="cl">PASS
+</span></span><span class="line"><span class="cl">ok  	example.com	6.217s
+</span></span></code></pre></div><p><code>BenchmarkFMA</code> と <code>BenchmarkMulAdd</code> がほぼ同じ結果、つまりFMA命令と積和演算はほぼ同じ速度になりました。
+同じ速度であればFMA命令のほうが精度が高いので、<code>mayFMA</code> はFMA命令へ置き換えるのが良さそうです。
+実際Goはどう判断したのか、逆アセンブルした結果を見てみましょう。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">go test -o main_test .
+</span></span><span class="line"><span class="cl">go tool objdump -S main_test &gt; dump.txt
+</span></span></code></pre></div><p><code>FMA</code> 関数を逆アセンブルした結果です。
+<code>FMADDD</code> という命令が使われていることが確認できますね。
+arm64よく知らないけど、名前からしてFMAを計算する命令なのでしょう。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">TEXT example%2ecom.FMA(SB) /Users/shogo/tmp/2025-05-18-fma/main_test.go
+</span></span><span class="line"><span class="cl">        return math.FMA(x, y, z)
+</span></span><span class="line"><span class="cl">  0x10010cab0           1f400820                FMADDD F0, F2, F1, F0
+</span></span><span class="line"><span class="cl">  0x10010cab4           d65f03c0                RET
+</span></span><span class="line"><span class="cl">  0x10010cab8           00000000                ?
+</span></span><span class="line"><span class="cl">  0x10010cabc           00000000                ?
+</span></span></code></pre></div><p><code>mayFMA</code> 関数を逆アセンブルした結果です。
+<code>FMA</code> 関数と同様の結果となっており、積和演算がFMA演算へと最適化されたことがわかります。
+予想通りですね。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">TEXT example%2ecom.mayFMA(SB) /Users/shogo/tmp/2025-05-18-fma/main_test.go
+</span></span><span class="line"><span class="cl">        return x*y + z
+</span></span><span class="line"><span class="cl">  0x10010cab0           1f400820                FMADDD F0, F2, F1, F0
+</span></span><span class="line"><span class="cl">  0x10010cab4           d65f03c0                RET
+</span></span><span class="line"><span class="cl">  0x10010cab8           00000000                ?
+</span></span><span class="line"><span class="cl">  0x10010cabc           00000000                ?
+</span></span></code></pre></div><p><code>mulAdd</code> 関数を逆アセンブルした結果です。
+<code>FMULD</code> と <code>FADDD</code> というふたつの命令に分かれていることが確認できます。
+仕様通り <code>float64(x*y) + z</code> はFMA命令への最適化を阻害する効果があるようです。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">TEXT example%2ecom.mulAdd(SB) /Users/shogo/tmp/2025-05-18-fma/main_test.go
+</span></span><span class="line"><span class="cl">        return float64(x*y) + z
+</span></span><span class="line"><span class="cl">  0x10010cb40           1e610801                FMULD F1, F0, F1
+</span></span><span class="line"><span class="cl">  0x10010cb44           1e622820                FADDD F2, F1, F0
+</span></span><span class="line"><span class="cl">  0x10010cb48           d65f03c0                RET
+</span></span><span class="line"><span class="cl">  0x10010cb4c           00000000                ?
+</span></span></code></pre></div><h3 id="amd64アーキテクチャーでのベンチマーク結果">amd64アーキテクチャーでのベンチマーク結果</h3>
+<p>Amazon EC2 で m5.large を借りてベンチマークを回してみました。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">$ go test -bench .
+</span></span><span class="line"><span class="cl">goos: linux
+</span></span><span class="line"><span class="cl">goarch: amd64
+</span></span><span class="line"><span class="cl">pkg: example.com
+</span></span><span class="line"><span class="cl">cpu: Intel(R) Xeon(R) Platinum 8259CL CPU @ 2.50GHz
+</span></span><span class="line"><span class="cl">BenchmarkPortableFMA-2          60701370                19.13 ns/op
+</span></span><span class="line"><span class="cl">BenchmarkMathFMA-2              844946583                1.419 ns/op
+</span></span><span class="line"><span class="cl">BenchmarkFMA-2                  528670326                2.270 ns/op
+</span></span><span class="line"><span class="cl">BenchmarkMayFMA-2               703064860                1.705 ns/op
+</span></span><span class="line"><span class="cl">BenchmarkMulAdd-2               740604318                1.620 ns/op
+</span></span><span class="line"><span class="cl">PASS
+</span></span><span class="line"><span class="cl">ok      example.com     5.964s
+</span></span></code></pre></div><p><code>BenchmarkFMA</code> が <code>BenchmarkMulAdd</code> より遅い、つまりFMA命令を使ったほうが積和演算より遅いという結果になりました。</p>
+<p>arm64のときと同様に逆アセンブルしてみます。
+<code>FMA</code> 関数を逆アセンブルした結果です。
+<code>runtime.x86HasFMA</code> を見て条件分岐しています。名前からしてCPUがFMA命令に対応しているかを表すフラグでしょう。
+全体的に命令数も多く、いかにも遅そうです。
+（ところでこの逆アセンブルの結果あってる？機械語読める人おしえて）</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">TEXT example%2ecom.FMA(SB) /home/ec2-user/tmp/2025-05-24-fma/main_test.go
+</span></span><span class="line"><span class="cl">func FMA(x, y, z float64) float64 {
+</span></span><span class="line"><span class="cl">  0x5205c0              493b6610                CMPQ SP, 0x10(R14)
+</span></span><span class="line"><span class="cl">  0x5205c4              762d                    JBE 0x5205f3
+</span></span><span class="line"><span class="cl">  0x5205c6              55                      PUSHQ BP
+</span></span><span class="line"><span class="cl">  0x5205c7              4889e5                  MOVQ SP, BP
+</span></span><span class="line"><span class="cl">  0x5205ca              4883ec18                SUBQ $0x18, SP
+</span></span><span class="line"><span class="cl">        return math.FMA(x, y, z)
+</span></span><span class="line"><span class="cl">  0x5205ce              0fb605fda21a00          MOVZX runtime.x86HasFMA(SB), AX
+</span></span><span class="line"><span class="cl">  0x5205d5              85c0                    TESTL AX, AX
+</span></span><span class="line"><span class="cl">  0x5205d7              7409                    JE 0x5205e2
+</span></span><span class="line"><span class="cl">  0x5205d9              c4e2f9b9d16690eb        MOVL $-0x146f992f, CX
+</span></span><span class="line"><span class="cl">  0x5205e1              08e8                    ORL CH, AL
+</span></span><span class="line"><span class="cl">  0x5205e3              99                      CDQ
+</span></span><span class="line"><span class="cl">  0x5205e4              19f8                    SBBL DI, AX
+</span></span><span class="line"><span class="cl">  0x5205e6              ff0f                    DECL 0(DI)
+</span></span><span class="line"><span class="cl">  0x5205e8              10d0                    ADCL DL, AL
+</span></span><span class="line"><span class="cl">  0x5205ea              0f10c2                  MOVUPS X2, X0
+</span></span><span class="line"><span class="cl">  0x5205ed              4883c418                ADDQ $0x18, SP
+</span></span><span class="line"><span class="cl">  0x5205f1              5d                      POPQ BP
+</span></span><span class="line"><span class="cl">  0x5205f2              c3                      RET
+</span></span><span class="line"><span class="cl">func FMA(x, y, z float64) float64 {
+</span></span><span class="line"><span class="cl">  0x5205f3              f20f11442408            MOVSD_XMM X0, 0x8(SP)
+</span></span><span class="line"><span class="cl">  0x5205f9              f20f114c2410            MOVSD_XMM X1, 0x10(SP)
+</span></span><span class="line"><span class="cl">  0x5205ff              f20f11542418            MOVSD_XMM X2, 0x18(SP)
+</span></span><span class="line"><span class="cl">  0x520605              e83666f5ff              CALL runtime.morestack_noctxt.abi0(SB)
+</span></span><span class="line"><span class="cl">  0x52060a              f20f10442408            MOVSD_XMM 0x8(SP), X0
+</span></span><span class="line"><span class="cl">  0x520610              f20f104c2410            MOVSD_XMM 0x10(SP), X1
+</span></span><span class="line"><span class="cl">  0x520616              f20f10542418            MOVSD_XMM 0x18(SP), X2
+</span></span><span class="line"><span class="cl">  0x52061c              eba2                    JMP example%2ecom.FMA(SB)
+</span></span></code></pre></div><p><code>mayFMA</code> を逆アセンブルした結果です。
+<code>MULSD</code> と <code>ADDSD</code> というふたつの命令に分かれました。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">TEXT example%2ecom.mayFMA(SB) /home/ec2-user/tmp/2025-05-24-fma/main_test.go
+</span></span><span class="line"><span class="cl">        return x*y + z
+</span></span><span class="line"><span class="cl">  0x5206a0              f20f59c1                MULSD X1, X0
+</span></span><span class="line"><span class="cl">  0x5206a4              f20f58c2                ADDSD X2, X0
+</span></span><span class="line"><span class="cl">  0x5206a8              c3                      RET
+</span></span></code></pre></div><p><code>mulAdd</code> を逆アセンブルした結果です。
+<code>mayFMA</code> と同等の結果が得られました。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">TEXT example%2ecom.mulAdd(SB) /home/ec2-user/tmp/2025-05-24-fma/main_test.go
+</span></span><span class="line"><span class="cl">        return float64(x*y) + z
+</span></span><span class="line"><span class="cl">  0x520740              f20f59c1                MULSD X1, X0
+</span></span><span class="line"><span class="cl">  0x520744              f20f58c2                ADDSD X2, X0
+</span></span><span class="line"><span class="cl">  0x520748              c3                      RET
+</span></span></code></pre></div><h2 id="godbolt-に突っ込んでみる">godbolt に突っ込んでみる</h2>
+<p>FMA関数の逆アセンブルの結果が怪しかったので、<a href="https://godbolt.org/">godbolt</a>に突っ込んでみました。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">main_FMA_pc0:
+</span></span><span class="line"><span class="cl">        TEXT    main.FMA(SB), ABIInternal, $32-24
+</span></span><span class="line"><span class="cl">        CMPQ    SP, 16(R14)
+</span></span><span class="line"><span class="cl">        PCDATA  $0, $-2
+</span></span><span class="line"><span class="cl">        JLS     main_FMA_pc51
+</span></span><span class="line"><span class="cl">        PCDATA  $0, $-1
+</span></span><span class="line"><span class="cl">        PUSHQ   BP
+</span></span><span class="line"><span class="cl">        MOVQ    SP, BP
+</span></span><span class="line"><span class="cl">        SUBQ    $24, SP
+</span></span><span class="line"><span class="cl">        FUNCDATA        $0, gclocals·g5+hNtRBP6YXNjfog7aZjQ==(SB)
+</span></span><span class="line"><span class="cl">        FUNCDATA        $1, gclocals·g5+hNtRBP6YXNjfog7aZjQ==(SB)
+</span></span><span class="line"><span class="cl">        FUNCDATA        $5, main.FMA.arginfo1(SB)
+</span></span><span class="line"><span class="cl">        FUNCDATA        $6, main.FMA.argliveinfo(SB)
+</span></span><span class="line"><span class="cl">        PCDATA  $3, $1
+</span></span><span class="line"><span class="cl">        MOVBLZX runtime.x86HasFMA(SB), AX
+</span></span><span class="line"><span class="cl">        TESTL   AX, AX
+</span></span><span class="line"><span class="cl">        JEQ     main_FMA_pc34
+</span></span><span class="line"><span class="cl">        VFMADD231SD     X1, X0, X2
+</span></span><span class="line"><span class="cl">        NOP
+</span></span><span class="line"><span class="cl">        JMP     main_FMA_pc42
+</span></span><span class="line"><span class="cl">main_FMA_pc34:
+</span></span><span class="line"><span class="cl">        PCDATA  $1, $0
+</span></span><span class="line"><span class="cl">        CALL    math.FMA(SB)
+</span></span><span class="line"><span class="cl">        MOVUPS  X0, X2
+</span></span><span class="line"><span class="cl">main_FMA_pc42:
+</span></span><span class="line"><span class="cl">        MOVUPS  X2, X0
+</span></span><span class="line"><span class="cl">        ADDQ    $24, SP
+</span></span><span class="line"><span class="cl">        POPQ    BP
+</span></span><span class="line"><span class="cl">        RET
+</span></span><span class="line"><span class="cl">main_FMA_pc51:
+</span></span><span class="line"><span class="cl">        NOP
+</span></span><span class="line"><span class="cl">        PCDATA  $1, $-1
+</span></span><span class="line"><span class="cl">        PCDATA  $0, $-2
+</span></span><span class="line"><span class="cl">        MOVSD   X0, 8(SP)
+</span></span><span class="line"><span class="cl">        MOVSD   X1, 16(SP)
+</span></span><span class="line"><span class="cl">        MOVSD   X2, 24(SP)
+</span></span><span class="line"><span class="cl">        CALL    runtime.morestack_noctxt(SB)
+</span></span><span class="line"><span class="cl">        PCDATA  $0, $-1
+</span></span><span class="line"><span class="cl">        MOVSD   8(SP), X0
+</span></span><span class="line"><span class="cl">        MOVSD   16(SP), X1
+</span></span><span class="line"><span class="cl">        MOVSD   24(SP), X2
+</span></span><span class="line"><span class="cl">        JMP     main_FMA_pc0
+</span></span></code></pre></div><p><code>runtime.x86HasFMA</code> をチェックし、CPUがFMA命令に対応していれば <code>VFMADD231SD</code> 命令を、対応していなければ <code>math.FMA</code> 関数を呼び出すというコードになっています。
+なんだかそれっぽいですね。</p>
+<h2 id="まとめ">まとめ</h2>
+<p>CPUアーキテクチャーによって実行結果が異なる、という謎を調査しました。
+仕様書を読んだ結果、Goは <code>x*y + z</code> を <code>math.FMA(x, y, z)</code> にコンパイルする場合があるということがわかりました。
+アーキテクチャーによってこの最適化が行われない場合があるため、今回のような差が生まれてしまったようです。</p>
+<p>CPUがFMA命令を持っていたとしても、FMA命令を使ったほうが高速とは限らないということもわかりました。
+実際amd64ではFMA命令を使ったほうが低速でした。</p>
+<p>再現性のある実行結果を得たい場合はコードの書き方に注意が必要です。
+<code>float64(x*y) + z</code> とキャストをいれることで、アーキテクチャーに依存した最適化を阻害できます。
+精度が必要な場合は明示的に <code>math.FMA(x, y, z)</code> を呼び出しましょう。</p>
+<p>再現性は別に求めず速度を出したい場合は <code>x*y + z</code> と書きましょう。
+必要に応じてFMA命令を使用した最適化を行ってくれます。</p>
+<blockquote>
+<p>うさぎが跳ねてFMAを知る、<br>
+Goの世界で計算が走る。<br>
+アーキテクチャで違う道、<br>
+ベンチも分岐も見てみよう。<br>
+再現性にはご用心、<br>
+ふわりと浮かぶ数の旅。<br>
+🐇✨</p>
+<p>by <a href="https://www.coderabbit.ai/">CodeRabbit</a></p>
+</blockquote>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://go.dev/ref/spec#Floating_point_operators">Floating-point operators - The Go Programming Language Specification</a></li>
+<li><a href="https://shogo82148.github.io/blog/2025/05/20/update-of-math-fma-in-golang/">Goのmath.FMAの挙動を修正した</a></li>
+<li><a href="https://godbolt.org/">godbolt</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">ICHINOSE Shogo</span></span>
+    
+    <time>May 24, 2025</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2025/05/20/update-of-math-fma-in-golang/" title="Goのmath.FMAの挙動を修正した">Goのmath.FMAの挙動を修正した</a>
+    
+
+    
+  </p>
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2025/05/24/go-may-convert-mul-add-to-fma/">Goは積和演算をFMAに変換する場合があるという話</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/05/20/update-of-math-fma-in-golang/">Goのmath.FMAの挙動を修正した</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/05/02/akamai-peace-for-all-2nd/">Akamai x UNIQLOコラボTシャツに書かれたプログラムを解読してみる (第二回戦)</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/04/06/actions-setup-redis-verifies-build-provenance/">actions-setup-redisがBuild Provenanceの検証を行うようになりました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/03/27/convert-csv-to-structs-in-golang/">CSVをGoの構造体にマッピングする</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/03/19/mecab-python-module-is-released/">MeCabのPython BindingをPyPIに上げた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/12/10/perl-iterating-over-multiple-values-is-no-longer-experimental/">Perl 5.40からiterating over multiple values at a time機能が安定版になりました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/12/09/perl-requires-use-utf8/">Perl 5.41から、UTF-8で書かれたソースコードにはuse utf8が必須になります</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2024/12/05/perl-logical-xor-operator/">Perl 5.40に真偽値の排他的論理和を表す新しい演算子が導入されました</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2025 ICHINOSE Shogo - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+</body>
+
+</html>
+
