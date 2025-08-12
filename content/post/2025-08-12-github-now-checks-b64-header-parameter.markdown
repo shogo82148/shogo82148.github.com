@@ -47,7 +47,10 @@ JWTのヘッダーの中身:
 
 ## 対応
 
-そもそも `{"b64": false}` のJWTは使用してはならない (MUST NOT) とRFC 7797で定められています。
+そもそも `{"b64": false}` のJWTは使用してはならない (MUST NOT) とRFC 7797 Section 7で明記されています。
+
+> For interoperability reasons, JSON Web Tokens [JWT] MUST NOT use "b64" with a "false" value.” (RFC 7797 Section 7)
+
 そのため "b64" の設定を削除してしまえば解決です。
 
 JWTのヘッダーの中身:
