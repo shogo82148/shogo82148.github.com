@@ -26,6 +26,11 @@ Seedが衝突したということは生成される乱数列も同じなので�
 
 最後に、Base32に含まれていない文字が入力された場合、`Parse` 関数はエラーを報告しないという点。
 この場合どのようなULIDが返却されるかは未定義です。
+
+> Parse parses an encoded ULID, returning an error in case of failure. 
+> ErrDataSize is returned if the len(ulid) is different from an encoded ULID's length. Invalid encodings produce undefined ULIDs. For a version that returns an error instead, see ParseStrict. 
+> from https://pkg.go.dev/github.com/oklog/ulid/v2@v2.1.1#Parse
+
 外部からの入力を受け付けるには心もとない挙動です。
 
 ## 実装
