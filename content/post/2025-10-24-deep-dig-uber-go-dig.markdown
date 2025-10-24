@@ -133,31 +133,31 @@ func main() {
 package foo
 
 import (
-	"errors"
+  "errors"
 
-	"github.com/k0kubun/pp"
-	"go.uber.org/dig"
+  "github.com/k0kubun/pp"
+  "go.uber.org/dig"
 )
 
 type foo struct {
 }
 
 func Invoke() error {
-	return invoke(false)
+  return invoke(false)
 }
 
 func invoke(dryRun bool) error {
-	c := dig.New(dig.DryRun(dryRun))
+  c := dig.New(dig.DryRun(dryRun))
 
-	if err := c.Provide(func() (*foo, error) {
-		return nil, errors.New("you can't create foo in your local machine!")
-	}); err != nil {
-		return err
-	}
+  if err := c.Provide(func() (*foo, error) {
+    return nil, errors.New("you can't create foo in your local machine!")
+  }); err != nil {
+    return err
+  }
 
-	return c.Invoke(func(foo *foo) {
-		pp.Println(foo)
-	})
+  return c.Invoke(func(foo *foo) {
+    pp.Println(foo)
+  })
 }
 
 -- foo_test.go --
@@ -166,9 +166,9 @@ package foo
 import "testing"
 
 func TestInvoke(t *testing.T) {
-	if err := invoke(true); err != nil {
-		t.Fatalf("expected no error, but got: %v", err)
-	}
+  if err := invoke(true); err != nil {
+    t.Fatalf("expected no error, but got: %v", err)
+  }
 }
 ```
 
