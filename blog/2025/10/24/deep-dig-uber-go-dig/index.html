@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono&display=swap" rel="stylesheet"> 
+
+  
+  <title>uber-go/dig を深堀りしてみる</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="ICHINOSE Shogo">
+
+  
+  <meta name="generator" content="Hugo 0.120.4">
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-40R0PCLKVF');
+</script>
+
+
+<script>
+MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']]
+  },
+  svg: {
+    fontCache: 'global'
+  }
+};
+</script>
+
+<script type="text/javascript" id="MathJax-script" async
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+</script>
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Oct 24, 2025
+     - 3 minute read 
+    
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2025/10/24/deep-dig-uber-go-dig/">uber-go/dig を深堀りしてみる</a>
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <h2 id="背景目的">背景・目的</h2>
+<p>弊社では依存性注入（DI）に <a href="https://github.com/google/wire">google/wire</a> を使用しています。
+しかし、一部 Gopher 界隈で話題となったように 2025年8月25日 <a href="https://github.com/google/wire">google/wire</a> はアーカイブされてしまいました！</p>
+<ul>
+<li><a href="https://zenn.dev/motch/articles/google-wire-alternative">google/wire がアーカイブされたけどどうすればいいの？</a></li>
+</ul>
+<p>しばらく静観してきたのですが、そうも言ってられなくなったので移行先を考えることにしました。
+軽く調べた感じでは <a href="https://github.com/uber-go/dig">uber-go/dig</a> が依存関係も少なく、導入も楽そうです。
+しかし <a href="https://github.com/google/wire">google/wire</a> でできたことが <a href="https://github.com/uber-go/dig">uber-go/dig</a> に移行した途端できなくなっては困ります。</p>
+<h2 id="検証">検証</h2>
+<p>そこで、弊社が <a href="https://github.com/google/wire">google/wire</a> で使っている機能が <a href="https://github.com/uber-go/dig">uber-go/dig</a> でも実現できるのか、調査してみました。</p>
+<h3 id="依存関係の事前チェック">依存関係の事前チェック</h3>
+<p>個人的に一番欲しいのが依存関係の事前チェックです。</p>
+<p>たとえばプロバイダーの不足はよくあるミスだと思います。
+<a href="https://github.com/google/wire">google/wire</a> は事前にコード生成を行うため、このようなミスに気が付きやすいです。
+しかし <a href="https://github.com/uber-go/dig">uber-go/dig</a> では実行時までエラーに気がつけません。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">  <span class="s">&#34;github.com/k0kubun/pp&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="s">&#34;go.uber.org/dig&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">foo</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">c</span> <span class="o">:=</span> <span class="nx">dig</span><span class="p">.</span><span class="nf">New</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="c1">// foo のプロバイダーが登録されていない！！！
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">c</span><span class="p">.</span><span class="nf">Invoke</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">foo</span> <span class="o">*</span><span class="nx">foo</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">pp</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">foo</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">});</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// panic: missing dependencies for function &#34;main&#34;.main.func1: missing type: *main.foo
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>せめてプロバイダーの不足のような単純ミスはテスト時にわかると嬉しいです。
+しかしプロバイダーのコードは実行環境に依存しがちで、テストが書きにくいです。
+（たとえば、AWSクライアントの初期化とか。EC2/ECS上ではうまく動くけど、ローカル環境を用意するのは意外と面倒）</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">  <span class="s">&#34;errors&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="s">&#34;github.com/k0kubun/pp&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="s">&#34;go.uber.org/dig&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">foo</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">c</span> <span class="o">:=</span> <span class="nx">dig</span><span class="p">.</span><span class="nf">New</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">c</span><span class="p">.</span><span class="nf">Provide</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">(</span><span class="o">*</span><span class="nx">foo</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// 深遠な理由により、ローカル環境では実行に失敗する
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">errors</span><span class="p">.</span><span class="nf">New</span><span class="p">(</span><span class="s">&#34;you can&#39;t create foo in your local machine!&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">});</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">c</span><span class="p">.</span><span class="nf">Invoke</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">foo</span> <span class="o">*</span><span class="nx">foo</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">pp</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">foo</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">});</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// panic: could not build arguments for function &#34;main&#34;.main.func2: failed to build *main.foo: received non-nil error from function &#34;main&#34;.main.func1: you can&#39;t create foo in your local machine!
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>そんなときに使えるのが <a href="https://pkg.go.dev/go.uber.org/dig#DryRun">DryRunオプション</a> です。
+Dry Run を有効化すると Provide や Invoke に渡した関数が実行されなくなります。
+型チェックは行われるので、プロバイダーの不足のような単純ミスはチェックしてくれます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">  <span class="s">&#34;errors&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="s">&#34;github.com/k0kubun/pp&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="s">&#34;go.uber.org/dig&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">foo</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="c1">// Dry Run を有効化する
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="nx">c</span> <span class="o">:=</span> <span class="nx">dig</span><span class="p">.</span><span class="nf">New</span><span class="p">(</span><span class="nx">dig</span><span class="p">.</span><span class="nf">DryRun</span><span class="p">(</span><span class="kc">true</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">c</span><span class="p">.</span><span class="nf">Provide</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">(</span><span class="o">*</span><span class="nx">foo</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">errors</span><span class="p">.</span><span class="nf">New</span><span class="p">(</span><span class="s">&#34;you can&#39;t create foo in your local machine!&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">});</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">c</span><span class="p">.</span><span class="nf">Invoke</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">foo</span> <span class="o">*</span><span class="nx">foo</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">pp</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">foo</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">});</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>以下のようにテスト時だけ Dry Run が実行されるようにすると良いでしょう。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="o">--</span> <span class="nx">foo</span><span class="p">.</span><span class="k">go</span> <span class="o">--</span>
+</span></span><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">foo</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">  <span class="s">&#34;errors&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="s">&#34;github.com/k0kubun/pp&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="s">&#34;go.uber.org/dig&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">foo</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Invoke</span><span class="p">()</span> <span class="kt">error</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="nf">invoke</span><span class="p">(</span><span class="kc">false</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">invoke</span><span class="p">(</span><span class="nx">dryRun</span> <span class="kt">bool</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">c</span> <span class="o">:=</span> <span class="nx">dig</span><span class="p">.</span><span class="nf">New</span><span class="p">(</span><span class="nx">dig</span><span class="p">.</span><span class="nf">DryRun</span><span class="p">(</span><span class="nx">dryRun</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">c</span><span class="p">.</span><span class="nf">Provide</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">(</span><span class="o">*</span><span class="nx">foo</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">errors</span><span class="p">.</span><span class="nf">New</span><span class="p">(</span><span class="s">&#34;you can&#39;t create foo in your local machine!&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">});</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">err</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="nx">c</span><span class="p">.</span><span class="nf">Invoke</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">foo</span> <span class="o">*</span><span class="nx">foo</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">pp</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">foo</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">})</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="o">--</span> <span class="nx">foo_test</span><span class="p">.</span><span class="k">go</span> <span class="o">--</span>
+</span></span><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">foo</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="s">&#34;testing&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">TestInvoke</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nf">invoke</span><span class="p">(</span><span class="kc">true</span><span class="p">);</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">t</span><span class="p">.</span><span class="nf">Fatalf</span><span class="p">(</span><span class="s">&#34;expected no error, but got: %v&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><h3 id="struct-providers">Struct Providers</h3>
+<p>依存関係が膨大になってくると、依存関係を構造体定義で書きたくなることがあるでしょう。
+<a href="https://github.com/google/wire">google/wire</a> では <a href="https://github.com/google/wire/blob/main/docs/guide.md#struct-providers">Struct Providers</a> を使いますが、
+<a href="https://github.com/uber-go/dig">uber-go/dig</a> では同等の機能が <a href="https://pkg.go.dev/go.uber.org/dig#hdr-Parameter_Objects">Parameter Objects</a> で実現できます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">  <span class="s">&#34;github.com/k0kubun/pp&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="s">&#34;go.uber.org/dig&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">bar</span> <span class="kd">struct</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">baz</span> <span class="kd">struct</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">fooParameters</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">dig</span><span class="p">.</span><span class="nx">In</span> <span class="c1">// dig.In を埋め込むことでパラメータオブジェクトとして扱う
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">  <span class="nx">Bar</span> <span class="o">*</span><span class="nx">bar</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">Baz</span> <span class="o">*</span><span class="nx">baz</span>
+</span></span><span class="line"><span class="cl">  <span class="c1">// ... たくさんの依存関係が並ぶ
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">foo</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">params</span> <span class="nx">fooParameters</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">c</span> <span class="o">:=</span> <span class="nx">dig</span><span class="p">.</span><span class="nf">New</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">c</span><span class="p">.</span><span class="nf">Provide</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="o">*</span><span class="nx">bar</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="o">&amp;</span><span class="nx">bar</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">});</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">c</span><span class="p">.</span><span class="nf">Provide</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="o">*</span><span class="nx">baz</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="o">&amp;</span><span class="nx">baz</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">});</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">c</span><span class="p">.</span><span class="nf">Provide</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">params</span> <span class="nx">fooParameters</span><span class="p">)</span> <span class="o">*</span><span class="nx">foo</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// fooParameters 型の引数を受け取ることで、bar と baz の両方を受け取れる
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">return</span> <span class="o">&amp;</span><span class="nx">foo</span><span class="p">{</span><span class="nx">params</span><span class="p">:</span> <span class="nx">params</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">});</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">c</span><span class="p">.</span><span class="nf">Invoke</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">foo</span> <span class="o">*</span><span class="nx">foo</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">pp</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">foo</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// &amp;main.foo{
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">//   params: main.fooParameters{
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">//     In: dig.In{
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">//       _: dig.digSentinel{},
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">//     },
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">//     Bar: &amp;main.bar{},
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">//     Baz: &amp;main.baz{...},
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">//   },
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// }
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="p">});</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><h3 id="binding-interfaces">Binding Interfaces</h3>
+<p><a href="https://github.com/google/wire">google/wire</a> の <a href="https://github.com/google/wire/blob/main/docs/guide.md#binding-interfaces">Binding Interfaces</a> と相当の機能を <a href="https://github.com/uber-go/dig">uber-go/dig</a> で使うには <a href="https://pkg.go.dev/go.uber.org/dig#As">As関数</a> を使用します。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">  <span class="s">&#34;github.com/k0kubun/pp&#34;</span>
+</span></span><span class="line"><span class="cl">  <span class="s">&#34;go.uber.org/dig&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">fooImplementation</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="p">(</span><span class="nx">f</span> <span class="o">*</span><span class="nx">fooImplementation</span><span class="p">)</span> <span class="nf">Foo</span><span class="p">()</span> <span class="p">{}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">Foo</span> <span class="kd">interface</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nf">Foo</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">NewFoo</span><span class="p">()</span> <span class="p">(</span><span class="o">*</span><span class="nx">fooImplementation</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="k">return</span> <span class="o">&amp;</span><span class="nx">fooImplementation</span><span class="p">{},</span> <span class="kc">nil</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">c</span> <span class="o">:=</span> <span class="nx">dig</span><span class="p">.</span><span class="nf">New</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">c</span><span class="p">.</span><span class="nf">Provide</span><span class="p">(</span><span class="nx">NewFoo</span><span class="p">,</span> <span class="nx">dig</span><span class="p">.</span><span class="nf">As</span><span class="p">(</span><span class="nb">new</span><span class="p">(</span><span class="nx">Foo</span><span class="p">)));</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">c</span><span class="p">.</span><span class="nf">Invoke</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">foo</span> <span class="nx">Foo</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">pp</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">foo</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">});</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><h2 id="まとめ">まとめ</h2>
+<p><a href="https://github.com/uber-go/dig">uber-go/dig</a> を使って「依存関係の事前チェック」「Struct Providers」「Binding Interfaces」を実現する方法を調査しました。
+導入に際して一番のネックだと思っていた「依存関係の事前チェック」が解消できそうなので、
+DIライブラリーの第一候補になるかなーと思っています。</p>
+<blockquote>
+<p>ウサギはスキップして、新しい知識を発見 🐰✨ <br>
+dig と wire の物語を書きて、 <br>
+Go の依存性注入の道を照らす ⚡ <br>
+ポストの森でみんなを導く 📚🌿</p>
+<p>by <a href="https://www.coderabbit.ai/">CodeRabbit</a></p>
+</blockquote>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://zenn.dev/motch/articles/google-wire-alternative">google/wire がアーカイブされたけどどうすればいいの？</a></li>
+<li><a href="https://github.com/uber-go/dig">uber-go/dig</a></li>
+<li><a href="https://github.com/google/wire">google/wire</a></li>
+<li><a href="https://github.com/google/wire/blob/main/docs/guide.md">Wire User Guide</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">ICHINOSE Shogo</span></span>
+    
+    <time>Oct 24, 2025</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2025/10/13/ulid-for-golang/" title="Go向けのULIDライブラリを作った">Go向けのULIDライブラリを作った</a>
+    
+
+    
+  </p>
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/10/24/deep-dig-uber-go-dig/">uber-go/dig を深堀りしてみる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/10/13/ulid-for-golang/">Go向けのULIDライブラリを作った</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/08/12/github-now-checks-b64-header-parameter/">GitHubがJWTのb64ヘッダーパラメーターを認識するようになった</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/05/24/go-may-convert-mul-add-to-fma/">Goは積和演算をFMAに変換する場合があるという話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/05/20/update-of-math-fma-in-golang/">Goのmath.FMAの挙動を修正した</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/05/02/akamai-peace-for-all-2nd/">Akamai x UNIQLOコラボTシャツに書かれたプログラムを解読してみる (第二回戦)</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/04/06/actions-setup-redis-verifies-build-provenance/">actions-setup-redisがBuild Provenanceの検証を行うようになりました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/03/27/convert-csv-to-structs-in-golang/">CSVをGoの構造体にマッピングする</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/03/19/mecab-python-module-is-released/">MeCabのPython BindingをPyPIに上げた</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2025 ICHINOSE Shogo - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+</body>
+
+</html>
+
