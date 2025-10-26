@@ -45,7 +45,7 @@ v1.45.0の関連アセットに必要なバイナリーを全部突っ込む、�
 完成したバイナリーは [gh] コマンドでアップロードします。
 
 同じMySQLバージョンの再ビルドを行いたい（たとえば、将来リリースされるであろうubuntu-26.04版ビルドの追加とか）ケースも考えて、リリース名に `mysql-8.4.6-20251026153058` のようにリリースした日付を入れておきます。
-これは、[変更不可リリース](https://docs.github.com/ja/code-security/supply-chain-security/understanding-your-software-supply-chain/immutable-releases)を有効化してあるため、過去のリリースを直接書き換えることができないためです。
+これは、[変更不可リリース](https://docs.github.com/ja/code-security/supply-chain-security/understanding-your-software-supply-chain/immutable-releases)を有効化しており、過去のリリースを直接書き換えることができないためです。
 
 ### shogo82148/actions-setup-mysql のダウンロードURL書き換え
 
