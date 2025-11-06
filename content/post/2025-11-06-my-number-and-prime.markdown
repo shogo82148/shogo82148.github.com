@@ -24,6 +24,8 @@ categories: [go, golang]
 
 C++よくわからずコンパイル通らなかったので、Goで再実装してみました。
 
+- [shogo82148/go-generate-my-number](https://github.com/shogo82148/go-generate-my-number)
+
 ```go
 package main
 
@@ -296,3 +298,4 @@ go run ./is_prime  41508.48s user 511.37s system 99% cpu 11:41:34.54 total
 - [エラトステネスの篩の高速化](https://qiita.com/peria/items/a4ff4ddb3336f7b81d50)
 - [マイナンバーが素数になる確率を概算する](https://note.com/noios/n/n5737b78a19a3)
 - [マイナンバーが素数になる確率は？](https://detail.chiebukuro.yahoo.co.jp/qa/question_detail/q14150083094)
+- [shogo82148/go-generate-my-number](https://github.com/shogo82148/go-generate-my-number)
