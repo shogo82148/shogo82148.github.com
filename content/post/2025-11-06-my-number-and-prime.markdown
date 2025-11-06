@@ -270,7 +270,7 @@ go run ./is_prime  41508.48s user 511.37s system 99% cpu 11:41:34.54 total
 
 -----
 
-他の人が計算した概算約3%という結果とも一するので、あってる気がします、たぶん。
+他の人が計算した概算約3%という結果とも一致するので、あってる気がします、たぶん。
 
 - [マイナンバーが素数になる確率を概算する](https://note.com/noios/n/n5737b78a19a3)
 - [マイナンバーが素数になる確率は？](https://detail.chiebukuro.yahoo.co.jp/qa/question_detail/q14150083094)
