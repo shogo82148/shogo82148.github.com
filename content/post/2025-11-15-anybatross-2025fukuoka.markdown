@@ -390,6 +390,12 @@ for(;;){
 print join(',',@d)."\n$i\n"
 ```
 
+- `/(?=(..))/g` を `/(?=(\S\S))/g` に置き換えて、`split / /` の分を削る。
+- sortを使って最頻値を取得。
+- `for(;;)` の中に書けるものはそちらに移す。`;` の分だけお得。
+- ソースコード中に出てくる bare word は、対応する関数が存在しなければ文字列として解釈されるので、`''` を外せる。
+- `join(',',@d)` するより `$"=',';"@d"` のほうが短い。
+
 > [Score: -110](https://perlbatross.kayac.com/contest/2025fukuoka/challenge/2/01KA5CRMD6987TVS22V4JF7649)
 
 ```perl
