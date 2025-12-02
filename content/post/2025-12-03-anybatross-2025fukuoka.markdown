@@ -28,7 +28,7 @@ YAPC::Fukuoka 2025 の余興で[コードゴルフ](https://ja.wikipedia.org/wik
 >
 > 1行ずつ数えて、その行までの累積個数と、その行での出現個数を出力してください。
 >
-> - https://perlbatross.kayac.com/contest/2025fukuoka/challenge/1/sample
+> - <https://perlbatross.kayac.com/contest/2025fukuoka/challenge/1/sample>
 
 サンプルのコードが提供されているので、まずはここから始めていきましょう。
 
@@ -189,6 +189,8 @@ print$a+=$b=y/8B/0/+y/0469ADO-R//,",$b
 ## Hole 2
 
 > アルファベット小文字と半角スペースを用いて分かち書きされたテキストが標準入力で与えられます。このテキストを以下のルールに従って圧縮してください。
+>
+> - <https://perlbatross.kayac.com/contest/2025fukuoka/challenge/2/sample>
 
 Hole 2もまずはサンプルコードを通してランキングに載るところからスタートです。
 
