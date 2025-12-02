@@ -168,7 +168,7 @@ $a+=$b=()=(/[04689ABDO-R]/g,/[8B]/g),print"$a,$b\n"for<>;
 print$a+=$b=s/[8B]/0/g+s/[04689ABDO-R]//g,",$b\n"for<>
 ```
 
-さらに perldoc を彷徨って、`y///` 演算子を使うと同等の処理をもっと短く書けることに気が付きました。
+さらに perldoc を彷徨って、`y///` 演算子を使うと同等の処理をもっと短く書けることに気が付きました。`y///` 演算子も置換を行ったあと、評価結果として置換した回数を返します。
 
 > [Score: -54](https://perlbatross.kayac.com/contest/2025fukuoka/challenge/1/01K9XV7DDMEXM2MBXZS1SARJKS)
 
