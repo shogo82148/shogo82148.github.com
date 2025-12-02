@@ -2,7 +2,7 @@
 layout: post
 title: "コードゴルフコンテスト Anybatross YAPC::Fukuoka 2025 に参加した"
 slug: anybatross-2025fukuoka
-date: 2025-11-15 17:16:00 +0900
+date: 2025-12-03 00:20:00 +0900
 comments: true
 categories: [perl]
 ---
