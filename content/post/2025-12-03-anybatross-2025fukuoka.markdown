@@ -7,13 +7,18 @@ comments: true
 categories: [perl]
 ---
 
+この記事は、[Perl Advent Calendar 2025](https://qiita.com/advent-calendar/2025/perl) 4日目の記事です。 3日目は[id:hkoba501](https://profile.hatena.ne.jp/hkoba501/)で「[Claude Code は OO Modulino （オゥオゥ・モジュリーノ）も理解してくれる、ぽい！](https://hkoba.hatenablog.com/entry/2025/12/02/000000)」でした。
+
+-----
+
 YAPC::Fukuoka 2025 の余興で[コードゴルフ](https://ja.wikipedia.org/wiki/%E3%82%B3%E3%83%BC%E3%83%89%E3%82%B4%E3%83%AB%E3%83%95)コンテストが開催されました。
 
 - [コードゴルフコンテスト Anybatross YAPC::Fukuoka 2025 開催のお知らせ](https://techblog.kayac.com/anybatross-yapc2025fukuoka)
 - [~~Perl~~Anybatross YAPC::Fukuoka 2025](https://perlbatross.kayac.com/contest/2025fukuoka)
 
 コードゴルフとは、与えられた仕様に対してできる限り短いソースコードで解答するというゲームです。
-なんだか面白そうなのでチャレンジしてみました。
+今回はPerl、Ruby、Python、JavaScript、PHPなどで参加可能ですが、~~Perl Advent Calendarのネタのために、~~　個人的に一番馴染み深いPerlを使って参加しました。
+結果、すべての問題をPerlでチャレンジした人の中では2位になることができました。
 
 ## Hole 1
 
@@ -416,3 +421,14 @@ $_=<>;for(
 $"=',';print"@d
 $_"
 ```
+
+## まとめ
+
+[~~Perl~~Anybatross YAPC::Fukuoka 2025](https://perlbatross.kayac.com/contest/2025fukuoka)に参加し、全問Perlで解いた人としては2位になりました。
+
+文字列置換（`s///`, `y///`）の戻り値とかあまり気にしたことがなかったので勉強になりました。
+また、正規表現の先読みにこんな使い方（Hole2）があるとははじめて知りました。このことはChatGPTを使わなければ気が付かなかったと思うので、個人的にはAI大活躍でした。
+
+-----
+
+明日5日は[@ytnobody](https://qiita.com/ytnobody)で、「なにかかきます」です。お楽しみに！
