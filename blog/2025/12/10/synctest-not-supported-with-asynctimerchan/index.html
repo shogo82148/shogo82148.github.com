@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono&display=swap" rel="stylesheet"> 
+
+  
+  <title>Goのsynctestを使おうとしたらsynctest.Run not supported with asynctimerchanと怒られたときの対処法</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="ICHINOSE Shogo">
+
+  
+  <meta name="generator" content="Hugo 0.120.4">
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-40R0PCLKVF');
+</script>
+
+
+<script>
+MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']]
+  },
+  svg: {
+    fontCache: 'global'
+  }
+};
+</script>
+
+<script type="text/javascript" id="MathJax-script" async
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+</script>
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Dec 10, 2025
+     - 2 minute read 
+    
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a>
+    
+  </p>
+  <h1 class="entry-title">
+     Goのsynctestを使おうとしたらsynctest.Run not supported with asynctimerchanと怒られたときの対処法 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <h2 id="tldr">TL;DR</h2>
+<ul>
+<li>Go 1.25 から正式サポートされた<a href="https://pkg.go.dev/testing/synctest">testing/synctest</a>パッケージを使ってみた</li>
+<li>「synctest.Run not supported with asynctimerchan」というメッセージとともにpanicした</li>
+<li><code>go mod edit -go=1.23</code> を実行すれば解決</li>
+</ul>
+<h2 id="背景">背景</h2>
+<p><a href="https://github.com/shogo82148/go-retry">shogo82148/go-retry</a> は指数的バックオフをよしなになってくれるライブラリーです。</p>
+<ul>
+<li><a href="https://github.com/shogo82148/go-retry">shogo82148/go-retry</a></li>
+<li><a href="https://shogo82148.github.io/blog/2019/07/22/go-retry/">Goで指数的バックオフをやってくれるgo-retryを書いた</a></li>
+<li><a href="https://shogo82148.github.io/blog/2023/12/29/2023-12-29-go-retry-meets-generics/">go-retry v1.2.0 リリースのお知らせ、ジェネリクスがやってきた</a></li>
+<li><a href="https://shogo82148.github.io/blog/2024/06/25/2024-06-25-go-retry-v2/">go-retry v2 リリースのお知らせ</a></li>
+</ul>
+<p>は待ち時間を調整するテストを書くために、「実際にSleepをして経過時間を取得する」という方法を採用しています。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// テストのイメージ
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="kd">var</span> <span class="nx">policy</span> <span class="p">=</span> <span class="nx">retry</span><span class="p">.</span><span class="nx">Policy</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">MinDelay</span><span class="p">:</span> <span class="mi">100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">MaxDelay</span><span class="p">:</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">MaxCount</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="c1">// 実際にSleepをして経過時間を取得する
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>  <span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">_</span> <span class="p">=</span> <span class="nx">policy</span><span class="p">.</span><span class="nf">Do</span><span class="p">(</span><span class="nx">t</span><span class="p">.</span><span class="nf">Context</span><span class="p">(),</span> <span class="kd">func</span><span class="p">()</span> <span class="kt">error</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">errors</span><span class="p">.</span><span class="nf">New</span><span class="p">(</span><span class="s">&#34;some error&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">})</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">d</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Since</span><span class="p">(</span><span class="nx">start</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="k">if</span> <span class="nx">d</span> <span class="p">&lt;</span> <span class="mi">300</span><span class="o">*</span><span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">t</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;want at least 300ms, got %s&#34;</span><span class="p">,</span> <span class="nx">d</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>このテストは実際に300ミリ秒Sleepしてしまうので、テストに必ず300ミリ秒かかってしまいます。
+また実際のSleep時間はランタイムの状態によって変化してしまうため、
+「300ミリ秒ちょうどSleepする」ことをテストしたいのに、実際にそのようなテストを書くことは難しいです。</p>
+<h2 id="testingsynctest-を使ってみた">testing/synctest を使ってみた</h2>
+<p>そんな問題を一気に解決してくれるのが、Go 1.25 から正式サポートされた <a href="https://pkg.go.dev/testing/synctest">testing/synctest</a> です。
+やり方は簡単。<code>synctest.Test(t, func(t *testing.T) { /* ... */ })</code> で囲ってあげるだけです。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nx">synctest</span><span class="p">.</span><span class="nf">Test</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">policy</span> <span class="p">=</span> <span class="nx">retry</span><span class="p">.</span><span class="nx">Policy</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">MinDelay</span><span class="p">:</span> <span class="mi">100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">MaxDelay</span><span class="p">:</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">MaxCount</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">_</span> <span class="p">=</span> <span class="nx">policy</span><span class="p">.</span><span class="nf">Do</span><span class="p">(</span><span class="nx">t</span><span class="p">.</span><span class="nf">Context</span><span class="p">(),</span> <span class="kd">func</span><span class="p">()</span> <span class="kt">error</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="k">return</span> <span class="nx">errors</span><span class="p">.</span><span class="nf">New</span><span class="p">(</span><span class="s">&#34;some error&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">})</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">d</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Since</span><span class="p">(</span><span class="nx">start</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 300msちょうどSleepすることをテストできる！！
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">if</span> <span class="nx">d</span> <span class="o">!=</span> <span class="mi">300</span><span class="o">*</span><span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nx">t</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;want 300ms, got %s&#34;</span><span class="p">,</span> <span class="nx">d</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">})</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>と思っていた時期が僕にもありました。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">=== RUN   Test
+</span></span><span class="line"><span class="cl">--- FAIL: Test (0.00s)
+</span></span><span class="line"><span class="cl">panic: synctest.Run not supported with asynctimerchan!=0 [recovered, repanicked]
+</span></span></code></pre></div><p>なんと <code>synctest.Run</code> はサポートされていないと怒られてしまいました。</p>
+<h2 id="go-123-で入ったタイマーの変更">Go 1.23 で入ったタイマーの変更</h2>
+<p><code>asynctimerchan</code> というのは Go 1.23 で入ったタイマーの挙動変更をコントロールするためのフラグです。</p>
+<ul>
+<li><a href="https://go.dev/wiki/Go123Timer">Go Wiki: Go 1.23 Timer Channel Changes</a></li>
+<li><a href="https://zenn.dev/schottman13/articles/a67a86cb8a32bd">【Go】もう迷わないtime.Timerの正しい使い方（Go1.22以前と1.23以降まとめ）</a></li>
+</ul>
+<p>詳しい変更内容はリンク先に譲りますが、<code>asynctimerchan=1</code> になっていると Go 1.22 以前の挙動に巻き戻してくれます。</p>
+<p>そこで go.mod を確認してみると・・・</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">// go.mod
+</span></span><span class="line"><span class="cl">module github.com/shogo82148/go-retry/v2
+</span></span><span class="line"><span class="cl"> 
+</span></span><span class="line"><span class="cl">go 1.18 // こいつが悪さをしていた
+</span></span></code></pre></div><p>go ディレクティブが 1.18 になっているので、Goのランタイムは Go 1.18 の挙動をなるべく再現しようとします。
+その結果 <code>asynctimerchan=1</code> になってしまったのです。</p>
+<h2 id="解決方法">解決方法</h2>
+<p>修正は簡単で、<code>go mod edit -go=1.23</code> を実行して <code>go.mod</code> の go ディレクティブを書き換えれば解決します。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-diff" data-lang="diff"><span class="line"><span class="cl"> module github.com/shogo82148/go-retry/v2
+</span></span><span class="line"><span class="cl"> 
+</span></span><span class="line"><span class="cl"><span class="gd">-go 1.18
+</span></span></span><span class="line"><span class="cl"><span class="gd"></span><span class="gi">+go 1.23
+</span></span></span></code></pre></div><p>ただしタイマーの挙動が Go 1.23 以降のものになるので、そこだけ注意が必要です。</p>
+<h2 id="まとめ">まとめ</h2>
+<p><a href="https://pkg.go.dev/testing/synctest">testing/synctest</a> を使うには Go 1.22 との互換性を切る必要があります。
+ただしタイマーの挙動が変わってしまうので注意しましょう。</p>
+<blockquote>
+<p>🐰 新しきポストが加わり、喜びあふれ、<br>
+Go言語の迷宮も解き明かす道筋、<br>
+synctest、asynctimer、謎は晴れて、<br>
+開発者の手助け、ウサギのちから！<br>
+✨
+by <a href="https://www.coderabbit.ai/">CodeRabbit</a></p>
+</blockquote>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://github.com/shogo82148/go-retry">shogo82148/go-retry</a></li>
+<li><a href="https://shogo82148.github.io/blog/2019/07/22/go-retry/">Goで指数的バックオフをやってくれるgo-retryを書いた</a></li>
+<li><a href="https://shogo82148.github.io/blog/2023/12/29/2023-12-29-go-retry-meets-generics/">go-retry v1.2.0 リリースのお知らせ、ジェネリクスがやってきた</a></li>
+<li><a href="https://shogo82148.github.io/blog/2024/06/25/2024-06-25-go-retry-v2/">go-retry v2 リリースのお知らせ</a></li>
+<li><a href="https://pkg.go.dev/testing/synctest">testing/synctest</a></li>
+<li><a href="https://github.com/shogo82148/go-retry/pull/43">shogo82148/go-retry#43</a></li>
+<li><a href="https://go.dev/wiki/Go123Timer">Go Wiki: Go 1.23 Timer Channel Changes</a></li>
+<li><a href="https://zenn.dev/schottman13/articles/a67a86cb8a32bd">【Go】もう迷わないtime.Timerの正しい使い方（Go1.22以前と1.23以降まとめ）</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">ICHINOSE Shogo</span></span>
+    
+    <time>Dec 10, 2025</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2025/12/10/signatures-named-parameters-in-perl/" title="Perl 5.43.5 の Signatures Named Parameters を先取り">Perl 5.43.5 の Signatures Named Parameters を先取り</a>
+    
+
+    
+  </p>
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2025/12/10/synctest-not-supported-with-asynctimerchan/">Goのsynctestを使おうとしたらsynctest.Run not supported with asynctimerchanと怒られたときの対処法</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/12/10/signatures-named-parameters-in-perl/">Perl 5.43.5 の Signatures Named Parameters を先取り</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/12/03/anybatross-2025fukuoka/">コードゴルフコンテスト Anybatross YAPC::Fukuoka 2025 に参加した</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/11/06/my-number-and-prime/">マイナンバーを全列挙して含まれる素数の数を数えた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/10/26/split-actions-setup-mysql/">shogo82148/actions-setup-mysqlのMySQLビルドスクリプト群を別レポジトリーに移行した</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/10/24/deep-dig-uber-go-dig/">uber-go/dig を深堀りしてみる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/10/13/ulid-for-golang/">Go向けのULIDライブラリを作った</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/08/12/github-now-checks-b64-header-parameter/">GitHubがJWTのb64ヘッダーパラメーターを認識するようになった</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/05/24/go-may-convert-mul-add-to-fma/">Goは積和演算をFMAに変換する場合があるという話</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2025 ICHINOSE Shogo - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+</body>
+
+</html>
+
