@@ -22,7 +22,7 @@ categories: [go, golang]
 - [go-retry v1.2.0 リリースのお知らせ、ジェネリクスがやってきた](https://shogo82148.github.io/blog/2023/12/29/2023-12-29-go-retry-meets-generics/)
 - [go-retry v2 リリースのお知らせ](https://shogo82148.github.io/blog/2024/06/25/2024-06-25-go-retry-v2/)
 
-は待ち時間を調整するテストを書くために、「実際にSleepをして経過時間を取得する」というテスト書いています。
+は待ち時間を調整するテストを書くために、「実際にSleepをして経過時間を取得する」という方法を採用しています。
 
 ```go
 // テストのイメージ
