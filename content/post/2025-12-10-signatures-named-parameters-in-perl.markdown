@@ -7,6 +7,10 @@ comments: true
 categories: [perl]
 ---
 
+この記事は、[Perl Advent Calendar 2025](https://qiita.com/advent-calendar/2025/perl) 10日目の記事です。 9日目は[@sognmu](https://x.com/songmu)で「[Text::Markdown::Discountのメンテナンスを引き継ぎました](https://songmu.jp/riji/entry/2025-12-09-becoming-text-markdown-discount-maintainer.html)」でした。
+
+-----
+
 ## 背景
 
 2025年12月10日時点の最新版のPerl 5.43.5（開発版）で、
@@ -210,6 +214,10 @@ Perl 5.43.5（開発版）から導入された、サブルーチンの名前付
 
 繰り返しになりますが、Signatures Named Parametersは実験的な（Experimental）機能という位置づけです。
 今回検証した挙動は将来変更される可能性があるので注意してください。
+
+-----
+
+明日11日はTBDで、「TBD」です。お楽しみに！
 
 > 🐰 新しい記事、ペンで綴り、\
 > Perlの秘密、紙に記す、\
