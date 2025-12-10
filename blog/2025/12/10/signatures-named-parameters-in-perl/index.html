@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono&display=swap" rel="stylesheet"> 
+
+  
+  <title>Perl 5.43.5 の Signatures Named Parameters を先取り</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="ICHINOSE Shogo">
+
+  
+  <meta name="generator" content="Hugo 0.120.4">
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-40R0PCLKVF');
+</script>
+
+
+<script>
+MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']]
+  },
+  svg: {
+    fontCache: 'global'
+  }
+};
+</script>
+
+<script type="text/javascript" id="MathJax-script" async
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+</script>
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Dec 10, 2025
+     - 3 minute read 
+    
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/perl/">perl </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2025/12/10/signatures-named-parameters-in-perl/">Perl 5.43.5 の Signatures Named Parameters を先取り</a>
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <p>この記事は、<a href="https://qiita.com/advent-calendar/2025/perl">Perl Advent Calendar 2025</a> 10日目の記事です。 9日目は<a href="https://x.com/songmu">@sognmu</a>で「<a href="https://songmu.jp/riji/entry/2025-12-09-becoming-text-markdown-discount-maintainer.html">Text::Markdown::Discountのメンテナンスを引き継ぎました</a>」でした。</p>
+<hr>
+<h2 id="背景">背景</h2>
+<p>2025年12月10日時点の最新版のPerl 5.43.5（開発版）で、
+サブルーチンの名前付きパラメーター呼び出し（Signatures Named Parameters）がサポートされました。
+これは <a href="https://github.com/Perl/PPCs/blob/209b515ea88c85b152e256eb1cbeb166451fa992/ppcs/ppc0024-signature-named-parameters.md">PPC0024</a> を実装したものです。</p>
+<p>どういう機能かさっそく遊んでみましょう。</p>
+<h2 id="perl-5435-のビルド">Perl 5.43.5 のビルド</h2>
+<p>Signatures Named Parameters はまだ安定版のPerlには取り込まれていません。
+使用するには開発版のPerlをビルドする必要があります。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">plenv install 5.43.5 -Dusedevel
+</span></span><span class="line"><span class="cl">plenv local 5.43.5
+</span></span></code></pre></div><h2 id="試してみる">試してみる</h2>
+<p>ビルドが完了したら実際に試してみましょう。</p>
+<p>まだ実験的な（Experimental）機能という位置づけなので、今回検証した挙動は将来変更される可能性があります。
+注意してください。</p>
+<h3 id="普通に呼び出し">普通に呼び出し</h3>
+<p>サブルーチンの仮引数部に <code>:$alpha</code> と書くと名前付きパラメーターとして扱われます。
+サブルーチンの中からは <code>$alpha</code> という変数名でアクセス可能です。
+呼び出し側からは <code>alpha =&gt; &quot;A&quot;</code> のように指定します。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="line"><span class="cl"><span class="k">use</span> <span class="nn">v5</span><span class="mf">.43.5</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">use</span> <span class="nn">experimental</span> <span class="sx">qw(signature_named_parameters)</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">sub</span> <span class="nf">foo</span> <span class="p">(:$alpha, :$beta) {</span>
+</span></span><span class="line"><span class="cl">  <span class="k">print</span> <span class="s">&#34;The value of alpha was $alpha\n&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">print</span> <span class="s">&#34;The value of beta was $beta\n&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">foo</span><span class="p">(</span><span class="n">alpha</span> <span class="o">=&gt;</span> <span class="s">&#34;A&#34;</span><span class="p">,</span> <span class="n">beta</span> <span class="o">=&gt;</span> <span class="s">&#34;B&#34;</span><span class="p">);</span>
+</span></span></code></pre></div><p>出力：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">The value of alpha was A
+</span></span><span class="line"><span class="cl">The value of beta was B
+</span></span></code></pre></div><p>実験的な（Experimental）機能なので、何も指定がないと警告がでます。
+警告は <code>use experimental qw(signature_named_parameters);</code> で抑制可能です。</p>
+<h3 id="ハッシュ変数を使ってパラメーターを渡す">ハッシュ変数を使ってパラメーターを渡す</h3>
+<p>ハッシュ変数をパラメーターとして渡すことが可能です。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="line"><span class="cl"><span class="k">use</span> <span class="nn">v5</span><span class="mf">.43.5</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">use</span> <span class="nn">experimental</span> <span class="sx">qw(signature_named_parameters)</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">sub</span> <span class="nf">foo</span> <span class="p">(:$alpha, :$beta) {</span>
+</span></span><span class="line"><span class="cl">  <span class="k">print</span> <span class="s">&#34;The value of alpha was $alpha\n&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">print</span> <span class="s">&#34;The value of beta was $beta\n&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">my</span> <span class="nv">%params</span> <span class="o">=</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">  <span class="n">alpha</span> <span class="o">=&gt;</span> <span class="s">&#34;X&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="n">beta</span>  <span class="o">=&gt;</span> <span class="s">&#34;Y&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl"><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="n">foo</span><span class="p">(</span><span class="nv">%params</span><span class="p">);</span>
+</span></span></code></pre></div><p>出力：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">The value of alpha was X
+</span></span><span class="line"><span class="cl">The value of beta was Y
+</span></span></code></pre></div><h3 id="デフォルト値の設定">デフォルト値の設定</h3>
+<p>デフォルト値の設定も可能です。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="line"><span class="cl"><span class="k">use</span> <span class="nn">v5</span><span class="mf">.43.5</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">use</span> <span class="nn">experimental</span> <span class="sx">qw(signature_named_parameters)</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">sub</span> <span class="nf">foo</span> <span class="p">(:$alpha, :$beta = &#34;default&#34;) {</span>
+</span></span><span class="line"><span class="cl">  <span class="k">print</span> <span class="s">&#34;The value of alpha was $alpha\n&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">print</span> <span class="s">&#34;The value of beta was $beta\n&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">foo</span><span class="p">(</span><span class="n">alpha</span> <span class="o">=&gt;</span> <span class="s">&#34;X&#34;</span><span class="p">);</span>
+</span></span></code></pre></div><p>出力：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">The value of alpha was X
+</span></span><span class="line"><span class="cl">The value of beta was default
+</span></span></code></pre></div><h3 id="パラメーターの設定エラー">パラメーターの設定エラー</h3>
+<p>シグネチャーと合わないパラメーターを渡した場合どうなるのかも試してみました。</p>
+<p>まずはパラメーターが不足している場合：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="line"><span class="cl"><span class="k">use</span> <span class="nn">v5</span><span class="mf">.43.5</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">use</span> <span class="nn">experimental</span> <span class="sx">qw(signature_named_parameters)</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">sub</span> <span class="nf">foo</span> <span class="p">(:$alpha, :$beta) {</span>
+</span></span><span class="line"><span class="cl">  <span class="k">print</span> <span class="s">&#34;The value of alpha was $alpha\n&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">print</span> <span class="s">&#34;The value of beta was $beta\n&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># Missing required named parameter &#39;beta&#39; to subroutine &#39;main::foo&#39; at ./sample4.pl line 10.</span>
+</span></span><span class="line"><span class="cl"><span class="n">foo</span><span class="p">(</span><span class="n">alpha</span> <span class="o">=&gt;</span> <span class="s">&#34;X&#34;</span><span class="p">);</span>
+</span></span></code></pre></div><p>&ldquo;Missing required named parameter &lsquo;beta&rsquo;&rdquo; とパラメーターが不足していることを教えてくれました。</p>
+<p>次は逆にパラメーターが多すぎる場合：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="line"><span class="cl"><span class="k">use</span> <span class="nn">v5</span><span class="mf">.43.5</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">use</span> <span class="nn">experimental</span> <span class="sx">qw(signature_named_parameters)</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">sub</span> <span class="nf">foo</span> <span class="p">(:$alpha, :$beta) {</span>
+</span></span><span class="line"><span class="cl">  <span class="k">print</span> <span class="s">&#34;The value of alpha was $alpha\n&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">print</span> <span class="s">&#34;The value of beta was $beta\n&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># Unrecognized named parameter &#39;gamma&#39; to subroutine &#39;main::foo&#39; at ./sample3.pl line 10.</span>
+</span></span><span class="line"><span class="cl"><span class="n">foo</span><span class="p">(</span><span class="n">alpha</span> <span class="o">=&gt;</span> <span class="s">&#34;X&#34;</span><span class="p">,</span> <span class="n">beta</span> <span class="o">=&gt;</span> <span class="s">&#34;Y&#34;</span><span class="p">,</span> <span class="n">gamma</span> <span class="o">=&gt;</span> <span class="s">&#34;Z&#34;</span><span class="p">);</span>
+</span></span></code></pre></div><p>&ldquo;Unrecognized named parameter &lsquo;gamma&rsquo;&rdquo; と未知のパラメーターが存在することを教えてくれました。</p>
+<h3 id="吸い込みパラメーター">吸い込みパラメーター</h3>
+<p>名前付きパラメーターは、吸い込みパラメーター（slurpy parameter）と一緒に使うこともできます。
+吸い込みパラメーターは未知のパラメーターを集めてくれます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="line"><span class="cl"><span class="k">use</span> <span class="nn">v5</span><span class="mf">.43.5</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">use</span> <span class="nn">experimental</span> <span class="sx">qw(signature_named_parameters)</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">sub</span> <span class="nf">foo</span> <span class="p">(:$alpha, :$beta, @rest) {</span>
+</span></span><span class="line"><span class="cl">  <span class="k">print</span> <span class="s">&#34;The value of alpha was $alpha\n&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">print</span> <span class="s">&#34;The value of beta was $beta\n&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">for</span> <span class="k">my</span> <span class="nv">$val</span> <span class="p">(</span><span class="nv">@rest</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">print</span> <span class="s">&#34;Additional value: $val\n&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">foo</span><span class="p">(</span><span class="n">alpha</span> <span class="o">=&gt;</span> <span class="s">&#34;X&#34;</span><span class="p">,</span> <span class="n">beta</span> <span class="o">=&gt;</span> <span class="s">&#34;Y&#34;</span><span class="p">,</span> <span class="s">&#34;extra1&#34;</span><span class="p">,</span> <span class="s">&#34;extra2&#34;</span><span class="p">);</span>
+</span></span></code></pre></div><p>出力：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">The value of alpha was X
+</span></span><span class="line"><span class="cl">The value of beta was Y
+</span></span><span class="line"><span class="cl">Additional value: extra1
+</span></span><span class="line"><span class="cl">Additional value: extra2
+</span></span></code></pre></div><p>吸い込みパラメーターはハッシュ変数にすることもできます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-perl" data-lang="perl"><span class="line"><span class="cl"><span class="k">use</span> <span class="nn">v5</span><span class="mf">.43.5</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">use</span> <span class="nn">experimental</span> <span class="sx">qw(signature_named_parameters)</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">sub</span> <span class="nf">foo</span> <span class="p">(:$alpha, :$beta, %rest) {</span>
+</span></span><span class="line"><span class="cl">  <span class="k">print</span> <span class="s">&#34;The value of alpha was $alpha\n&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">print</span> <span class="s">&#34;The value of beta was $beta\n&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">for</span> <span class="k">my</span> <span class="p">(</span><span class="nv">$key</span><span class="p">,</span> <span class="nv">$val</span><span class="p">)</span> <span class="p">(</span><span class="nv">%rest</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">print</span> <span class="s">&#34;The value of $key was $val\n&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">foo</span><span class="p">(</span><span class="n">alpha</span> <span class="o">=&gt;</span> <span class="s">&#34;X&#34;</span><span class="p">,</span> <span class="n">beta</span> <span class="o">=&gt;</span> <span class="s">&#34;Y&#34;</span><span class="p">,</span> <span class="n">extra1</span> <span class="o">=&gt;</span> <span class="s">&#34;value1&#34;</span><span class="p">,</span> <span class="n">extra2</span> <span class="o">=&gt;</span> <span class="s">&#34;value2&#34;</span><span class="p">);</span>
+</span></span></code></pre></div><p>出力：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">The value of alpha was X
+</span></span><span class="line"><span class="cl">The value of beta was Y
+</span></span><span class="line"><span class="cl">The value of extra1 was value1
+</span></span><span class="line"><span class="cl">The value of extra2 was value2
+</span></span></code></pre></div><h2 id="まとめ">まとめ</h2>
+<p>Perl 5.43.5（開発版）から導入された、サブルーチンの名前付きパラメーター呼び出し（Signatures Named Parameters）を試してみました。
+引数の過不足のチェックは自前で実装すると意外と漏れがちなので、過不足チェックをデフォルトでやってくれるのはいいですね。</p>
+<p>繰り返しになりますが、Signatures Named Parametersは実験的な（Experimental）機能という位置づけです。
+今回検証した挙動は将来変更される可能性があるので注意してください。</p>
+<hr>
+<p>明日11日はTBDで、「TBD」です。お楽しみに！</p>
+<blockquote>
+<p>🐰 新しい記事、ペンで綴り、<br>
+Perlの秘密、紙に記す、<br>
+ナンドパラメータの魔法を説く、<br>
+デバッグの道、クリアになりて、<br>
+開発者の心、ホッと安心！</p>
+<p>by <a href="https://www.coderabbit.ai/">CodeRabbit</a></p>
+</blockquote>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://speakerdeck.com/charsbar/2025nian-qiu-noperl?slide=67">2025年 秋のPerl</a></li>
+<li><a href="https://metacpan.org/release/CONTRA/perl-5.43.5/view/pod/perldelta.pod">perldelta - Perl 5.43.5</a></li>
+<li><a href="https://metacpan.org/release/CONTRA/perl-5.43.5/view/pod/perlsub.pod#Signatures">perlsub - Perl 5.43.5</a></li>
+<li><a href="https://github.com/Perl/PPCs/blob/209b515ea88c85b152e256eb1cbeb166451fa992/ppcs/ppc0024-signature-named-parameters.md">PPC0024</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">ICHINOSE Shogo</span></span>
+    
+    <time>Dec 10, 2025</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2025/12/03/anybatross-2025fukuoka/" title="コードゴルフコンテスト Anybatross YAPC::Fukuoka 2025 に参加した">コードゴルフコンテスト Anybatross YAPC::Fukuoka 2025 に参加した</a>
+    
+
+    
+  </p>
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2025/12/10/signatures-named-parameters-in-perl/">Perl 5.43.5 の Signatures Named Parameters を先取り</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/12/03/anybatross-2025fukuoka/">コードゴルフコンテスト Anybatross YAPC::Fukuoka 2025 に参加した</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/11/06/my-number-and-prime/">マイナンバーを全列挙して含まれる素数の数を数えた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/10/26/split-actions-setup-mysql/">shogo82148/actions-setup-mysqlのMySQLビルドスクリプト群を別レポジトリーに移行した</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/10/24/deep-dig-uber-go-dig/">uber-go/dig を深堀りしてみる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/10/13/ulid-for-golang/">Go向けのULIDライブラリを作った</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/08/12/github-now-checks-b64-header-parameter/">GitHubがJWTのb64ヘッダーパラメーターを認識するようになった</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/05/24/go-may-convert-mul-add-to-fma/">Goは積和演算をFMAに変換する場合があるという話</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/05/20/update-of-math-fma-in-golang/">Goのmath.FMAの挙動を修正した</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2025 ICHINOSE Shogo - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+</body>
+
+</html>
+
