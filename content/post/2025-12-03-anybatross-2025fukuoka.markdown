@@ -433,7 +433,7 @@ $_"
 
 -----
 
-明日5日は[@ytnobody](https://qiita.com/ytnobody)で、「なにかかきます」です。お楽しみに！
+明日5日は[わいとん（@ytnobody）](https://qiita.com/ytnobody)で、「[Perlからでもtursoを使いたい！](https://ytnobody.github.io/wyton/2025/12/04/2025-12-04-001/)」です。お楽しみに！
 
 > 🐰 ゴルフボール、コードで短く、✨\
 > ホール1、ホール2、スコアを詰めて、\
