@@ -93,4 +93,4 @@ Perl 5.42.0 から `any` と `all` キーワードが使えるようになった
 ## 参考
 
 - [2025年 秋のPerl](https://speakerdeck.com/charsbar/2025nian-qiu-noperl?slide=30)
-- [perldelta - Perl 5.42.0](hhttps://metacpan.org/release/BOOK/perl-5.42.0/view/pod/perldelta.pod)
+- [perldelta - Perl 5.42.0](https://metacpan.org/release/BOOK/perl-5.42.0/view/pod/perldelta.pod)
