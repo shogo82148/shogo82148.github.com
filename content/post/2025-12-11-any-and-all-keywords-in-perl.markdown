@@ -74,7 +74,7 @@ Perl 5.42.0 から `any` と `all` キーワードが使えるようになった
 
 ドキュメントによると `any` も `all` も他の実装より高速に動作するそうです。
 余力があればベンチマーク取って確認したかったけど、力尽きてしまいました。
-(@charsbar)[https://x.com/charsbar]の[2025年 秋のPerl](https://speakerdeck.com/charsbar/2025nian-qiu-noperl?slide=30)にベンチマークの結果が載っているのでこちらをどうぞ。
+[@charsbar](https://x.com/charsbar)の[2025年 秋のPerl](https://speakerdeck.com/charsbar/2025nian-qiu-noperl?slide=30)にベンチマークの結果が載っているのでこちらをどうぞ。
 
 その他にもベンチマーク取ってみたぞ！という記事をお待ちしております。
 
