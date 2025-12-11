@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Perl 5.40.0 の any と all キーワードを試してみた"
+title: "Perl 5.42.0 の any と all キーワードを試してみた"
 slug: any-and-all-keywords-in-perl
 date: 2025-12-11 23:14:00 +0900
 comments: true
@@ -13,7 +13,7 @@ categories: [perl]
 
 ## 背景・目的
 
-Perl 5.40.0 から any と all キーワードが使えるようになったそうです。
+Perl 5.42.0 から any と all キーワードが使えるようになったそうです。
 まだ実験的機能ですが遊んでみます。
 
 ## 試してみた
@@ -69,7 +69,7 @@ Any of the numbers are even
 
 ## まとめ
 
-Perl 5.40.0 から `any` と `all` キーワードが使えるようになったので、簡単に触ってみました。
+Perl 5.42.0 から `any` と `all` キーワードが使えるようになったので、簡単に触ってみました。
 意図した通りに動いてくれたので満足です。
 
 ドキュメントによると `any` も `all` も他の実装より高速に動作するそうです。
