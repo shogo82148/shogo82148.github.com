@@ -217,7 +217,7 @@ Perl 5.43.5（開発版）から導入された、サブルーチンの名前付
 
 -----
 
-明日11日はTBDで、「TBD」です。お楽しみに！
+明日11日は[@shogo82148](https://x.com/shogo82148)で、「[Perl 5.40.0 の any と all キーワードを試してみた](https://shogo82148.github.io/blog/2025/12/11/any-and-all-keywords-in-perl/)」です。お楽しみに！
 
 > 🐰 新しい記事、ペンで綴り、\
 > Perlの秘密、紙に記す、\
