@@ -115,7 +115,7 @@ Javaで実装されたPerlのインタープリター[fglock/PerlOnJava](https:/
 
 -----
 
-明日12日はTBDさんで「TBD」です。
+明日14日はTBDさんで「TBD」です。
 
 
 > 🐰 Javaの上で踊るPerlを見つけたよ、\
