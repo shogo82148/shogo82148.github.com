@@ -2,10 +2,12 @@
 layout: post
 title: "PerlOnJavaで遊んでみた"
 slug: perl-on-java
-date: 2025-12-11 23:14:00 +0900
+date: 2025-12-13 00:44:00 +0900
 comments: true
 categories: [perl]
 ---
+
+この記事は、[Perl Advent Calendar 2025](https://qiita.com/advent-calendar/2025/perl) 13日目の記事です。 12日目は[@takihito](https://x.com/takihito)で「[10年ぶりCPANリリース＆爆破解体の裏話](https://akihito.hatenablog.com/entry/cpan-release-redmine)」でした。
 
 ## 背景
 
@@ -112,6 +114,9 @@ Javaで実装されたPerlのインタープリター[fglock/PerlOnJava](https:/
 
 
 -----
+
+明日12日はTBDさんで「TBD」です。
+
 
 > 🐰 Javaの上で踊るPerlを見つけたよ、\
 > ページに綴り、朝露のように輝く。\
