@@ -78,6 +78,8 @@ timethis 10: 18 wallclock secs (18.22 usr +  0.12 sys = 18.33 CPU) @  0.55/s (n=
 ```
 
 約6.6% PerlOnJavaのほうが遅いという結果になりました。
+遅いとはいえ僅差ですね。
+簡単なマイクロベンチしか取っていませんが、この速度なら既存のPerlの置き換えとして使えるかも・・・？
 
 ところでしれっと [Benchmark](https://metacpan.org/pod/Benchmark) を使ってみたのですが、なんか普通に動きました。
 互換性の高さがうかがえますね。
@@ -87,7 +89,7 @@ timethis 10: 18 wallclock secs (18.22 usr +  0.12 sys = 18.33 CPU) @  0.55/s (n=
 
 最新版の[v5.42.2](https://github.com/fglock/PerlOnJava/releases/tag/v5.42.2)はPerlの5.42.0と互換性があるそうです。
 
-そんなわけでこんなコードも動いちゃいました。
+そんなわけで「[Perl 5.42.0 の any と all キーワードを試してみた](https://shogo82148.github.io/blog/2025/12/11/any-and-all-keywords-in-perl/)」で試したコードをPerlOnJavaで動かしてみたところ、見事に動きました。
 
 ```perl
 use v5.42;
@@ -102,6 +104,11 @@ if ( any { $_ % 2 == 0 } @numbers ) {
 ```
 
 ## まとめ
+
+Javaで実装されたPerlのインタープリター[fglock/PerlOnJava](https://github.com/fglock/PerlOnJava)を見つけたので遊んでみました。
+速度も申し分ないし、互換性も高そうだし、かなり有望なプロジェクトだと感じました。
+「perlだけがPerlを解釈することができる」とよく言われますが、この状況に一石を投じるとこはできるのでしょうか。
+これからの進化が楽しみです。
 
 
 -----
