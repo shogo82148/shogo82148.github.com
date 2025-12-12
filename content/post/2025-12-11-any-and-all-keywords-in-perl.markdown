@@ -86,7 +86,7 @@ Perl 5.42.0 から `any` と `all` キーワードが使えるようになった
 > anyとallの光が輝く\
 > 明日また新たな物語\
 > Perlの森をくぐり抜けて\
-> 可能性の扉がひらく ✨\
+> 可能性の扉がひらく ✨
 >
 > by [CodeRabbit](https://www.coderabbit.ai/)
 
