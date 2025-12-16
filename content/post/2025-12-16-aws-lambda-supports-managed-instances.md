@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "AWS::Lambadaがマネージドインスタンスに対応しました"
+title: "AWS::Lambdaがマネージドインスタンスに対応しました"
 slug: aws-lambda-supports-managed-instances
 date: 2025-12-16 21:11:00 +0900
 comments: true
