@@ -7,7 +7,7 @@ comments: true
 categories: [perl]
 ---
 
-この記事は、[Perl Advent Calendar 2025](https://qiita.com/advent-calendar/2025/perl) 23日目の記事です。 23日目は[@shogo82148](https://x.com/shogo82148)で「[Perlのフィールド変数の:writer属性を試してみる](https://shogo82148.github.io/blog/2025/12/24/perl-class-writer-attribute/)」でした。
+この記事は、[Perl Advent Calendar 2025](https://qiita.com/advent-calendar/2025/perl) 23日目の記事です。 22日目は[@shogo82148](https://x.com/shogo82148)で「[Perlのフィールド変数の:writer属性を試してみる](https://shogo82148.github.io/blog/2025/12/24/perl-class-writer-attribute/)」でした。
 
 ## 背景
 
