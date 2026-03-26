@@ -115,7 +115,7 @@ curl https://holidays-jp.shogo82148.com/2021/02/01 | jq .
 最近マイブームな [Amazon API Gateway](https://aws.amazon.com/jp/api-gateway/) + [AWS Lambda](https://aws.amazon.com/jp/lambda/) による実装です。
 AWS の設定管理には [AWS Serverless Application Model](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/what-is-sam.html)を利用しています。
 
-データーソースには 2017 年の登場時にちょっと話題になった [syukujitsu.csv](https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv) を利用しています。
+データソースには 2017 年の登場時にちょっと話題になった [syukujitsu.csv](https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv) を利用しています。
 
 - [「国民の祝日」について - 内閣府](https://www8.cao.go.jp/chosei/shukujitsu/gaiyou.html)
 - [祝日オープンデータを巡って](https://oku.edu.mie-u.ac.jp/~okumura/stat/holidays.html)

@@ -14,7 +14,7 @@ API のようなデプロイが必要なものは当然ながらデプロイし�
 
 とりあえずお試しで [shogo82148/holidays-jp](https://github.com/shogo82148/holidays-jp) にワークフローを設定してみました。
 [AWS SAM](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/what-is-sam.html) を使った API で、
-データーベースや外部サービスとの連携のないシンプルなものです。
+データベースや外部サービスとの連携のないシンプルなものです。
 API 自体の使い方はこちらをどうぞ。
 
 - [祝日 API を公開しました](https://shogo82148.github.io/blog/2021/09/04/holidays-api-is-released/)

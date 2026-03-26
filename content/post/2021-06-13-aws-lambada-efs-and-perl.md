@@ -19,7 +19,7 @@ categories: [perl, aws]
 
 - [新機能 – Lambda 関数の共有ファイルシステム – Amazon Elastic File System for AWS Lambda](https://aws.amazon.com/jp/blogs/news/new-a-shared-file-system-for-your-lambda-functions/)
 
-従来 AWS Lambda でデーターを永続化するには DynamoDB, RDS, S3 といったデーターストアを別途用意する必要がありました。
+従来 AWS Lambda でデータを永続化するには DynamoDB, RDS, S3 といったデータストアを別途用意する必要がありました。
 ファイル書き込みができる領域として `/tmp` がありますが、 `/tmp` は 512MB に制限されていたり、永続化できなかったりと、用途は限定されます。
 EFS がマウントできることによって実質これらの制限がなくなります。
 プログラムからは普通のファイルとして見えるので、読み書きをするのも簡単です。

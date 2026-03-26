@@ -75,7 +75,7 @@ python product.py < kanji.txt > product.txt
 
 最後に
 
-念のため「どうせ公表後に新元号を追加したデーターを作っただけだろ！」と言われないよう、ハッシュ値を貼っておきます。
+念のため「どうせ公表後に新元号を追加したデータを作っただけだろ！」と言われないよう、ハッシュ値を貼っておきます。
 
 <blockquote class="twitter-tweet" data-conversation="none" data-lang="ja"><p lang="in" dir="ltr">元号候補一覧 <a href="https://t.co/OCaFAriJIt">https://t.co/OCaFAriJIt</a> SHA512: 245f3f616f3ee627ee2e2edd426663bba86fd2fbdb756505ff9d9f69fed7d6f16e2e711cf03cb1fb1b9efdcc261bf1b968de0756660cfa98cf1acbd43f89ae18</p>&mdash; Ichinose Shogo (@shogo82148) <a href="https://twitter.com/shogo82148/status/1101052320303898625?ref_src=twsrc%5Etfw">2019年2月28日</a></blockquote>
 <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
