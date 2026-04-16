@@ -152,7 +152,7 @@ aws kms create-alias \
     --target-key-id "$KEY_ID"
 ```
 
-このように設定しておくと、Key IDが必要な場面でKeyIDの代わりに `alias/github-app` を使用できます。
+このように設定しておくと、Key IDが必要な場面でKey IDの代わりに `alias/github-app` を使用できます。
 
 ## まとめ
 
