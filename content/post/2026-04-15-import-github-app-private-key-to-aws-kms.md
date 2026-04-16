@@ -91,13 +91,13 @@ openssl pkcs8 -topk8 -inform PEM -outform DER \
     -in github-app-private-key.pem -out private-key.der -nocrypt
 ```
 
-キーマテリアルの暗号化に使用する秘密鍵を作成します。
+キーマテリアルの暗号化に使用する共通鍵を作成します。
 
 ```bash
 openssl rand -out aes-key.bin 32
 ```
 
-この秘密鍵を使ってキーマテリアルを暗号化します。
+この共通鍵を使ってキーマテリアルを共通鍵暗号で暗号化します。
 
 ```bash
 openssl enc -id-aes256-wrap-pad \
@@ -107,7 +107,7 @@ openssl enc -id-aes256-wrap-pad \
         -out key-material-wrapped.bin
 ```
 
-秘密鍵はKMSの公開鍵を使って暗号化してます。
+共通鍵は公開鍵暗号を使って暗号化してます。
 
 ```bash
 openssl pkeyutl \
@@ -122,7 +122,7 @@ openssl pkeyutl \
     -pkeyopt rsa_mgf1_md:sha256
 ```
 
-暗号化した秘密鍵と暗号化したキーマテリアルとをひとつのファイルにまとめます。
+暗号化した共通鍵と暗号化したキーマテリアルとをひとつのファイルにまとめます。
 
 ```bash
 cat aes-key-wrapped.bin key-material-wrapped.bin > EncryptedKeyMaterial.bin
