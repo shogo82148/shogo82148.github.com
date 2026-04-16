@@ -164,6 +164,14 @@ GitHub Appの秘密鍵をAWS KMSにインポートする手順を紹介しまし
 しかしよく考えてみると、今回紹介した暗号化の流れはTLSが裏でやっていることそのものです。
 TLSのありがたさがよくわかりました。
 
+> 🐰 鍵を抱えてぴょんと来たよ、\
+> PEMをDERにしてぴょん、\
+> AESでくるみ、RSAで結び、\
+> KMSのもとへそっと運んだよ、\
+> ふかふかのaliasでおやすみなさい 🔐
+>
+> by [CodeRabbit](https://www.coderabbit.ai/)
+
 ## 参考
 
 - [GitHub App の秘密鍵を AWS KMS に閉じ込める](https://zenn.dev/aws_japan/articles/b311c3710826a6)
