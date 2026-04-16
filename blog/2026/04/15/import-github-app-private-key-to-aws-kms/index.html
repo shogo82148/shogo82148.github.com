@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono&display=swap" rel="stylesheet"> 
+
+  
+  <title>GitHub Appの秘密鍵をAWS KMSにインポートする</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="ICHINOSE Shogo">
+
+  
+  <meta name="generator" content="Hugo 0.120.4">
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-40R0PCLKVF');
+</script>
+
+
+<script>
+MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']]
+  },
+  svg: {
+    fontCache: 'global'
+  }
+};
+</script>
+
+<script type="text/javascript" id="MathJax-script" async
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+</script>
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Apr 15, 2026
+     - 2 minute read 
+    
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/github/">github </a><a class="label" href="https://shogo82148.github.io/categories/aws/">aws </a>
+    
+  </p>
+  <h1 class="entry-title">
+     GitHub Appの秘密鍵をAWS KMSにインポートする 
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <h2 id="背景目的">背景・目的</h2>
+<p>以下の記事を読んで GitHub App の秘密鍵を AWS KMS に閉じ込められることを知りました。</p>
+<ul>
+<li><a href="https://zenn.dev/aws_japan/articles/b311c3710826a6">GitHub App の秘密鍵を AWS KMS に閉じ込める</a></li>
+</ul>
+<p>AWS KMS は食わず嫌いしていたので、この機会に仲良くなろうとちょっと触ってみることにしました。</p>
+<p>触ってはみたものの秘密鍵をAWS KMSにインポートする手順が難しすぎる！
+正直挫折しそうになりました。これからチャレンジする人が挫折しないよう、簡単に手順をまとめておきます。</p>
+<h2 id="github-appの秘密鍵のインポート手順">GitHub Appの秘密鍵のインポート手順</h2>
+<p>GitHub Appの設定は終わっているものとし、秘密鍵はすでに入手しているものとします。
+入手した秘密鍵のことをKMSの用語では「キーマテリアル（鍵素材）」と呼ぶので、以下そのように記載します。</p>
+<p>以下のような手順でキーマテリアルをインポートします。</p>
+<ul>
+<li>キーマテリアル無しでKMS Keyを作成する</li>
+<li>ラッピングパブリックキーとインポートトークンを取得する</li>
+<li>キーマテリアルの暗号化</li>
+<li>KMSにキーマテリアルをインポートする</li>
+<li>エイリアスを割り当てる（Optional）</li>
+</ul>
+<h3 id="キーマテリアル無しでkms-keyを作成する">キーマテリアル無しでKMS Keyを作成する</h3>
+<p>AWS KMSにはキーマテリアルを自動生成してくれる機能がありますが、
+今回は手元にあるキーマテリアルをインポートしたいです。
+そのためには <code>--origin EXTERNAL</code> オプションをつけてキーを作成します。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">aws kms create-key <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --key-spec RSA_2048 <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --key-usage SIGN_VERIFY <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --origin EXTERNAL <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --description <span class="s2">&#34;GitHub App JWT signing key&#34;</span>
+</span></span></code></pre></div><p>作成に成功すると「KeyId」が発行されます。
+後で使うので覚えておきましょう。</p>
+<h3 id="ラッピングパブリックキーとインポートトークンを取得する">ラッピングパブリックキーとインポートトークンを取得する</h3>
+<p>KMSにキーマテリアルをインポートするには、
+キーマテリアルを暗号化する必要があります。
+暗号化に必要な公開鍵を取得します。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">aws kms get-parameters-for-import <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --key-id <span class="s2">&#34;</span><span class="nv">$KEY_ID</span><span class="s2">&#34;</span> <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --wrapping-algorithm RSA_AES_KEY_WRAP_SHA_256 <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --wrapping-key-spec RSA_4096
+</span></span></code></pre></div><p>以下のようなJSONが出力されます。
+<code>PublicKey</code> と <code>ImportToken</code> をそれぞれ <code>publickey.b64</code>、<code>importtoken.b64</code> という名前で保存します。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;KeyId&#34;</span><span class="p">:</span> <span class="s2">&#34;arn:aws:kms:us-east-1:123456789012:key/$KEY_ID&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;ImportToken&#34;</span><span class="p">:</span> <span class="s2">&#34;import token (base64 encoded)&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;PublicKey&#34;</span><span class="p">:</span> <span class="s2">&#34;public key (base64 encoded)&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;ParametersValidTo&#34;</span><span class="p">:</span> <span class="s2">&#34;2026-04-14T22:45:46.755000+09:00&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Base64でエンコードされているので、デコードしておきます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">openssl enc -d -base64 -A -in publickey.b64 -out WrappingPublicKey.bin
+</span></span><span class="line"><span class="cl">openssl enc -d -base64 -A -in importtoken.b64 -out ImportToken.bin
+</span></span></code></pre></div><h3 id="キーマテリアルの暗号化">キーマテリアルの暗号化</h3>
+<p>GitHubからダウンロードできるプライベートキーはBase64エンコードされた形式（PEM形式）です。
+KMSが受け入れてくれるのはバイナリー形式（DER形式）なので、
+PEM形式からDER形式へ変換しておきます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">openssl pkcs8 -topk8 -inform PEM -outform DER <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    -in github-app-private-key.pem -out private-key.der -nocrypt
+</span></span></code></pre></div><p>キーマテリアルの暗号化に使用する共通鍵を作成します。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">openssl rand -out aes-key.bin <span class="m">32</span>
+</span></span></code></pre></div><p>この共通鍵を使ってキーマテリアルを共通鍵暗号で暗号化します。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">openssl enc -id-aes256-wrap-pad <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>        -K <span class="s2">&#34;</span><span class="k">$(</span>xxd -p &lt; aes-key.bin <span class="p">|</span> tr -d <span class="s1">&#39;\n&#39;</span><span class="k">)</span><span class="s2">&#34;</span> <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>        -iv A65959A6 <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>        -in private-key.der <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>        -out key-material-wrapped.bin
+</span></span></code></pre></div><p>共通鍵は公開鍵暗号を使って暗号化してます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">openssl pkeyutl <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    -encrypt <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    -in aes-key.bin <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    -out aes-key-wrapped.bin <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    -inkey WrappingPublicKey.bin <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    -keyform DER <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    -pubin <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    -pkeyopt rsa_padding_mode:oaep <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    -pkeyopt rsa_oaep_md:sha256 <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    -pkeyopt rsa_mgf1_md:sha256
+</span></span></code></pre></div><p>暗号化した共通鍵と暗号化したキーマテリアルとをひとつのファイルにまとめます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">cat aes-key-wrapped.bin key-material-wrapped.bin &gt; EncryptedKeyMaterial.bin
+</span></span></code></pre></div><h3 id="kmsにキーマテリアルをインポートする">KMSにキーマテリアルをインポートする</h3>
+<p>KMSに暗号化したキーマテリアルをインポートします。
+キーマテリアルの有効期限も設定できます。以下は有効期限を無期限に設定する場合のコマンド例です。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">aws kms import-key-material <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --key-id <span class="s2">&#34;</span><span class="nv">$KEY_ID</span><span class="s2">&#34;</span> <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --encrypted-key-material fileb://EncryptedKeyMaterial.bin <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --import-token fileb://ImportToken.bin <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --expiration-model KEY_MATERIAL_DOES_NOT_EXPIRE
+</span></span></code></pre></div><h3 id="エイリアスを割り当てるoptional">エイリアスを割り当てる（Optional）</h3>
+<p>Key IDの形式はUUIDv4です。
+そのままでは覚えにくいので、必要に応じてエイリアスを割り当てましょう。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">aws kms create-alias <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --alias-name alias/github-app <span class="se">\
+</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --target-key-id <span class="s2">&#34;</span><span class="nv">$KEY_ID</span><span class="s2">&#34;</span>
+</span></span></code></pre></div><p>このように設定しておくと、Key IDが必要な場面でKey IDの代わりに <code>alias/github-app</code> を使用できます。</p>
+<h2 id="まとめ">まとめ</h2>
+<p>GitHub Appの秘密鍵をAWS KMSにインポートする手順を紹介しました。
+キーマテリアルを直接KMSへインポートすることはできず、
+共通鍵暗号と公開鍵暗号を組み合わせて自分で暗号化する必要があります。
+鍵がたくさん出てきてややこしいですね。</p>
+<p>しかしよく考えてみると、今回紹介した暗号化の流れはTLSが裏でやっていることそのものです。
+TLSのありがたさがよくわかりました。</p>
+<blockquote>
+<p>🐰 鍵を抱えてぴょんと来たよ、<br>
+PEMをDERにしてぴょん、<br>
+AESでくるみ、RSAで結び、<br>
+KMSのもとへそっと運んだよ、<br>
+ふかふかのaliasでおやすみなさい 🔐</p>
+<p>by <a href="https://www.coderabbit.ai/">CodeRabbit</a></p>
+</blockquote>
+<h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://zenn.dev/aws_japan/articles/b311c3710826a6">GitHub App の秘密鍵を AWS KMS に閉じ込める</a></li>
+<li><a href="https://github.com/konippi/create-github-app-token-aws-kms">konippi/create-github-app-token-aws-kms</a></li>
+<li><a href="https://docs.aws.amazon.com/kms/latest/developerguide/importing-keys-conceptual.html">Create a KMS key with imported key material</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">ICHINOSE Shogo</span></span>
+    
+    <time>Apr 15, 2026</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2026/04/11/sets3lock/" title="Amazon S3で分散ロックを実現するsets3lock">Amazon S3で分散ロックを実現するsets3lock</a>
+    
+
+    
+  </p>
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2026/04/15/import-github-app-private-key-to-aws-kms/">GitHub Appの秘密鍵をAWS KMSにインポートする</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2026/04/11/sets3lock/">Amazon S3で分散ロックを実現するsets3lock</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/12/24/perl-5.42-new-warnings/">Perl 5.42 から新しく入った警告を試してみる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/12/24/perl-class-lexical-method/">Perlクラスのレキシカルメソッドを試してみる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/12/24/perl-class-writer-attribute/">Perlのフィールド変数の:writer属性を試してみる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/12/16/aws-lambda-supports-managed-instances/">AWS::Lambdaがマネージドインスタンスに対応しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/12/13/perl-on-java/">PerlOnJavaで遊んでみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/12/11/any-and-all-keywords-in-perl/">Perl 5.42.0 の any と all キーワードを試してみた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/12/10/synctest-not-supported-with-asynctimerchan/">Goのsynctestを使おうとしたらsynctest.Run not supported with asynctimerchanと怒られたときの対処法</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2026 ICHINOSE Shogo - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+</body>
+
+</html>
+
