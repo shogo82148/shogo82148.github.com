@@ -155,6 +155,14 @@ fmt.Println(u)
 v1.3.0から `(*Image).SignedURL` の返すURLが変更になったので注意してください。
 また、テキストオーバーレイ機能が使えるようになったので、ぜひ活用してください。
 
+> 🐇 週末にリリース、v1.3.0！\
+> カンマ消えた URL、スッキリきれいに\
+> テキストも重なる、画像の上で\
+> srcset 対応、うさぎも跳ねる 🎉\
+> go-imageflux 、今日もお役立ち！
+>
+> by [CodeRabbit](https://www.coderabbit.ai/)
+
 ## 参考文献
 
 - [ImageFlux 画像変換・配信エンジン](https://imageflux.sakura.ad.jp/image/)
