@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono&display=swap" rel="stylesheet"> 
+
+  
+  <title>GitHub Personal Access Token を大量生成するプログラムを書いた</title>
+
+  
+  
+  <link rel="stylesheet" href="/css/hugo-octopress.css">
+
+  
+  
+    <link rel="stylesheet" href="https://shogo82148.github.io/css/syntax.css">
+  
+
+  
+  <link href="https://shogo82148.github.io/favicon.png" rel="icon">
+
+  
+  
+
+  <meta name="description" content="" />
+  <meta name="keywords" content="">
+  <meta name="author" content="ICHINOSE Shogo">
+
+  
+  <meta name="generator" content="Hugo 0.120.4">
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-40R0PCLKVF');
+</script>
+
+
+<script>
+MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']]
+  },
+  svg: {
+    fontCache: 'global'
+  }
+};
+</script>
+
+<script type="text/javascript" id="MathJax-script" async
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+</script>
+
+  
+  
+</head>
+<body>
+
+
+<header role="banner">
+<hgroup>
+  
+  <h1><a href="https://shogo82148.github.io/">Shogo&#39;s Blog</a></h1>
+  <h2></h2>
+</hgroup>
+</header>
+
+
+<nav role="navigation">
+<fieldset class="mobile-nav">
+  
+  <select onchange="location = this.value;">
+    <option value="">Navigate…</option>
+      
+  </select>
+</fieldset>
+
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+<ul class="subscription">
+  
+</ul>
+
+
+  <form action="https://www.google.com/search" method="get" target="_blank">
+    <fieldset role="search">
+      <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+      <input type="hidden" name="q" value="site:https://shogo82148.github.io/" />
+    </fieldset>
+  </form>
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+  <p class="meta">Jun 16, 2026
+     - 3 minute read 
+    
+
+    
+    
+      - <a class="label" href="https://shogo82148.github.io/categories/go/">go </a><a class="label" href="https://shogo82148.github.io/categories/golang/">golang </a><a class="label" href="https://shogo82148.github.io/categories/github/">github </a>
+    
+  </p>
+  <h1 class="entry-title">
+    <a href="https://shogo82148.github.io/blog/2026/06/16/github-personal-access-token-generator/">GitHub Personal Access Token を大量生成するプログラムを書いた</a>
+  </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+          <h2 id="背景目的">背景・目的</h2>
+<p>APIトークンは他者に知られると悪用される可能性があるので、GitHub などにプッシュするのは厳禁です。
+とはいえ人間が注意するのではうっかり混入する場合もあります。
+これを機械的に防ごうというサービスが <a href="https://github.com/security/advanced-security/secret-protection?locale=ja">GitHub Secret Protection</a> です。
+公開レポジトリーならデフォルトで有効になっているので、普段気が付かずにお世話になっているサービスだと思います。</p>
+<p>さて、GitHub Secret Protection でシークレットが検出された場合のフローを検証しているのですが、そのためには実際にシークレットをプッシュする必要があります。
+実際に GitHub などのサービスでトークンを発行してプッシュするのが楽ですが、本物のトークンを使うのは怖いですよね？</p>
+<p>じゃあ、ダミーデータを作ってみよう！というわけでやってみました。</p>
+<h2 id="pat生成機">PAT生成機</h2>
+<p>GitHub の Personal Access Token (PAT) のジェネレーターを作ってみました。
+そんな長くないので、ここにペタリと貼っておきます。
+手元にコピペしてお使いください。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// SPDX-FileCopyrightText: 2026 ICHINOSE Shogo &lt;shogo82148@gmail.com&gt;
+</span></span></span><span class="line"><span class="cl"><span class="c1">// SPDX-License-Identifier: MIT
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;bufio&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;crypto/rand&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;encoding/base64&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;hash/crc32&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;os&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">base62</span><span class="p">(</span><span class="nx">in</span> <span class="kt">uint32</span><span class="p">)</span> <span class="p">[]</span><span class="kt">byte</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="kd">const</span> <span class="nx">chars</span> <span class="p">=</span> <span class="s">&#34;0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="kd">var</span> <span class="nx">result</span> <span class="p">[</span><span class="mi">6</span><span class="p">]</span><span class="kt">byte</span>
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="mi">5</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span><span class="o">--</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">result</span><span class="p">[</span><span class="nx">i</span><span class="p">]</span> <span class="p">=</span> <span class="nx">chars</span><span class="p">[</span><span class="nx">in</span><span class="o">%</span><span class="mi">62</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">in</span> <span class="o">/=</span> <span class="mi">62</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="k">return</span> <span class="nx">result</span><span class="p">[:]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">randomString</span><span class="p">(</span><span class="nx">length</span> <span class="kt">int</span><span class="p">)</span> <span class="p">[]</span><span class="kt">byte</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">ret</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">([]</span><span class="kt">byte</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="nx">length</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="kd">var</span> <span class="nx">buf1</span> <span class="p">[</span><span class="mi">30</span><span class="p">]</span><span class="kt">byte</span>
+</span></span><span class="line"><span class="cl">	<span class="kd">var</span> <span class="nx">buf2</span> <span class="p">[</span><span class="mi">40</span><span class="p">]</span><span class="kt">byte</span>
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">rand</span><span class="p">.</span><span class="nf">Read</span><span class="p">(</span><span class="nx">buf1</span><span class="p">[:])</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">base64</span><span class="p">.</span><span class="nx">RawStdEncoding</span><span class="p">.</span><span class="nf">Encode</span><span class="p">(</span><span class="nx">buf2</span><span class="p">[:],</span> <span class="nx">buf1</span><span class="p">[:])</span>
+</span></span><span class="line"><span class="cl">		<span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">ch</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">buf2</span><span class="p">[:]</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="k">if</span> <span class="p">(</span><span class="nx">ch</span> <span class="o">&gt;=</span> <span class="sc">&#39;0&#39;</span> <span class="o">&amp;&amp;</span> <span class="nx">ch</span> <span class="o">&lt;=</span> <span class="sc">&#39;9&#39;</span><span class="p">)</span> <span class="o">||</span> <span class="p">(</span><span class="nx">ch</span> <span class="o">&gt;=</span> <span class="sc">&#39;A&#39;</span> <span class="o">&amp;&amp;</span> <span class="nx">ch</span> <span class="o">&lt;=</span> <span class="sc">&#39;Z&#39;</span><span class="p">)</span> <span class="o">||</span> <span class="p">(</span><span class="nx">ch</span> <span class="o">&gt;=</span> <span class="sc">&#39;a&#39;</span> <span class="o">&amp;&amp;</span> <span class="nx">ch</span> <span class="o">&lt;=</span> <span class="sc">&#39;z&#39;</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">				<span class="nx">ret</span> <span class="p">=</span> <span class="nb">append</span><span class="p">(</span><span class="nx">ret</span><span class="p">,</span> <span class="nx">ch</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">				<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="nx">ret</span><span class="p">)</span> <span class="o">==</span> <span class="nx">length</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">					<span class="k">return</span> <span class="nx">ret</span>
+</span></span><span class="line"><span class="cl">				<span class="p">}</span>
+</span></span><span class="line"><span class="cl">			<span class="p">}</span>
+</span></span><span class="line"><span class="cl">		<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">w</span> <span class="o">:=</span> <span class="nx">bufio</span><span class="p">.</span><span class="nf">NewWriter</span><span class="p">(</span><span class="nx">os</span><span class="p">.</span><span class="nx">Stdout</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">random</span> <span class="o">:=</span> <span class="nf">randomString</span><span class="p">(</span><span class="mi">30</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">checksum</span> <span class="o">:=</span> <span class="nx">crc32</span><span class="p">.</span><span class="nf">ChecksumIEEE</span><span class="p">(</span><span class="nx">random</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">w</span><span class="p">.</span><span class="nf">WriteString</span><span class="p">(</span><span class="s">&#34;ghp_&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">w</span><span class="p">.</span><span class="nf">Write</span><span class="p">(</span><span class="nx">random</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">w</span><span class="p">.</span><span class="nf">Write</span><span class="p">(</span><span class="nf">base62</span><span class="p">(</span><span class="nx">checksum</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">w</span><span class="p">.</span><span class="nf">WriteByte</span><span class="p">(</span><span class="sc">&#39;\n&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>実行すると永遠とPATを吐き続けるので、適宜 <code>head</code> コマンドなどで制限してください。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">go run main.go | head -n 10
+</span></span><span class="line"><span class="cl">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
+</span></span><span class="line"><span class="cl">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
+</span></span><span class="line"><span class="cl">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
+</span></span><span class="line"><span class="cl">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
+</span></span><span class="line"><span class="cl">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
+</span></span><span class="line"><span class="cl">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
+</span></span><span class="line"><span class="cl">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
+</span></span><span class="line"><span class="cl">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
+</span></span><span class="line"><span class="cl">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
+</span></span><span class="line"><span class="cl">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
+</span></span><span class="line"><span class="cl">signal: broken pipe
+</span></span></code></pre></div><p>手元のマシン（MacBook Pro 2021, Apple M1 Pro）では 100M個（1億個）のトークン生成に49.89秒かかりました。
+1秒間に約2M個（200万個）生成できる計算です。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">% time go run generate/main.go | head -n 100000000 &gt; /dev/null
+</span></span><span class="line"><span class="cl">signal: broken pipe
+</span></span><span class="line"><span class="cl">go run generate/main.go  48.89s user 1.45s system 100% cpu 49.961 total
+</span></span><span class="line"><span class="cl">head -n 100000000 &gt; /dev/null  5.58s user 2.66s system 16% cpu 49.957 total
+</span></span></code></pre></div><p>これだけあれば検証仕放題ですね！</p>
+<p>このブログは GitHub Pages でホストしているのですが、上に書いた実行例がさっそく引っかかりました。
+期待通り動作していそうです。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-plain" data-lang="plain"><span class="line"><span class="cl">$ git push
+</span></span><span class="line"><span class="cl">Enumerating objects: 8, done.
+</span></span><span class="line"><span class="cl">Counting objects: 100% (8/8), done.
+</span></span><span class="line"><span class="cl">Delta compression using up to 8 threads
+</span></span><span class="line"><span class="cl">Compressing objects: 100% (4/4), done.
+</span></span><span class="line"><span class="cl">Writing objects: 100% (5/5), 4.84 KiB | 4.84 MiB/s, done.
+</span></span><span class="line"><span class="cl">Total 5 (delta 2), reused 0 (delta 0), pack-reused 0 (from 0)
+</span></span><span class="line"><span class="cl">remote: Resolving deltas: 100% (2/2), completed with 2 local objects.
+</span></span><span class="line"><span class="cl">remote: error: GH013: Repository rule violations found for refs/heads/github-personal-access-token-generator.
+</span></span><span class="line"><span class="cl">remote:
+</span></span><span class="line"><span class="cl">remote: - GITHUB PUSH PROTECTION
+</span></span><span class="line"><span class="cl">remote:   —————————————————————————————————————————
+</span></span><span class="line"><span class="cl">remote:     Resolve the following violations before pushing again
+</span></span><span class="line"><span class="cl">remote:
+</span></span><span class="line"><span class="cl">remote:     - Push cannot contain secrets
+</span></span><span class="line"><span class="cl">remote:
+</span></span><span class="line"><span class="cl">remote:
+</span></span><span class="line"><span class="cl">remote:      (?) Learn how to resolve a blocked push
+</span></span><span class="line"><span class="cl">remote:      https://docs.github.com/code-security/secret-scanning/working-with-secret-scanning-and-push-protection/working-with-push-protection-from-the-command-line#resolving-a-blocked-push
+</span></span><span class="line"><span class="cl">remote:
+</span></span><span class="line"><span class="cl">remote:
+</span></span><span class="line"><span class="cl">remote:       —— GitHub Personal Access Token ——————————————————————
+</span></span><span class="line"><span class="cl">remote:        locations:
+</span></span><span class="line"><span class="cl">remote:          - commit:
+</span></span><span class="line"><span class="cl">remote:            path: :95
+</span></span><span class="line"><span class="cl">remote:
+</span></span><span class="line"><span class="cl">remote:        (?) To push, remove secret from commit(s) or follow this URL to allow the secret.
+</span></span><span class="line"><span class="cl">remote:        https://github.com/shogo82148/shogo82148.github.com/security/secret-scanning/unblock-secret/3FGSQxE1hq4JPtZZRtZEVlm3PNI
+</span></span><span class="line"><span class="cl">remote:
+</span></span><span class="line"><span class="cl">remote:
+</span></span><span class="line"><span class="cl">remote:
+</span></span><span class="line"><span class="cl">To ssh://github.com/shogo82148/shogo82148.github.com.git
+</span></span></code></pre></div><h2 id="仕組み">仕組み</h2>
+<p>PATは <code>ghp_</code> から始まる40文字の文字列ですが、テキトーな文字列だと Secret Protection では検出してくれません。
+誤検出を防ぐためにPATにはチェックサムが含まれているため、チェックサムまで一致しないとシークレットとしては扱われません。
+このことは以下のブログで説明されています。</p>
+<ul>
+<li><a href="https://github.blog/engineering/platform-security/behind-githubs-new-authentication-token-formats/">Behind GitHub’s new authentication token formats</a></li>
+</ul>
+<p>要点だけまとめると、</p>
+<ul>
+<li>PAT は <code>ghp_</code> から始まる</li>
+<li>30文字は <code>[a-zA-Z0-9]</code> の範囲のランダムな文字列</li>
+<li>末尾の6桁は CRC32 を base62 エンコードしたもの</li>
+</ul>
+<p>さて問題は <strong>「CRC32 と言ってもいくつか種類がある」</strong> という点と、 <strong>「よく知られたbase62の規格は存在しない」</strong> の二点です。</p>
+<h3 id="crc32">CRC32</h3>
+<p>Wikipedia の <a href="https://ja.wikipedia.org/wiki/%E5%B7%A1%E5%9B%9E%E5%86%97%E9%95%B7%E6%A4%9C%E6%9F%BB">巡回冗長検査</a> の項に書いてあるのですが、
+CRC32に統一規格はなく、よく使われているものだけでも3種類あります。</p>
+<blockquote>
+<p>巡回冗長検査は唯一の標準規格があるわけではなく、例えば CRC-12 では3種類の多項式が使われている。また、CRC-16 にはよく使われているものが8種類、CRC-32 は3種類存在する。</p>
+</blockquote>
+<p>どれだ？！ってなったのですが、結論から言うと Wikipediaの記事にある <code>CRC-32</code>（gzip、zip、png等に使われているやつ）でした。</p>
+<p>とりあえず一番使われていそうなやつ・・・と選んだらあたりでした。</p>
+<h3 id="base62">base62</h3>
+<p>base64やbase32であればRFCがあるので、そのとおりに実装すればよいですが、
+base62にRFCのような規格はありません。</p>
+<p>仕方がないので「入力が32ビット」「出力は6桁の英数字」という点から「自分だったらこう書くだろうなあ」を実装してみました。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">base62</span><span class="p">(</span><span class="nx">in</span> <span class="kt">uint32</span><span class="p">)</span> <span class="kt">string</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="kd">const</span> <span class="nx">chars</span> <span class="p">=</span> <span class="s">&#34;0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="kd">var</span> <span class="nx">result</span> <span class="p">[</span><span class="mi">6</span><span class="p">]</span><span class="kt">byte</span>
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="mi">5</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span><span class="o">--</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">result</span><span class="p">[</span><span class="nx">i</span><span class="p">]</span> <span class="p">=</span> <span class="nx">chars</span><span class="p">[</span><span class="nx">in</span><span class="o">%</span><span class="mi">62</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">in</span> <span class="o">/=</span> <span class="mi">62</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="k">return</span> <span class="nb">string</span><span class="p">(</span><span class="nx">result</span><span class="p">[:])</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>これが見事に当たりました。いやGitHubの中の人、素朴な実装をしてくれて助かった。</p>
+<h2 id="チェッカー">チェッカー</h2>
+<p>PATを入力するとチェックサムが正しいかチェックしてくれるチェッカーも作ってみました。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// SPDX-FileCopyrightText: 2026 ICHINOSE Shogo &lt;shogo82148@gmail.com&gt;
+</span></span></span><span class="line"><span class="cl"><span class="c1">// SPDX-License-Identifier: MIT
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">main</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;bufio&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;fmt&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;hash/crc32&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;log&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;os&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="s">&#34;strings&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">base62</span><span class="p">(</span><span class="nx">in</span> <span class="kt">uint32</span><span class="p">)</span> <span class="kt">string</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="kd">const</span> <span class="nx">chars</span> <span class="p">=</span> <span class="s">&#34;0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz&#34;</span>
+</span></span><span class="line"><span class="cl">	<span class="kd">var</span> <span class="nx">result</span> <span class="p">[</span><span class="mi">6</span><span class="p">]</span><span class="kt">byte</span>
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="mi">5</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span><span class="o">--</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">result</span><span class="p">[</span><span class="nx">i</span><span class="p">]</span> <span class="p">=</span> <span class="nx">chars</span><span class="p">[</span><span class="nx">in</span><span class="o">%</span><span class="mi">62</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">in</span> <span class="o">/=</span> <span class="mi">62</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="k">return</span> <span class="nb">string</span><span class="p">(</span><span class="nx">result</span><span class="p">[:])</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">s</span> <span class="o">:=</span> <span class="nx">bufio</span><span class="p">.</span><span class="nf">NewScanner</span><span class="p">(</span><span class="nx">os</span><span class="p">.</span><span class="nx">Stdin</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="nx">s</span><span class="p">.</span><span class="nf">Scan</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">token</span> <span class="o">:=</span> <span class="nx">s</span><span class="p">.</span><span class="nf">Text</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">		<span class="k">if</span> <span class="nf">validateToken</span><span class="p">(</span><span class="nx">token</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;%s\tok\n&#34;</span><span class="p">,</span> <span class="nx">token</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;%s\tng\n&#34;</span><span class="p">,</span> <span class="nx">token</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">s</span><span class="p">.</span><span class="nf">Err</span><span class="p">();</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">log</span><span class="p">.</span><span class="nf">Fatalf</span><span class="p">(</span><span class="s">&#34;reading standard input: %s&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">validateToken</span><span class="p">(</span><span class="nx">token</span> <span class="kt">string</span><span class="p">)</span> <span class="kt">bool</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="p">!</span><span class="nx">strings</span><span class="p">.</span><span class="nf">HasPrefix</span><span class="p">(</span><span class="nx">token</span><span class="p">,</span> <span class="s">&#34;ghp_&#34;</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="k">return</span> <span class="kc">false</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">token</span> <span class="p">=</span> <span class="nx">token</span><span class="p">[</span><span class="mi">4</span><span class="p">:]</span> <span class="c1">// remove &#34;ghp_&#34;
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="nx">token</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">36</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="k">return</span> <span class="kc">false</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">token</span><span class="p">,</span> <span class="nx">checksum</span> <span class="o">:=</span> <span class="nx">token</span><span class="p">[:</span><span class="mi">30</span><span class="p">],</span> <span class="nx">token</span><span class="p">[</span><span class="mi">30</span><span class="p">:]</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">expected</span> <span class="o">:=</span> <span class="nf">base62</span><span class="p">(</span><span class="nx">crc32</span><span class="p">.</span><span class="nf">ChecksumIEEE</span><span class="p">([]</span><span class="nb">byte</span><span class="p">(</span><span class="nx">token</span><span class="p">)))</span>
+</span></span><span class="line"><span class="cl">	<span class="k">return</span> <span class="nx">checksum</span> <span class="o">==</span> <span class="nx">expected</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><h2 id="まとめ">まとめ</h2>
+<p>GitHub Secret Protection の検証のために、 GitHub Personal Access Token（PAT）のジェネレーターを作ってみました。
+PATをプッシュするとどうなるのか検証したい方はぜひご活用ください。</p>
+<p>また、ジェネレーターを作る過程でPATの設計の詳細も明らかになりました。
+自分のサービスでアクセストークンを設計する場合の参考になりそうですね。</p>
+<blockquote>
+<p>🐇 ぴょんと跳ねて <code>ghp_</code> を作るよ<br>
+CRC32 でチェックサムつけて<br>
+base62 に変換したら完成！<br>
+ダミートークンがずらり並ぶ<br>
+Secret Scanning よ、見つけておくれ 🔍</p>
+<p>by <a href="https://www.coderabbit.ai/">CodeRabbit</a></p>
+</blockquote>
+<h2 id="参考文献">参考文献</h2>
+<ul>
+<li><a href="https://github.com/security/advanced-security/secret-protection?locale=ja">GitHub Secret Protection</a></li>
+<li><a href="https://github.blog/engineering/platform-security/behind-githubs-new-authentication-token-formats/">Behind GitHub’s new authentication token formats</a></li>
+<li><a href="https://ja.wikipedia.org/wiki/%E5%B7%A1%E5%9B%9E%E5%86%97%E9%95%B7%E6%A4%9C%E6%9F%BB">巡回冗長検査</a></li>
+</ul>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">ICHINOSE Shogo</span></span>
+    
+    <time>Jun 16, 2026</time>
+    
+    </span>
+  </p>
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://shogo82148.github.io/blog/2026/06/16/go-imageflux-v1.3.0/" title="go-imageflux の紹介と v1.3.0 リリースのお知らせ">go-imageflux の紹介と v1.3.0 リリースのお知らせ</a>
+    
+
+    
+  </p>
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      <a target="_blank" href="https://github.com/shogo82148/" title="https://github.com/shogo82148/"><i class="fa fa-github fa-3x"></i></a>
+      
+      
+      <a target="_blank" href="https://twitter.com/shogo82148/" title="https://twitter.com/shogo82148/"><i class="fa fa-twitter fa-3x"></i></a>
+      
+         
+      
+      
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+    
+      <section class="even">
+        <h1>Recent Posts</h1>
+        <ul id="recent_posts">
+          
+          
+            
+              <li class="post">
+                <a href="/blog/2026/06/16/github-personal-access-token-generator/">GitHub Personal Access Token を大量生成するプログラムを書いた</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2026/06/16/go-imageflux-v1.3.0/">go-imageflux の紹介と v1.3.0 リリースのお知らせ</a>
+              </li>
+            
+          
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2026/04/15/import-github-app-private-key-to-aws-kms/">GitHub Appの秘密鍵をAWS KMSにインポートする</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2026/04/11/sets3lock/">Amazon S3で分散ロックを実現するsets3lock</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/12/24/perl-5.42-new-warnings/">Perl 5.42 から新しく入った警告を試してみる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/12/24/perl-class-lexical-method/">Perlクラスのレキシカルメソッドを試してみる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/12/24/perl-class-writer-attribute/">Perlのフィールド変数の:writer属性を試してみる</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/12/16/aws-lambda-supports-managed-instances/">AWS::Lambdaがマネージドインスタンスに対応しました</a>
+              </li>
+            
+          
+            
+              <li class="post">
+                <a href="/blog/2025/12/13/perl-on-java/">PerlOnJavaで遊んでみた</a>
+              </li>
+            
+          
+        </ul>
+      </section>
+    
+  
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2026 ICHINOSE Shogo - <a
+      href="https://shogo82148.github.io/license/">License</a> -
+    <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank"
+        href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+  </p>
+</footer>
+
+
+
+
+
+
+
+
+
+</body>
+
+</html>
+
