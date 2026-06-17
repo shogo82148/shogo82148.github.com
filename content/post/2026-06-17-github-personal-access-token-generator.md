@@ -109,6 +109,44 @@ head -n 100000000 > /dev/null  5.58s user 2.66s system 16% cpu 49.957 total
 
 これだけあれば検証仕放題ですね！
 
+このブログは GitHub Pages でホストしているのですが、上に書いた実行例がさっそく引っかかりました。
+期待通り動作していそうです。
+
+```plain
+$ git push
+Enumerating objects: 8, done.
+Counting objects: 100% (8/8), done.
+Delta compression using up to 8 threads
+Compressing objects: 100% (4/4), done.
+Writing objects: 100% (5/5), 4.84 KiB | 4.84 MiB/s, done.
+Total 5 (delta 2), reused 0 (delta 0), pack-reused 0 (from 0)
+remote: Resolving deltas: 100% (2/2), completed with 2 local objects.
+remote: error: GH013: Repository rule violations found for refs/heads/github-personal-access-token-generator.
+remote:
+remote: - GITHUB PUSH PROTECTION
+remote:   —————————————————————————————————————————
+remote:     Resolve the following violations before pushing again
+remote:
+remote:     - Push cannot contain secrets
+remote:
+remote:
+remote:      (?) Learn how to resolve a blocked push
+remote:      https://docs.github.com/code-security/secret-scanning/working-with-secret-scanning-and-push-protection/working-with-push-protection-from-the-command-line#resolving-a-blocked-push
+remote:
+remote:
+remote:       —— GitHub Personal Access Token ——————————————————————
+remote:        locations:
+remote:          - commit:
+remote:            path: :95
+remote:
+remote:        (?) To push, remove secret from commit(s) or follow this URL to allow the secret.
+remote:        https://github.com/shogo82148/shogo82148.github.com/security/secret-scanning/unblock-secret/3FGSQxE1hq4JPtZZRtZEVlm3PNI
+remote:
+remote:
+remote:
+To ssh://github.com/shogo82148/shogo82148.github.com.git
+```
+
 ## 仕組み
 
 PATは `ghp_` から始まる40文字の文字列ですが、テキトーな文字列だと Secret Protection では検出してくれません。
