@@ -261,6 +261,14 @@ PATをプッシュするとどうなるのか検証したい方はぜひご活�
 また、ジェネレーターを作る過程でPATの設計の詳細も明らかになりました。
 自分のサービスでアクセストークンを設計する場合の参考になりそうですね。
 
+> 🐇 ぴょんと跳ねて `ghp_` を作るよ\
+> CRC32 でチェックサムつけて\
+> base62 に変換したら完成！\
+> ダミートークンがずらり並ぶ\
+> Secret Scanning よ、見つけておくれ 🔍
+>
+> by [CodeRabbit](https://www.coderabbit.ai/)
+
 ## 参考文献
 
 - [GitHub Secret Protection](https://github.com/security/advanced-security/secret-protection?locale=ja)
