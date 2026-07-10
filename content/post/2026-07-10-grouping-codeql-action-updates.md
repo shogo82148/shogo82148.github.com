@@ -76,4 +76,4 @@ dependabotが何もしてないのに壊れたプルリクエストを送って�
 
 - [CodeQL](https://codeql.github.com/)
 - [github/codeql-action](https://github.com/github/codeql-action)
-- [dependabotの更新グループ化機能を使ってAWS SDK for Go v2をアップデートする ](https://shogo82148.github.io/blog/2023/07/02/2023-07-02-update-aws-sdk-v2-with-grouped-version-updates-for-dependabot/)
+- [dependabotの更新グループ化機能を使ってAWS SDK for Go v2をアップデートする](https://shogo82148.github.io/blog/2023/07/02/2023-07-02-update-aws-sdk-v2-with-grouped-version-updates-for-dependabot/)
