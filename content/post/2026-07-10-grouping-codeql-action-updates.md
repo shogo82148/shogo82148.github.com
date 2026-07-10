@@ -64,6 +64,14 @@ updates:
 dependabotが何もしてないのに壊れたプルリクエストを送って来るようになったので、
 設定をいじって対応しました。
 
+> うさぎが跳ねて、更新をひとまとめ\
+> CodeQLの枝葉も、仲よく並んで\
+> CIの道を軽やかに駆ける\
+> にんじん片手に、記事を祝おう\
+> ぴょん、ぴょん、よい変更！
+>
+> by [CodeRabbit](https://www.coderabbit.ai/)
+
 ## 参考文献
 
 - [CodeQL](https://codeql.github.com/)
