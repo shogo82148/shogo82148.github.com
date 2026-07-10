@@ -29,7 +29,7 @@ categories: [github]
 
 - [build(deps): bump github/codeql-action from 4.36.1 to 4.36.2 #507](https://github.com/shogo82148/typescript-action/pull/507)
 
-しかし7月のはじめことから、なぜか複数のプルリクエストに分割されるようになりました。
+しかし7月初めから、なぜか複数のプルリクエストに分割されるようになりました。
 
 - [build(deps): bump github/codeql-action/analyze from 4.36.2 to 4.36.3 #525](https://github.com/shogo82148/typescript-action/pull/525)
 - [build(deps): bump github/codeql-action/init from 4.36.2 to 4.36.3 #526](https://github.com/shogo82148/typescript-action/pull/526)
