@@ -30,8 +30,10 @@ APIは [coder/websocket](https://github.com/coder/websocket) と合わせてあ�
 package main
 
 import (
+  "context"
 	"log"
 	"net/http"
+  "time"
 
 	"github.com/shogo82148/websocket"
 )
