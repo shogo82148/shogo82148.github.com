@@ -118,7 +118,10 @@ Contextがキャンセルされた場合の挙動が分かりやすくなって�
 
 `MessageText` タイプのメッセージは UTF-8 でエンコードされている必要がある（MUST）とRFC 6455に記載があります。
 [shogo82148/websocket](https://github.com/shogo82148/websocket) ではこれに遵守するために、
-ライブラリーのユーザーが読み書きしたデータがValidなUTF-8かを自動的にバリデーションします。
+ライブラリーのユーザーが読み書きしたデータがValidなUTF-8かをデフォルトでバリデーションします。
+この挙動はクライアント側では `DialOptions.SkipValidateUTF8Read` と `DialOptions.SkipValidateUTF8Write` オプション、
+サーバー側では `AcceptOptions.SkipValidateUTF8Read` `AcceptOptions.SkipValidateUTF8Write` で制御可能です。
+読み書きするデータがすでにUTF-8だとわかっている場合に使ってください。
 
 ## まとめ
 
