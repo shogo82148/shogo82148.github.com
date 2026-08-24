@@ -111,7 +111,7 @@ func main() {
 
 ### Contextサポートの強化
 
-「[ぼくのかんがえたさいきょうのcontext対応版go-mysql-driverをマージしてもらった](https://shogo82148.github.io/blog/2017/06/16/mysql-driver-and-context/)」で採用した watcher goroutine/executor goroutine方式を実装しています。
+「[ぼくのかんがえたさいきょうのcontext対応版go-mysql-driverをマージしてもらった](https://shogo82148.github.io/blog/2017/06/16/mysql-driver-and-context/)」で採用したwatcher goroutine方式を実装しています。
 Contextがキャンセルされた場合の挙動が分かりやすくなっていると思います。
 
 ### UTF-8のバリデーションサポート
