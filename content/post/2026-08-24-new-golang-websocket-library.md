@@ -31,11 +31,11 @@ package main
 
 import (
   "context"
-	"log"
-	"net/http"
+  "log"
+  "net/http"
   "time"
 
-	"github.com/shogo82148/websocket"
+  "github.com/shogo82148/websocket"
 )
 
 func main() {
