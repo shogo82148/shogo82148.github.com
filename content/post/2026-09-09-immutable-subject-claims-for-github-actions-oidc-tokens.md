@@ -124,6 +124,14 @@ gh api \
 2026年7月15日以降に作成されたレポジトリーでは、 GitHub Actions OIDCフェデレーション時のSubjectクレームが変更になりました。
 OIDCフェデレーションがうまく動かないときは、設定画面から現在の Subjectクレームの形式を確認してみてください。
 
+> 白うさぎ、OIDCの道を跳ねる\
+> Subjectの形をそっと照らす\
+> IAMの扉に新しい鍵\
+> CLIで設定を確かめて\
+> 安全なトークンを月へ運ぶ
+>
+> by [CodeRabbit](https://www.coderabbit.ai/)
+
 ## 参考
 
 - [Immutable subject claims for GitHub Actions OIDC tokens](https://github.blog/changelog/2026-04-23-immutable-subject-claims-for-github-actions-oidc-tokens/)
