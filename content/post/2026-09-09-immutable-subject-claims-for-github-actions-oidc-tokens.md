@@ -47,7 +47,7 @@ Resources:
             Condition:
               StringEquals:
                 "token.actions.githubusercontent.com:aud": sts.amazonaws.com
-                "token.actions.githubusercontent.com:sub": repo:shogo82148@/webntp.shogo82148.com@:ref:refs/heads/main
+                "token.actions.githubusercontent.com:sub": repo:shogo82148/webntp.shogo82148.com:ref:refs/heads/main
         Policies:
           # 略
 ```
@@ -57,7 +57,7 @@ CloudFormationのレンプレートの信頼ポリシーを、新形式のSubjec
 ```diff
              Condition:
                StringEquals:
--                "token.actions.githubusercontent.com:sub": repo:shogo82148@/webntp.shogo82148.com@:ref:refs/heads/main
+-                "token.actions.githubusercontent.com:sub": repo:shogo82148/webntp.shogo82148.com:ref:refs/heads/main
 +                "token.actions.githubusercontent.com:sub": repo:shogo82148@1157344/webntp.shogo82148.com@1360340997:ref:refs/heads/main
 ```
 
