@@ -74,7 +74,7 @@ CIに簡単に組み込めるよう GitHub Action も用意しました。
 ```yaml
 # .github/workflows/dependalint.yml
 
-name: reviewdog
+name: dependalint
 on:
   push:
     paths:
@@ -85,13 +85,17 @@ on:
       - .github/dependabot.yml
       - .github/workflows/dependalint.yml
 
+permissions:
+  contents: read
+  checks: write
+
 jobs:
   dependalint:
     name: runner / dependalint
     runs-on: ubuntu-slim
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: shogo82148/actions-dependalint@v0
+      - uses: shogo82148/actions-dependalint@5a2eeef8cd5d8354b4e8446822649e9b37c177c1 # v0.1.0
         with:
           reporter: github-check
 ```
