@@ -85,6 +85,7 @@ on:
       - .github/dependabot.yml
       - .github/workflows/dependalint.yml
 
+jobs:
   dependalint:
     name: runner / dependalint
     runs-on: ubuntu-slim
