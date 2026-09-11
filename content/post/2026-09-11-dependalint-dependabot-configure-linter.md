@@ -144,6 +144,15 @@ Dependabotの設定ファイルのリンターを作りました。
 
 `dependabot.yml` の設定ミスでお悩みの方はぜひご利用ください。
 
+> うさぎは設定を静かに確認する\
+> dependalintが誤りを見つける\
+> Actionsが手順を走る\
+> cronは月夜の予定を刻む\
+> 安心の設定が巣を守る\
+> ぴょんと記事が完成する
+>
+> by [CodeRabbit](https://www.coderabbit.ai/)
+
 ## 参考
 
 - [Dependabot](https://github.com/dependabot)
