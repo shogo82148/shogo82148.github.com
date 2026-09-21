@@ -56,6 +56,13 @@ error: Uncaught (in promise) Error: Had 5 diagnostics.
 
 適当にググってみても同じ現象に悩んでいる人を見つけられなかったので、自前のワークアラウンドで回避した方法をメモっておきます。
 
+2026-09-21追記:
+もっとスマートな解決方法を見つけました！
+
+- [【解決】denoland/dntがerror TS2304: Cannot find name 'ErrorOptions'で失敗する](https://shogo82148.github.io/blog/2026/09/21/resolved-denoland-dnt-cannot-find-error-options/)
+
+追記ここまで
+
 ## 原因
 
 直接の原因は[@std/assert](https://jsr.io/@std/assert) がECMAScriptの新機能を使うようになったためです。
