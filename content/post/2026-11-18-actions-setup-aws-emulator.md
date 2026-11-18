@@ -42,9 +42,12 @@ GitHub Action を呼び出すだけです。
 on:
   push:
 
-steps:
-  - uses: shogo82148/actions-setup-aws-emulator@v0
-  - run: aws sts get-caller-identity
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: shogo82148/actions-setup-aws-emulator@v0
+      - run: aws sts get-caller-identity
 ```
 
 テレメトリーはデフォルトで有効になっています。気になる人は明示的にオフにしてください。
@@ -53,11 +56,14 @@ steps:
 on:
   push:
 
-steps:
-  - uses: shogo82148/actions-setup-aws-emulator@v0
-    with:
-      telemetry: "off"
-  - run: aws sts get-caller-identity
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: shogo82148/actions-setup-aws-emulator@v0
+        with:
+          telemetry: "off"
+      - run: aws sts get-caller-identity
 ```
 
 実際に使用する際は、CIが予期せず壊れないよう、バージョンを固定するのが望ましいでしょう。
@@ -66,12 +72,15 @@ steps:
 on:
   push:
 
-steps:
-  - uses: shogo82148/actions-setup-aws-emulator@v0
-    with:
-      aws-emulator-version: "1.0.508" # 2026-11-18 21:56 現在最新のバージョンを使用
-      telemetry: "off"
-  - run: aws sts get-caller-identity
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: shogo82148/actions-setup-aws-emulator@v0
+        with:
+          aws-emulator-version: "1.0.508" # 2026-11-18 21:56 現在最新のバージョンを使用
+          telemetry: "off"
+      - run: aws sts get-caller-identity
 ```
 
 ## 余談
