@@ -33,7 +33,7 @@
   <meta name="author" content="ICHINOSE Shogo">
 
   
-  <meta name="generator" content="Hugo 0.120.4">
+  <meta name="generator" content="Hugo 0.170.1">
 
 
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
@@ -116,7 +116,7 @@ MathJax = {
 
 <header>
   <p class="meta">Apr 15, 2026
-     - 2 minute read 
+     - 4 minute read 
     
 
     
@@ -159,10 +159,10 @@ MathJax = {
 今回は手元にあるキーマテリアルをインポートしたいです。
 そのためには <code>--origin EXTERNAL</code> オプションをつけてキーを作成します。</p>
 <div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">aws kms create-key <span class="se">\
-</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --key-spec RSA_2048 <span class="se">\
-</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --key-usage SIGN_VERIFY <span class="se">\
-</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --origin EXTERNAL <span class="se">\
-</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --description <span class="s2">&#34;GitHub App JWT signing key&#34;</span>
+</span></span></span><span class="line"><span class="cl">    --key-spec RSA_2048 <span class="se">\
+</span></span></span><span class="line"><span class="cl">    --key-usage SIGN_VERIFY <span class="se">\
+</span></span></span><span class="line"><span class="cl">    --origin EXTERNAL <span class="se">\
+</span></span></span><span class="line"><span class="cl">    --description <span class="s2">&#34;GitHub App JWT signing key&#34;</span>
 </span></span></code></pre></div><p>作成に成功すると「KeyId」が発行されます。
 後で使うので覚えておきましょう。</p>
 <h3 id="ラッピングパブリックキーとインポートトークンを取得する">ラッピングパブリックキーとインポートトークンを取得する</h3>
@@ -170,9 +170,9 @@ MathJax = {
 キーマテリアルを暗号化する必要があります。
 暗号化に必要な公開鍵を取得します。</p>
 <div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">aws kms get-parameters-for-import <span class="se">\
-</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --key-id <span class="s2">&#34;</span><span class="nv">$KEY_ID</span><span class="s2">&#34;</span> <span class="se">\
-</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --wrapping-algorithm RSA_AES_KEY_WRAP_SHA_256 <span class="se">\
-</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --wrapping-key-spec RSA_4096
+</span></span></span><span class="line"><span class="cl">    --key-id <span class="s2">&#34;</span><span class="nv">$KEY_ID</span><span class="s2">&#34;</span> <span class="se">\
+</span></span></span><span class="line"><span class="cl">    --wrapping-algorithm RSA_AES_KEY_WRAP_SHA_256 <span class="se">\
+</span></span></span><span class="line"><span class="cl">    --wrapping-key-spec RSA_4096
 </span></span></code></pre></div><p>以下のようなJSONが出力されます。
 <code>PublicKey</code> と <code>ImportToken</code> をそれぞれ <code>publickey.b64</code>、<code>importtoken.b64</code> という名前で保存します。</p>
 <div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
@@ -189,42 +189,42 @@ MathJax = {
 KMSが受け入れてくれるのはバイナリー形式（DER形式）なので、
 PEM形式からDER形式へ変換しておきます。</p>
 <div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">openssl pkcs8 -topk8 -inform PEM -outform DER <span class="se">\
-</span></span></span><span class="line"><span class="cl"><span class="se"></span>    -in github-app-private-key.pem -out private-key.der -nocrypt
+</span></span></span><span class="line"><span class="cl">    -in github-app-private-key.pem -out private-key.der -nocrypt
 </span></span></code></pre></div><p>キーマテリアルの暗号化に使用する共通鍵を作成します。</p>
 <div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">openssl rand -out aes-key.bin <span class="m">32</span>
 </span></span></code></pre></div><p>この共通鍵を使ってキーマテリアルを共通鍵暗号で暗号化します。</p>
 <div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">openssl enc -id-aes256-wrap-pad <span class="se">\
-</span></span></span><span class="line"><span class="cl"><span class="se"></span>        -K <span class="s2">&#34;</span><span class="k">$(</span>xxd -p &lt; aes-key.bin <span class="p">|</span> tr -d <span class="s1">&#39;\n&#39;</span><span class="k">)</span><span class="s2">&#34;</span> <span class="se">\
-</span></span></span><span class="line"><span class="cl"><span class="se"></span>        -iv A65959A6 <span class="se">\
-</span></span></span><span class="line"><span class="cl"><span class="se"></span>        -in private-key.der <span class="se">\
-</span></span></span><span class="line"><span class="cl"><span class="se"></span>        -out key-material-wrapped.bin
+</span></span></span><span class="line"><span class="cl">        -K <span class="s2">&#34;</span><span class="k">$(</span>xxd -p &lt; aes-key.bin <span class="p">|</span> tr -d <span class="s1">&#39;\n&#39;</span><span class="k">)</span><span class="s2">&#34;</span> <span class="se">\
+</span></span></span><span class="line"><span class="cl">        -iv A65959A6 <span class="se">\
+</span></span></span><span class="line"><span class="cl">        -in private-key.der <span class="se">\
+</span></span></span><span class="line"><span class="cl">        -out key-material-wrapped.bin
 </span></span></code></pre></div><p>共通鍵は公開鍵暗号を使って暗号化してます。</p>
 <div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">openssl pkeyutl <span class="se">\
-</span></span></span><span class="line"><span class="cl"><span class="se"></span>    -encrypt <span class="se">\
-</span></span></span><span class="line"><span class="cl"><span class="se"></span>    -in aes-key.bin <span class="se">\
-</span></span></span><span class="line"><span class="cl"><span class="se"></span>    -out aes-key-wrapped.bin <span class="se">\
-</span></span></span><span class="line"><span class="cl"><span class="se"></span>    -inkey WrappingPublicKey.bin <span class="se">\
-</span></span></span><span class="line"><span class="cl"><span class="se"></span>    -keyform DER <span class="se">\
-</span></span></span><span class="line"><span class="cl"><span class="se"></span>    -pubin <span class="se">\
-</span></span></span><span class="line"><span class="cl"><span class="se"></span>    -pkeyopt rsa_padding_mode:oaep <span class="se">\
-</span></span></span><span class="line"><span class="cl"><span class="se"></span>    -pkeyopt rsa_oaep_md:sha256 <span class="se">\
-</span></span></span><span class="line"><span class="cl"><span class="se"></span>    -pkeyopt rsa_mgf1_md:sha256
+</span></span></span><span class="line"><span class="cl">    -encrypt <span class="se">\
+</span></span></span><span class="line"><span class="cl">    -in aes-key.bin <span class="se">\
+</span></span></span><span class="line"><span class="cl">    -out aes-key-wrapped.bin <span class="se">\
+</span></span></span><span class="line"><span class="cl">    -inkey WrappingPublicKey.bin <span class="se">\
+</span></span></span><span class="line"><span class="cl">    -keyform DER <span class="se">\
+</span></span></span><span class="line"><span class="cl">    -pubin <span class="se">\
+</span></span></span><span class="line"><span class="cl">    -pkeyopt rsa_padding_mode:oaep <span class="se">\
+</span></span></span><span class="line"><span class="cl">    -pkeyopt rsa_oaep_md:sha256 <span class="se">\
+</span></span></span><span class="line"><span class="cl">    -pkeyopt rsa_mgf1_md:sha256
 </span></span></code></pre></div><p>暗号化した共通鍵と暗号化したキーマテリアルとをひとつのファイルにまとめます。</p>
 <div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">cat aes-key-wrapped.bin key-material-wrapped.bin &gt; EncryptedKeyMaterial.bin
 </span></span></code></pre></div><h3 id="kmsにキーマテリアルをインポートする">KMSにキーマテリアルをインポートする</h3>
 <p>KMSに暗号化したキーマテリアルをインポートします。
 キーマテリアルの有効期限も設定できます。以下は有効期限を無期限に設定する場合のコマンド例です。</p>
 <div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">aws kms import-key-material <span class="se">\
-</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --key-id <span class="s2">&#34;</span><span class="nv">$KEY_ID</span><span class="s2">&#34;</span> <span class="se">\
-</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --encrypted-key-material fileb://EncryptedKeyMaterial.bin <span class="se">\
-</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --import-token fileb://ImportToken.bin <span class="se">\
-</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --expiration-model KEY_MATERIAL_DOES_NOT_EXPIRE
+</span></span></span><span class="line"><span class="cl">    --key-id <span class="s2">&#34;</span><span class="nv">$KEY_ID</span><span class="s2">&#34;</span> <span class="se">\
+</span></span></span><span class="line"><span class="cl">    --encrypted-key-material fileb://EncryptedKeyMaterial.bin <span class="se">\
+</span></span></span><span class="line"><span class="cl">    --import-token fileb://ImportToken.bin <span class="se">\
+</span></span></span><span class="line"><span class="cl">    --expiration-model KEY_MATERIAL_DOES_NOT_EXPIRE
 </span></span></code></pre></div><h3 id="エイリアスを割り当てるoptional">エイリアスを割り当てる（Optional）</h3>
 <p>Key IDの形式はUUIDv4です。
 そのままでは覚えにくいので、必要に応じてエイリアスを割り当てましょう。</p>
 <div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">aws kms create-alias <span class="se">\
-</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --alias-name alias/github-app <span class="se">\
-</span></span></span><span class="line"><span class="cl"><span class="se"></span>    --target-key-id <span class="s2">&#34;</span><span class="nv">$KEY_ID</span><span class="s2">&#34;</span>
+</span></span></span><span class="line"><span class="cl">    --alias-name alias/github-app <span class="se">\
+</span></span></span><span class="line"><span class="cl">    --target-key-id <span class="s2">&#34;</span><span class="nv">$KEY_ID</span><span class="s2">&#34;</span>
 </span></span></code></pre></div><p>このように設定しておくと、Key IDが必要な場面でKey IDの代わりに <code>alias/github-app</code> を使用できます。</p>
 <h2 id="まとめ">まとめ</h2>
 <p>GitHub Appの秘密鍵をAWS KMSにインポートする手順を紹介しました。

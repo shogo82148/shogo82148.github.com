@@ -1,611 +1,332 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
-  <channel>
-    <title>GitHub on Shogo&#39;s Blog</title>
-    <link>https://shogo82148.github.io/categories/github/</link>
-    <description>Recent content in GitHub on Shogo&#39;s Blog</description>
-    <generator>Hugo -- gohugo.io</generator>
-    <language>ja-jp</language>
-    <lastBuildDate>Wed, 18 Nov 2026 21:25:00 +0900</lastBuildDate>
-    <atom:link href="https://shogo82148.github.io/categories/github/index.xml" rel="self" type="application/rss+xml" />
-    <item>
-      <title>AWS EmulatorのセットアップをするGitHub Actionを書いた</title>
-      <link>https://shogo82148.github.io/blog/2026/11/18/actions-setup-aws-emulator/</link>
-      <pubDate>Wed, 18 Nov 2026 21:25:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2026/11/18/actions-setup-aws-emulator/</guid>
-      <description>背景・目的 11月11日にAWS Emulatorが公開されました。 AWSの環境を手元で再現できるツールです。
-AWS Emulator を使用してローカルで AWS に対してアプリケーションをテストする 手元でテストができるようになったら、GitHub Actionsでテストしたくなりますよね。 しかし、実際にGitHub ActionsにAWS Emulatorを導入するのは意外と面倒です。
-.debファイルのダウンロード 署名の検証 AWS Emulatorの起動 AWS Emulatorがリクエストを受け付けられるようになるまで待機 接続用の環境変数の設定 やることが多い。
-毎回この分量書くのつらいから、公式からGitHub Action提供されないかな https://t.co/W5drYuDYU9
-— f96fd3a0-bdb9-4f10-b69f-8f765c1d341c ICHINOSEShogo (@shogo82148) November 15, 2026
-公式から提供される気配をまったく感じないので作っちゃいました。
-shogo82148/actions-setup-aws-emulator 使い方 GitHub Action を呼び出すだけです。
-on: push: jobs: test: runs-on: ubuntu-latest steps: - uses: shogo82148/actions-setup-aws-emulator@v0 - run: aws sts get-caller-identity テレメトリーはデフォルトで有効になっています。気になる人は明示的にオフにしてください。
-on: push: jobs: test: runs-on: ubuntu-latest steps: - uses: shogo82148/actions-setup-aws-emulator@v0 with: telemetry: &amp;#34;off&amp;#34; - run: aws sts get-caller-identity 実際に使用する際は、CIが予期せず壊れないよう、バージョンを固定するのが望ましいでしょう。</description>
-    </item>
-    <item>
-      <title>Dependabotの設定リンター dependalint を作った</title>
-      <link>https://shogo82148.github.io/blog/2026/09/11/dependalint-dependabot-configure-linter/</link>
-      <pubDate>Fri, 11 Sep 2026 14:38:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2026/09/11/dependalint-dependabot-configure-linter/</guid>
-      <description>背景・目的 Dependabot はレポジトリーが依存しているライブラリーの更新をチェックしてくれるツールです。 GitHub の公式ツールとして提供されており、導入も .github/dependabot.yml を設置するだけ、と簡単なのでよく使ってます。
-.github/dependabot.yml を設置するだけなんですが、それでも設定内容をミスってしまうのが人間というもの。 main ブランチへの .github/dependabot.yml のコミットで設定ファイルのバリデーションが走るのですが、そこではじめてミスに気がつくということが多々ありました。 プルリクエストの時点で気がつけるといいのですが、なぜかプルリクエストでは .github/dependabot.yml のバリデーションは走りません。
-僕と同じ悩みを持つ人は他にもいるらしく、Issueも起票されているのですが、あまり動きはありません。
-Make it possible to validate Dependabot config before it lands on main #4605 今の時代AIでなんとでもなるだろと、 Codex先生に「ドキュメントを読んでリンターを実装して」とお願いしたらものの5分で作ってくれました。
-shogo82148/dependalint 使い方 Goで実装してあるので go install でインストールできます。
-go install github.com/shogo82148/dependalint/cmd/dependalint@latest コマンドを叩くと dependabot.yml の内容をバリデーションしてくれます。
-dependalint 何も出力がなければOKです。 問題があるとエラーのあった場所を教えてくれます。
-たとえば以下のような問題だらけの設定ファイルを渡すと、
-# Test configuration for dependalint version: 2 updates: - package-ecosystem: &amp;#34;unknown&amp;#34; # そんな名前のエコシステムは存在しない directory: &amp;#34;/not-found&amp;#34; # 対象となるディレクトリーが存在しない schedule: interval: &amp;#34;invalid&amp;#34; # 不正なインターバル 以下のような出力が得られます。</description>
-    </item>
-    <item>
-      <title>新規レポジトリーで GitHub Actions のOIDCフェデレーションが動かなくなった件</title>
-      <link>https://shogo82148.github.io/blog/2026/09/09/immutable-subject-claims-for-github-actions-oidc-tokens/</link>
-      <pubDate>Wed, 09 Sep 2026 19:42:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2026/09/09/immutable-subject-claims-for-github-actions-oidc-tokens/</guid>
-      <description>背景 新しいウェブサイトを立ち上げようと、GitHubのレポジトリーを新規作成して、GitHub Actions から Amazon S3 へデプロイするワークフローを組みました。 いつものように AWS OIDC フェデレーションを設定したのですが、認証に失敗してしまいました。
-原因 （Codex先生に訪ねたところ）原因は ID トークンの Subject クレームの形式が変更になったことでした。
-Immutable subject claims for GitHub Actions OIDC tokens 変更できないサブジェクト要求 以前までは repo:octocat/my-repo:ref:refs/heads/main のような形式だったのが、 repo:octocat@123456/my-repo@456789:ref:refs/heads/main のようなユーザーID・レポジトリーIDが入った形式に変更になりました。 7月15日以降に新規作成したレポジトリーでは新形式が使用されます。 古いレポジトリーに関しては新形式の利用はオプトインで、引き続き古い Subject クレームが使用されます。
-CloudTrail のログを Codex先生に渡したら、Web検索してすぐに原因を突き止めてくれました。 賢いですね。
-対応 今回のケースでは IAM ロールを CloudFormation のテンプレートで管理していました。
-Resources: GitHubActionsWebntpDeployRole: Type: AWS::IAM::Role Properties: RoleName: GitHubActionsWebntpDeploy AssumeRolePolicyDocument: Version: &amp;#34;2012-10-17&amp;#34; Statement: - Effect: Allow Principal: Federated: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com Action: sts:AssumeRoleWithWebIdentity Condition: StringEquals: &amp;#34;token.actions.githubusercontent.com:aud&amp;#34;: sts.amazonaws.com &amp;#34;token.actions.githubusercontent.com:sub&amp;#34;: repo:shogo82148/webntp.</description>
-    </item>
-    <item>
-      <title>GitHub経由で脆弱性報告を受けた</title>
-      <link>https://shogo82148.github.io/blog/2026/08/23/receiving-a-vulnerability-report-via-github/</link>
-      <pubDate>Sun, 23 Aug 2026 23:05:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2026/08/23/receiving-a-vulnerability-report-via-github/</guid>
-      <description>TL;DR go-webntp および go-nginx-oauth2-adapter に脆弱性が見つかりました。 脆弱性を修正した以下のバージョンをリリースしました。 現在使用している方は最新バージョンへのアップデートをオススメします。
-go-webntp v0.0.3 go-nginx-oauth2-adapter v0.4.8 脆弱性の概要 GitHub経由で脆弱性報告してみた では、「報告者」という立場でしたが、 今回は「報告を受けるメンテナー」という形で「プライベート脆弱性レポート機能」を利用することになりました。 報告者の @EQSTLab ありがとうございます。
-go-webntp HTTP/WebSocketで時刻同期するWebNTPを書いた で紹介した、WebSocketのサーバーです。
-GHSA-chpr-3j48-r4vg: Unbounded WebSocket Message Read Causes Remote Memory Exhaustion DoS in go-webntp Server WebSocketのメッセージを全部メモリー上に展開して解析する処理が入っているのですが、そこにサイズ制限が漏れていました。 そのため、攻撃者はデカいデータを送りつけることでメモリーを圧迫し、最終的にはOOMでサービスを止められます。
-v0.0.3 では読み込みデータのサイズ制限を設けることでこの脆弱性を修正しました。
-go-nginx-oauth2-adapter nginx-omniauth-adapterのGolangポート作った で紹介した、nginxにOIDCで認証を行う機能をつけるためのサーバーです。
-GHSA-j2f5-qx44-xggq: Predictable Default Session Signing Key Leads to Authentication Bypass go-nginx-oauth2-adapter では、セッションの署名に使用する秘密鍵を設定する必要があります。 しかし、省略しても警告を吐くだけで、その場合は固定の文字列をキーとして使っていました。 固定の文字列はソースコードに埋め込まれているので、攻撃者は簡単にセッションを偽造することが可能です。
-v0.4.8 では、秘密鍵未設定時に警告ではなく起動に失敗するよう修正しました。 警告をちゃんと読んで秘密鍵をちゃんと設定していたユーザーには影響はないはずです。
-まとめ GitHub経由で脆弱性報告を受けたので、修正版をリリースしました。
-go-webntp または go-nginx-oauth2-adapter を利用している方はアップデートをお願いします。
-go-webntp v0.0.3 go-nginx-oauth2-adapter v0.4.8 うさぎが記事をぴょんと読む
-脆弱性の話を明るく綴る</description>
-    </item>
-    <item>
-      <title>dependabotでgithub/codeql-actionのアップデートをまとめる</title>
-      <link>https://shogo82148.github.io/blog/2026/07/10/grouping-codeql-action-updates/</link>
-      <pubDate>Fri, 10 Jul 2026 22:00:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2026/07/10/grouping-codeql-action-updates/</guid>
-      <description>背景・目的 github/codeql-action について 僕の管理しているGitHubレポジトリーの一部はCodeQLを使って脆弱性の診断を行っています。 診断には公式のgithub/codeql-action Actionを使って、GitHub Actions上で実行しています。
-github/codeql-actionは内部で複数のアクションを提供しており、これらのアクションを組み合わせて診断を行います。
-init アクション analyze アクション autobuild アクション etc. これらのActionsはバージョンが食い違っていると、警告やエラー、予期しない結果につながるため、常にバージョンを一致させておく必要があります。
-dependabotの仕様変更？ 今まではgithub/codeql-actionに関連するActionをdependabotはすべて一括更新してくれました。
-build(deps): bump github/codeql-action from 4.36.1 to 4.36.2 #507 しかし7月初めから、なぜか複数のプルリクエストに分割されるようになりました。
-build(deps): bump github/codeql-action/analyze from 4.36.2 to 4.36.3 #525 build(deps): bump github/codeql-action/init from 4.36.2 to 4.36.3 #526 build(deps): bump github/codeql-action/autobuild from 4.36.2 to 4.36.3 #527 バージョンの不一致でCIがコケるので、このままではこれらのプルリクエストは取り込めません。
-github/codeql-action のアップデートをまとめる これだと困るので一括更新してくれるよう、.dependabot.yaml の設定を更新しました。
-version: 2 updates: # Maintain dependencies for GitHub Actions - package-ecosystem: &amp;#34;github-actions&amp;#34; directory: &amp;#34;/&amp;#34; schedule: interval: &amp;#34;daily&amp;#34; # 新しく追加した部分 groups: codeql-actions: patterns: - &amp;#34;github/codeql-action/*&amp;#34; これで github/codeql-action のバージョンの食い違いを避けやすくなります。</description>
-    </item>
-    <item>
-      <title>GitHub Personal Access Token を大量生成するプログラムを書いた</title>
-      <link>https://shogo82148.github.io/blog/2026/06/16/github-personal-access-token-generator/</link>
-      <pubDate>Tue, 16 Jun 2026 16:53:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2026/06/16/github-personal-access-token-generator/</guid>
-      <description>背景・目的 APIトークンは他者に知られると悪用される可能性があるので、GitHub などにプッシュするのは厳禁です。 とはいえ人間が注意するのではうっかり混入する場合もあります。 これを機械的に防ごうというサービスが GitHub Secret Protection です。 公開レポジトリーならデフォルトで有効になっているので、普段気が付かずにお世話になっているサービスだと思います。
-さて、GitHub Secret Protection でシークレットが検出された場合のフローを検証しているのですが、そのためには実際にシークレットをプッシュする必要があります。 実際に GitHub などのサービスでトークンを発行してプッシュするのが楽ですが、本物のトークンを使うのは怖いですよね？
-じゃあ、ダミーデータを作ってみよう！というわけでやってみました。
-PAT生成機 GitHub の Personal Access Token (PAT) のジェネレーターを作ってみました。 そんな長くないので、ここにペタリと貼っておきます。 手元にコピペしてお使いください。
-// SPDX-FileCopyrightText: 2026 ICHINOSE Shogo &amp;lt;shogo82148@gmail.com&amp;gt; // SPDX-License-Identifier: MIT package main import ( &amp;#34;bufio&amp;#34; &amp;#34;crypto/rand&amp;#34; &amp;#34;encoding/base64&amp;#34; &amp;#34;hash/crc32&amp;#34; &amp;#34;os&amp;#34; ) func base62(in uint32) []byte { const chars = &amp;#34;0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz&amp;#34; var result [6]byte for i := 5; i &amp;gt;= 0; i-- { result[i] = chars[in%62] in /= 62 } return result[:] } func randomString(length int) []byte { ret := make([]byte, 0, length) var buf1 [30]byte var buf2 [40]byte for { rand.</description>
-    </item>
-    <item>
-      <title>GitHub Appの秘密鍵をAWS KMSにインポートする</title>
-      <link>https://shogo82148.github.io/blog/2026/04/15/import-github-app-private-key-to-aws-kms/</link>
-      <pubDate>Wed, 15 Apr 2026 23:21:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2026/04/15/import-github-app-private-key-to-aws-kms/</guid>
-      <description>背景・目的 以下の記事を読んで GitHub App の秘密鍵を AWS KMS に閉じ込められることを知りました。
-GitHub App の秘密鍵を AWS KMS に閉じ込める AWS KMS は食わず嫌いしていたので、この機会に仲良くなろうとちょっと触ってみることにしました。
-触ってはみたものの秘密鍵をAWS KMSにインポートする手順が難しすぎる！ 正直挫折しそうになりました。これからチャレンジする人が挫折しないよう、簡単に手順をまとめておきます。
-GitHub Appの秘密鍵のインポート手順 GitHub Appの設定は終わっているものとし、秘密鍵はすでに入手しているものとします。 入手した秘密鍵のことをKMSの用語では「キーマテリアル（鍵素材）」と呼ぶので、以下そのように記載します。
-以下のような手順でキーマテリアルをインポートします。
-キーマテリアル無しでKMS Keyを作成する ラッピングパブリックキーとインポートトークンを取得する キーマテリアルの暗号化 KMSにキーマテリアルをインポートする エイリアスを割り当てる（Optional） キーマテリアル無しでKMS Keyを作成する AWS KMSにはキーマテリアルを自動生成してくれる機能がありますが、 今回は手元にあるキーマテリアルをインポートしたいです。 そのためには --origin EXTERNAL オプションをつけてキーを作成します。
-aws kms create-key \ --key-spec RSA_2048 \ --key-usage SIGN_VERIFY \ --origin EXTERNAL \ --description &amp;#34;GitHub App JWT signing key&amp;#34; 作成に成功すると「KeyId」が発行されます。 後で使うので覚えておきましょう。
-ラッピングパブリックキーとインポートトークンを取得する KMSにキーマテリアルをインポートするには、 キーマテリアルを暗号化する必要があります。 暗号化に必要な公開鍵を取得します。
-aws kms get-parameters-for-import \ --key-id &amp;#34;$KEY_ID&amp;#34; \ --wrapping-algorithm RSA_AES_KEY_WRAP_SHA_256 \ --wrapping-key-spec RSA_4096 以下のようなJSONが出力されます。 PublicKey と ImportToken をそれぞれ publickey.</description>
-    </item>
-    <item>
-      <title>shogo82148/actions-setup-mysqlのMySQLビルドスクリプト群を別レポジトリーに移行した</title>
-      <link>https://shogo82148.github.io/blog/2025/10/26/split-actions-setup-mysql/</link>
-      <pubDate>Sun, 26 Oct 2025 21:12:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2025/10/26/split-actions-setup-mysql/</guid>
-      <description>TL;DR shogo82148/actions-setup-mysql には「GitHub Actionsのコード」と「MySQLをビルドするためのスクリプト群」が一緒に入っていたのですが、 このたび「MySQLをビルドするためのスクリプト群」を以下のレポジトリーに移行することにしました。
-shogo82148/build-mysql ユーザー側での対応は不要です。
-背景・目的 shogo82148/actions-setup-mysql のビルド済みMySQLバイナリー置き場には紆余曲折ありました。 以下のブログ記事はPerlのものですが、MySQLも同じような道筋を辿っています。
-Setup Perl GitHub Action を公開しました Setup Perl Environment Action のストレージを Azure Blob Storage に移行しました 紆余曲折あり最終的には GitHub Releases に保存することにしました。 GitHubネイティブの機能で安心感があるのと、なんたって無料なのが魅力的ですね。
-v1.45.0 をリリースしたら、 v1.45.0の関連アセットに必要なバイナリーを全部突っ込む、という作戦で運用を続けてきました。 しかし、この方法では以下のような問題がありました。
-リリースのたびにすべてのプラットフォームのビルドをし直さなければならない ひとつのリリースに含める事のできるアセットの上限 1000 が見えてきた というわけで、「MySQLをビルドするためのスクリプト群」を別レポジトリーに移行し、 shogo82148/actions-setup-mysql 自体のリリースサイクルとは別に管理するようにしました。
-移行作業 shogo82148/build-mysql のセットアップ 「MySQLをビルドするための秘伝のスクリプト群」はすでに手元にあるので、スクリプト群をコピーするたけです。 完成したバイナリーは gh コマンドでアップロードします。
-同じMySQLバージョンの再ビルドを行いたい（たとえば、将来リリースされるであろうubuntu-26.04版ビルドの追加とか）ケースも考えて、リリース名に mysql-8.4.6-20251026153058 のようにリリースした日付を入れておきます。 これは、変更不可リリースを有効化しており、過去のリリースを直接書き換えることができないためです。
-shogo82148/actions-setup-mysql のダウンロードURL書き換え 毎回 shogo82148/build-mysql のリリースを検索するのも大変なので、 shogo82148/build-mysql の全リリースを gh api --paginate --slurp &#39;/repos/shogo82148/build-mysql/releases?per_page=100&#39; コマンドで取得し、整形したものをソースコードに埋め込んでいます。
-[ { &amp;#34;arch&amp;#34;: &amp;#34;arm64&amp;#34;, &amp;#34;distribution&amp;#34;: &amp;#34;mysql&amp;#34;, &amp;#34;os&amp;#34;: &amp;#34;darwin&amp;#34;, &amp;#34;sha256&amp;#34;: &amp;#34;874d49f26f0bcb1cdd186bf768d863cb1da227091609e5873e25255f19e46753&amp;#34;, &amp;#34;url&amp;#34;: &amp;#34;https://github.</description>
-    </item>
-    <item>
-      <title>GitHubがJWTのb64ヘッダーパラメーターを認識するようになった</title>
-      <link>https://shogo82148.github.io/blog/2025/08/12/github-now-checks-b64-header-parameter/</link>
-      <pubDate>Tue, 12 Aug 2025 23:11:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2025/08/12/github-now-checks-b64-header-parameter/</guid>
-      <description>こんな罠に引っかかるのは僕だけだと思うんですが、一応記録として残しておきます・・・。
-TL;DR 2025-08-09あたりから、GitHubがJWTのb64ヘッダーパラメーターを認識するようになった 具体的にはJWTのヘッダーに {&amp;quot;b64&amp;quot;: false} が含まれている場合に、&amp;ldquo;A JSON web token could not be decoded, documentation_url: https://docs.github.com/rest&amp;quot; というエラーメッセージが返ってくる 原因 GitHub Appsにアクセスするのに、お勉強も兼ねて自前実装のJWTエンコーダーを使っていました。
-https://github.com/shogo82148/goat JWSのペイロードは普通base64エンコードされていますが、base64エンコードをスキップする拡張が提案されています。
-RFC 7797: JSON Web Signature (JWS) Unencoded Payload Option もちろん時前実装のJWTエンコーダーでも対応しました。
-しかし、そこにバグがあったのです！ payloadをbase64エンコードしているのにもかかわらず、{&amp;quot;b64&amp;quot;: false} が設定された状態になっていました。
-JWTのヘッダーの中身:
-{ &amp;#34;cty&amp;#34;: &amp;#34;JWT&amp;#34;, &amp;#34;alg&amp;#34;: &amp;#34;RS256&amp;#34;, &amp;#34;b64&amp;#34;: false } 実際のペイロードの内容と、ヘッダーの情報が食い違っており、要するにもとから壊れたJWTを送っていたのです。 今まではたまたまGitHubが受け入れてくれる状態でした。
-GitHub 側の改修 おそらく b64 ヘッダーパラメーターをチェックするようになったのだと思います。 この改修により、今までは許容されていた {&amp;quot;b64&amp;quot;: false} 付きのJWTが使えなくなりました。
-対応 そもそも {&amp;quot;b64&amp;quot;: false} のJWTは使用してはならない (MUST NOT) とRFC 7797 Section 7で明記されています。
-For interoperability reasons, JSON Web Tokens [JWT] MUST NOT use &amp;ldquo;b64&amp;rdquo; with a &amp;ldquo;false&amp;rdquo; value.</description>
-    </item>
-    <item>
-      <title>actions-setup-redisがBuild Provenanceの検証を行うようになりました</title>
-      <link>https://shogo82148.github.io/blog/2025/04/06/actions-setup-redis-verifies-build-provenance/</link>
-      <pubDate>Sun, 06 Apr 2025 22:34:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2025/04/06/actions-setup-redis-verifies-build-provenance/</guid>
-      <description>shogo82148/actions-setup-redis はRedisのバイナリーをGitHub Releasesからダウンロードしています。 このバイナリーをGitHub Artifact Attestationsで署名して、 ダウンロード時に検証するようにしました。
-背景 今年3月に発生したGitHub Actionsのサプライチェーン攻撃を受けての対応です。
-[Security Advisory] Supply Chain Attack on reviewdog GitHub Actions during a specific time period #2079 New GitHub Action supply chain attack: reviewdog/action-setup GitHub Actions Supply Chain Attack: A Targeted Attack on Coinbase Expanded to the Widespread tj-actions/changed-files Incident: Threat Assessment (Updated 4/2) tj-actions のインシデントレポートを読んだ 個人的にはreviewdog/action-setupをよく利用しているので、びっくりしました。 （インシデントレポートに自分のコミット載ってるし） さいわい侵害を受けたのが日本時間深夜ということもあり、被害を受けたレポジトリーは見つかりませんでした。
-しかし、こういった攻撃が身近に迫っていることを、改めて感じた事件でした。 自分自身もいくつかGitHub Actionsを公開しているので、他人事ではありません。 少しでも安全に利用できるよう、何等かの対応をすることにしました。
-対応 GitHub Actionsのピン留め 今回の侵害事件においてもっとも効果的なのはGitHub ActionsのSHA1ハッシュによりピン留めです。 他の方もたくさんブログを書いてくれているので、そちらをどうぞ。
-GitHub Actionsの侵害・サプライチェーンリスクを軽減:pinactを使ってアクションをバージョンではなくハッシュ値で指定 GitHub Actionsの外部Actionのバージョンをhash指定にし、可読性を維持しつつバージョンを上げる GitHub Actionsの外部ActionでVersionTagを使ってるものを一括でCommitHashにしたい。 shogo82148/actions-setup-redis でも同様の対応を行いました。</description>
-    </item>
-    <item>
-      <title>GitHub Artifact Attestations を試してみた</title>
-      <link>https://shogo82148.github.io/blog/2024/06/30/2024-06-30-try-artifact-attestations/</link>
-      <pubDate>Sun, 30 Jun 2024 14:36:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2024/06/30/2024-06-30-try-artifact-attestations/</guid>
-      <description>GitHub Artifact Attestations が正式リリースされました。
-GitHub Artifact Attestations is generally available ベータ公開 から2カ月足らずでの正式リリースです。 早いですね。それだけ力を入れているということでしょうか。
-なんか難しい単語（attestations とか provenanceとか）が並んでいて正直良くわからんのですが、とりあえず試してみましょう。
-署名してみる 「S3からファイルを落とすだけのツールを作った」で作成した、 s3cli-mini で試してみます。
-s3cli-miniのリリース処理は GitHub Actions 上で実行しています。 ビルドしたバイナリーは以下のリンクからダウンロード可能です。
-v0.0.15 - GitHub Releases しかしこのバイナリーは本当に GitHub Actions 上でビルドしたものでしょうか？ リリースバイナリーはあとから差し替えも可能です。僕が悪意のあるコードを密かに忍ばせ、再ビルドし、上書きしているかもしれません。 僕に悪意がなくとも、僕がうっかりクレデンシャルを流出させてしまい、悪意のある第三者によって上書きされるかもしれません。
-そんな心配を解決するのが Artifact Attestations です。
-使い方は簡単で、リリースのワークフローに actions/attest-build-provenance を呼ぶステップを追加するだけです。
-diff --git a/.github/workflows/release.yml b/.github/workflows/release.yml index b5b65f4..31f2d6c 100644 --- a/.github/workflows/release.yml +++ b/.github/workflows/release.yml @@ -10,6 +10,7 @@ jobs: permissions: contents: write id-token: write + attestations: write runs-on: ubuntu-latest steps: @@ -35,3 +36,14 @@ jobs: args: release --clean env: GITHUB_TOKEN: ${{ secrets.</description>
-    </item>
-    <item>
-      <title>actions-setup-mysqlとactions-setup-redisがApple M1上で動くようになりました</title>
-      <link>https://shogo82148.github.io/blog/2024/02/04/2024-02-04-actions-setup-mysql-and-actions-setup-redis-now-work-on-macos14/</link>
-      <pubDate>Sun, 04 Feb 2024 12:35:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2024/02/04/2024-02-04-actions-setup-mysql-and-actions-setup-redis-now-work-on-macos14/</guid>
-      <description>GitHub Actions に　Apple Silicon がやってきました！
-GitHub Actions: Introducing the new M1 macOS runner available to open source! GitHub Actions: macOS 14 (Sonoma) is now available 先日Perlをビルドして遊んでみました。
-actions-setup-perlがApple M1上で動くようになりました 今回はMySQLとRedisをビルドしてみたお話です。
-shogo82148/actions-setup-mysql shogo82148/actions-setup-redis actions-setup-mysql v1.31.0, actions-setup-redis リリースのお知らせ actions-setup-mysql v1.31.0, actions-setup-redis v1.33.0 から M1 macOS に対応しています。 runs-on: キーに macos-14 を指定すると M1 を利用できます。
-jobs: build: runs-on: macos-14 steps: - uses: actions/checkout@v4 - name: Set up MySQL uses: shogo82148/actions-setup-mysql@v1.31.0 M1による高速化 今日現在（2024-02-04）のMySQL最新安定版リリースは 8.0.36 です。 MySQL 8.</description>
-    </item>
-    <item>
-      <title>actions-setup-perlがApple M1上で動くようになりました</title>
-      <link>https://shogo82148.github.io/blog/2024/02/01/2024-02-01-actions-setup-perl-now-works-on-macos14/</link>
-      <pubDate>Thu, 01 Feb 2024 20:50:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2024/02/01/2024-02-01-actions-setup-perl-now-works-on-macos14/</guid>
-      <description>GitHub Actions に　Apple Silicon がやってきました！
-GitHub Actions: Introducing the new M1 macOS runner available to open source! GitHub Actions: macOS 14 (Sonoma) is now available 新しいコンピューティング環境がでてやることといえばアレですよね。 Perlのビルド。 というわけでやっていきましょう。
-actions-setup-perl v1.28.0 リリースのお知らせ actions-setup-perl v1.28.0 から M1 macOS に対応しています。 runs-on: キーに macos-14 を指定すると M1 を利用できます。
-jobs: build: runs-on: macos-14 steps: - uses: actions/checkout@v4 - name: Set up perl uses: shogo82148/actions-setup-perl@v1.28.0 M1による高速化 今回のリリースにあたり、バージョン違いコンパイルオプション違いの 全148種類 のPerlバイナリを再ビルドしました！ Perl 5.38.2 のビルド時間で比較すると、x64では 11m 27s かかっていたビルドが、M1では 4m 6s へと大きく改善しました。 64.</description>
-    </item>
-    <item>
-      <title>1Passwordで管理しているシークレットを各種サービスに同期するプログラムを書いた</title>
-      <link>https://shogo82148.github.io/blog/2023/10/21/2023-10-21-op-sync/</link>
-      <pubDate>Sat, 21 Oct 2023 17:44:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2023/10/21/2023-10-21-op-sync/</guid>
-      <description>弊社では各種シークレットは1Passwordで管理しています。 シークレットの棚卸し作業をしていて不便を感じたので、 1Passwordで管理しているシークレットを各種サービスに同期するプログラムを書いてみました。
-shogo82148/op-sync 背景 何が困るって、シークレットの出処がわからないこと。
-たとえばCI/CDサービスのシークレット管理機能にシークレットが登録されている場合、 ヒントが FIREBASE_SECRET という名前だけ、ということがよくあります。 このヒントだけだと、Firebaseで使われていそうなのはわかる・・・でもFirebaseのプロジェクトたくさんあるんだよな、どれだろう・・・ってなります。 プロジェクト名やサービスアカウント名までわからないと、シークレットの出処を特定できません。
-1Passwordにはシークレットの出処をメモとして残しておけるので、 せめて「このシークレットは、1Passwordのこの項目と対応しています」という情報が分かれば特定が簡単になります。
-「シークレットと1Passwordの項目の対応付け」、ちょっとしたテキストを書くだけで十分なんですが、それができないのが人間というもの・・・。 そこでさらに推し進めて「シークレットと1Passwordの項目の対応付け」を機械可読な形式にして、「1Passwordの項目からシークレットの自動反映」を行います。 普段から自動反映する習慣をつけておけば、対応付けが漏れる心配はありません。
-使い方 1Passwordとの連携には1Password CLIを使用しています。 あらかじめインストールしておいてください。
-シークレットをファイルに書き出す Private Vaultに入っている、Testという名前のアイテムを読み出す設定例です。
-# .op-sync.yml secrets: MyPassword: type: template output: .envrc template: | MY_PASSWORD={{ op://Private/Test/password }} 1Password CLIでサインインして、 op-sync コマンドを叩けば 1Password からパスワードを引っ張ってきてファイルに書き出してくれます。
-$ eval $(op signin) Enter the password for shogo82148@gmail.com at my.1password.com: $ op-sync 2023/10/21 16:58:32 INFO 1password user information url=https://my.1password.com email=shogo82148@gmail.com The following changes will be applied: file &amp;#34;.</description>
-    </item>
-    <item>
-      <title>Slack Incoming Webhook を GitHub Actions Secrets へ突っ込むのに疲れた俺達は</title>
-      <link>https://shogo82148.github.io/blog/2023/10/01/2023-10-01-github-actions-notify-slack/</link>
-      <pubDate>Sun, 01 Oct 2023 00:05:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2023/10/01/2023-10-01-github-actions-notify-slack/</guid>
-      <description>GitHub ActionsからSlackへ通知したいとき、一番お手軽なのはSlack Incoming Webhookです。 直接curlで叩いてもいいですし、マーケットプレイスにも通知用のアクションがたくさんあります。
-しかし、Incoming Webhookは一般公開してはいけないシークレットです。 迂闊にレポジトリにコミットしてはいけません。 GitHub Actions Secrets へ突っ込む等して、適切に管理する必要があります。 一個や二個ならまだしも、いくつもレポジトリがあると管理が大変です。
-そういうわけで、OIDCを使ってSlackへの通知を行うアクションを書きました。
-actions-notify-slack 使い方 gha-notify.shogo82148.com へアクセスします。 「Add to Slack」をクリックして、アプリをSlackにインストールします。 @actions-notify-slack というボットが追加されるので、こいつを通知を流したいチャンネルに招待します。 投稿先のチャンネルで /gha-notify allow ORG/REPO スラッシュコマンドを実行します。これにより ORG/REPO からの投稿が許可されます。 ワークフローにアクションを追加して完成！　- uses: shogo82148/actions-notify-slack@v0 with: team-id: T3G1HAY66 # 自分のチームIDに置き換え channel-id: C3GMGG162 # 自分のチャンネルIDに置き換え payload: &amp;#39;{&amp;#34;text&amp;#34;: &amp;#34;hello world&amp;#34;}&amp;#39; 仕組み 早い話が、過去 GitHub や AWS 向けに作ったアクションを Slack 向けに焼き直したものです。
-actions-github-app-tokenの紹介 AWS_SECRET_ACCESS_KEY を GitHub Actions secrets へ突っ込むのに疲れた俺達は GitHub Actions は直接 Slack とやり取りするかわりに、中継サーバーにリクエストを投げます。 中継サーバーは、OIDC ID Tokenを検証し、Slackへの投稿権限をチェックします。 権限を確認できたら、ボットユーザーとして投稿する、という流れです。</description>
-    </item>
-    <item>
-      <title>actions-github-app-tokenの紹介</title>
-      <link>https://shogo82148.github.io/blog/2023/09/26/2023-09-26-actions-github-app-token/</link>
-      <pubDate>Tue, 26 Sep 2023 23:30:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2023/09/26/2023-09-26-actions-github-app-token/</guid>
-      <description>GitHub App Tokenを発行するための actions-github-app-token という GitHub アクションを書きました。
-実験的なアクションだったので、マーケットには公開していませんでした。 最近になって「安定して動作しているし、マーケットに公開するか！」という気持ちになったので、 改めてご紹介です。
-背景 GitHub Actionsのワークフローから、GitHub APIを叩きたいこと、よくありますよね？
-GITHUB_TOKEN そんなとき第一候補に挙がるのは secrets.GITHUB_TOKEN です。
-Automatic token authentication 特段複雑な設定をせずとも使えるのでお手軽です。 しかし、 secrets.GITHUB_TOKEN には大きな制限があります。 それは「他のGitHub Actions Workflowを起動できない」ということ。 これは無限ループで大量のジョブが投入されるのを防ぐための制限です。 理由もはっきりしていて妥当な制限だとは思うのですが、 必要なワークフローが起動しなくて困ることがときどきあります。
-PAT (Personal Access Token) (Classic) 「他のGitHub Actions Workflowを起動できない」制限を回避する簡単な方法は、 Personal Access Token を使うことです。 このトークンにはこの制限はありません。
-ただし、トークンを発行したユーザーの権限でAPIを叩くので、権限の範囲が広すぎる、という問題があります。 実行できるアクションは制限できるのですが、レポジトリの範囲までは調整できません。
-また、トークンは「ユーザー」に紐づきます。 個人のレポジトリならまだいいんですが、Organization管理のレポジトリ困ることがあります。 一番のあるあるは「トークンを発行したユーザーがOrganizationを抜けるとワークフローが止まる」ですかね。 属人化が進み、健全とは言い難い状態です。
-fine-grained personal access tokens 「権限の範囲が広すぎる」問題を解決するのが fine-grained personal access tokens です。 レポジトリ単位でアクセス権を設定できます。
-しかし、権限の広さは解決しますが、「トークンがユーザーに紐づいていることの弊害」は解消しません。
-また、fine-grained personal access tokensは有効期限の設定が必須です。 管理するレポジトリの数が多いと、トークン更新行脚をする必要があります。
-GitHub Apps ここで本命、 GitHub Apps の出番です。</description>
-    </item>
-    <item>
-      <title>ChooseALicense.com の日本語訳を公開しました</title>
-      <link>https://shogo82148.github.io/blog/2023/09/16/2023-09-16-choose-a-license-in-japanese/</link>
-      <pubDate>Sat, 16 Sep 2023 20:29:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2023/09/16/2023-09-16-choose-a-license-in-japanese/</guid>
-      <description>ChooseALicense.com の日本語訳を公開しました。
-choosealicense.shogo82148.com 背景 いつの間にか「オープンソースライセンスを適切に管理する係」になってしまい、 最近はライセンス文章とにらめっこする毎日のいっちーです。
-そんな中お世話になったのがChooseALicense.comの付録です。 ライセンスの概要が大まかにわかります。 まあ、最終的には原文を読まないといけないわけですが、読む手がかりにはなります。
-母国語が日本語の僕にとって、毎回英語読むのはきつい・・・日本語版欲しいな・・・ってことで作りました。
-ツール 今回お世話になったツールたちです。
-GitHub Pages BudouX GitHub Pages ChooseALicense.com は GitHub Pages でホストされています。 自然とchoosealicense.shogo82148.comのホスト先もGitHub Pagesになりました。
-GitHub Pages自体はこのブログでもお世話になっている機能です。 今回個人的に初挑戦だったのは、独自ドメインの割り当てでした。 ChooseALicense.comのコードがカスタムドメインでの提供前提で組まれており、サブディレクトリでの提供では表示が崩れてしまうからです。
-とは言ってもドキュメントにしたがい、GitHub側の設定を済ませたあと、自分のドメインにCNAMEレコードを挿入するだけでした。
-Managing a custom domain for your GitHub Pages site お手軽なので、今後なにかに使えるかもしれないですね。
-BudouX タイトルの「Choose an open source license」は「オープンソースライセンスを選ぼう」と翻訳しました。 が、これをそのまま表示すると、こうなります。
-オープンソースライセンスを選ぼ う 「う」の位置がなんか気に食わない・・・。 この問題の解決のため、BudouXを利用しました。 自動でいい感じの改行位置を決めてくれます。
-オープンソースライセンスを 選ぼう まとめ ChooseALicense.com の日本語訳を公開しました。
-choosealicense.shogo82148.com 参考 ChooseALicense.com choosealicense.shogo82148.com オープンソースライセンスの日本語参考訳 Managing a custom domain for your GitHub Pages site GitHub Pages BudouX </description>
-    </item>
-    <item>
-      <title>actions/checkout@v4の襲撃を受けた件</title>
-      <link>https://shogo82148.github.io/blog/2023/09/08/2023-09-08-actions-checkout-v4/</link>
-      <pubDate>Fri, 08 Sep 2023 20:22:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2023/09/08/2023-09-08-actions-checkout-v4/</guid>
-      <description>先日 actions/checkout@v4 がリリースされましたね。
-actions/checkout@v4 まあ、何が言いたいかというと、「メジャーバージョンアップ多すぎじゃない？？？」という話。
-actions/checkout@v4の襲撃 新規に作成したレポジトリには基本的にdependabotをセットアップしています。 まあそんな状況下で actions/checkout@v4 なんてリリースされたら、こうなるわけですよ。
-actions/checkout のアップデートつらい pic.twitter.com/4bNeCFsE4Y
-&amp;mdash; f96fd3a0-bdb9-4f10-b69f-8f765c1d341c ICHINOSEShogo (@shogo82148) September 5, 2023 よほど単純なワークフローでない限り、 actions/checkout は必須のアクションです。 GitHub Actions でCIを組んでいるレポジトリはもれなく使っています。 @shogo82148以下にあるレポジトリだけで、76個のプルリクエストが来ました。 心を無にしてマージボタンを押しまくりました。 他のorgにも参加しているので、実際に対応したプルリクエストはもっと多いです。
-Node.js 16 のEOLが近い 背景には Node.js 16 が9月11日にEOLになるという話があります。 actions/checkout@v3 は Node.js 16 で動くので、当然サポート対象外になります。 そこで新しいバージョンが必要なわけです。
-actions/checkout@v4 は Node.js 20 で動くようになりました。 GitHub Actions はセフルホストできるので、まだ Node.js 20 が動かない環境も残っています。 そのような環境でオプトインできるよう、メジャーバージョンアップにしたのだと思います。
-Node.js 18 がスキップされた話 ちなみに Node.js 16 と Node.js 20 の間には Node.js 18 が存在するわけですが、 Node.js 18 はスキップされました。 （Node.</description>
-    </item>
-    <item>
-      <title>GitHubのプロジェクトにUsed by counterを追加する</title>
-      <link>https://shogo82148.github.io/blog/2023/07/05/2023-07-05-github-used-by-counter/</link>
-      <pubDate>Wed, 05 Jul 2023 23:36:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2023/07/05/2023-07-05-github-used-by-counter/</guid>
-      <description>GitHubのプロジェクトを見に行くと、サイドバーに「Used by（数字）」と書かれたセクションがあります。
-これの設定方法を知ったのでメモ。
-TL;DR レポジトリのナビゲーションバーから「Setting」をクリックし設定画面を開きます サイドバーから「Code security and analysis」を選択します 「Used by counter」という項目で、たくさん使ってもらっていそうなパッケージを選択します 背景 GitHub Actions上でFuzzingを実行するアクションを書いたでshogo82148/actions-go-fuzzというGitHub Actionを作りました。 このために作ったレポジトリの概要を眺めていると、いつの間にか「Used by 3」という表示が増えてました。 これ自体はおかしなことではありません。お試しで自分が過去に作ったレポジトリにshogo82148/actions-go-fuzzを導入したので、依存しているレポジトリは存在します。
-ずっと不思議だったのは、自分の作った他のGitHub Actionにはこの表示がないこと。 たとえば「actions-setup-perl」でGitHubを検索すると、それなりに使用例が出てきます。 しかし、shogo82148/actions-setup-perlには（この文章を書く前の時点では）「Used by（数字）」のセクションはありませんでした。
-原因 ただの趣味でやっているので別に利用者がいなくたって構わないんですが、 やっぱり利用者がいるとモチベーションが変わってくるじゃないですか。 そういうわけで、表示方法を探したところ公式ドキュメントにたどり着きました。
-Changing the &amp;ldquo;Used by&amp;rdquo; package ドキュメントによると、ひとつのレポジトリで複数のパッケージを提供していると、 このようなことが起こるそうです。
-shogo82148/actions-setup-perlの場合、GitHubの依存解析によって「JavaScriptのパッケージ」「GitHub Actionのパッケージ」の2つが検出されました。 shogo82148/actions-setup-perlはTypeScriptで実装されているので「JavaScriptのパッケージ」として認識されるのは仕方のないことです。 しかし、利用者はみんなGitHub Actionとして利用するので、実際に「JavaScriptのパッケージ」として利用する人はいません。 というかそういう使い方は想定していないので、使われていないのは正しい。 利用者がいないので、「Used by（数字）」の表示がなかったんですね。
-ドキュメントに記載されている通り、「Used by counter」の設定を変更すれば無事表示されます。 shogo82148/actions-setup-perlも「GitHub Actionのパッケージ」としてカウントされるよう設定を変更したので、 この記事を書いている時点では利用者数が表示されるようになりました。
-まとめ GitHubのレポジトリで利用者数が表示されるアレは「Used by counter」という名前らしい 設定の「Code security and analysis」から変更できるよ 個人的に「Code security and analysis」から変更できるというのは盲点でした。 「security」の文字だけ見て「セキュリティー関連の設定かー」と思っていたんですが、 なるほど「Code analysis（コード分析）」の設定も含まれているんですね。
-レポジトリの設定多すぎて覚えきれないよ・・・。
-参考 Changing the &amp;ldquo;Used by&amp;rdquo; package GitHub Actions上でFuzzingを実行するアクションを書いた shogo82148/actions-setup-perl </description>
-    </item>
-    <item>
-      <title>GitHub Actions上でFuzzingを実行するアクションを書いた</title>
-      <link>https://shogo82148.github.io/blog/2023/07/05/2023-07-05-actions-go-fuzz/</link>
-      <pubDate>Wed, 05 Jul 2023 00:41:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2023/07/05/2023-07-05-actions-go-fuzz/</guid>
-      <description>Go 1.18からGo Fuzzingの機能が追加されました。 僕もいくつかのパッケージに導入してみたのですが、予期していなかったテストパターンを見つけられて役にやっている気がします。 Fuzzテストが増えてきたので、毎回手元でFuzzテストを実行するのも大変になってきました。
-簡単にFuzzテストを実行する環境を作れないかと、GitHub Actions上でFuzzテストを実行するActionを書いてみました。
-shogo82148/actions-go-fuzz 使い方 Fuzzingのチュートリアルのコードで試してみましょう。
-テスト対象の関数を書く main.go に文字列を反転させるコードを書きます。
-// main.go package main func Reverse(s string) string { b := []byte(s) for i, j := 0, len(b)-1; i &amp;lt; len(b)/2; i, j = i+1, j-1 { b[i], b[j] = b[j], b[i] } return string(b) } チュートリアルを進めていくとわかるのですが、このコードは「マルチバイト文字を正しく処理できない」というバグがあります。 このバグをFuzzingを使って見つけてもらいましょう。
-Fuzzテストを書く Reverseを2回実行すると同じ文字列に戻るはずです。 このことを確認するテストを書きます。
-さらに、入力がUTF-8としてValidであるなら、出力もValidであって欲しいです。 これもテストで確認します。
-package main func FuzzReverse(f *testing.F) { testcases := []string{&amp;#34;Hello, world&amp;#34;, &amp;#34; &amp;#34;, &amp;#34;!12345&amp;#34;} for _, tc := range testcases { f.</description>
-    </item>
-    <item>
-      <title>GitHub ActionsからWorkload Identityを使ってGCPにアクセスする</title>
-      <link>https://shogo82148.github.io/blog/2023/07/04/2023-07-04-access-google-cloud-from-github-actions-using-workload-identity/</link>
-      <pubDate>Tue, 04 Jul 2023 11:45:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2023/07/04/2023-07-04-access-google-cloud-from-github-actions-using-workload-identity/</guid>
-      <description>GitHub Actionsの利用量をまとめるではGitHub Actionsの使用量をGoogle Spreadsheetにまとめるスクリプトを書きました。 このときは動作確認ができればよかったので、自分のGoogleアカウントで認証して書き込みを行いました。 しかし、このスクリプトを定期的に実行するのも面倒です。
-そこでGitHub Actionsのスケジュール実行機能を使い、毎日使用量を記録する設定を行いました。 イマドキAPIキーを使うのはリスクが高いので、Google CloudのWorkload Identity連携を使ってアクセスします。
-Workload Identity 連携の構成 GitHub Actions からのキーなしの認証の有効化を参考にGoogle Cloud側の設定を行います。 設定内容をバージョン管理したいので、設定にはTerraformを使用します。 意外と作成するリソースが多くて大変なので、GitHub OIDC Terraform ModuleとProject API Activation Terraform Moduleを利用してみましょう。
-provider &amp;#34;google&amp;#34; { batching { enable_batching = false } } # Google Cloudのプロジェクト resource &amp;#34;google_project&amp;#34; &amp;#34;my_project&amp;#34; { name = &amp;#34;my-project&amp;#34; project_id = &amp;#34;my-project&amp;#34; } # サービスアカウント resource &amp;#34;google_service_account&amp;#34; &amp;#34;github_actions&amp;#34; { project = google_project.my_project.id account_id = &amp;#34;github-actions&amp;#34; } # サービスAPIの有効化設定 module &amp;#34;project_services&amp;#34; { source = &amp;#34;terraform-google-modules/project-factory/google//modules/project_services&amp;#34; version = &amp;#34;14.</description>
-    </item>
-    <item>
-      <title>dependabotの更新グループ化機能を使ってAWS SDK for Go v2をアップデートする</title>
-      <link>https://shogo82148.github.io/blog/2023/07/02/2023-07-02-update-aws-sdk-v2-with-grouped-version-updates-for-dependabot/</link>
-      <pubDate>Sun, 02 Jul 2023 11:45:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2023/07/02/2023-07-02-update-aws-sdk-v2-with-grouped-version-updates-for-dependabot/</guid>
-      <description>dependabot の更新グループ化（Grouped version updates）機能がパブリックベータになりました。
-Grouped version updates for Dependabot public beta AWS SDK for Go v2の更新設定をしてみたのでメモ。
-設定内容 グループ化したい依存をgroupsに設定します。 AWS SDK for Go v2関連のバージョンアップを、aws-sdkという名前でプルリクエストを出すよう設定しました。
-updates: - package-ecosystem: gomod directory: &amp;#34;/&amp;#34; schedule: interval: daily groups: # AWS SDK for Go v2 関連のバージョンアップをまとめる aws-sdk: patterns: - github.com/aws/aws-sdk-go-v2 # `*` が空文字にマッチするのかよく分からなかったので・・・ - github.com/aws/aws-sdk-go-v2/* AWS SDK for Go v2 アップデートの困りごと AWS ではたくさんのサービスが公開されているので、毎日のようにサービスのアップデートが入り、 それに合わせて AWS SDK の更新が入ります。 dependabot のような自動アップデートの仕組みを入れておくと、本当に毎日のようにプルリクエストが来るのでとても大変です。 しかし、実際使う AWS のサービスなんて、全体に比べればほんの一部です。 ほとんどが自分の使っているサービスとは無関係な更新で、dependabot が送ってくるプルリクエストのほとんどはムダなものです。
-AWS SDK for Go は v2 からマルチモジュール構成になり、サービス毎に go.</description>
-    </item>
-    <item>
-      <title>GitHub Actionsの利用量をまとめる</title>
-      <link>https://shogo82148.github.io/blog/2023/06/22/2023-06-22-github-actions-usage-report/</link>
-      <pubDate>Thu, 22 Jun 2023 11:45:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2023/06/22/2023-06-22-github-actions-usage-report/</guid>
-      <description>GitHub Actionsの利用量はsettings/billingから確認できます。
-それはいいんですが、問題は今月分しか確認できないこと！
-「先月は〇〇分使ったから上限いくらに設定しておくか〜〜」ということができません。 APIは見つけたので、取得スクリプトを組んでみました。
-Get GitHub Actions billing for an organization 集計スクリプト GitHub REST APIをたたいて、結果をGoogle Spreadsheetにまとめます。 GitHub REST APIを叩く部分はGitHub CLIを使えばすぐにできるんですが、 Google Spreadsheetへの書き込みをシェルスクリプトで組むのはちょっと大変です。
-今回はGoで書いてみました。
-package main import ( &amp;#34;context&amp;#34; &amp;#34;encoding/json&amp;#34; &amp;#34;fmt&amp;#34; &amp;#34;io&amp;#34; &amp;#34;log&amp;#34; &amp;#34;net/http&amp;#34; &amp;#34;os&amp;#34; &amp;#34;time&amp;#34; &amp;#34;google.golang.org/api/sheets/v4&amp;#34; ) func main() { ctx := context.Background() token := os.Getenv(&amp;#34;GITHUB_TOKEN&amp;#34;) if token == &amp;#34;&amp;#34; { log.Fatal(&amp;#34;GITHUB_TOKEN is required&amp;#34;) } sheetID := os.Getenv(&amp;#34;SHEET_ID&amp;#34;) if sheetID == &amp;#34;&amp;#34; { log.Fatal(&amp;#34;SHEET_ID is required&amp;#34;) } org := os.</description>
-    </item>
-    <item>
-      <title>GitHub経由で脆弱性報告してみた</title>
-      <link>https://shogo82148.github.io/blog/2023/06/18/2023-06-18-report-vulnerability-via-github/</link>
-      <pubDate>Sun, 18 Jun 2023 17:00:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2023/06/18/2023-06-18-report-vulnerability-via-github/</guid>
-      <description>lestrrat-go/jwxに脆弱性を発見したので報告しました。
-GHSA-rm8v-mxj3-5rmq Potential Padding Oracle Attack Vulnerability 「メールでやり取りするの面倒だなー」と思っていたら、いつのまにかGitHub経由で脆弱性報告できるようになってるじゃないですか。
-Privately reporting a security vulnerability というわけで試してみたお話です。
-背景 脆弱性報告の難しさ 脆弱性に関する情報は悪い人に悪用される可能性があるので、GitHubのIssueで報告するのは厳禁です。 公開レポジトリのIssueは広く公開されているので、悪い人に見つかってしまいます。
-そのため、基本的に脆弱性の報告者はメンテナーと直接やり取りをする必要があります。 しかし、やり取りの方法に決まったルールはありません。 GitHubではセキュリティーポリシーをSECURITY.mdに記載するルールになっているので、運が良ければSECURITY.mdに連絡先が書いてあります。
-Adding a security policy to your repository 運が悪ければ連絡先を頑張って探すところからはじめなければなりません。
-まあ、たいていは連絡先としてメールアドレスが見つかるので、そこにメールを送ることになります。 ただし、メールというものは脆弱性の報告に特化したものではないので、どうやって情報をやり取りするかお互いに工夫が必要です。 僕はやったことないですが、修正のパッチをメーリングリストに送るんですかね。 大変そうです。
-脆弱性と聞けば、CVEのような脆弱性情報データベースや、IPAの脆弱性関連情報の届出受付を思い浮かべるひとも多いでしょう。
-共通脆弱性識別子CVE概説 - IPA 魚拓 脆弱性関連情報の届出受付 - IPA 魚拓 しかしこういった制度も、メンテナーの連絡先を管理しているわけではありません。 メンテナーの連絡先を探す手間も、メンテナーとのやり取りをする手間もかわりません。 （まあやったことないけど）
-実際に報告した人のレポートにもありますが、「虎の威を借る」効果は多少期待できるでしょう。 CVEやIPAの名前だけ知っているというひとは多いでので、優先度を上げてくれるメンテナーも多いと思います。
-脆弱性情報をIPAへ報告して修正されました #情報処理安全確保支援士 アカネちゃん、JVNに謝辞が載る：こうしす！　こちら京姫鉄道 広報部システム課 ＠IT支線（17） - ＠IT 逆に言えば、脆弱性レポートの段階では、その程度の効果しかありません。
-脆弱性の概要 lestrrat-go/jwxのJWEのデコード機能を利用する場合に、本脆弱性の影響を受ける可能性があります。
-AES-CBCで暗号化されたデータを復号するにはパディングを取り除く必要があります。 このとき不正なパディングを見つけた場合に &amp;ldquo;failed to generate plaintext from decrypted blocks: invalid padding&amp;rdquo; というエラーを返す実装になっていました。</description>
-    </item>
-    <item>
-      <title>GitHubに接続したらWARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!と怒られる件</title>
-      <link>https://shogo82148.github.io/blog/2023/03/24/2023-03-24-github-identification-has-changed/</link>
-      <pubDate>Fri, 24 Mar 2023 17:13:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2023/03/24/2023-03-24-github-identification-has-changed/</guid>
-      <description>TL;DR SSH経由でGitHubに接続したら、以下のメッセージが表示されました。
-% ssh -T github.com @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ @ WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! @ @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ IT IS POSSIBLE THAT SOMEONE IS DOING SOMETHING NASTY! Someone could be eavesdropping on you right now (man-in-the-middle attack)! It is also possible that a host key has just been changed. The fingerprint for the RSA key sent by the remote host is SHA256:uNiVztksCsDhcc0u9e8BujQXVUpKZIDTMczCvj3tD2s. Please contact your system administrator. Add correct host key in /Users/shogo.</description>
-    </item>
-    <item>
-      <title>GitHub GraphQL のノードIDフォーマットが変わるらしい (続報)</title>
-      <link>https://shogo82148.github.io/blog/2022/11/16/2022-10-19-perl-webdb-vol131/</link>
-      <pubDate>Wed, 16 Nov 2022 17:17:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2022/11/16/2022-10-19-perl-webdb-vol131/</guid>
-      <description>以前 GitHub GraphQL のノードIDフォーマットが変わるらしい に書いたように、 将来ノードIDフォーマットが変わるらしいらしいです。 これについて、旧式のノードIDを使用した場合に警告がでるようになった、とアナウンスがありました。
-GraphQL Legacy Global ID Deprecation Message というわけで、どんな警告文がでるのか試してみました。
-実際の挙動 試しに僕の名前を取得するクエリを実行してみると、以下のような警告文がでました。
-$ gh api graphql -f query=&amp;#39;query { node(id: &amp;#34;MDQ6VXNlcjExNTczNDQ=&amp;#34;) { ... on User { id name login } } }&amp;#39; { &amp;#34;data&amp;#34;: { &amp;#34;node&amp;#34;: { &amp;#34;id&amp;#34;: &amp;#34;MDQ6VXNlcjExNTczNDQ=&amp;#34;, &amp;#34;name&amp;#34;: &amp;#34;ICHINOSE Shogo&amp;#34;, &amp;#34;login&amp;#34;: &amp;#34;shogo82148&amp;#34; } }, &amp;#34;extensions&amp;#34;: { &amp;#34;warnings&amp;#34;: [ { &amp;#34;type&amp;#34;: &amp;#34;DEPRECATION&amp;#34;, &amp;#34;message&amp;#34;: &amp;#34;The id MDQ6VXNlcjExNTczNDQ= is deprecated. Update your cache to use the next_global_id from the data payload.</description>
-    </item>
-    <item>
-      <title>GitHub GraphQL のノードIDフォーマットが変わるらしい</title>
-      <link>https://shogo82148.github.io/blog/2021/11/29/github-graphql-global-node-id-will-change/</link>
-      <pubDate>Mon, 29 Nov 2021 23:08:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2021/11/29/github-graphql-global-node-id-will-change/</guid>
-      <description>弊社では Terraform GitHub Provider を使って GitHub のレポジトリ管理・権限管理などを行っているのですが、 プロバイダーが repository_id を認識してくれない問題に遭遇しました。 原因を探ってみると GitHub GraphQL API に かなり大きな変更が入ること を知ったので、メモとして残しておきます。
-グローバルノードID GraphQL API から扱えるすべてのオブジェクト (レポジトリ、ユーザー、etc) にはIDが振ってあります。
-Using global node IDs 例えば僕 (@shogo82148) のノードIDは MDQ6VXNlcjExNTczNDQ= です。
-$ curl https://api.github.com/users/shogo82148 | jq .node_id &amp;#34;MDQ6VXNlcjExNTczNDQ=&amp;#34; このノードIDを使って GraphQL のクエリを書くことが出来ます。
-$ gh api graphql -f query=&amp;#39;query { node(id: &amp;#34;MDQ6VXNlcjExNTczNDQ=&amp;#34;) { ... on User { name login } } }&amp;#39; { &amp;#34;data&amp;#34;: { &amp;#34;node&amp;#34;: { &amp;#34;name&amp;#34;: &amp;#34;Ichinose Shogo&amp;#34;, &amp;#34;login&amp;#34;: &amp;#34;shogo82148&amp;#34; } } } ノードIDにはオブジェクトの種類の情報 (MDQ6VXNlcjExNTczNDQ= の例では「ユーザー」) も含まれているので、 GitHub が管理している全オブジェクトの中から一意に目的のノードを特定することが出来ます。</description>
-    </item>
-    <item>
-      <title>GitHub Actions &#43; OIDC Token の情報をAWSのセッションタグに設定してみた</title>
-      <link>https://shogo82148.github.io/blog/2021/09/24/github-actions-oidc/</link>
-      <pubDate>Fri, 24 Sep 2021 13:58:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2021/09/24/github-actions-oidc/</guid>
-      <description>GitHub Actions で ID Token が使えるようになったと話題ですね。
-うおー！サイコー！！！！！ https://t.co/2stS4miUOD
-&amp;mdash; Tori Hara (@toricls) September 15, 2021 Ok I blogged about it. That&amp;#39;s how excited I am. 1. Deploy this CFN template
-2. Write this GHA workflow
-3. Never worry about IAM users again
-https://t.co/KJrr2Jw4bE pic.twitter.com/9IcocgurxP
-&amp;mdash; Aidan W Steele (@__steele) September 15, 2021 AWS IAM が OpenID Connect (OIDC) を使った認証 (sts:AssumeRoleWithWebIdentity) に対応しているので、認証プロバイダ(IdP)を用意してあげればシークレットの登録が不要になるということらしいです。 これは便利！
-セッションタグを渡したい これはまさに「AWS_SECRET_ACCESS_KEY を GitHub Actions secrets へ突っ込むのに疲れた俺達は」で実現したかったことですね。 このままだとせっかく作ったアクションが不要になりそうで悔しいので このアクションにずっと追加したかった機能があるのですが、OIDCトークンを使うと簡単に実装できそうだったので、お試しで追加してみました。</description>
-    </item>
-    <item>
-      <title>祝日APIを公開しました</title>
-      <link>https://shogo82148.github.io/blog/2021/09/04/holidays-api-is-released/</link>
-      <pubDate>Sat, 04 Sep 2021 18:17:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2021/09/04/holidays-api-is-released/</guid>
-      <description>プログラマーなら誰しも一度は祝日について頭を悩ませたことがあるでしょう(要出典)。
-日付が固定ならまだ楽なんですが、「春分の日」「秋分の日」のように天体の運行によって決まる祝日があったり、 ハッピーマンデー制度によって「成人の日(一月の第二月曜日)」のような曜日固定の祝日があったり、 振替休日という概念があったりと、ちゃんと考えるとかなり面倒です。
-更に面倒なのが国の施策によってたまに変更になるという点です。 東京オリンピックの延期で祝日が移動したのは記憶に新しいですね。 前年の 12 月 4 日に法律が公布されるという、カレンダーの印刷会社泣かせなスケジュール変更です。
-2021 年の祝日移動について 東京五輪開催で夏の祝日が移動 〜各言語の祝日ライブラリの 2021 年の祝日対応を追ってみる〜 プログラムなら更新可能ですが、ライブラリとして組み込まれているとうっかり更新を忘れてしまうこともありますよね。 そういうわけで API として提供されていると嬉しいな、プログラミング言語に縛られることもないし、ということで作りました。
-github.com/shogo82148/holidays-jp holidays-jp.shogo82148.com 使い方 パスに日付を入力して GET リクエストを投げるだけのシンプルな API です。
-ある年の祝日一覧を取得する GET /{year} で year の祝日一覧を返します。 以下は 2021 年の祝日一覧を返す例です。
-curl https://holidays-jp.shogo82148.com/2021 | jq . { &amp;#34;holidays&amp;#34;: [ { &amp;#34;date&amp;#34;: &amp;#34;2021-01-01&amp;#34;, &amp;#34;name&amp;#34;: &amp;#34;元日&amp;#34; }, { &amp;#34;date&amp;#34;: &amp;#34;2021-01-11&amp;#34;, &amp;#34;name&amp;#34;: &amp;#34;成人の日&amp;#34; }, { &amp;#34;date&amp;#34;: &amp;#34;2021-02-11&amp;#34;, &amp;#34;name&amp;#34;: &amp;#34;建国記念の日&amp;#34; }, (snip) { &amp;#34;date&amp;#34;: &amp;#34;2021-11-23&amp;#34;, &amp;#34;name&amp;#34;: &amp;#34;勤労感謝の日&amp;#34; } ] } ある月の祝日一覧を取得する GET /{year}/{month} で月の祝日一覧を返します。 以下は 2021 年 1 月の祝日一覧を返す例です。</description>
-    </item>
-    <item>
-      <title>Perl 5.34 がリリースされました</title>
-      <link>https://shogo82148.github.io/blog/2021/05/22/perl-5.34-is-released/</link>
-      <pubDate>Sat, 22 May 2021 15:44:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2021/05/22/perl-5.34-is-released/</guid>
-      <description>Perl 5.34 がリリースされましたね。 と、言うわけで、 AWS::Lambda と actions-setup-perl に Perl 5.34 を追加しました。
-AWS::Lambda AWS Lambda Layers の ARN 一覧はこちら。 具体的な使い方は過去の記事を参考にどうぞ。 もちろん大阪リージョンも入ってますよ！
-Amazon Linux 2 ベース Perl ランタイム arn:aws:lambda:af-south-1:445285296882:layer:perl-5-34-runtime-al2:1 arn:aws:lambda:ap-east-1:445285296882:layer:perl-5-34-runtime-al2:1 arn:aws:lambda:ap-northeast-1:445285296882:layer:perl-5-34-runtime-al2:1 arn:aws:lambda:ap-northeast-2:445285296882:layer:perl-5-34-runtime-al2:1 arn:aws:lambda:ap-northeast-3:445285296882:layer:perl-5-34-runtime-al2:1 arn:aws:lambda:ap-south-1:445285296882:layer:perl-5-34-runtime-al2:1 arn:aws:lambda:ap-southeast-1:445285296882:layer:perl-5-34-runtime-al2:1 arn:aws:lambda:ap-southeast-2:445285296882:layer:perl-5-34-runtime-al2:1 arn:aws:lambda:ca-central-1:445285296882:layer:perl-5-34-runtime-al2:1 arn:aws:lambda:eu-central-1:445285296882:layer:perl-5-34-runtime-al2:1 arn:aws:lambda:eu-south-1:445285296882:layer:perl-5-34-runtime-al2:1 arn:aws:lambda:eu-west-1:445285296882:layer:perl-5-34-runtime-al2:1 arn:aws:lambda:eu-west-2:445285296882:layer:perl-5-34-runtime-al2:1 arn:aws:lambda:eu-west-3:445285296882:layer:perl-5-34-runtime-al2:1 arn:aws:lambda:me-south-1:445285296882:layer:perl-5-34-runtime-al2:1 arn:aws:lambda:sa-east-1:445285296882:layer:perl-5-34-runtime-al2:1 arn:aws:lambda:us-east-1:445285296882:layer:perl-5-34-runtime-al2:1 arn:aws:lambda:us-east-2:445285296882:layer:perl-5-34-runtime-al2:1 arn:aws:lambda:us-west-1:445285296882:layer:perl-5-34-runtime-al2:1 arn:aws:lambda:us-west-2:445285296882:layer:perl-5-34-runtime-al2:1 Paws レイヤー arn:aws:lambda:af-south-1:445285296882:layer:perl-5-34-paws-al2:1 arn:aws:lambda:ap-east-1:445285296882:layer:perl-5-34-paws-al2:1 arn:aws:lambda:ap-northeast-1:445285296882:layer:perl-5-34-paws-al2:1 arn:aws:lambda:ap-northeast-2:445285296882:layer:perl-5-34-paws-al2:1 arn:aws:lambda:ap-northeast-3:445285296882:layer:perl-5-34-paws-al2:1 arn:aws:lambda:ap-south-1:445285296882:layer:perl-5-34-paws-al2:1 arn:aws:lambda:ap-southeast-1:445285296882:layer:perl-5-34-paws-al2:1 arn:aws:lambda:ap-southeast-2:445285296882:layer:perl-5-34-paws-al2:1 arn:aws:lambda:ca-central-1:445285296882:layer:perl-5-34-paws-al2:1 arn:aws:lambda:eu-central-1:445285296882:layer:perl-5-34-paws-al2:1 arn:aws:lambda:eu-south-1:445285296882:layer:perl-5-34-paws-al2:1 arn:aws:lambda:eu-west-1:445285296882:layer:perl-5-34-paws-al2:1 arn:aws:lambda:eu-west-2:445285296882:layer:perl-5-34-paws-al2:1 arn:aws:lambda:eu-west-3:445285296882:layer:perl-5-34-paws-al2:1 arn:aws:lambda:me-south-1:445285296882:layer:perl-5-34-paws-al2:1 arn:aws:lambda:sa-east-1:445285296882:layer:perl-5-34-paws-al2:1 arn:aws:lambda:us-east-1:445285296882:layer:perl-5-34-paws-al2:1 arn:aws:lambda:us-east-2:445285296882:layer:perl-5-34-paws-al2:1 arn:aws:lambda:us-west-1:445285296882:layer:perl-5-34-paws-al2:1 arn:aws:lambda:us-west-2:445285296882:layer:perl-5-34-paws-al2:1 合わせて Docker Image も公開済みです。</description>
-    </item>
-    <item>
-      <title>AWS_SECRET_ACCESS_KEY を GitHub Actions secrets へ突っ込むのに疲れた俺達は</title>
-      <link>https://shogo82148.github.io/blog/2021/03/24/actions-aws-assume-role/</link>
-      <pubDate>Wed, 24 Mar 2021 21:57:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2021/03/24/actions-aws-assume-role/</guid>
-      <description>「GitHub Actions から継続的デプロイをしたい！」と思ったときに、 僕の扱うデプロイ先は AWS なことが多いので AWS のキー (AWS_ACCESS_KEY, AWS_SECRET_ACCESS_KEY ) を GitHub Actions secrets へ突っ込む必要があります。 まあ一回や二回ならやるんですが、デベロップメント、ステージング、プロダクション、と複数環境あったり、 プロジェクトも複数あったりして、中々の回数設定を行わなければなりません。 設定するだけでつらいのに、AWS はキーのローテーションを勧めてきます。つらい。
-と言うわけで、シークレットの管理を極力しなくて済む方法を考えて、設定用の Action を作成しました。
-fuller-inc/actions-aws-assume-role Configure AWS Credentials by Assuming Roles 2021-08-19 更新 「会社でも使いたいな(ﾎﾞｿｯ」と言ったら社のアカウントで管理してもらえることになりました。 それにともないアクションの URL が shogo82148/actions-aws-assume-role から fuller-inc/actions-aws-assume-role に変更になっています。 正しくリダイレクトされるようですが、念の為 URL の変更をお願いします。
-信頼関係に指定する AWS アカウント 053160724612 に変更はありません。 こんなこともあろうかと専用の AWS アカウントを作成しておいたので、まるごと権限を移しました。
-使い方 まずは AWS 側に IAM Role を作成します。 IAM Role の信頼関係(trust policy) には以下の内容を記載します。 信頼する AWS アカウントには 053160724612 を指定してください。 これはフラー株式会社の管理している AWS アカウントなので、フラーを信頼できる方だけこの先に進んでください。 外部 ID(ExternalId) にはこのロールを使用する予定のレポジトリ名を入れます。</description>
-    </item>
-    <item>
-      <title>Dependabot が起動する GitHub Actions Workflow から write 権限が無くなった件</title>
-      <link>https://shogo82148.github.io/blog/2021/03/17/actions-check-permissions/</link>
-      <pubDate>Wed, 17 Mar 2021 19:14:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2021/03/17/actions-check-permissions/</guid>
-      <description>Dependabot から送られてくるプルリクエストのテストが最近良くコケるようになったなあと思ったら、 3 月 1 日から GitHub Actions Workflow 内の GITHUB_TOKEN のパーミッションが変更になったそうです。
-GitHub Actions: Workflows triggered by Dependabot PRs will run with read-only permissions 更新されたパッケージに secrets を盗み見るような危険なコードが含まれているかもしれません。 そのようなコードでも安全に実行できるよう read-only のパーミッションで実行されるようになりました。
-その結果以下のようなワークフローが失敗するようになってしまいました。
-プルリクエストにラベルをつけるような、レポジトリに対して write パーミッションが必要なワークフロー 外部サービスとのインテグレーションテストをやっていて、連携のためにシークレットを読む必要があるワークフロー 2021-12-01 追記 その後のアップデートで GitHub Token のパーミッションをワークフロー中に明示できるようになり、 dependabot もこれに従うようになりました。
-GitHub Actions: Workflows triggered by Dependabot PRs will respect permissions key in workflows 以下のような設定を追加すれば、GitHub Token を使ってレポジトリへの書き込みも可能です。
-# Set the access for individual scopes, or use permissions: write-all permissions: pull-requests: write issues: write repository-projects: write またこの記事中で以下のように書いていますが、</description>
-    </item>
-    <item>
-      <title>Setup Perl Environment Action のストレージを Azure Blob Storage に移行しました</title>
-      <link>https://shogo82148.github.io/blog/2021/02/03/setup-perl-uses-azure-blob-storage/</link>
-      <pubDate>Wed, 03 Feb 2021 21:33:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2021/02/03/setup-perl-uses-azure-blob-storage/</guid>
-      <description>GitHub Actions が一般公開された際に Perl をセットアップするアクションを書きました。
-Setup Perl GitHub Action を公開しました セットアップのたびに毎回コンパイルすると遅いので、コンパイル済みのバイナリを事前に Amazon S3 にアップロードしていました。 アップロード先に S3 を選んだのは単に自分が AWS に慣れているからなのですが、最近になってちょっとした問題に直面してます。 解決へ向けて S3 から Azure Blob Storage へ移行した、というお話です。
-利用する分には全く影響ないはずなんですが、Azure Blob Storage を使ってみたメモも兼ねてやったことを書いておきます。
-S3 の問題点 もちろん S3 自体が悪いわけじゃなくって、単に自分の見積もりが甘かっただけなんですが、 ネットワークのアウト向きのデータ転送料が高い！！！！
-これまでの僕のユースケースではせいぜい数 MB のバイナリをアップロードするだけだったのが、perl のバイナリは 1 バージョン当たり 100MB 以上あります。 Perl Monger の方々は互換性に気を使うので、いろんな OS、バージョン、コンパイルオプションでテストを実行します。 各 OS(Linux, Windows, macOS)、Perl 5.6〜5.32、multi-thread オプションありなし、という条件でマトリックスのワークフローを組むと 84 ジョブ。 単純計算で 1 ワークフローを実行するだけで、約 8GB の転送が発生するわけです。 2021-02-05 現在のアウトデータ転送料は 0.09USD/GB なので、1 ワークフローあたり 0.72USD です。
-去年の秋あたりから使ってくれる人が増えたようで、転送量だけで 100USD/mo を超えるようになってきました。 趣味の範囲でやってるので、ちょっと許容できる範囲を超えてきたかな・・・ということでコスト削減に乗り出しました。</description>
-    </item>
-    <item>
-      <title>排他制御を行う GitHub Action を作った</title>
-      <link>https://shogo82148.github.io/blog/2020/12/30/github-actions-mutex/</link>
-      <pubDate>Wed, 30 Dec 2020 00:00:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2020/12/30/github-actions-mutex/</guid>
-      <description>弊社では GitHub のレポジトリ管理に Terraform GitHub provider を使用しています。 いちいち手元で terraform plan や terraform apply を叩くのは面倒なので、 GitHub Actions を利用することを考えました。 tf ファイルと現実のリソースとの不整合を避けるために、 これらのコマンドは排他的に実行する必要があります。 例えば terraform apply を実行している最中に terraform plan を実行することはできません。
-ここで問題になってくるのが GitHub Actions のジョブ並列数です。 2020-12-30 現在、GitHub Actions は同時に 20 並列まで実行可能ですが、逆に並列数を制限できないという贅沢な悩みがあります。 一応 Matrix Build の並列数を制限するオプションはありますが、 ワークフローをまたいだ並列数の制限はできません。
-これを解決するために作ったのが actions-mutex です。
-shogo82148/actions-mutex actions-mutex Marketplace 使い方 ただワークフローから uses を使って呼び出すだけ。 面倒なアクセスキーの設定等は必要ありません。簡単ですね。
-on: push: branches: - main jobs: build: runs-on: ubuntu-latest steps: - uses: actions/checkout@v2 - uses: shogo82148/actions-mutex@v1 - run: &amp;#34;: 排他的に実行する必要のあるタスク&amp;#34; 仕組み actions-mutex と同様のことを実現する Action として GitHub Action Locks があります。 これの使用も考えたのですが、GitHub Action Locks はバックエンドに AWS DynamoDB を使用しています。 DynamoDB のテーブルを作成した上で AWS IAM を適切に設定する必要があり、セットアップが面倒です (まあ単に DynamoDB 食わず嫌いしているだけ、というのもあります)。</description>
-    </item>
-    <item>
-      <title>2020年に書いた GitHub Action &#43; α</title>
-      <link>https://shogo82148.github.io/blog/2020/12/03/github-actions-in-2020/</link>
-      <pubDate>Thu, 03 Dec 2020 00:00:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2020/12/03/github-actions-in-2020/</guid>
-      <description>この記事はフラーAdvent Calendar 2020の3日目の記事です。 2日目はid:gibachan03 さんで「Androidアプリエンジニアになって気づいたiOSとの違い」でした。
-さて、公開当初色々して遊んだ GitHub Actions ですが、今年も引き続き遊んでました。 いくつか新しい Action を作ったものの、このブログでは紹介していなかったので、2020年作ったものを紹介したいと思います。
-actions-upload-release-asset Yet Another Upload Release Asset Action 一言で表すのならば、 Yet Another actions/upload-release-asset GitHub Action です。 GitHub の Releases にファイルをアップロードする Action です。 このアクションは GitHub 公式という安心感はあるのですが、一度のステップで1個のファイルしかアップロードできません。
-ソースファイル本体と、ビルド済みバイナリと・・・と色々アップロードしたいものがあったので、新しく作りました。 actions-upload-release-asset は @actions/glob の Glob Pattern に対応しているので、一つのステップで複数のファイルをアップロードすることができます。
-例えば、カレントディレクトリにあるテキストファイルを全てアップロードする例は以下のようになります。
-on: release: types: - created jobs: build: runs-on: ubuntu-latest steps: - uses: actions/checkout@v2 # steps for building assets - run: echo &amp;#34;REPLACE ME!&amp;#34; &amp;gt; assets.txt - uses: shogo82148/actions-upload-release-asset@v1 with: upload_url: ${{ github.</description>
-    </item>
-    <item>
-      <title>AWS SDK for Go v2 の今後が不安な件について</title>
-      <link>https://shogo82148.github.io/blog/2020/10/24/aws-sdk-go-v2-broken/</link>
-      <pubDate>Sat, 24 Oct 2020 01:06:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2020/10/24/aws-sdk-go-v2-broken/</guid>
-      <description>なんだか今日はもうコードを書く気がしないので、最近思っていることをつらつらと・・・
-タイトルの通り、最近 AWS SDK for Go v2 の行く末がちょっと気になっています。 あんまり話題になっているのを観測できていないので、少し現状を書いてみます。
-背景 最近あったビッグイベントが v0.25.0 のリリースです。
-Client Updates in the Preview Version of the AWS SDK for Go V2 パッケージの構成が見直され、APIの呼び出し方法も変わりました。 まあ、プレビュー版なのでよくあること・・・なんですが、ちょっと変更点が多すぎて追いきれない。
-v0.25.0 移行で入った変更の数々 ちょっと一例を見てみましょう。
-設定の読み込み Before: v0.25.0 より前は external パッケージを使って設定を読み込んでいました。
-import ( &amp;#34;github.com/aws/aws-sdk-go-v2/aws/external&amp;#34; ) func loadConfig() (aws.Config, error) { return external.LoadDefaultAWSConfig() } After: これが config パッケージに変更になりました。
-import ( &amp;#34;github.com/aws/aws-sdk-go-v2/config&amp;#34; ) func loadConfig() (aws.Config, error) { return config.LoadDefaultConfig() } API の呼び出し Before: Requestオブジェクトを作って、そのSendメソッドを呼ぶ形式でした。
-s3svc := s3.</description>
-    </item>
-    <item>
-      <title>GitHub Actions を使って簡単なボットを作る</title>
-      <link>https://shogo82148.github.io/blog/2020/10/23/github-bot-using-actions/</link>
-      <pubDate>Fri, 23 Oct 2020 22:03:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2020/10/23/github-bot-using-actions/</guid>
-      <description>リリース当初は git push など GitHub 上のイベントしかトリガーにできなかった GitHub Actionsですが、 workflow_dispatch イベント の登場により手動実行ができるようになりました。
-社内でもこの機能を利用してワークフローの手動実行をしていたのですが、人間とは欲深いもので「毎回ワークフローを選択してポチポチするのだるい」という声があがってきました。 そういうわけで、Pull Request のコメントをトリガーにしてワークフローを実行する簡単なボットを作ってみました。
-方針 workflow_dispatch と issue_comment をトリガーにしたワークフローを作ればいいだけの気もしますが、 以下のような理由からワークフローからワークフローを呼び出す形にしました。
-workflow_dispatch を使った既存のワークフローがあるので、それを流用したい トリガーが複数あると、イベントの種類に応じてペイロードの形式が異なるので、地味に処理が大変 issue_comment は全部のコメントに反応するので、本当に見たいログが埋もれてしまう コメントを投稿した Pull Request のHEADでワークフローを実行して欲しい issue_comment はイベントの発生元として、デフォルトブランチのHEADが渡ってきます イベントのペイロードには、プルリクエストへのリンクが入っているだけで、HEADの情報はわからない 実装 jfurudo1 がサードパーティのアクションを使ってゴニョゴニョやっていたものの、 あんまりうまく行ってなさそうだったので、bash script でエイヤッと書き直しました。
-「build」 とコメントすると、.github/workflows/build.yml のワークフローを実行するサンプルです。
-name: comment hook on: issue_comment: types: [created] jobs: distribute: runs-on: ubuntu-latest steps: - name: dispatch workflow run: | # イベントに関する詳細情報を取ってくる PAYLOAD=$(cat &amp;#34;$GITHUB_EVENT_PATH&amp;#34;) NUMBER=$(echo &amp;#34;$PAYLOAD&amp;#34; | jq -c &amp;#39;.issue.number&amp;#39;) # Issue と Pull Request のコメントが混ざってくるので、Issueは無視する if [[ &amp;#34;$(echo &amp;#34;$PAYLOAD&amp;#34; | jq -c &amp;#39;.</description>
-    </item>
-    <item>
-      <title>RE: Pull Request Title Injection とその対策</title>
-      <link>https://shogo82148.github.io/blog/2020/04/02/re-pull-request-title-injection/</link>
-      <pubDate>Thu, 02 Apr 2020 06:37:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2020/04/02/re-pull-request-title-injection/</guid>
-      <description>@furusax が書いてくれた GitHub Action からの Slack 通知機能について以下のようにコメントしたところ、 対策案を考えてくれました。
-そういえばこれって Pull Request Title Injection できないですかね？ まあ、タイトル書くの社員なのでいいんですが。
-対策してみました #はてなブログ
-Pull Request Title Injection とその対策 - なまえは まだ ないhttps://t.co/hIkMykFUr8
-&amp;mdash; ふるさっくす (@furusax) March 31, 2020 Pull Request Title Injection とその対策 なるほど、こう来ましたか。しかし、まだまだ甘いですね・・・。
-2021-08-19 追記 ドッグさん が便利なツールを作ってくれました。
-rhysd/actionlint actionlint v1.4 → v1.6 で実装した新機能の紹介 GitHub Actions のワークフローファイルの静的チェッカーです。 チェック項目にこの記事で紹介したような脆弱性検知も含まれているのでおすすめです！
-Pull Request Title Injection について まずはこの記事に出てくる「Pull Request Title Injection」についておさらいです。 以下のような Slack への通知を行う GitHub Actions があります。 github.event.pull_request.title はプルリクエストを送った本人が自由に設定できるので、 ここにうまいこと細工をすれば Slack への投稿内容を自由に改変できてしまうのでは？という問いかけでした。</description>
-    </item>
-    <item>
-      <title>元Yahoo!ジオシティーズ利用者のかたへ、GitHub Pagesのすゝめ</title>
-      <link>https://shogo82148.github.io/blog/2020/02/01/goodbye-geocities/</link>
-      <pubDate>Sat, 01 Feb 2020 00:00:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2020/02/01/goodbye-geocities/</guid>
-      <description>TL;DR 今GitHubにアップロードした内容は1000年残る！ デッドラインは 2020年2月3日(月) 午前7時(日本時間) Yahoo!ジオシティーズのデータがダウンロードできるのは2020年3月31日まで つまりYahoo!ジオシティーズから移行するなら、今！ GitHubが一番！
-Yahoo!ジオシティーズは終了しました Yahoo!ジオシティーズ 公開停止からはや10ヶ月。 ちょっと古いリンクをたどると「Yahoo!ジオシティーズは終了しました」というページを目にすることが多くなりました。
-Yahoo!ジオシティーズは終了しました
-2019年3月31日をもちましてYahoo!ジオシティーズのサービス提供を終了いたしました。長らくご愛顧いただき誠にありがとうございました。
-ホームページをお持ちのお客様につきましては、2020年3月31日までFTPによるファイルダウンロードのみご利用可能となっております。ホームページやドメインの移行方法などはサービス終了のお知らせをご確認ください。
-https://info-geocities.yahoo.co.jp/
-それ見てこんなツイートをしたのですが、なぜ GitHub への移行がいいのか知らない人が多いようなのでちょっと説明しますね。
-みんな！FTP経由ならまだジオシティーズからホームページのダウンロードはできる！！今のうちにGitHubへ上げてその黒歴史を1000年後まで残すんだ！！！
-&amp;mdash; Ichinose Shogo (@shogo82148) January 31, 2020 GitHub Arctic Code Vault なぜ今 GitHub なのかというと、 GitHub Universe 2019 で GitHub Archive Programというプログラムが発表されたからです。
-今から1,000年後にソフトウェアはどのようになっているのか、また人類はどうなっているのか、推測することしかできません。しかし、今日の時点で最も重要なビルディングブロックを、確実に明日に残せるようにすることは可能です。私たちの世界は、オープンソースソフトウェアで動いています。この文明の隠れた基盤であり、全人類の共有財産です。GitHub Archive Programの使命は、次世代のためにオープンソースソフトウェアを保護することです。
-GitHubは、スタンフォード大学図書館、Long Now Foundation、 Internet Archive、Software Heritage Foundation、Piql、Microsoft Research、オックスフォード大学ボドリアン図書館などの機関や団体と連携し、世界のオープンソースコードを保護していきます。この貴重な知識を保護する方法として、あらゆるデータ形式でさまざまな場所に、継続的に複数のコピーを保存していきます。保存場所には、GitHub Arctic Code Vaultと呼ばれる、少なくとも1,000年は存続する非常に長期的なアーカイブも含まれます。
-https://github.blog/jp/2019-11-14-universe-day-one/
-このプログラムで最長の保存場所である GitHub Arctic Code Vault は、北極圏に広がる永久凍土の深さ250mに建設されたアーカイブ施設「Arctic World Archive」。
-2020年2月2日 時点でのアクティブな公開リポジトリ※のスナップショットが、QRコードとしてエンコードされフィルムに印刷されたのち、この場所に保管されます。 Arctic World Archive は地政学的に地球上でもっとも安定した場所であり、1000年の長期保存にも耐えるとのこと。</description>
-    </item>
-    <item>
-      <title>CloudFormationのテンプレートのLinter actions-cfn-lint のご紹介</title>
-      <link>https://shogo82148.github.io/blog/2019/12/06/actions-cfn-lint/</link>
-      <pubDate>Fri, 06 Dec 2019 00:00:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2019/12/06/actions-cfn-lint/</guid>
-      <description>この記事はフラーAdvent Calendar 2019の6日目の記事です。 5日目は@shogo82148 さんで「GitHub Goveralls Action を公開しました」でした。
-さて、最近 GitHub Actions を作るのにハマっているので、今日も GitHub Actions の紹介です。
-GitHub Action for CloudFormation Linter with reviewdog shogo82148/actions-cfn-lint Amazon CloudFormation Infrastructure as Code の盛り上がりも一段落し、今では当たり前のように使っている人も多いと思います。 フラー共創スタジオはAWSがメインなので、CloudFormationをメインに使っています。 色々とクセは強いですが、少なくともtfstateが行方不明になったりはしないので、まあまあ仲良くやっています。
-CloudFormation Linter テンプレートを書いている上で地味にややこしいのが、プロパティーの名前や型の統一感が微妙にない、ということです。
-例を挙げると、AWS::ApplicationAutoScaling::ScalableTarget の MaxCapacity は整数型です。 これはまあ、納得できますね。
-ところが AWS::AutoScaling::AutoScalingGroup の MaxSize は 文字列型 なんです。説明文には「Auto Scaling グループの Amazon EC2 インスタンスの最大数」とあるのに！ オートスケールという似たような機能を持っていて、どちらもスケーリンググループの最大数を表しているの、名前も違えば型が全く違う。
-この手のミスは aws cli に付属している テンプレートの validation 機能では見つけられす、実際に反映してみるしかありません。 すぐに失敗してくれればいいんですが、失敗するまでにも十数分かかったりしてかなり面倒です。
-そこでおすすめなのが CloudFormation Linter。 この手の名前のミスや型のミスを指摘してくれるコマンドラインツールです。 各種エディタ用の拡張もあり、VSCodeでも使える ので、ぼくはいつもこれを使っています。
-CloudFormation Linter については Classmethod さんの紹介記事もどうぞ。</description>
-    </item>
-    <item>
-      <title>GitHub Goveralls Action を公開しました</title>
-      <link>https://shogo82148.github.io/blog/2019/12/05/actions-goveralls/</link>
-      <pubDate>Thu, 05 Dec 2019 00:00:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2019/12/05/actions-goveralls/</guid>
-      <description>この記事はフラーAdvent Calendar 2019の5日目の記事です。 4日目はふるふる先生の「GoでJSONを良い感じに使おうと思ってハマった話」でした。
-さて、首を長くして待っていた GitHub Actions がついにGAになりましたね。 (日本語版ヘルプだとまだbetaになってますが)
-さっそくActionを自作してちょっと前に公開してたんですが、この機会に紹介しようと思います。
-actions-goveralls - Actions GitHub Marketplace shogo82148/actions-goveralls 使い方 coveralls.io はコードカバレッジの可視化サービスです。 実は公式でGitHub Actionsを提供しており、Coveralls GitHub Action を使うと 「JavaScriptのプロジェクトであれば」簡単にカバレッジを送信することができます。
-しかし、Goが出力するカバレッジはJavaScriptと形式が違うので、そのままは使えません。 他のCIではmattn/goverallsにお世話になっていたので、 これを GitHub Actions として簡単に使えるようにしました。 最小限の設定はこれだけです。
-# ここらへんにテストとかの設定ば別途描く # coveralls.io に送信 - uses: shogo82148/actions-goveralls@v1 with: github-token: ${{ secrets.GITHUB_TOKEN }} path-to-profile: profile.cov 簡単ですね。
-マトリックスビルド され、後発なだけあって GitHub Actions では他のCIの便利な機能を簡単に使えます。 その中でも最も便利(偏見)なのがマトリックスビルドです。 例えば以下のように設定するだけで、Linux, macOS, Windows で同じテストを実行できます。
-strategy: fail-fast: false matrix: os: - ubuntu-latest - macos-latest - windows-latest runs-on: ${{ matrix.</description>
-    </item>
-    <item>
-      <title>Setup Perl GitHub Action を公開しました</title>
-      <link>https://shogo82148.github.io/blog/2019/09/18/actions-setup-perl/</link>
-      <pubDate>Wed, 18 Sep 2019 23:14:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2019/09/18/actions-setup-perl/</guid>
-      <description>GitHub Actions の公式レポジトリには Perl のセットアップアクションが無いぞ！ ということで三連休+αで書きました。
-actions-setup-perl on GitHub Marketplace 使い方 Marketplaceの設定例は間違えているので以下を参照。(これ書いていて気がついた) 必要な Perl のバージョンを渡すだけです。簡単！
-steps: - uses: actions/checkout@master - uses: shogo82148/actions-setup-perl@v1 with: perl-version: &amp;#39;5.30&amp;#39; - run: cpanm --installdeps . - run: prove -lv t Ubuntu, macOS, Windows 各種OSにも対応しています。
-jobs: build: runs-on: ${{ matrix.os }} strategy: matrix: os: [&amp;#39;ubuntu-18.04&amp;#39;, &amp;#39;macOS-10.14&amp;#39;, &amp;#39;windows-2019&amp;#39;] perl: [ &amp;#39;5.30&amp;#39;, &amp;#39;5.28&amp;#39; ] name: Perl ${{ matrix.perl }} on ${{ matrix.os }} steps: - uses: actions/checkout@v1 - name: Setup perl uses: shogo82148/actions-setup-perl@v1 with: perl-version: ${{ matrix.</description>
-    </item>
-    <item>
-      <title>GithubのIRCフックがgollumをサポートしました</title>
-      <link>https://shogo82148.github.io/blog/2014/11/15/github-irc-hook-supports-gollum/</link>
-      <pubDate>Sat, 15 Nov 2014 22:24:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2014/11/15/github-irc-hook-supports-gollum/</guid>
-      <description>GithubのIRCフックがgollum(Wikiページの変更通知)をサポートしました。
-最近ぴーちんさんがWikiの編集業に精を出していて、編集の度にIRCに「変更しました！」とポストしてました。 「自動で通知してくれるとうれしいよねー」と話していたら、ある秘密を教えてもらいました。
-acidlemon: githubのwiki編集のIRC通知、ここに秘密が隠されています https://github.com/github/github-services/blob/master/lib/services/irc.rb acidlemon: Blameおして黄色い変なアイコンを調べれば何をすれば良いかわかるはず おや・・・何処かで見た黄色いアイコンが・・・
-真似してgithub-servicesにプルリクエストをだしてマージしてもらった。 で、さっき対応イベント一覧見てたらgollum増えてる！ マージのときのコメントで「a few days」と言われたので2,3日かかるのかな？と思ってたけど、24時間経たないうちに反映されたよ！ 早い！！
-さっそくGithub::Hooks::Managerを使って設定しておきました。 「[project-name] shogo82148 edited wiki page hogehoge」みたいに編集されたページが通知されます。
-便利！！！
-SEE ALSO github-services github の irc hook に幾つかの event type が追加されました - @soh335 memo GithubのHookについてのまとめとソリューション - おそらくはそれさえも平凡な日々 </description>
-    </item>
-    <item>
-      <title>githubのタブサイズを変えるChrome拡張を作った</title>
-      <link>https://shogo82148.github.io/blog/2014/02/10/github-tab-change/</link>
-      <pubDate>Mon, 10 Feb 2014 08:01:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2014/02/10/github-tab-change/</guid>
-      <description>にゃんぱすー。 最近 C# のコードを見ることが多くなってきました。 開発はVSやMonoDevelop等のIDEを使っているのですが、 diffの確認程度ならgithub上で行っています。 しかし、github上の表示は崩れて非常に読みづらい・・・。
-githubのコードプレビューはタブストップが8文字幅で表示されます。 しかし、有名ドコロのIDEはデフォルトがタブインデント、4文字幅で設定されているので、 どうしても表示が狂ってしまいます。 タブインデントではなくスペースインデントを使えば解決☆ なのですが、スペースインデントの中にタブインデントを混入する場合が多々あるので、僕は疲れました・・・。 混在したときのコードなんて、読めたものじゃないですよ。
-そこで、githubのタブサイズを変更する Chrome拡張を作ってみました。 ユーザスタイルシートでもできるんですが、まあ、勉強を兼ねて。
-GithubTabChange インストール後、github上のレポジトリを開くと≡みたいなマークがURLの横に表示されます。 それをクリックでタブサイズの設定変更が可能です。 githubのプレビューの一斉設定だけでなく、 レポジトリ単位でタブサイズを切り替えることができます。
-アイコンとか設定画面のデザインとかちゃんとしたものを作る気力はなかったので、 皆さんのprをお待ちしております。
-GithubTabChange on github (これ作ってるときに、githubのHTMLソースの中にtab-size-8というクラスを見つけたのですが、実はどこかに隠し機能としてあるんですかね？)</description>
-    </item>
-    <item>
-      <title>GitHubにブログを設置してみたよ</title>
-      <link>https://shogo82148.github.io/blog/2012/03/21/test/</link>
-      <pubDate>Wed, 21 Mar 2012 19:29:00 +0900</pubDate>
-      <guid>https://shogo82148.github.io/blog/2012/03/21/test/</guid>
-      <description>TLにGitHubでブログのホスティングしている人がいたので、 「githubとjekyllとoctopressで作る簡単でモダンなブログ」 を参考に作ってみましたよ。
-RVM のインストール 自分の環境には Ruby 1.9.2.2 が入っているんだけど、Ocropressでは Ruby 1.9.2 が必要らしい。 そのままでもいけるかと思ったけど、怒られた。 rake コマンドを全部 bundle exec rake に置き換えると一応実行はできるけど、なんだか警告がでる。
-こういう時は複数のバージョンの Ruby を切り替えて管理できる、 rvm というのを使うといいらしい。 公式サイトの「Installing RVM」通りにコマンドを打てばOK。
-bash -s stable &amp;lt; &amp;lt;(curl -s https://raw.github.com/wayneeseguin/rvm/master/binscripts/rvm-installer) echo &amp;#39;[[ -s &amp;#34;$HOME/.rvm/scripts/rvm&amp;#34; ]] &amp;amp;&amp;amp; . &amp;#34;$HOME/.rvm/scripts/rvm&amp;#34; # Load RVM function&amp;#39; &amp;gt;&amp;gt; ~/.bash_profile source ~/.bash_profile rvm install 1.9.2 &amp;amp;&amp;amp; rvm use 1.9.2 rvm rubygems latest Octopress のインストール あとはgitでクローンして、インストールコマンドを叩くだけ。
-git clone git://github.com/imathis/octopress.git octopress cd octopress gem install bundler bundle install rake install rake setup_github_pages 最後のコマンドは GitHub Pages に公開するためのもの。公開用のレポジトリを聞いてくるので予め登録しておこう。</description>
-    </item>
-  </channel>
+	<channel>
+		<title>Github on Shogo&#39;s Blog</title>
+		<link>https://shogo82148.github.io/categories/github/</link>
+		<description>Recent content in Github on Shogo&#39;s Blog</description>
+		<generator>Hugo</generator>
+		<language>ja-jp</language>
+		
+		
+		
+		
+			<lastBuildDate>Wed, 18 Nov 2026 21:25:00 +0900</lastBuildDate>
+		
+			<atom:link href="https://shogo82148.github.io/categories/github/index.xml" rel="self" type="application/rss+xml" />
+			<item>
+				<title>AWS EmulatorのセットアップをするGitHub Actionを書いた</title>
+				<link>https://shogo82148.github.io/blog/2026/11/18/actions-setup-aws-emulator/</link>
+				<pubDate>Wed, 18 Nov 2026 21:25:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2026/11/18/actions-setup-aws-emulator/</guid>
+				<description>&lt;h2 id=&#34;背景目的&#34;&gt;背景・目的&lt;/h2&gt;&#xA;&lt;p&gt;11月11日に&lt;a href=&#34;https://github.com/aws/aws-emulator&#34;&gt;AWS Emulator&lt;/a&gt;が公開されました。&#xA;AWSの環境を手元で再現できるツールです。&lt;/p&gt;&#xA;&lt;ul&gt;&#xA;&lt;li&gt;&lt;a href=&#34;https://aws.amazon.com/jp/blogs/news/test-your-applications-against-aws-locally-with-aws-emulator/&#34;&gt;AWS Emulator を使用してローカルで AWS に対してアプリケーションをテストする&lt;/a&gt;&lt;/li&gt;&#xA;&lt;/ul&gt;&#xA;&lt;p&gt;手元でテストができるようになったら、GitHub Actionsでテストしたくなりますよね。&#xA;しかし、実際にGitHub ActionsにAWS Emulatorを導入するのは意外と面倒です。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>Dependabotの設定リンター dependalint を作った</title>
+				<link>https://shogo82148.github.io/blog/2026/09/11/dependalint-dependabot-configure-linter/</link>
+				<pubDate>Fri, 11 Sep 2026 14:38:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2026/09/11/dependalint-dependabot-configure-linter/</guid>
+				<description>&lt;h2 id=&#34;背景目的&#34;&gt;背景・目的&lt;/h2&gt;&#xA;&lt;p&gt;&lt;a href=&#34;https://github.com/dependabot&#34;&gt;Dependabot&lt;/a&gt; はレポジトリーが依存しているライブラリーの更新をチェックしてくれるツールです。&#xA;GitHub の公式ツールとして提供されており、導入も &lt;code&gt;.github/dependabot.yml&lt;/code&gt; を設置するだけ、と簡単なのでよく使ってます。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>新規レポジトリーで GitHub Actions のOIDCフェデレーションが動かなくなった件</title>
+				<link>https://shogo82148.github.io/blog/2026/09/09/immutable-subject-claims-for-github-actions-oidc-tokens/</link>
+				<pubDate>Wed, 09 Sep 2026 19:42:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2026/09/09/immutable-subject-claims-for-github-actions-oidc-tokens/</guid>
+				<description>&lt;h2 id=&#34;背景&#34;&gt;背景&lt;/h2&gt;&#xA;&lt;p&gt;新しいウェブサイトを立ち上げようと、GitHubのレポジトリーを新規作成して、GitHub Actions から Amazon S3 へデプロイするワークフローを組みました。&#xA;いつものように AWS OIDC フェデレーションを設定したのですが、認証に失敗してしまいました。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>GitHub経由で脆弱性報告を受けた</title>
+				<link>https://shogo82148.github.io/blog/2026/08/23/receiving-a-vulnerability-report-via-github/</link>
+				<pubDate>Sun, 23 Aug 2026 23:05:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2026/08/23/receiving-a-vulnerability-report-via-github/</guid>
+				<description>&lt;h2 id=&#34;tldr&#34;&gt;TL;DR&lt;/h2&gt;&#xA;&lt;p&gt;&lt;a href=&#34;https://github.com/shogo82148/go-webntp&#34;&gt;go-webntp&lt;/a&gt; および &lt;a href=&#34;https://github.com/shogo82148/go-nginx-oauth2-adapter&#34;&gt;go-nginx-oauth2-adapter&lt;/a&gt; に脆弱性が見つかりました。&#xA;脆弱性を修正した以下のバージョンをリリースしました。&#xA;現在使用している方は最新バージョンへのアップデートをオススメします。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>dependabotでgithub/codeql-actionのアップデートをまとめる</title>
+				<link>https://shogo82148.github.io/blog/2026/07/10/grouping-codeql-action-updates/</link>
+				<pubDate>Fri, 10 Jul 2026 22:00:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2026/07/10/grouping-codeql-action-updates/</guid>
+				<description>&lt;h2 id=&#34;背景目的&#34;&gt;背景・目的&lt;/h2&gt;&#xA;&lt;h3 id=&#34;githubcodeql-action-について&#34;&gt;&lt;code&gt;github/codeql-action&lt;/code&gt; について&lt;/h3&gt;&#xA;&lt;p&gt;僕の管理しているGitHubレポジトリーの一部は&lt;a href=&#34;https://codeql.github.com/&#34;&gt;CodeQL&lt;/a&gt;を使って脆弱性の診断を行っています。&#xA;診断には公式の&lt;a href=&#34;https://github.com/github/codeql-action&#34;&gt;github/codeql-action&lt;/a&gt; Actionを使って、GitHub Actions上で実行しています。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>GitHub Personal Access Token を大量生成するプログラムを書いた</title>
+				<link>https://shogo82148.github.io/blog/2026/06/16/github-personal-access-token-generator/</link>
+				<pubDate>Tue, 16 Jun 2026 16:53:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2026/06/16/github-personal-access-token-generator/</guid>
+				<description>&lt;h2 id=&#34;背景目的&#34;&gt;背景・目的&lt;/h2&gt;&#xA;&lt;p&gt;APIトークンは他者に知られると悪用される可能性があるので、GitHub などにプッシュするのは厳禁です。&#xA;とはいえ人間が注意するのではうっかり混入する場合もあります。&#xA;これを機械的に防ごうというサービスが &lt;a href=&#34;https://github.com/security/advanced-security/secret-protection?locale=ja&#34;&gt;GitHub Secret Protection&lt;/a&gt; です。&#xA;公開レポジトリーならデフォルトで有効になっているので、普段気が付かずにお世話になっているサービスだと思います。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>GitHub Appの秘密鍵をAWS KMSにインポートする</title>
+				<link>https://shogo82148.github.io/blog/2026/04/15/import-github-app-private-key-to-aws-kms/</link>
+				<pubDate>Wed, 15 Apr 2026 23:21:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2026/04/15/import-github-app-private-key-to-aws-kms/</guid>
+				<description>&lt;h2 id=&#34;背景目的&#34;&gt;背景・目的&lt;/h2&gt;&#xA;&lt;p&gt;以下の記事を読んで GitHub App の秘密鍵を AWS KMS に閉じ込められることを知りました。&lt;/p&gt;&#xA;&lt;ul&gt;&#xA;&lt;li&gt;&lt;a href=&#34;https://zenn.dev/aws_japan/articles/b311c3710826a6&#34;&gt;GitHub App の秘密鍵を AWS KMS に閉じ込める&lt;/a&gt;&lt;/li&gt;&#xA;&lt;/ul&gt;&#xA;&lt;p&gt;AWS KMS は食わず嫌いしていたので、この機会に仲良くなろうとちょっと触ってみることにしました。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>shogo82148/actions-setup-mysqlのMySQLビルドスクリプト群を別レポジトリーに移行した</title>
+				<link>https://shogo82148.github.io/blog/2025/10/26/split-actions-setup-mysql/</link>
+				<pubDate>Sun, 26 Oct 2025 21:12:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2025/10/26/split-actions-setup-mysql/</guid>
+				<description>&lt;h2 id=&#34;tldr&#34;&gt;TL;DR&lt;/h2&gt;&#xA;&lt;p&gt;&lt;a href=&#34;https://github.com/shogo82148/actions-setup-mysql&#34;&gt;shogo82148/actions-setup-mysql&lt;/a&gt; には「GitHub Actionsのコード」と「MySQLをビルドするためのスクリプト群」が一緒に入っていたのですが、&#xA;このたび「MySQLをビルドするためのスクリプト群」を以下のレポジトリーに移行することにしました。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>GitHubがJWTのb64ヘッダーパラメーターを認識するようになった</title>
+				<link>https://shogo82148.github.io/blog/2025/08/12/github-now-checks-b64-header-parameter/</link>
+				<pubDate>Tue, 12 Aug 2025 23:11:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2025/08/12/github-now-checks-b64-header-parameter/</guid>
+				<description>&lt;p&gt;こんな罠に引っかかるのは僕だけだと思うんですが、一応記録として残しておきます・・・。&lt;/p&gt;&#xA;&lt;h2 id=&#34;tldr&#34;&gt;TL;DR&lt;/h2&gt;&#xA;&lt;ul&gt;&#xA;&lt;li&gt;2025-08-09あたりから、GitHubがJWTのb64ヘッダーパラメーターを認識するようになった&lt;/li&gt;&#xA;&lt;li&gt;具体的にはJWTのヘッダーに &lt;code&gt;{&amp;quot;b64&amp;quot;: false}&lt;/code&gt; が含まれている場合に、&amp;ldquo;A JSON web token could not be decoded, documentation_url: &lt;a href=&#34;https://docs.github.com/rest%22&#34;&gt;https://docs.github.com/rest&amp;quot;&lt;/a&gt; というエラーメッセージが返ってくる&lt;/li&gt;&#xA;&lt;/ul&gt;&#xA;&lt;h2 id=&#34;原因&#34;&gt;原因&lt;/h2&gt;&#xA;&lt;p&gt;GitHub Appsにアクセスするのに、お勉強も兼ねて自前実装のJWTエンコーダーを使っていました。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>actions-setup-redisがBuild Provenanceの検証を行うようになりました</title>
+				<link>https://shogo82148.github.io/blog/2025/04/06/actions-setup-redis-verifies-build-provenance/</link>
+				<pubDate>Sun, 06 Apr 2025 22:34:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2025/04/06/actions-setup-redis-verifies-build-provenance/</guid>
+				<description>&lt;p&gt;&lt;a href=&#34;https://github.com/shogo82148/actions-setup-redis&#34;&gt;shogo82148/actions-setup-redis&lt;/a&gt; はRedisのバイナリーをGitHub Releasesからダウンロードしています。&#xA;このバイナリーを&lt;a href=&#34;https://github.blog/changelog/2024-06-25-artifact-attestations-is-generally-available/&#34;&gt;GitHub Artifact Attestations&lt;/a&gt;で署名して、&#xA;ダウンロード時に検証するようにしました。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>GitHub Artifact Attestations を試してみた</title>
+				<link>https://shogo82148.github.io/blog/2024/06/30/2024-06-30-try-artifact-attestations/</link>
+				<pubDate>Sun, 30 Jun 2024 14:36:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2024/06/30/2024-06-30-try-artifact-attestations/</guid>
+				<description>&lt;p&gt;GitHub Artifact Attestations が正式リリースされました。&lt;/p&gt;&#xA;&lt;ul&gt;&#xA;&lt;li&gt;&lt;a href=&#34;https://github.blog/changelog/2024-06-25-artifact-attestations-is-generally-available/&#34;&gt;GitHub Artifact Attestations is generally available&lt;/a&gt;&lt;/li&gt;&#xA;&lt;/ul&gt;&#xA;&lt;p&gt;&lt;a href=&#34;https://github.blog/2024-05-02-introducing-artifact-attestations-now-in-public-beta/&#34;&gt;ベータ公開&lt;/a&gt; から2カ月足らずでの正式リリースです。&#xA;早いですね。それだけ力を入れているということでしょうか。&lt;/p&gt;&#xA;&lt;p&gt;なんか難しい単語（attestations とか provenanceとか）が並んでいて正直良くわからんのですが、とりあえず試してみましょう。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>actions-setup-mysqlとactions-setup-redisがApple M1上で動くようになりました</title>
+				<link>https://shogo82148.github.io/blog/2024/02/04/2024-02-04-actions-setup-mysql-and-actions-setup-redis-now-work-on-macos14/</link>
+				<pubDate>Sun, 04 Feb 2024 12:35:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2024/02/04/2024-02-04-actions-setup-mysql-and-actions-setup-redis-now-work-on-macos14/</guid>
+				<description>&lt;p&gt;GitHub Actions に　Apple Silicon がやってきました！&lt;/p&gt;&#xA;&lt;ul&gt;&#xA;&lt;li&gt;&lt;a href=&#34;https://github.blog/changelog/2024-01-30-github-actions-introducing-the-new-m1-macos-runner-available-to-open-source/&#34;&gt;GitHub Actions: Introducing the new M1 macOS runner available to open source!&lt;/a&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;a href=&#34;https://github.blog/changelog/2024-01-30-github-actions-macos-14-sonoma-is-now-available/&#34;&gt;GitHub Actions: macOS 14 (Sonoma) is now available&lt;/a&gt;&lt;/li&gt;&#xA;&lt;/ul&gt;&#xA;&lt;p&gt;先日Perlをビルドして遊んでみました。&lt;/p&gt;&#xA;&lt;ul&gt;&#xA;&lt;li&gt;&lt;a href=&#34;https://shogo82148.github.io/blog/2024/02/01/2024-02-01-actions-setup-perl-now-works-on-macos14/&#34;&gt;actions-setup-perlがApple M1上で動くようになりました&lt;/a&gt;&lt;/li&gt;&#xA;&lt;/ul&gt;&#xA;&lt;p&gt;今回はMySQLとRedisをビルドしてみたお話です。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>actions-setup-perlがApple M1上で動くようになりました</title>
+				<link>https://shogo82148.github.io/blog/2024/02/01/2024-02-01-actions-setup-perl-now-works-on-macos14/</link>
+				<pubDate>Thu, 01 Feb 2024 20:50:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2024/02/01/2024-02-01-actions-setup-perl-now-works-on-macos14/</guid>
+				<description>&lt;p&gt;GitHub Actions に　Apple Silicon がやってきました！&lt;/p&gt;&#xA;&lt;ul&gt;&#xA;&lt;li&gt;&lt;a href=&#34;https://github.blog/changelog/2024-01-30-github-actions-introducing-the-new-m1-macos-runner-available-to-open-source/&#34;&gt;GitHub Actions: Introducing the new M1 macOS runner available to open source!&lt;/a&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;a href=&#34;https://github.blog/changelog/2024-01-30-github-actions-macos-14-sonoma-is-now-available/&#34;&gt;GitHub Actions: macOS 14 (Sonoma) is now available&lt;/a&gt;&lt;/li&gt;&#xA;&lt;/ul&gt;&#xA;&lt;p&gt;新しいコンピューティング環境がでてやることといえばアレですよね。&#xA;Perlのビルド。&#xA;というわけでやっていきましょう。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>1Passwordで管理しているシークレットを各種サービスに同期するプログラムを書いた</title>
+				<link>https://shogo82148.github.io/blog/2023/10/21/2023-10-21-op-sync/</link>
+				<pubDate>Sat, 21 Oct 2023 17:44:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2023/10/21/2023-10-21-op-sync/</guid>
+				<description>&lt;p&gt;弊社では各種シークレットは1Passwordで管理しています。&#xA;シークレットの棚卸し作業をしていて不便を感じたので、&#xA;1Passwordで管理しているシークレットを各種サービスに同期するプログラムを書いてみました。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>Slack Incoming Webhook を GitHub Actions Secrets へ突っ込むのに疲れた俺達は</title>
+				<link>https://shogo82148.github.io/blog/2023/10/01/2023-10-01-github-actions-notify-slack/</link>
+				<pubDate>Sun, 01 Oct 2023 00:05:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2023/10/01/2023-10-01-github-actions-notify-slack/</guid>
+				<description>&lt;p&gt;GitHub ActionsからSlackへ通知したいとき、一番お手軽なのはSlack Incoming Webhookです。&#xA;直接curlで叩いてもいいですし、マーケットプレイスにも通知用のアクションがたくさんあります。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>actions-github-app-tokenの紹介</title>
+				<link>https://shogo82148.github.io/blog/2023/09/26/2023-09-26-actions-github-app-token/</link>
+				<pubDate>Tue, 26 Sep 2023 23:30:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2023/09/26/2023-09-26-actions-github-app-token/</guid>
+				<description>&lt;p&gt;GitHub App Tokenを発行するための&#xA;&lt;a href=&#34;https://github.com/shogo82148/actions-github-app-token&#34;&gt;actions-github-app-token&lt;/a&gt;&#xA;という GitHub アクションを書きました。&lt;/p&gt;&#xA;&lt;p&gt;実験的なアクションだったので、マーケットには公開していませんでした。&#xA;最近になって「安定して動作しているし、マーケットに公開するか！」という気持ちになったので、&#xA;改めてご紹介です。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>ChooseALicense.com の日本語訳を公開しました</title>
+				<link>https://shogo82148.github.io/blog/2023/09/16/2023-09-16-choose-a-license-in-japanese/</link>
+				<pubDate>Sat, 16 Sep 2023 20:29:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2023/09/16/2023-09-16-choose-a-license-in-japanese/</guid>
+				<description>&lt;p&gt;&lt;a href=&#34;https://choosealicense.com&#34;&gt;ChooseALicense.com&lt;/a&gt; の日本語訳を公開しました。&lt;/p&gt;&#xA;&lt;ul&gt;&#xA;&lt;li&gt;&lt;a href=&#34;https://choosealicense.shogo82148.com/&#34;&gt;choosealicense.shogo82148.com&lt;/a&gt;&lt;/li&gt;&#xA;&lt;/ul&gt;&#xA;&lt;h2 id=&#34;背景&#34;&gt;背景&lt;/h2&gt;&#xA;&lt;p&gt;いつの間にか「オープンソースライセンスを適切に管理する係」になってしまい、&#xA;最近はライセンス文章とにらめっこする毎日のいっちーです。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>actions/checkout@v4の襲撃を受けた件</title>
+				<link>https://shogo82148.github.io/blog/2023/09/08/2023-09-08-actions-checkout-v4/</link>
+				<pubDate>Fri, 08 Sep 2023 20:22:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2023/09/08/2023-09-08-actions-checkout-v4/</guid>
+				<description>&lt;p&gt;先日 &lt;a href=&#34;https://github.com/actions/checkout/releases/tag/v4.0.0&#34;&gt;actions/checkout@v4&lt;/a&gt; がリリースされましたね。&lt;/p&gt;&#xA;&lt;ul&gt;&#xA;&lt;li&gt;&lt;a href=&#34;https://github.com/actions/checkout/releases/tag/v4.0.0&#34;&gt;actions/checkout@v4&lt;/a&gt;&lt;/li&gt;&#xA;&lt;/ul&gt;&#xA;&lt;p&gt;まあ、何が言いたいかというと、「メジャーバージョンアップ多すぎじゃない？？？」という話。&lt;/p&gt;&#xA;&lt;h2 id=&#34;actionscheckoutv4の襲撃&#34;&gt;actions/checkout@v4の襲撃&lt;/h2&gt;&#xA;&lt;p&gt;新規に作成したレポジトリには基本的に&lt;a href=&#34;https://docs.github.com/en/code-security/dependabot&#34;&gt;dependabot&lt;/a&gt;をセットアップしています。&#xA;まあそんな状況下で &lt;a href=&#34;https://github.com/actions/checkout/releases/tag/v4.0.0&#34;&gt;actions/checkout@v4&lt;/a&gt; なんてリリースされたら、こうなるわけですよ。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>GitHubのプロジェクトにUsed by counterを追加する</title>
+				<link>https://shogo82148.github.io/blog/2023/07/05/2023-07-05-github-used-by-counter/</link>
+				<pubDate>Wed, 05 Jul 2023 23:36:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2023/07/05/2023-07-05-github-used-by-counter/</guid>
+				<description>&lt;p&gt;GitHubのプロジェクトを見に行くと、サイドバーに「Used by（数字）」と書かれたセクションがあります。&lt;/p&gt;&#xA;&lt;p&gt;&lt;img src=&#34;https://shogo82148.github.io/images/2023-07-05-github-used-by-counter-1.png&#34; alt=&#34;Used by 2.4k&#34;&gt;&lt;/p&gt;&#xA;&lt;p&gt;これの設定方法を知ったのでメモ。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>GitHub Actions上でFuzzingを実行するアクションを書いた</title>
+				<link>https://shogo82148.github.io/blog/2023/07/05/2023-07-05-actions-go-fuzz/</link>
+				<pubDate>Wed, 05 Jul 2023 00:41:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2023/07/05/2023-07-05-actions-go-fuzz/</guid>
+				<description>&lt;p&gt;Go 1.18から&lt;a href=&#34;https://go.dev/security/fuzz/&#34;&gt;Go Fuzzing&lt;/a&gt;の機能が追加されました。&#xA;僕もいくつかのパッケージに導入してみたのですが、予期していなかったテストパターンを見つけられて役にやっている気がします。&#xA;Fuzzテストが増えてきたので、毎回手元でFuzzテストを実行するのも大変になってきました。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>GitHub ActionsからWorkload Identityを使ってGCPにアクセスする</title>
+				<link>https://shogo82148.github.io/blog/2023/07/04/2023-07-04-access-google-cloud-from-github-actions-using-workload-identity/</link>
+				<pubDate>Tue, 04 Jul 2023 11:45:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2023/07/04/2023-07-04-access-google-cloud-from-github-actions-using-workload-identity/</guid>
+				<description>&lt;p&gt;&lt;a href=&#34;https://shogo82148.github.io/blog/2023/06/22/2023-06-22-github-actions-usage-report/&#34;&gt;GitHub Actionsの利用量をまとめる&lt;/a&gt;ではGitHub Actionsの使用量をGoogle Spreadsheetにまとめるスクリプトを書きました。&#xA;このときは動作確認ができればよかったので、自分のGoogleアカウントで認証して書き込みを行いました。&#xA;しかし、このスクリプトを定期的に実行するのも面倒です。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>dependabotの更新グループ化機能を使ってAWS SDK for Go v2をアップデートする</title>
+				<link>https://shogo82148.github.io/blog/2023/07/02/2023-07-02-update-aws-sdk-v2-with-grouped-version-updates-for-dependabot/</link>
+				<pubDate>Sun, 02 Jul 2023 11:45:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2023/07/02/2023-07-02-update-aws-sdk-v2-with-grouped-version-updates-for-dependabot/</guid>
+				<description>&lt;p&gt;dependabot の更新グループ化（Grouped version updates）機能がパブリックベータになりました。&lt;/p&gt;&#xA;&lt;ul&gt;&#xA;&lt;li&gt;&lt;a href=&#34;https://github.blog/changelog/2023-06-30-grouped-version-updates-for-dependabot-public-beta/&#34;&gt;Grouped version updates for Dependabot public beta&lt;/a&gt;&lt;/li&gt;&#xA;&lt;/ul&gt;&#xA;&lt;p&gt;&lt;a href=&#34;https://github.com/aws/aws-sdk-go-v2&#34;&gt;AWS SDK for Go v2&lt;/a&gt;の更新設定をしてみたのでメモ。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>GitHub Actionsの利用量をまとめる</title>
+				<link>https://shogo82148.github.io/blog/2023/06/22/2023-06-22-github-actions-usage-report/</link>
+				<pubDate>Thu, 22 Jun 2023 11:45:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2023/06/22/2023-06-22-github-actions-usage-report/</guid>
+				<description>&lt;p&gt;&lt;a href=&#34;https://github.com/features/actions&#34;&gt;GitHub Actions&lt;/a&gt;の利用量は&lt;a href=&#34;https://github.com/settings/billing&#34;&gt;settings/billing&lt;/a&gt;から確認できます。&lt;/p&gt;&#xA;&lt;p&gt;&lt;img src=&#34;https://shogo82148.github.io/images/2023-06-22-github-actions-billing.png&#34; alt=&#34;今月分のGitHub Actions利用量、今月はあと3000分使える&#34;&gt;&lt;/p&gt;&#xA;&lt;p&gt;それはいいんですが、問題は&lt;strong&gt;今月分しか確認できないこと！&lt;/strong&gt;&lt;/p&gt;&#xA;&lt;p&gt;「先月は〇〇分使ったから上限いくらに設定しておくか〜〜」ということができません。&#xA;APIは見つけたので、取得スクリプトを組んでみました。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>GitHub経由で脆弱性報告してみた</title>
+				<link>https://shogo82148.github.io/blog/2023/06/18/2023-06-18-report-vulnerability-via-github/</link>
+				<pubDate>Sun, 18 Jun 2023 17:00:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2023/06/18/2023-06-18-report-vulnerability-via-github/</guid>
+				<description>&lt;p&gt;&lt;a href=&#34;https://github.com/lestrrat-go/jwx&#34;&gt;lestrrat-go/jwx&lt;/a&gt;に脆弱性を発見したので報告しました。&lt;/p&gt;&#xA;&lt;ul&gt;&#xA;&lt;li&gt;&lt;a href=&#34;https://github.com/lestrrat-go/jwx/security/advisories/GHSA-rm8v-mxj3-5rmq&#34;&gt;GHSA-rm8v-mxj3-5rmq Potential Padding Oracle Attack Vulnerability&lt;/a&gt;&lt;/li&gt;&#xA;&lt;/ul&gt;&#xA;&lt;p&gt;「メールでやり取りするの面倒だなー」と思っていたら、いつのまにかGitHub経由で脆弱性報告できるようになってるじゃないですか。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>GitHubに接続したらWARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!と怒られる件</title>
+				<link>https://shogo82148.github.io/blog/2023/03/24/2023-03-24-github-identification-has-changed/</link>
+				<pubDate>Fri, 24 Mar 2023 17:13:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2023/03/24/2023-03-24-github-identification-has-changed/</guid>
+				<description>&lt;h2 id=&#34;tldr&#34;&gt;TL;DR&lt;/h2&gt;&#xA;&lt;p&gt;SSH経由でGitHubに接続したら、以下のメッセージが表示されました。&lt;/p&gt;&#xA;&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-plain&#34; data-lang=&#34;plain&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;% ssh -T github.com&#xA;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@&#xA;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @&#xA;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@&#xA;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;IT IS POSSIBLE THAT SOMEONE IS DOING SOMETHING NASTY!&#xA;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Someone could be eavesdropping on you right now (man-in-the-middle attack)!&#xA;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;It is also possible that a host key has just been changed.&#xA;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;The fingerprint for the RSA key sent by the remote host is&#xA;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;SHA256:uNiVztksCsDhcc0u9e8BujQXVUpKZIDTMczCvj3tD2s.&#xA;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Please contact your system administrator.&#xA;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Add correct host key in /Users/shogo.ichinose/.ssh/known_hosts to get rid of this message.&#xA;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Offending RSA key in /Users/shogo.ichinose/.ssh/known_hosts:1&#xA;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Host key for github.com has changed and you have requested strict checking.&#xA;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Host key verification failed.&#xA;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;どうやら、GitHubのSSHサーバーの公開鍵が変更されたようです。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>GitHub GraphQL のノードIDフォーマットが変わるらしい (続報)</title>
+				<link>https://shogo82148.github.io/blog/2022/11/16/2022-10-19-perl-webdb-vol131/</link>
+				<pubDate>Wed, 16 Nov 2022 17:17:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2022/11/16/2022-10-19-perl-webdb-vol131/</guid>
+				<description>&lt;p&gt;以前 &lt;a href=&#34;https://shogo82148.github.io/blog/2021/11/29/github-graphql-global-node-id-will-change/&#34;&gt;GitHub GraphQL のノードIDフォーマットが変わるらしい&lt;/a&gt; に書いたように、&#xA;将来ノードIDフォーマットが変わるらしいらしいです。&#xA;これについて、旧式のノードIDを使用した場合に警告がでるようになった、とアナウンスがありました。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>GitHub GraphQL のノードIDフォーマットが変わるらしい</title>
+				<link>https://shogo82148.github.io/blog/2021/11/29/github-graphql-global-node-id-will-change/</link>
+				<pubDate>Mon, 29 Nov 2021 23:08:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2021/11/29/github-graphql-global-node-id-will-change/</guid>
+				<description>&lt;p&gt;弊社では &lt;a href=&#34;https://registry.terraform.io/providers/integrations/github/latest/docs&#34;&gt;Terraform GitHub Provider&lt;/a&gt; を使って&#xA;GitHub のレポジトリ管理・権限管理などを行っているのですが、&#xA;プロバイダーが &lt;code&gt;repository_id&lt;/code&gt; を認識してくれない問題に遭遇しました。&#xA;原因を探ってみると GitHub GraphQL API に &lt;strong&gt;かなり大きな変更が入ること&lt;/strong&gt; を知ったので、メモとして残しておきます。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>GitHub Actions &#43; OIDC Token の情報をAWSのセッションタグに設定してみた</title>
+				<link>https://shogo82148.github.io/blog/2021/09/24/github-actions-oidc/</link>
+				<pubDate>Fri, 24 Sep 2021 13:58:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2021/09/24/github-actions-oidc/</guid>
+				<description>&lt;p&gt;GitHub Actions で ID Token が使えるようになったと話題ですね。&lt;/p&gt;&#xA;&lt;blockquote class=&#34;twitter-tweet&#34;&gt;&lt;p lang=&#34;ja&#34; dir=&#34;ltr&#34;&gt;うおー！サイコー！！！！！ &lt;a href=&#34;https://t.co/2stS4miUOD&#34;&gt;https://t.co/2stS4miUOD&lt;/a&gt;&lt;/p&gt;&amp;mdash; Tori Hara (@toricls) &lt;a href=&#34;https://twitter.com/toricls/status/1438111074138480645?ref_src=twsrc%5Etfw&#34;&gt;September 15, 2021&lt;/a&gt;&lt;/blockquote&gt; &lt;script async src=&#34;https://platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&#xA;&lt;blockquote class=&#34;twitter-tweet&#34;&gt;&lt;p lang=&#34;en&#34; dir=&#34;ltr&#34;&gt;Ok I blogged about it. That&amp;#39;s how excited I am. &lt;br&gt;&lt;br&gt;1. Deploy this CFN template&lt;br&gt;2. Write this GHA workflow&lt;br&gt;3. Never worry about IAM users again&lt;br&gt; &lt;a href=&#34;https://t.co/KJrr2Jw4bE&#34;&gt;https://t.co/KJrr2Jw4bE&lt;/a&gt; &lt;a href=&#34;https://t.co/9IcocgurxP&#34;&gt;pic.twitter.com/9IcocgurxP&lt;/a&gt;&lt;/p&gt;&amp;mdash; Aidan W Steele (@__steele) &lt;a href=&#34;https://twitter.com/__steele/status/1437984026145427461?ref_src=twsrc%5Etfw&#34;&gt;September 15, 2021&lt;/a&gt;&lt;/blockquote&gt; &lt;script async src=&#34;https://platform.twitter.com/widgets.js&#34; charset=&#34;utf-8&#34;&gt;&lt;/script&gt;&#xA;&lt;p&gt;AWS IAM が OpenID Connect (OIDC) を使った認証 (&lt;code&gt;sts:AssumeRoleWithWebIdentity&lt;/code&gt;) に対応しているので、認証プロバイダ(IdP)を用意してあげればシークレットの登録が不要になるということらしいです。&#xA;これは便利！&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>祝日APIを公開しました</title>
+				<link>https://shogo82148.github.io/blog/2021/09/04/holidays-api-is-released/</link>
+				<pubDate>Sat, 04 Sep 2021 18:17:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2021/09/04/holidays-api-is-released/</guid>
+				<description>&lt;p&gt;プログラマーなら誰しも一度は祝日について頭を悩ませたことがあるでしょう(要出典)。&lt;/p&gt;&#xA;&lt;p&gt;日付が固定ならまだ楽なんですが、「春分の日」「秋分の日」のように天体の運行によって決まる祝日があったり、&#xA;ハッピーマンデー制度によって「成人の日(一月の第二月曜日)」のような曜日固定の祝日があったり、&#xA;振替休日という概念があったりと、ちゃんと考えるとかなり面倒です。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>Perl 5.34 がリリースされました</title>
+				<link>https://shogo82148.github.io/blog/2021/05/22/perl-5.34-is-released/</link>
+				<pubDate>Sat, 22 May 2021 15:44:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2021/05/22/perl-5.34-is-released/</guid>
+				<description>&lt;p&gt;&lt;a href=&#34;https://metacpan.org/pod/release/XSAWYERX/perl-5.34.0/pod/perl.pod&#34;&gt;Perl 5.34&lt;/a&gt; がリリースされましたね。&#xA;と、言うわけで、 &lt;a href=&#34;https://metacpan.org/pod/AWS::Lambda&#34;&gt;AWS::Lambda&lt;/a&gt; と &lt;a href=&#34;https://github.com/marketplace/actions/setup-perl-environment&#34;&gt;actions-setup-perl&lt;/a&gt; に Perl 5.34 を追加しました。&lt;/p&gt;&#xA;&lt;h2 id=&#34;awslambda&#34;&gt;AWS::Lambda&lt;/h2&gt;&#xA;&lt;p&gt;AWS Lambda Layers の ARN 一覧はこちら。&#xA;具体的な使い方は&lt;a href=&#34;https://shogo82148.github.io/blog/2018/12/16/run-cgi-in-aws-lambda/&#34;&gt;過去の記事&lt;/a&gt;を参考にどうぞ。&#xA;もちろん&lt;a href=&#34;https://shogo82148.github.io/blog/2021/03/02/perl-lambda-in-ap-northeast-3/&#34;&gt;大阪リージョンも入ってますよ&lt;/a&gt;！&lt;/p&gt;&#xA;&lt;ul&gt;&#xA;&lt;li&gt;Amazon Linux 2 ベース Perl ランタイム&#xA;&lt;ul&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:af-south-1:445285296882:layer:perl-5-34-runtime-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:ap-east-1:445285296882:layer:perl-5-34-runtime-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:ap-northeast-1:445285296882:layer:perl-5-34-runtime-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:ap-northeast-2:445285296882:layer:perl-5-34-runtime-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:ap-northeast-3:445285296882:layer:perl-5-34-runtime-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:ap-south-1:445285296882:layer:perl-5-34-runtime-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:ap-southeast-1:445285296882:layer:perl-5-34-runtime-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:ap-southeast-2:445285296882:layer:perl-5-34-runtime-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:ca-central-1:445285296882:layer:perl-5-34-runtime-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:eu-central-1:445285296882:layer:perl-5-34-runtime-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:eu-south-1:445285296882:layer:perl-5-34-runtime-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:eu-west-1:445285296882:layer:perl-5-34-runtime-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:eu-west-2:445285296882:layer:perl-5-34-runtime-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:eu-west-3:445285296882:layer:perl-5-34-runtime-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:me-south-1:445285296882:layer:perl-5-34-runtime-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:sa-east-1:445285296882:layer:perl-5-34-runtime-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:us-east-1:445285296882:layer:perl-5-34-runtime-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:us-east-2:445285296882:layer:perl-5-34-runtime-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:us-west-1:445285296882:layer:perl-5-34-runtime-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:us-west-2:445285296882:layer:perl-5-34-runtime-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;/ul&gt;&#xA;&lt;/li&gt;&#xA;&lt;li&gt;Paws レイヤー&#xA;&lt;ul&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:af-south-1:445285296882:layer:perl-5-34-paws-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:ap-east-1:445285296882:layer:perl-5-34-paws-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:ap-northeast-1:445285296882:layer:perl-5-34-paws-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:ap-northeast-2:445285296882:layer:perl-5-34-paws-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:ap-northeast-3:445285296882:layer:perl-5-34-paws-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:ap-south-1:445285296882:layer:perl-5-34-paws-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:ap-southeast-1:445285296882:layer:perl-5-34-paws-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:ap-southeast-2:445285296882:layer:perl-5-34-paws-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:ca-central-1:445285296882:layer:perl-5-34-paws-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:eu-central-1:445285296882:layer:perl-5-34-paws-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:eu-south-1:445285296882:layer:perl-5-34-paws-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:eu-west-1:445285296882:layer:perl-5-34-paws-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:eu-west-2:445285296882:layer:perl-5-34-paws-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:eu-west-3:445285296882:layer:perl-5-34-paws-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:me-south-1:445285296882:layer:perl-5-34-paws-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:sa-east-1:445285296882:layer:perl-5-34-paws-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:us-east-1:445285296882:layer:perl-5-34-paws-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:us-east-2:445285296882:layer:perl-5-34-paws-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:us-west-1:445285296882:layer:perl-5-34-paws-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;li&gt;&lt;code&gt;arn:aws:lambda:us-west-2:445285296882:layer:perl-5-34-paws-al2:1&lt;/code&gt;&lt;/li&gt;&#xA;&lt;/ul&gt;&#xA;&lt;/li&gt;&#xA;&lt;/ul&gt;&#xA;&lt;p&gt;合わせて Docker Image も公開済みです。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>AWS_SECRET_ACCESS_KEY を GitHub Actions secrets へ突っ込むのに疲れた俺達は</title>
+				<link>https://shogo82148.github.io/blog/2021/03/24/actions-aws-assume-role/</link>
+				<pubDate>Wed, 24 Mar 2021 21:57:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2021/03/24/actions-aws-assume-role/</guid>
+				<description>&lt;p&gt;「GitHub Actions から継続的デプロイをしたい！」と思ったときに、&#xA;僕の扱うデプロイ先は AWS なことが多いので AWS のキー (&lt;code&gt;AWS_ACCESS_KEY&lt;/code&gt;, &lt;code&gt;AWS_SECRET_ACCESS_KEY&lt;/code&gt; ) を&#xA;GitHub Actions secrets へ突っ込む必要があります。&#xA;まあ一回や二回ならやるんですが、デベロップメント、ステージング、プロダクション、と複数環境あったり、&#xA;プロジェクトも複数あったりして、中々の回数設定を行わなければなりません。&#xA;設定するだけでつらいのに、AWS はキーのローテーションを勧めてきます。つらい。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>Dependabot が起動する GitHub Actions Workflow から write 権限が無くなった件</title>
+				<link>https://shogo82148.github.io/blog/2021/03/17/actions-check-permissions/</link>
+				<pubDate>Wed, 17 Mar 2021 19:14:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2021/03/17/actions-check-permissions/</guid>
+				<description>&lt;p&gt;&lt;a href=&#34;https://dependabot.com/&#34;&gt;Dependabot&lt;/a&gt; から送られてくるプルリクエストのテストが最近良くコケるようになったなあと思ったら、&#xA;3 月 1 日から GitHub Actions Workflow 内の &lt;code&gt;GITHUB_TOKEN&lt;/code&gt; のパーミッションが変更になったそうです。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>Setup Perl Environment Action のストレージを Azure Blob Storage に移行しました</title>
+				<link>https://shogo82148.github.io/blog/2021/02/03/setup-perl-uses-azure-blob-storage/</link>
+				<pubDate>Wed, 03 Feb 2021 21:33:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2021/02/03/setup-perl-uses-azure-blob-storage/</guid>
+				<description>&lt;p&gt;GitHub Actions が一般公開された際に Perl をセットアップするアクションを書きました。&lt;/p&gt;&#xA;&lt;ul&gt;&#xA;&lt;li&gt;&lt;a href=&#34;https://shogo82148.github.io/blog/2019/09/18/actions-setup-perl/&#34;&gt;Setup Perl GitHub Action を公開しました&lt;/a&gt;&lt;/li&gt;&#xA;&lt;/ul&gt;&#xA;&lt;p&gt;セットアップのたびに毎回コンパイルすると遅いので、コンパイル済みのバイナリを事前に Amazon S3 にアップロードしていました。&#xA;アップロード先に S3 を選んだのは単に自分が AWS に慣れているからなのですが、最近になってちょっとした問題に直面してます。&#xA;解決へ向けて S3 から Azure Blob Storage へ移行した、というお話です。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>排他制御を行う GitHub Action を作った</title>
+				<link>https://shogo82148.github.io/blog/2020/12/30/github-actions-mutex/</link>
+				<pubDate>Wed, 30 Dec 2020 00:00:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2020/12/30/github-actions-mutex/</guid>
+				<description>&lt;p&gt;弊社では GitHub のレポジトリ管理に &lt;a href=&#34;https://github.com/terraform-providers/terraform-provider-github&#34;&gt;Terraform GitHub provider&lt;/a&gt; を使用しています。&#xA;いちいち手元で &lt;code&gt;terraform plan&lt;/code&gt; や &lt;code&gt;terraform apply&lt;/code&gt; を叩くのは面倒なので、&#xA;GitHub Actions を利用することを考えました。&#xA;tf ファイルと現実のリソースとの不整合を避けるために、 これらのコマンドは排他的に実行する必要があります。&#xA;例えば &lt;code&gt;terraform apply&lt;/code&gt; を実行している最中に &lt;code&gt;terraform plan&lt;/code&gt; を実行することはできません。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>2020年に書いた GitHub Action &#43; α</title>
+				<link>https://shogo82148.github.io/blog/2020/12/03/github-actions-in-2020/</link>
+				<pubDate>Thu, 03 Dec 2020 00:00:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2020/12/03/github-actions-in-2020/</guid>
+				<description>&lt;p&gt;この記事は&lt;a href=&#34;https://adventar.org/calendars/5034&#34;&gt;フラーAdvent Calendar 2020&lt;/a&gt;の3日目の記事です。&#xA;2日目は&lt;a href=&#34;https://gibachansblog.hatenablog.jp/about&#34;&gt;id:gibachan03&lt;/a&gt; さんで「&lt;a href=&#34;https://gibachansblog.hatenablog.jp/entry/2020/12/02/000000&#34;&gt;Androidアプリエンジニアになって気づいたiOSとの違い&lt;/a&gt;」でした。&lt;/p&gt;&#xA;&lt;hr&gt;&#xA;&lt;p&gt;さて、公開当初色々して遊んだ GitHub Actions ですが、今年も引き続き遊んでました。&#xA;いくつか新しい Action を作ったものの、このブログでは紹介していなかったので、2020年作ったものを紹介したいと思います。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>AWS SDK for Go v2 の今後が不安な件について</title>
+				<link>https://shogo82148.github.io/blog/2020/10/24/aws-sdk-go-v2-broken/</link>
+				<pubDate>Sat, 24 Oct 2020 01:06:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2020/10/24/aws-sdk-go-v2-broken/</guid>
+				<description>&lt;p&gt;なんだか今日はもうコードを書く気がしないので、最近思っていることをつらつらと・・・&lt;/p&gt;&#xA;&lt;p&gt;タイトルの通り、最近 &lt;a href=&#34;https://github.com/aws/aws-sdk-go-v2&#34;&gt;AWS SDK for Go v2&lt;/a&gt; の行く末がちょっと気になっています。&#xA;あんまり話題になっているのを観測できていないので、少し現状を書いてみます。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>GitHub Actions を使って簡単なボットを作る</title>
+				<link>https://shogo82148.github.io/blog/2020/10/23/github-bot-using-actions/</link>
+				<pubDate>Fri, 23 Oct 2020 22:03:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2020/10/23/github-bot-using-actions/</guid>
+				<description>&lt;p&gt;リリース当初は &lt;code&gt;git push&lt;/code&gt; など GitHub 上のイベントしかトリガーにできなかった &lt;a href=&#34;https://github.com/features/actions&#34;&gt;GitHub Actions&lt;/a&gt;ですが、&#xA;&lt;a href=&#34;https://docs.github.com/en/free-pro-team@latest/actions/reference/events-that-trigger-workflows#workflow_dispatch&#34;&gt;workflow_dispatch イベント&lt;/a&gt; の登場により手動実行ができるようになりました。&lt;/p&gt;&#xA;&lt;p&gt;社内でもこの機能を利用してワークフローの手動実行をしていたのですが、人間とは欲深いもので「毎回ワークフローを選択してポチポチするのだるい」という声があがってきました。&#xA;そういうわけで、Pull Request のコメントをトリガーにしてワークフローを実行する簡単なボットを作ってみました。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>RE: Pull Request Title Injection とその対策</title>
+				<link>https://shogo82148.github.io/blog/2020/04/02/re-pull-request-title-injection/</link>
+				<pubDate>Thu, 02 Apr 2020 06:37:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2020/04/02/re-pull-request-title-injection/</guid>
+				<description>&lt;p&gt;&lt;a href=&#34;https://twitter.com/furusax&#34;&gt;@furusax&lt;/a&gt; が書いてくれた GitHub Action からの Slack 通知機能について以下のようにコメントしたところ、&#xA;対策案を考えてくれました。&lt;/p&gt;&#xA;&lt;blockquote&gt;&#xA;&lt;p&gt;そういえばこれって Pull Request Title Injection できないですかね？ まあ、タイトル書くの社員なのでいいんですが。&lt;/p&gt;&#xA;&lt;/blockquote&gt;</description>
+			</item>
+			<item>
+				<title>元Yahoo!ジオシティーズ利用者のかたへ、GitHub Pagesのすゝめ</title>
+				<link>https://shogo82148.github.io/blog/2020/02/01/goodbye-geocities/</link>
+				<pubDate>Sat, 01 Feb 2020 00:00:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2020/02/01/goodbye-geocities/</guid>
+				<description>&lt;h2 id=&#34;tldr&#34;&gt;TL;DR&lt;/h2&gt;&#xA;&lt;ul&gt;&#xA;&lt;li&gt;&lt;strong&gt;今GitHubにアップロードした内容は1000年残る！&lt;/strong&gt;&lt;/li&gt;&#xA;&lt;li&gt;デッドラインは &lt;strong&gt;2020年2月3日(月) 午前7時(日本時間)&lt;/strong&gt;&lt;/li&gt;&#xA;&lt;li&gt;Yahoo!ジオシティーズのデータがダウンロードできるのは2020年3月31日まで&lt;/li&gt;&#xA;&lt;/ul&gt;&#xA;&lt;p&gt;つまりYahoo!ジオシティーズから移行するなら、今！ GitHubが一番！&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>CloudFormationのテンプレートのLinter actions-cfn-lint のご紹介</title>
+				<link>https://shogo82148.github.io/blog/2019/12/06/actions-cfn-lint/</link>
+				<pubDate>Fri, 06 Dec 2019 00:00:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2019/12/06/actions-cfn-lint/</guid>
+				<description>&lt;p&gt;この記事は&lt;a href=&#34;https://adventar.org/calendars/4155&#34;&gt;フラーAdvent Calendar 2019&lt;/a&gt;の6日目の記事です。&#xA;5日目は&lt;a href=&#34;https://twitter.com/shogo82148&#34;&gt;@shogo82148&lt;/a&gt; さんで「&lt;a href=&#34;https://shogo82148.github.io/blog/2019/12/05/actions-goveralls/&#34;&gt;GitHub Goveralls Action を公開しました&lt;/a&gt;」でした。&lt;/p&gt;&#xA;&lt;hr&gt;&#xA;&lt;p&gt;さて、最近 GitHub Actions を作るのにハマっているので、今日も GitHub Actions の紹介です。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>GitHub Goveralls Action を公開しました</title>
+				<link>https://shogo82148.github.io/blog/2019/12/05/actions-goveralls/</link>
+				<pubDate>Thu, 05 Dec 2019 00:00:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2019/12/05/actions-goveralls/</guid>
+				<description>&lt;p&gt;この記事は&lt;a href=&#34;https://adventar.org/calendars/4155&#34;&gt;フラーAdvent Calendar 2019&lt;/a&gt;の5日目の記事です。&#xA;4日目はふるふる先生の「&lt;a href=&#34;https://furusax0621.hatenablog.com/entry/2019/12/04/000000&#34;&gt;GoでJSONを良い感じに使おうと思ってハマった話&lt;/a&gt;」でした。&lt;/p&gt;&#xA;&lt;hr&gt;&#xA;&lt;p&gt;さて、首を長くして待っていた GitHub Actions がついにGAになりましたね。&#xA;(&lt;a href=&#34;https://github.co.jp/features/actions&#34;&gt;日本語版ヘルプ&lt;/a&gt;だとまだbetaになってますが)&lt;/p&gt;&#xA;&lt;p&gt;さっそくActionを自作してちょっと前に公開してたんですが、この機会に紹介しようと思います。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>Setup Perl GitHub Action を公開しました</title>
+				<link>https://shogo82148.github.io/blog/2019/09/18/actions-setup-perl/</link>
+				<pubDate>Wed, 18 Sep 2019 23:14:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2019/09/18/actions-setup-perl/</guid>
+				<description>&lt;p&gt;GitHub Actions の公式レポジトリには Perl のセットアップアクションが無いぞ！&#xA;ということで三連休+αで書きました。&lt;/p&gt;&#xA;&lt;ul&gt;&#xA;&lt;li&gt;&lt;a href=&#34;https://github.com/marketplace/actions/setup-perl-environment&#34;&gt;actions-setup-perl on GitHub Marketplace&lt;/a&gt;&lt;/li&gt;&#xA;&lt;/ul&gt;&#xA;&lt;h2 id=&#34;使い方&#34;&gt;使い方&lt;/h2&gt;&#xA;&lt;p&gt;Marketplaceの設定例は間違えているので以下を参照。(これ書いていて気がついた)&#xA;必要な Perl のバージョンを渡すだけです。簡単！&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>GithubのIRCフックがgollumをサポートしました</title>
+				<link>https://shogo82148.github.io/blog/2014/11/15/github-irc-hook-supports-gollum/</link>
+				<pubDate>Sat, 15 Nov 2014 22:24:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2014/11/15/github-irc-hook-supports-gollum/</guid>
+				<description>&lt;p&gt;GithubのIRCフックがgollum(Wikiページの変更通知)をサポートしました。&lt;/p&gt;&#xA;&lt;!-- More --&gt;&#xA;&lt;p&gt;最近ぴーちんさんがWikiの編集業に精を出していて、編集の度にIRCに「変更しました！」とポストしてました。&#xA;「自動で通知してくれるとうれしいよねー」と話していたら、ある秘密を教えてもらいました。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>githubのタブサイズを変えるChrome拡張を作った</title>
+				<link>https://shogo82148.github.io/blog/2014/02/10/github-tab-change/</link>
+				<pubDate>Mon, 10 Feb 2014 08:01:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2014/02/10/github-tab-change/</guid>
+				<description>&lt;p&gt;にゃんぱすー。&#xA;最近 C# のコードを見ることが多くなってきました。&#xA;開発はVSやMonoDevelop等のIDEを使っているのですが、&#xA;diffの確認程度ならgithub上で行っています。&#xA;しかし、github上の表示は崩れて非常に読みづらい・・・。&lt;/p&gt;</description>
+			</item>
+			<item>
+				<title>GitHubにブログを設置してみたよ</title>
+				<link>https://shogo82148.github.io/blog/2012/03/21/test/</link>
+				<pubDate>Wed, 21 Mar 2012 19:29:00 +0900</pubDate>
+				<guid>https://shogo82148.github.io/blog/2012/03/21/test/</guid>
+				<description>&lt;p&gt;TLにGitHubでブログのホスティングしている人がいたので、&#xA;「&lt;a href=&#34;http://mattn.kaoriya.net/software/lang/ruby/20111017205717.htm&#34;&gt;githubとjekyllとoctopressで作る簡単でモダンなブログ&lt;/a&gt;」&#xA;を参考に作ってみましたよ。&lt;/p&gt;&#xA;&lt;!-- more --&gt;&#xA;&lt;h2 id=&#34;rvm-のインストール&#34;&gt;RVM のインストール&lt;/h2&gt;&#xA;&lt;p&gt;自分の環境には Ruby 1.9.2.2 が入っているんだけど、Ocropressでは Ruby 1.9.2 が必要らしい。&#xA;そのままでもいけるかと思ったけど、怒られた。&#xA;rake コマンドを全部 bundle exec rake に置き換えると一応実行はできるけど、なんだか警告がでる。&lt;/p&gt;</description>
+			</item>
+	</channel>
 </rss>

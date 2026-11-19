@@ -33,7 +33,7 @@
   <meta name="author" content="ICHINOSE Shogo">
 
   
-  <meta name="generator" content="Hugo 0.120.4">
+  <meta name="generator" content="Hugo 0.170.1">
 
 
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-40R0PCLKVF"></script>
@@ -121,7 +121,7 @@ MathJax = {
 
 <header>
   <p class="meta">Mar 12, 2024
-     - 1 minute read 
+     - 2 minute read 
     
 
     
@@ -135,10 +135,11 @@ MathJax = {
 </header>
 
         
-          <p>これから新規に書くコードでは mysql.NewConnector と sql.OpenDBを使ったほうが良さそう、という話。
-昔からある書き方 go-sql-driver/mysql のDSNを文字列結合で実現するのは意外と大変なので、 某所ではDSN(Data Source Name)の生成を mysql.Config を使って行っています。
-// DSNの生成 cfg := mysql.NewConfig() cfg.User = &#34;user&#34; cfg.Passwd = &#34;password&#34; cfg.DBName = &#34;dbname&#34; dsn := cfg.FormatDSN() // 接続 db, err := sql.Open(&#34;mysql&#34;, dsn) if err != nil { panic(err) } 新しい書き方 実はDSNを生成しなくとも、 mysql.Configから *sql.DB を取得できます。
-cfg := mysql.NewConfig() cfg.User = &#34;user&#34; cfg.Passwd = &#34;password&#34; cfg.DBName = &#34;dbname&#34; // *mysql.Config を直接渡す conn, err := mysql.NewConnector(cfg) if err != nil { panic(err) } db := sql.</p>
+          <p>これから新規に書くコードでは <a href="https://pkg.go.dev/github.com/go-sql-driver/mysql@v1.8.0#NewConnector">mysql.NewConnector</a> と
+<a href="https://pkg.go.dev/database/sql@go1.22.1#OpenDB">sql.OpenDB</a>を使ったほうが良さそう、という話。</p>
+<h2 id="昔からある書き方">昔からある書き方</h2>
+<p>go-sql-driver/mysql のDSNを文字列結合で実現するのは意外と大変なので、
+某所ではDSN(Data Source Name)の生成を <a href="https://pkg.go.dev/github.com/go-sql-driver/mysql@v1.8.0#Config">mysql.Config</a> を使って行っています。</p>
           
             <footer>
               <a href="https://shogo82148.github.io/blog/2024/03/12/2024-03-12-use-mysql-new-connector-and-sql-open-db/" rel="full-article">Read On &rarr;</a>
@@ -167,13 +168,14 @@ cfg := mysql.NewConfig() cfg.User = &#34;user&#34; cfg.Passwd = &#34;password&#3
 </header>
 
         
-          <p>先日 go-sql-driver/mysql v1.8.0 がリリースされ、 いくつかのオプションが追加されました。 その中からひとつ BeforeConnect を紹介したいと思います。
-Add BeforeConnect callback to configuration object #1469 何が嬉しいの？ パスワード以外の方法で MySQL にログインするのが簡単になります。
-BeforeConnect を使わない従来の方法 たとえば、AWS では IAM 認証を使ってログインする方法を提供しています。 IAM の情報を使って短期間だけ有効なトークンを発行し、そのトークンを使ってログインします。
-MariaDB、MySQL、および PostgreSQL の IAM データベース認証 トークンの有効期限は短いので、接続を開始する直前にトークンを発行し接続設定を書き換えなければいけません。 しかし、Go はコネクションプールを採用しているため、実際に接続を開始するタイミングを知るのは意外と難しいです。
-頑張ってそれを実現するためにわざわざドライバーを書いたこともありました。
-IAM 認証で AWS RDS へ接続する MySQL ドライバを作った shogo82148/rdsmysql BeforeConnect を使った方法 BeforeConnect は、接続を開始する直前に接続設定を書き換える機能です。 shogo82148/rdsmysql を使用せずとも、簡単に IAM 認証を実現できます。
-package main import ( &#34;context&#34; &#34;github.com/aws/aws-sdk-go-v2/config&#34; &#34;github.com/aws/aws-sdk-go-v2/feature/rds/auth&#34; &#34;github.com/go-sql-driver/mysql&#34; ) func main() { mycnf := mysql.NewConfig() mycnf.TLSConfig = &#34;true&#34; mycnf.</p>
+          <p>先日 <a href="https://github.com/go-sql-driver/mysql/releases/tag/v1.8.0">go-sql-driver/mysql v1.8.0</a> がリリースされ、
+いくつかのオプションが追加されました。
+その中からひとつ <a href="https://pkg.go.dev/github.com/go-sql-driver/mysql@v1.8.0#BeforeConnect">BeforeConnect</a> を紹介したいと思います。</p>
+<ul>
+<li><a href="https://github.com/go-sql-driver/mysql/pull/1469">Add BeforeConnect callback to configuration object #1469</a></li>
+</ul>
+<h2 id="何が嬉しいの">何が嬉しいの？</h2>
+<p>パスワード以外の方法で MySQL にログインするのが簡単になります。</p>
           
             <footer>
               <a href="https://shogo82148.github.io/blog/2024/03/11/2024-03-11-before-connect-of-mysql-driver/" rel="full-article">Read On &rarr;</a>
@@ -188,7 +190,7 @@ package main import ( &#34;context&#34; &#34;github.com/aws/aws-sdk-go-v2/config
 
 <header>
   <p class="meta">Feb 6, 2024
-     - 2 minute read 
+     - 4 minute read 
     
 
     
@@ -202,12 +204,15 @@ package main import ( &#34;context&#34; &#34;github.com/aws/aws-sdk-go-v2/config
 </header>
 
         
-          <p>AWS Lambda関数をGoの標準ライブラリのインターフェイスに変換するライブラリを作りました。
-http.Handler 実装: shogo82148/ridgenative http.RoundTripper 実装: shogo82148/lambtrip ridgenative Lambda Function URLsではリクエストとレスポンスがJSON形式になって渡ってきます。 これらをGo標準ライブラリの net/http.Request と net/http.ResponseWriter で扱えるように書いたアダプターが shogo82148/ridgenativeです。
-同じコードをHTTPサーバーやAWS Lambda上で動かす これのうれしいポイントは net/http.Handler の実装をひとつ用意すれば、 普通のHTTPサーバーとしても、AWS Lambda上でも動かすことができるという点です。
-たとえば以下のコードは go run main.go のように実行すると、 8080ポート上で動く普通のHTTPサーバーになります。
-package main import ( &#34;fmt&#34; &#34;net/http&#34; &#34;github.com/shogo82148/ridgenative&#34; ) func main() { http.HandleFunc(&#34;/hello&#34;, handleRoot) // httpの代わりにridgenativeを呼び出す ridgenative.ListenAndServe(&#34;:8080&#34;, nil) } func handleRoot(w http.ResponseWriter, r *http.Request) { w.Header().Set(&#34;Content-Type&#34;, &#34;text/plain&#34;) fmt.Fprintln(w, &#34;Hello World&#34;) } bootstrap という名前でコンパイルして、zipで固めてアップロードすれば、 Lambda Function URLsやAPI Gatewayで動くHTTP APIの完成です。
-GOOS=linux GOARCH=arm64 CGOENABLED=0 go build -o bootstrap main.</p>
+          <p>AWS Lambda関数をGoの標準ライブラリのインターフェイスに変換するライブラリを作りました。</p>
+<ul>
+<li><code>http.Handler</code> 実装: <a href="https://github.com/shogo82148/ridgenative">shogo82148/ridgenative</a></li>
+<li><code>http.RoundTripper</code> 実装: <a href="https://github.com/shogo82148/lambtrip">shogo82148/lambtrip</a></li>
+</ul>
+<h2 id="ridgenative">ridgenative</h2>
+<p>Lambda Function URLsではリクエストとレスポンスがJSON形式になって渡ってきます。
+これらをGo標準ライブラリの <code>net/http.Request</code> と <code>net/http.ResponseWriter</code> で扱えるように書いたアダプターが
+<a href="https://github.com/shogo82148/ridgenative">shogo82148/ridgenative</a>です。</p>
           
             <footer>
               <a href="https://shogo82148.github.io/blog/2024/02/06/2024-02-06-introduce-ridgenative-and-lambtrip/" rel="full-article">Read On &rarr;</a>
@@ -222,7 +227,7 @@ GOOS=linux GOARCH=arm64 CGOENABLED=0 go build -o bootstrap main.</p>
 
 <header>
   <p class="meta">Feb 4, 2024
-     - 1 minute read 
+     - 3 minute read 
     
 
     
@@ -236,11 +241,16 @@ GOOS=linux GOARCH=arm64 CGOENABLED=0 go build -o bootstrap main.</p>
 </header>
 
         
-          <p>GitHub Actions に　Apple Silicon がやってきました！
-GitHub Actions: Introducing the new M1 macOS runner available to open source! GitHub Actions: macOS 14 (Sonoma) is now available 先日Perlをビルドして遊んでみました。
-actions-setup-perlがApple M1上で動くようになりました 今回はMySQLとRedisをビルドしてみたお話です。
-shogo82148/actions-setup-mysql shogo82148/actions-setup-redis actions-setup-mysql v1.31.0, actions-setup-redis リリースのお知らせ actions-setup-mysql v1.31.0, actions-setup-redis v1.33.0 から M1 macOS に対応しています。 runs-on: キーに macos-14 を指定すると M1 を利用できます。
-jobs: build: runs-on: macos-14 steps: - uses: actions/checkout@v4 - name: Set up MySQL uses: shogo82148/actions-setup-mysql@v1.31.0 M1による高速化 今日現在（2024-02-04）のMySQL最新安定版リリースは 8.0.36 です。 MySQL 8.</p>
+          <p>GitHub Actions に　Apple Silicon がやってきました！</p>
+<ul>
+<li><a href="https://github.blog/changelog/2024-01-30-github-actions-introducing-the-new-m1-macos-runner-available-to-open-source/">GitHub Actions: Introducing the new M1 macOS runner available to open source!</a></li>
+<li><a href="https://github.blog/changelog/2024-01-30-github-actions-macos-14-sonoma-is-now-available/">GitHub Actions: macOS 14 (Sonoma) is now available</a></li>
+</ul>
+<p>先日Perlをビルドして遊んでみました。</p>
+<ul>
+<li><a href="https://shogo82148.github.io/blog/2024/02/01/2024-02-01-actions-setup-perl-now-works-on-macos14/">actions-setup-perlがApple M1上で動くようになりました</a></li>
+</ul>
+<p>今回はMySQLとRedisをビルドしてみたお話です。</p>
           
             <footer>
               <a href="https://shogo82148.github.io/blog/2024/02/04/2024-02-04-actions-setup-mysql-and-actions-setup-redis-now-work-on-macos14/" rel="full-article">Read On &rarr;</a>
@@ -269,10 +279,14 @@ jobs: build: runs-on: macos-14 steps: - uses: actions/checkout@v4 - name: Set up
 </header>
 
         
-          <p>GitHub Actions に　Apple Silicon がやってきました！
-GitHub Actions: Introducing the new M1 macOS runner available to open source! GitHub Actions: macOS 14 (Sonoma) is now available 新しいコンピューティング環境がでてやることといえばアレですよね。 Perlのビルド。 というわけでやっていきましょう。
-actions-setup-perl v1.28.0 リリースのお知らせ actions-setup-perl v1.28.0 から M1 macOS に対応しています。 runs-on: キーに macos-14 を指定すると M1 を利用できます。
-jobs: build: runs-on: macos-14 steps: - uses: actions/checkout@v4 - name: Set up perl uses: shogo82148/actions-setup-perl@v1.28.0 M1による高速化 今回のリリースにあたり、バージョン違いコンパイルオプション違いの 全148種類 のPerlバイナリを再ビルドしました！ Perl 5.38.2 のビルド時間で比較すると、x64では 11m 27s かかっていたビルドが、M1では 4m 6s へと大きく改善しました。 64.</p>
+          <p>GitHub Actions に　Apple Silicon がやってきました！</p>
+<ul>
+<li><a href="https://github.blog/changelog/2024-01-30-github-actions-introducing-the-new-m1-macos-runner-available-to-open-source/">GitHub Actions: Introducing the new M1 macOS runner available to open source!</a></li>
+<li><a href="https://github.blog/changelog/2024-01-30-github-actions-macos-14-sonoma-is-now-available/">GitHub Actions: macOS 14 (Sonoma) is now available</a></li>
+</ul>
+<p>新しいコンピューティング環境がでてやることといえばアレですよね。
+Perlのビルド。
+というわけでやっていきましょう。</p>
           
             <footer>
               <a href="https://shogo82148.github.io/blog/2024/02/01/2024-02-01-actions-setup-perl-now-works-on-macos14/" rel="full-article">Read On &rarr;</a>
@@ -287,7 +301,7 @@ jobs: build: runs-on: macos-14 steps: - uses: actions/checkout@v4 - name: Set up
 
 <header>
   <p class="meta">Jan 11, 2024
-     - 1 minute read 
+     - 3 minute read 
     
 
     
@@ -301,15 +315,13 @@ jobs: build: runs-on: macos-14 steps: - uses: actions/checkout@v4 - name: Set up
 </header>
 
         
-          <p>ちょっとした用事で Forwarded ヘッダーの解析をしたくなったので、解析ライブラリを書いてみました。
-shogo82148/forwarded-header 背景 Amazon API GatewayのHTTP Proxy Integrationを利用しているプロジェクトで、 クライアントのIPアドレスを知りたい用件がありました。
-リバースプロキシの運用に慣れている人なら、「クライアントのIPアドレスを取得したい」と聞いて真っ先に思いつくのは X-Forwarded-For ヘッダーでしょう。 しかし、HTTP Proxy Integrationはこのヘッダーを付与しません。
-なんとかIPアドレスを取得できないかと調べてみると、HTTP Proxy IntegrationはForwardedヘッダーを付与することがわかりました。
-Amazon API Gateway: Explaining HTTP Proxy in HTTP API Forwardedヘッダーは RFC 7239 で標準化されているヘッダーです。 リバースプロキシによって失われてしまう情報を補完するために利用します。
-RFC 7239: Forwarded HTTP Extension RFC 7239: Forwarded HTTP拡張 Forwarded - MDN Forwardedヘッダーを見ればクライアントのIPアドレスもわかります。 たとえば以下の例では 192.0.2.60 がクライアントのIPアドレスです。
-Forwarded: for=192.0.2.60; proto=http; by=203.0.113.43 X-Forwarded-Forヘッダーは単純なカンマ区切りのテキストだったので、Split関数で十分でした。 一方Forwardedヘッダーは構造化されているため、パーサーが必要です。 そこまで複雑ではないので、実装してみました。
-使い方 解析は Parse関数を呼び出すだけです。
-package main import ( &#34;fmt&#34; &#34;net/http&#34; &#34;os&#34; forwardedheader &#34;github.com/shogo82148/forwarded-header&#34; ) func main() { header := make(http.</p>
+          <p>ちょっとした用事で Forwarded ヘッダーの解析をしたくなったので、解析ライブラリを書いてみました。</p>
+<ul>
+<li><a href="https://github.com/shogo82148/forwarded-header">shogo82148/forwarded-header</a></li>
+</ul>
+<h2 id="背景">背景</h2>
+<p>Amazon API GatewayのHTTP Proxy Integrationを利用しているプロジェクトで、
+クライアントのIPアドレスを知りたい用件がありました。</p>
           
             <footer>
               <a href="https://shogo82148.github.io/blog/2024/01/11/2024-01-11-go-forwarded-header/" rel="full-article">Read On &rarr;</a>
@@ -338,14 +350,14 @@ package main import ( &#34;fmt&#34; &#34;net/http&#34; &#34;os&#34; forwardedhea
 </header>
 
         
-          <p>AWS SDK for Go v2を使っているプロジェクトで、以下のようなエラーが発生しました。
-{&#34;time&#34;:&#34;2024-01-09T06:45:00.239872&#34;,&#34;level&#34;:&#34;fatal&#34;,&#34;message&#34;:&#34;not found, ResolveEndpointV2&#34;} 解決策 github.com/aws/aws-sdk-go-v2 名前空間の下にあるモジュールをすべて最新版にアップデートしましょう。
-go get -u &#34;github.com/aws/aws-sdk-go-v2/...&#34; 原因 AWS SDK for Go v2 v1.23.0 (2023-11-15) で入った以下の変更が原因です。
-Feature: BREAKING CHANGE: V2 endpoint resolution middleware has changed steps from Serialize to Finalize. Middleware that indexes off of this field will need to be updated accordingly.
-特徴: 重大な変更: V2エンドポイント解決ミドルウェアは、SerializeからFinalizeへのステップが変更されました。このフィールドをベースにインデックスを付けるミドルウェアは、それに応じて更新する必要があります。（ChatGPTによる和訳）
-なんでこんなひどいことするの 😭（1年3か月ぶり、2回目）
-前回壊れたとき（参考：AWS SDK v2 for Goが壊れた、Googleお前もか）はコンパイルエラーで気がつけたのですが、今回のエラーは実行してみないとわかりません。 マイナーアップデートで入れるのはやめてくれ・・・。
-参考 Release (2023-11-15) [SOLUTION IN THREAD] &ldquo;not found, ResolveEndpointV2&rdquo; service modules released on or after 11/15/23 are incompatible against previous runtimes (and vice versa) #2370 SOLUTIONが書かれたコメント AWS SDK v2 for Goが壊れた、Googleお前もか </p>
+          <p>AWS SDK for Go v2を使っているプロジェクトで、以下のようなエラーが発生しました。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span><span class="nt">&#34;time&#34;</span><span class="p">:</span><span class="s2">&#34;2024-01-09T06:45:00.239872&#34;</span><span class="p">,</span><span class="nt">&#34;level&#34;</span><span class="p">:</span><span class="s2">&#34;fatal&#34;</span><span class="p">,</span><span class="nt">&#34;message&#34;</span><span class="p">:</span><span class="s2">&#34;not found, ResolveEndpointV2&#34;</span><span class="p">}</span>
+</span></span></code></pre></div><h2 id="解決策">解決策</h2>
+<p><a href="https://github.com/aws/aws-sdk-go-v2">github.com/aws/aws-sdk-go-v2</a> 名前空間の下にあるモジュールをすべて最新版にアップデートしましょう。</p>
+          
+            <footer>
+              <a href="https://shogo82148.github.io/blog/2024/01/11/2024-01-11-not-found-resolve-endpoint-v2/" rel="full-article">Read On &rarr;</a>
+            </footer>
           
         
       </article>
@@ -356,7 +368,7 @@ Feature: BREAKING CHANGE: V2 endpoint resolution middleware has changed steps fr
 
 <header>
   <p class="meta">Dec 29, 2023
-     - 1 minute read 
+     - 2 minute read 
     
 
     
@@ -370,11 +382,25 @@ Feature: BREAKING CHANGE: V2 endpoint resolution middleware has changed steps fr
 </header>
 
         
-          <p>shogo82148/go-retry は指数的バックオフを行ってくれるライブラリです。
-Goで指数的バックオフをやってくれるgo-retryを書いた v1.2.0 でジェネリクスを導入した新しいインターフェイスを追加しました。
-新インターフェイス Goで指数的バックオフをやってくれるgo-retryを書いたの最後のまとめで、僕らのやりたいことを全部詰め込んだこんなコードを書きました。
-func DoSomethingWithRetry(ctx context.Context) (Result, error) { var res Result var err error policy.Do(ctx, func() error { ctx, cancel := context.WithTimeout(ctx, time.Second) defer cancel() res, err = DoSomething(ctx) return err }) return res, err } これが以下のようにちょっとシンプルになります。
-func DoSomethingWithRetry(ctx context.Context) (Result, error) { return retry.DoValue(ctx, policy, func() (Result, error) { ctx, cancel := context.WithTimeout(ctx, time.Second) defer cancel() return DoSomething(ctx) }) } math/randの実装変更に合わせた最適化 math/randパッケージ には Int, Intn などトップレベルに関数があります。 Go 1.</p>
+          <p><a href="https://github.com/shogo82148/go-retry">shogo82148/go-retry</a> は指数的バックオフを行ってくれるライブラリです。</p>
+<ul>
+<li><a href="https://shogo82148.github.io/blog/2019/07/22/go-retry/">Goで指数的バックオフをやってくれるgo-retryを書いた</a></li>
+</ul>
+<p><a href="https://github.com/shogo82148/go-retry/releases/tag/v1.2.0">v1.2.0</a> でジェネリクスを導入した新しいインターフェイスを追加しました。</p>
+<h2 id="新インターフェイス">新インターフェイス</h2>
+<p><a href="https://shogo82148.github.io/blog/2019/07/22/go-retry/">Goで指数的バックオフをやってくれるgo-retryを書いた</a>の最後のまとめで、僕らのやりたいことを全部詰め込んだこんなコードを書きました。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">func</span><span class="w"> </span><span class="nf">DoSomethingWithRetry</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nx">Result</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">var</span><span class="w"> </span><span class="nx">res</span><span class="w"> </span><span class="nx">Result</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">var</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="kt">error</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nx">policy</span><span class="p">.</span><span class="nf">Do</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="kt">error</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">cancel</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nf">WithTimeout</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">defer</span><span class="w"> </span><span class="nf">cancel</span><span class="p">()</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="nx">res</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nf">DoSomething</span><span class="p">(</span><span class="nx">ctx</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nx">err</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">})</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">res</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>これが以下のようにちょっとシンプルになります。</p>
           
             <footer>
               <a href="https://shogo82148.github.io/blog/2023/12/29/2023-12-29-go-retry-meets-generics/" rel="full-article">Read On &rarr;</a>
@@ -403,10 +429,18 @@ func DoSomethingWithRetry(ctx context.Context) (Result, error) { return retry.Do
 </header>
 
         
-          <p>この記事は、Perl Advent Calendar 2023 25日目の記事（代打）です。 24日目は@shogo842148で「PerlにClass構文がやってきた」でした。
-AWSでカナダ（カルガリー）リージョンが利用可能になりました！
-The AWS Canada West (Calgary) Region is now available それに合わせて p5-aws-lambda のビルド済みレイヤーも公開しました！
-Perl本体: arn:aws:lambda:ca-central-1:445285296882:layer:perl-5-38-runtime-al2023-x86_64:3 Paws: arn:aws:lambda:ca-central-1:445285296882:layer:perl-5-38-paws-al2023-x86_64:4 参考 The AWS Canada West (Calgary) Region is now available shogo82148/p5-aws-lambda AWS::Lambda </p>
+          <p>この記事は、<a href="https://qiita.com/advent-calendar/2023/perl">Perl Advent Calendar 2023</a> 25日目の記事（代打）です。
+24日目は<a href="https://twitter.com/shogo82148">@shogo842148</a>で「<a href="https://shogo82148.github.io/blog/2023/12/29/2023-12-29-perl-class/">PerlにClass構文がやってきた</a>」でした。</p>
+<hr>
+<p>AWSでカナダ（カルガリー）リージョンが利用可能になりました！</p>
+<ul>
+<li><a href="https://aws.amazon.com/jp/blogs/aws/the-aws-canada-west-calgary-region-is-now-available/">The AWS Canada West (Calgary) Region is now available</a></li>
+</ul>
+<p>それに合わせて p5-aws-lambda のビルド済みレイヤーも公開しました！</p>
+          
+            <footer>
+              <a href="https://shogo82148.github.io/blog/2023/12/29/2023-12-29-p5-aws-lambda-is-available-on-ca-east-1/" rel="full-article">Read On &rarr;</a>
+            </footer>
           
         
       </article>
@@ -417,7 +451,7 @@ Perl本体: arn:aws:lambda:ca-central-1:445285296882:layer:perl-5-38-runtime-al2
 
 <header>
   <p class="meta">Dec 29, 2023
-     - 1 minute read 
+     - 2 minute read 
     
 
     
@@ -431,12 +465,12 @@ Perl本体: arn:aws:lambda:ca-central-1:445285296882:layer:perl-5-38-runtime-al2
 </header>
 
         
-          <p>この記事は、Perl Advent Calendar 2023 24日目の記事（代打）です。 23日目は@doikojiで「【さらばpptxよ】perlとJavaScriptとHTMLで超手軽にスライドを作る」でした。
-今年のPerlの重大ニュースといえば 「PerlにClass構文がやってきた」 ことですよね[要出典]。 （※ただしExperimental） Advent Calendar でClassをメインに取り上げることなかったなと思ったので、ちょっと触ってみました。
-とりあえず動かしてみる perlclassの例です。 警告が出ないように no warnings 'experimental::class' で抑制だけしました。
-use v5.38; use feature &#39;class&#39;; no warnings &#39;experimental::class&#39;; class My::Example 1.234 { field $x; ADJUST { $x = &#34;Hello, world&#34;; } method print_message { say $x; } } My::Example-&gt;new-&gt;print_message; 実行すると Hello, world と出力されます。
-Hello, world newの引数を受け取る My::Example-&gt;new には引数を渡すことができます。 Perl 5.38時点では :param field属性を使って、フィールドを初期化できるようです。
-use v5.38; use feature &#39;class&#39;; no warnings &#39;experimental::class&#39;; class My::Example 1.</p>
+          <p>この記事は、<a href="https://qiita.com/advent-calendar/2023/perl">Perl Advent Calendar 2023</a> 24日目の記事（代打）です。
+23日目は<a href="https://qiita.com/doikoji">@doikoji</a>で「<a href="https://qiita.com/doikoji/items/b0d850349a6640d0c396">【さらばpptxよ】perlとJavaScriptとHTMLで超手軽にスライドを作る</a>」でした。</p>
+<hr>
+<p>今年のPerlの重大ニュースといえば <strong>「PerlにClass構文がやってきた」</strong> ことですよね[要出典]。
+（※ただしExperimental）
+Advent Calendar でClassをメインに取り上げることなかったなと思ったので、ちょっと触ってみました。</p>
           
             <footer>
               <a href="https://shogo82148.github.io/blog/2023/12/29/2023-12-29-perl-class/" rel="full-article">Read On &rarr;</a>
@@ -444,7 +478,6 @@ use v5.38; use feature &#39;class&#39;; no warnings &#39;experimental::class&#39
           
         
       </article>
-      
       
       
 
