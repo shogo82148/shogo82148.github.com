@@ -94,6 +94,7 @@ say_bool(
 
 ```bash
 plenv install 5.45.3 -Dusedevel
+plenv local 5.45.3
 ```
 
 `==`の代わりに`===`を、`eq`の代わりに`equ`を使って比較します。
