@@ -137,6 +137,11 @@ say_bool($x === $y);
 say_bool($x equ $y);
 ```
 
+## 発音
+
+ちなみにPPC 0030では未解決の問題として発音にも触れています。
+発案者のオススメは「イー・クー(ee-koo)」だそうです。
+
 ## まとめ
 
 Perl 5.45.3で入ったundef-aware equality operatorsで遊んでみました。
