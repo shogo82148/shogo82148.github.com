@@ -114,7 +114,7 @@ say_bool($x === 0);
 say_bool($x equ "");
 ```
 
-暗黙の型変換が行われなくなり、いずれも`false`を返します。
+`undef`の暗黙の型変換が行われなくなり、いずれも`false`を返します。
 
 ```plain
 false
